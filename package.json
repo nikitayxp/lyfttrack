@@ -1,0 +1,14 @@
+{
+  "name": "lyfttrack-monorepo",
+  "private": true,
+  "workspaces": [
+    "app",
+    "site"
+  ],
+  "scripts": {
+    "dev:site": "npm run dev --workspace=site",
+    "dev:app": "npm run start --workspace=app",
+    "install:all": "npm install",
+    "build:android": "npm run build:android --workspace=app"
+  }
+}

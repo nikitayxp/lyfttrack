@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "LyftTrack",
+    "slug": "lyfttrack",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "lyfttrack",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#020617",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "userInterfaceStyle": "dark",
+      "backgroundColor": "#020617",
+      "package": "com.lyfttrack.mobile",
+      "versionCode": 1,
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow LyftTrack to access your photos so you can choose a profile avatar."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#020617",
+          "dark": {
+            "backgroundColor": "#020617"
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

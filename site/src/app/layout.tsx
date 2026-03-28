@@ -13,8 +13,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "LyftTrack",
-  description: "LyftTrack - O teu progresso começa aqui.",
+  title: "LyftTrack Blog — Fitness Tracking Insights",
+  description:
+    "The official LyftTrack blog. Tips on progressive overload, workout tracking, and building a stronger version of yourself.",
+  keywords: ["fitness", "workout tracker", "gym app", "progressive overload", "LyftTrack"],
 };
 
 export default function RootLayout({
@@ -23,7 +25,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

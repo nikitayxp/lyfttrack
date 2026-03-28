@@ -37,12 +37,6 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <Ionicons name="person" size={24} color={color} />,
         }}
       />
-      
-      {/* Isto esconde o ecrã "explore" da barra, para não poluir o visual */}
-      <Tabs.Screen
-        name="explore"
-        options={{ href: null }} 
-      />
     </Tabs>
   );
 }

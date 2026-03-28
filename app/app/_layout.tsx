@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { router } from 'expo-router';
-import { supabase } from '../lib/supabase';
+import { supabase } from '@/services/supabase';
 
 export default function RootLayout() {
   useEffect(() => {
@@ -10,7 +10,7 @@ export default function RootLayout() {
       if (session) {
         router.replace('/(tabs)');
       } else {
-        router.replace('/(tabs)' as any);
+        router.replace('/(auth)' as any);
       }
     });
 
@@ -20,7 +20,7 @@ export default function RootLayout() {
        if (session) {
           router.replace('/(tabs)' as any);
         } else {
-          router.replace('/(tabs)' as any);
+          router.replace('/(auth)' as any);
         }
       }
     );

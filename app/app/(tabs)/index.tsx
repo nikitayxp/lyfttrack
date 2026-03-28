@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
-import { supabase } from '../../lib/supabase'; // Ajusta os '../' se der erro de caminho!
+import { supabase } from '@/services/supabase';
 
 export default function Home() {
   

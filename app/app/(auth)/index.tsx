@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert } from 'react-native';
-import { supabase } from '../../lib/supabase'; // Confirma se este caminho continua certo para ti
+import { supabase } from '@/services/supabase';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons'; // Importamos os ícones para o olhinho!
 

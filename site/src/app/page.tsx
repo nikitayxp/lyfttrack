@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 
 const BLOG_POSTS = [
   {
@@ -67,23 +68,23 @@ function NavBar() {
   return (
     <nav className="sticky top-0 z-50 border-b border-[var(--border)] bg-[var(--bg-primary)]/95 backdrop-blur-md">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-        <a href="/" className="flex items-center gap-2 no-underline">
+        <Link href="/" className="flex items-center gap-2 no-underline">
           <Image src="/logo.jpg" alt="LyftTrack" width={140} height={42} className="h-[42px] w-auto" />
-        </a>
+        </Link>
 
         <div className="flex items-center gap-6">
-          <a
+          <Link
             href="#blog"
             className="text-sm font-semibold text-[var(--text-secondary)] transition-colors hover:text-white no-underline"
           >
             Blog
-          </a>
-          <a
+          </Link>
+          <Link
             href="#"
             className="rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-bold text-white transition-all hover:brightness-110 no-underline"
           >
             Get the App
-          </a>
+          </Link>
         </div>
       </div>
     </nav>
@@ -115,18 +116,18 @@ function HeroSection() {
         </p>
 
         <div className="mt-10 flex items-center justify-center gap-4 flex-wrap">
-          <a
+          <Link
             href="#blog"
             className="rounded-full bg-[var(--accent)] px-8 py-3.5 text-base font-bold text-white shadow-lg shadow-[var(--accent)]/25 transition-all hover:brightness-110 no-underline"
           >
             Read Latest Posts
-          </a>
-          <a
+          </Link>
+          <Link
             href="#"
             className="rounded-full border border-[var(--border-strong)] px-8 py-3.5 text-base font-semibold text-[var(--text-secondary)] transition-all hover:border-[var(--accent)] hover:text-white no-underline"
           >
             Download App
-          </a>
+          </Link>
         </div>
       </div>
     </section>

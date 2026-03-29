@@ -1,55 +1,308 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { router } from 'expo-router';
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { Colors } from '@/constants/theme';
+import {
+  createRoutine,
+  getErrorMessage,
+  getExercisesCatalog,
+  getRoutines,
+  type RoutineSummary,
+} from '@/services/workoutService';
 import type { Tables } from '@/types/database';
 
 const palette = Colors.dark;
 
-type WorkoutRow = Tables<'workouts'>;
-type RoutineCard = Pick<WorkoutRow, 'id' | 'name' | 'notes'> & {
-  exerciseCount: number;
-};
-
-const MOCK_ROUTINES: RoutineCard[] = [
-  {
-    id: 'routine-push',
-    name: 'Push Day',
-    notes: 'Chest, shoulders and triceps focus.',
-    exerciseCount: 6,
-  },
-  {
-    id: 'routine-pull',
-    name: 'Pull Day',
-    notes: 'Back thickness, lats and biceps.',
-    exerciseCount: 5,
-  },
-  {
-    id: 'routine-legs',
-    name: 'Leg Day',
-    notes: 'Quads, glutes and hamstrings.',
-    exerciseCount: 7,
-  },
-];
+type ExerciseRow = Tables<'exercises'>;
 
 export default function RoutinesScreen() {
+  const [routines, setRoutines] = useState<RoutineSummary[]>([]);
+  const [isLoadingRoutines, setIsLoadingRoutines] = useState(true);
+  const [routinesError, setRoutinesError] = useState<string | null>(null);
+
+  const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
+  const [isCreatingRoutine, setIsCreatingRoutine] = useState(false);
+  const [routineNameInput, setRoutineNameInput] = useState('');
+  const [routineNotesInput, setRoutineNotesInput] = useState('');
+  const [selectedExerciseIds, setSelectedExerciseIds] = useState<string[]>([]);
+
+  const [catalogExercises, setCatalogExercises] = useState<ExerciseRow[]>([]);
+  const [isLoadingCatalog, setIsLoadingCatalog] = useState(true);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+
+  const loadRoutines = useCallback(async () => {
+    setIsLoadingRoutines(true);
+    setRoutinesError(null);
+
+    try {
+      const routineList = await getRoutines();
+      setRoutines(routineList);
+    } catch (error) {
+      setRoutinesError(getErrorMessage(error));
+    } finally {
+      setIsLoadingRoutines(false);
+    }
+  }, []);
+
+  const loadCatalogExercises = useCallback(async () => {
+    setIsLoadingCatalog(true);
+    setCatalogError(null);
+
+    try {
+      const exercises = await getExercisesCatalog();
+      setCatalogExercises(exercises);
+    } catch (error) {
+      setCatalogError(getErrorMessage(error));
+    } finally {
+      setIsLoadingCatalog(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadRoutines();
+  }, [loadRoutines]);
+
+  useEffect(() => {
+    if (!isCreateModalVisible) {
+      return;
+    }
+
+    if (catalogExercises.length > 0 && !catalogError) {
+      return;
+    }
+
+    void loadCatalogExercises();
+  }, [isCreateModalVisible, catalogExercises.length, catalogError, loadCatalogExercises]);
+
+  const selectionOrder = useMemo(() => {
+    return new Map(selectedExerciseIds.map((exerciseId, index) => [exerciseId, index + 1]));
+  }, [selectedExerciseIds]);
+
+  function handleStartRoutine(routineId: string) {
+    router.push({ pathname: '/workout/active', params: { routineId } } as any);
+  }
+
+  function toggleExerciseSelection(exerciseId: string) {
+    setSelectedExerciseIds((currentValue) => {
+      if (currentValue.includes(exerciseId)) {
+        return currentValue.filter((id) => id !== exerciseId);
+      }
+
+      return [...currentValue, exerciseId];
+    });
+  }
+
+  function resetRoutineForm() {
+    setRoutineNameInput('');
+    setRoutineNotesInput('');
+    setSelectedExerciseIds([]);
+  }
+
+  async function handleCreateRoutine() {
+    const normalizedName = routineNameInput.trim();
+
+    if (!normalizedName) {
+      Alert.alert('Validation', 'Routine name is required.');
+      return;
+    }
+
+    if (selectedExerciseIds.length === 0) {
+      Alert.alert('Validation', 'Select at least one exercise for this routine.');
+      return;
+    }
+
+    setIsCreatingRoutine(true);
+
+    try {
+      await createRoutine(normalizedName, routineNotesInput, selectedExerciseIds);
+      setIsCreateModalVisible(false);
+      resetRoutineForm();
+      await loadRoutines();
+    } catch (error) {
+      Alert.alert('Unable to create routine', getErrorMessage(error));
+    } finally {
+      setIsCreatingRoutine(false);
+    }
+  }
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <TouchableOpacity style={styles.newRoutineButton} activeOpacity={0.9}>
+      <TouchableOpacity
+        style={styles.newRoutineButton}
+        activeOpacity={0.9}
+        onPress={() => setIsCreateModalVisible(true)}
+      >
         <Ionicons name="add" size={24} color="#FFFFFF" />
         <Text style={styles.newRoutineButtonText}>New Routine</Text>
       </TouchableOpacity>
 
       <Text style={styles.sectionTitle}>Your Routines</Text>
-      {MOCK_ROUTINES.map((routine) => (
-        <TouchableOpacity key={routine.id} style={styles.routineCard} activeOpacity={0.88}>
-          <View style={styles.cardHead}>
-            <Text style={styles.routineName}>{routine.name}</Text>
-            <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
+      {isLoadingRoutines ? (
+        <View style={styles.statusContainer}>
+          <ActivityIndicator size="small" color={palette.accent} />
+          <Text style={styles.statusText}>Loading routines...</Text>
+        </View>
+      ) : routinesError ? (
+        <View style={styles.statusContainer}>
+          <Text style={styles.statusTitle}>Unable to load routines</Text>
+          <Text style={styles.statusText}>{routinesError}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => void loadRoutines()} activeOpacity={0.88}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : routines.length === 0 ? (
+        <View style={styles.statusContainer}>
+          <Text style={styles.statusTitle}>No routines yet</Text>
+          <Text style={styles.statusText}>Create your first routine to speed up workout starts.</Text>
+        </View>
+      ) : (
+        routines.map((routine) => (
+          <View key={routine.id} style={styles.routineCard}>
+            <View style={styles.cardHead}>
+              <Text style={styles.routineName}>{routine.name}</Text>
+              <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
+            </View>
+            <Text style={styles.routineMeta}>{routine.exerciseCount} exercises</Text>
+            <Text style={styles.routineNotes}>{routine.notes ?? 'No notes available.'}</Text>
+
+            <TouchableOpacity
+              style={styles.startRoutineButton}
+              activeOpacity={0.88}
+              onPress={() => handleStartRoutine(routine.id)}
+            >
+              <Ionicons name="play" size={15} color="#FFFFFF" />
+              <Text style={styles.startRoutineButtonText}>Start Routine</Text>
+            </TouchableOpacity>
           </View>
-          <Text style={styles.routineMeta}>{routine.exerciseCount} exercises</Text>
-          <Text style={styles.routineNotes}>{routine.notes ?? 'No notes available.'}</Text>
-        </TouchableOpacity>
-      ))}
+        ))
+      )}
+
+      <Modal
+        visible={isCreateModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsCreateModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <Pressable style={styles.modalDismissArea} onPress={() => setIsCreateModalVisible(false)} />
+
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Create Routine</Text>
+
+            <TextInput
+              value={routineNameInput}
+              onChangeText={setRoutineNameInput}
+              style={styles.modalInput}
+              placeholder="Routine Name"
+              placeholderTextColor={palette.textMuted}
+              autoCapitalize="words"
+            />
+            <TextInput
+              value={routineNotesInput}
+              onChangeText={setRoutineNotesInput}
+              style={[styles.modalInput, styles.modalNotesInput]}
+              placeholder="Notes (optional)"
+              placeholderTextColor={palette.textMuted}
+              autoCapitalize="sentences"
+              multiline
+              textAlignVertical="top"
+            />
+
+            <Text style={styles.modalSectionTitle}>Exercises ({selectedExerciseIds.length})</Text>
+
+            {isLoadingCatalog ? (
+              <View style={styles.modalStatusContainer}>
+                <ActivityIndicator size="small" color={palette.accent} />
+                <Text style={styles.modalStatusText}>Loading exercise catalog...</Text>
+              </View>
+            ) : catalogError ? (
+              <View style={styles.modalStatusContainer}>
+                <Text style={styles.modalStatusTitle}>Unable to load exercises</Text>
+                <Text style={styles.modalStatusText}>{catalogError}</Text>
+                <TouchableOpacity
+                  style={styles.modalRetryButton}
+                  onPress={() => void loadCatalogExercises()}
+                  activeOpacity={0.88}
+                >
+                  <Text style={styles.modalRetryButtonText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            ) : catalogExercises.length === 0 ? (
+              <View style={styles.modalStatusContainer}>
+                <Text style={styles.modalStatusTitle}>No exercises available</Text>
+                <Text style={styles.modalStatusText}>Create exercises first, then build routines.</Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
+                {catalogExercises.map((exercise) => {
+                  const selectedOrder = selectionOrder.get(exercise.id);
+                  const isSelected = selectedOrder !== undefined;
+
+                  return (
+                    <TouchableOpacity
+                      key={exercise.id}
+                      style={[styles.modalExerciseRow, isSelected && styles.modalExerciseRowSelected]}
+                      activeOpacity={0.88}
+                      onPress={() => toggleExerciseSelection(exercise.id)}
+                    >
+                      <View style={styles.modalExerciseTextWrap}>
+                        <Text style={styles.modalExerciseName}>{exercise.name}</Text>
+                        <Text style={styles.modalExerciseMeta}>
+                          {exercise.muscle_group ?? 'General'} - {exercise.equipment ?? 'Bodyweight'}
+                        </Text>
+                      </View>
+
+                      {isSelected ? (
+                        <View style={styles.orderBadge}>
+                          <Text style={styles.orderBadgeText}>{selectedOrder}</Text>
+                        </View>
+                      ) : (
+                        <Ionicons name="add-circle-outline" size={22} color={palette.accent} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+
+            <View style={styles.modalButtonRow}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setIsCreateModalVisible(false)}
+                activeOpacity={0.88}
+              >
+                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalCreateButton, isCreatingRoutine && styles.modalCreateButtonDisabled]}
+                onPress={() => void handleCreateRoutine()}
+                activeOpacity={0.88}
+                disabled={isCreatingRoutine}
+              >
+                {isCreatingRoutine ? (
+                  <ActivityIndicator size="small" color={palette.textPrimary} />
+                ) : (
+                  <Text style={styles.modalCreateButtonText}>Create Routine</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -66,18 +319,13 @@ const styles = StyleSheet.create({
   },
   newRoutineButton: {
     minHeight: 74,
-    borderRadius: 20,
+    borderRadius: 16,
     backgroundColor: palette.accent,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     marginBottom: 24,
-    shadowColor: palette.accent,
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 5 },
-    elevation: 4,
   },
   newRoutineButtonText: {
     color: '#FFFFFF',
@@ -89,6 +337,43 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 12,
+  },
+  statusContainer: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.surface,
+    minHeight: 140,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+  },
+  statusTitle: {
+    color: palette.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  statusText: {
+    color: palette.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginTop: 10,
+  },
+  retryButton: {
+    marginTop: 14,
+    backgroundColor: palette.accent,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 16,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
   routineCard: {
     backgroundColor: palette.surface,
@@ -120,5 +405,197 @@ const styles = StyleSheet.create({
     color: palette.textSecondary,
     fontSize: 14,
     lineHeight: 20,
+  },
+  startRoutineButton: {
+    marginTop: 12,
+    minHeight: 38,
+    borderRadius: 12,
+    backgroundColor: palette.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    columnGap: 8,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+  },
+  startRoutineButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: palette.overlay,
+  },
+  modalDismissArea: {
+    flex: 1,
+  },
+  modalSheet: {
+    maxHeight: '82%',
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderTopWidth: 1,
+    borderColor: palette.border,
+    paddingTop: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+  },
+  modalHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: palette.borderStrong,
+    marginBottom: 12,
+  },
+  modalTitle: {
+    color: palette.textPrimary,
+    fontSize: 20,
+    fontWeight: '800',
+    marginBottom: 12,
+  },
+  modalInput: {
+    backgroundColor: palette.inputBackground,
+    borderWidth: 1,
+    borderColor: palette.inputBorder,
+    color: palette.textPrimary,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 10,
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  modalNotesInput: {
+    minHeight: 84,
+  },
+  modalSectionTitle: {
+    color: palette.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 8,
+    marginTop: 2,
+  },
+  modalList: {
+    maxHeight: 260,
+  },
+  modalStatusContainer: {
+    borderWidth: 1,
+    borderColor: palette.border,
+    borderRadius: 14,
+    backgroundColor: palette.surfaceAlt,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalStatusTitle: {
+    color: palette.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  modalStatusText: {
+    color: palette.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 10,
+    textAlign: 'center',
+  },
+  modalRetryButton: {
+    marginTop: 12,
+    backgroundColor: palette.accent,
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+  },
+  modalRetryButtonText: {
+    color: palette.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  modalExerciseRow: {
+    borderWidth: 1,
+    borderColor: palette.border,
+    borderRadius: 16,
+    backgroundColor: palette.surfaceAlt,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  modalExerciseRowSelected: {
+    borderColor: palette.accent,
+    backgroundColor: '#17345C',
+  },
+  modalExerciseTextWrap: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  modalExerciseName: {
+    color: palette.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  modalExerciseMeta: {
+    color: palette.textSecondary,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  orderBadge: {
+    minWidth: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: palette.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  orderBadgeText: {
+    color: palette.textPrimary,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  modalButtonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    columnGap: 10,
+    marginTop: 10,
+  },
+  modalCancelButton: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: palette.inputBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: palette.bgPrimary,
+  },
+  modalCancelButtonText: {
+    color: palette.textSecondary,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  modalCreateButton: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: palette.accent,
+  },
+  modalCreateButtonDisabled: {
+    opacity: 0.75,
+  },
+  modalCreateButtonText: {
+    color: palette.textPrimary,
+    fontSize: 15,
+    fontWeight: '800',
   },
 });

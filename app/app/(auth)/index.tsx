@@ -72,6 +72,30 @@ export default function AuthScreen() {
     }
   }
 
+  async function handleForgotPassword() {
+    const normalizedEmail = email.trim();
+
+    if (!normalizedEmail) {
+      Alert.alert('Forgot Password', 'Please enter your email first.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail);
+
+      if (error) {
+        Alert.alert('Error', error.message);
+        return;
+      }
+
+      Alert.alert('Forgot Password', 'Check your email to reset your password');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.container}>
       <View style={styles.innerContainer}>
@@ -134,6 +158,16 @@ export default function AuthScreen() {
                   {loading ? 'Loading...' : mode === 'register' ? 'Create Account' : 'Sign In'}
                 </Text>
               </TouchableOpacity>
+
+              {mode === 'login' ? (
+                <TouchableOpacity
+                  onPress={() => void handleForgotPassword()}
+                  style={styles.forgotPasswordContainer}
+                  disabled={loading}
+                >
+                  <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                </TouchableOpacity>
+              ) : null}
 
               <TouchableOpacity
                 onPress={() => setMode(mode === 'login' ? 'register' : 'login')}
@@ -211,6 +245,15 @@ const styles = StyleSheet.create({
   buttonText: {
     color: palette.textPrimary,
     fontSize: 18,
+    fontWeight: '700',
+  },
+  forgotPasswordContainer: {
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  forgotPasswordText: {
+    color: '#93C5FD',
+    fontSize: 14,
     fontWeight: '700',
   },
   switchContainer: { marginTop: 25, alignItems: 'center' },

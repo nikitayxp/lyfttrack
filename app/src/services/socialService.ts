@@ -1,0 +1,414 @@
+import { supabase } from '@/services/supabase';
+import { getAuthenticatedUserOrThrow } from '@/services/workoutService';
+import type { Tables, TablesInsert } from '@/types/database';
+
+export type ProfileRow = Tables<'profiles'>;
+export type FriendRequestRow = Tables<'friend_requests'>;
+export type FriendRow = Tables<'friends'>;
+
+export type SocialProfile = Pick<ProfileRow, 'id' | 'username' | 'full_name' | 'avatar_url'>;
+
+export type SocialSearchResult = SocialProfile & {
+  relation: 'none' | 'friends' | 'request_sent' | 'request_received';
+};
+
+export type PendingFriendRequest = Pick<
+  FriendRequestRow,
+  'id' | 'from_user_id' | 'to_user_id' | 'status' | 'created_at'
+> & {
+  fromProfile: SocialProfile | null;
+};
+
+export type FriendListItem = {
+  friendshipId: string;
+  createdAt: string;
+  profile: SocialProfile;
+};
+
+function normalizeOptionalId(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeUuidSortKey(value: string): string {
+  return value.trim().toLowerCase().replace(/-/g, '');
+}
+
+function sortCanonicalPair(userAId: string, userBId: string): { user_low_id: string; user_high_id: string } {
+  const normalizedA = normalizeOptionalId(userAId);
+  const normalizedB = normalizeOptionalId(userBId);
+
+  if (!normalizedA || !normalizedB) {
+    throw new Error('Both user ids are required to build a friendship pair.');
+  }
+
+  const keyA = normalizeUuidSortKey(normalizedA);
+  const keyB = normalizeUuidSortKey(normalizedB);
+
+  if (keyA === keyB) {
+    throw new Error('Cannot create friendship pair with identical users.');
+  }
+
+  if (keyA < keyB) {
+    return {
+      user_low_id: normalizedA,
+      user_high_id: normalizedB,
+    };
+  }
+
+  return {
+    user_low_id: normalizedB,
+    user_high_id: normalizedA,
+  };
+}
+
+function inFilterList(ids: string[]): string {
+  const normalized = ids.map((id) => id.trim()).filter(Boolean);
+  return `(${normalized.join(',')})`;
+}
+
+async function getProfilesByIds(ids: string[]): Promise<Map<string, SocialProfile>> {
+  const uniqueIds = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+
+  if (uniqueIds.length === 0) {
+    return new Map();
+  }
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, username, full_name, avatar_url')
+    .in('id', uniqueIds);
+
+  if (error) {
+    throw new Error(`Unable to load profile data: ${error.message}`);
+  }
+
+  return new Map((data ?? []).map((profile) => [profile.id, profile]));
+}
+
+function toErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== 'object') {
+    return null;
+  }
+
+  if ('code' in error && typeof error.code === 'string') {
+    return error.code;
+  }
+
+  return null;
+}
+
+export async function searchUsers(query: string): Promise<SocialSearchResult[]> {
+  const user = await getAuthenticatedUserOrThrow();
+  const normalizedQuery = query.trim();
+
+  if (normalizedQuery.length < 2) {
+    return [];
+  }
+
+  const { data: users, error: usersError } = await supabase
+    .from('profiles')
+    .select('id, username, full_name, avatar_url')
+    .ilike('username', `%${normalizedQuery}%`)
+    .neq('id', user.id)
+    .order('username', { ascending: true })
+    .limit(20);
+
+  if (usersError) {
+    throw new Error(`Unable to search users: ${usersError.message}`);
+  }
+
+  const candidates = users ?? [];
+
+  if (candidates.length === 0) {
+    return [];
+  }
+
+  const candidateIds = candidates.map((candidate) => candidate.id);
+  const candidateIdsList = inFilterList(candidateIds);
+
+  const { data: friends, error: friendsError } = await supabase
+    .from('friends')
+    .select('user_low_id, user_high_id')
+    .or(
+      `and(user_low_id.eq.${user.id},user_high_id.in.${candidateIdsList}),and(user_high_id.eq.${user.id},user_low_id.in.${candidateIdsList})`
+    );
+
+  if (friendsError) {
+    throw new Error(`Unable to check friendships: ${friendsError.message}`);
+  }
+
+  const { data: pendingRequests, error: pendingError } = await supabase
+    .from('friend_requests')
+    .select('from_user_id, to_user_id')
+    .eq('status', 'pending')
+    .or(
+      `and(from_user_id.eq.${user.id},to_user_id.in.${candidateIdsList}),and(to_user_id.eq.${user.id},from_user_id.in.${candidateIdsList})`
+    );
+
+  if (pendingError) {
+    throw new Error(`Unable to check pending friend requests: ${pendingError.message}`);
+  }
+
+  const relationByUserId = new Map<string, SocialSearchResult['relation']>();
+
+  for (const link of friends ?? []) {
+    const otherId = link.user_low_id === user.id ? link.user_high_id : link.user_low_id;
+    relationByUserId.set(otherId, 'friends');
+  }
+
+  for (const request of pendingRequests ?? []) {
+    const otherId = request.from_user_id === user.id ? request.to_user_id : request.from_user_id;
+
+    if (relationByUserId.get(otherId) === 'friends') {
+      continue;
+    }
+
+    relationByUserId.set(otherId, request.from_user_id === user.id ? 'request_sent' : 'request_received');
+  }
+
+  return candidates.map((candidate) => ({
+    ...candidate,
+    relation: relationByUserId.get(candidate.id) ?? 'none',
+  }));
+}
+
+export async function sendFriendRequest(userId: string): Promise<FriendRequestRow> {
+  const user = await getAuthenticatedUserOrThrow();
+  const targetUserId = normalizeOptionalId(userId);
+
+  if (!targetUserId) {
+    throw new Error('Target user id is required.');
+  }
+
+  if (targetUserId === user.id) {
+    throw new Error('You cannot send a friend request to yourself.');
+  }
+
+  const pair = sortCanonicalPair(user.id, targetUserId);
+
+  const { data: existingFriend, error: existingFriendError } = await supabase
+    .from('friends')
+    .select('id')
+    .eq('user_low_id', pair.user_low_id)
+    .eq('user_high_id', pair.user_high_id)
+    .maybeSingle();
+
+  if (existingFriendError) {
+    throw new Error(`Unable to validate friendship status: ${existingFriendError.message}`);
+  }
+
+  if (existingFriend) {
+    throw new Error('You are already friends with this user.');
+  }
+
+  const { data: existingPending, error: existingPendingError } = await supabase
+    .from('friend_requests')
+    .select('id, from_user_id, to_user_id')
+    .eq('status', 'pending')
+    .or(
+      `and(from_user_id.eq.${pair.user_low_id},to_user_id.eq.${pair.user_high_id}),and(from_user_id.eq.${pair.user_high_id},to_user_id.eq.${pair.user_low_id})`
+    )
+    .maybeSingle();
+
+  if (existingPendingError) {
+    throw new Error(`Unable to validate pending requests: ${existingPendingError.message}`);
+  }
+
+  if (existingPending) {
+    if (existingPending.from_user_id === user.id) {
+      throw new Error('You already sent a pending friend request to this user.');
+    }
+
+    throw new Error('This user has already sent you a friend request.');
+  }
+
+  const insertRow: TablesInsert<'friend_requests'> = {
+    from_user_id: user.id,
+    to_user_id: targetUserId,
+    status: 'pending',
+  };
+
+  const { data: request, error: insertError } = await supabase
+    .from('friend_requests')
+    .insert(insertRow)
+    .select('*')
+    .single();
+
+  if (insertError || !request) {
+    const code = toErrorCode(insertError);
+
+    if (code === '23505') {
+      throw new Error('A pending friend request already exists between these users.');
+    }
+
+    throw new Error(`Unable to send friend request: ${insertError?.message ?? 'Unknown error'}`);
+  }
+
+  return request;
+}
+
+export async function getPendingRequests(): Promise<PendingFriendRequest[]> {
+  const user = await getAuthenticatedUserOrThrow();
+
+  const { data: requests, error: requestsError } = await supabase
+    .from('friend_requests')
+    .select('id, from_user_id, to_user_id, status, created_at')
+    .eq('to_user_id', user.id)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false });
+
+  if (requestsError) {
+    throw new Error(`Unable to load pending requests: ${requestsError.message}`);
+  }
+
+  const rows = requests ?? [];
+
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const profileById = await getProfilesByIds(rows.map((row) => row.from_user_id));
+
+  return rows.map((row) => ({
+    ...row,
+    fromProfile: profileById.get(row.from_user_id) ?? null,
+  }));
+}
+
+export async function acceptRequest(requestId: string): Promise<FriendRequestRow> {
+  const user = await getAuthenticatedUserOrThrow();
+  const normalizedRequestId = normalizeOptionalId(requestId);
+
+  if (!normalizedRequestId) {
+    throw new Error('Request id is required.');
+  }
+
+  const { data: request, error: requestError } = await supabase
+    .from('friend_requests')
+    .select('*')
+    .eq('id', normalizedRequestId)
+    .eq('to_user_id', user.id)
+    .maybeSingle();
+
+  if (requestError) {
+    throw new Error(`Unable to load friend request: ${requestError.message}`);
+  }
+
+  if (!request) {
+    throw new Error('Friend request not found.');
+  }
+
+  if (request.status !== 'pending') {
+    throw new Error('This friend request is no longer pending.');
+  }
+
+  const pair = sortCanonicalPair(request.from_user_id, request.to_user_id);
+
+  const friendshipInsert: TablesInsert<'friends'> = {
+    user_low_id: pair.user_low_id,
+    user_high_id: pair.user_high_id,
+    created_by_request_id: request.id,
+  };
+
+  const { error: friendInsertError } = await supabase.from('friends').insert(friendshipInsert);
+
+  if (friendInsertError) {
+    const code = toErrorCode(friendInsertError);
+
+    if (code !== '23505') {
+      throw new Error(`Unable to create friendship: ${friendInsertError.message}`);
+    }
+  }
+
+  const { data: updatedRequest, error: updateError } = await supabase
+    .from('friend_requests')
+    .update({
+      status: 'accepted',
+      responded_at: new Date().toISOString(),
+    })
+    .eq('id', request.id)
+    .eq('to_user_id', user.id)
+    .eq('status', 'pending')
+    .select('*')
+    .single();
+
+  if (updateError || !updatedRequest) {
+    throw new Error(`Unable to accept friend request: ${updateError?.message ?? 'Unknown error'}`);
+  }
+
+  return updatedRequest;
+}
+
+export async function rejectRequest(requestId: string): Promise<FriendRequestRow> {
+  const user = await getAuthenticatedUserOrThrow();
+  const normalizedRequestId = normalizeOptionalId(requestId);
+
+  if (!normalizedRequestId) {
+    throw new Error('Request id is required.');
+  }
+
+  const { data: updatedRequest, error: updateError } = await supabase
+    .from('friend_requests')
+    .update({
+      status: 'rejected',
+      responded_at: new Date().toISOString(),
+    })
+    .eq('id', normalizedRequestId)
+    .eq('to_user_id', user.id)
+    .eq('status', 'pending')
+    .select('*')
+    .single();
+
+  if (updateError || !updatedRequest) {
+    throw new Error(`Unable to reject friend request: ${updateError?.message ?? 'Unknown error'}`);
+  }
+
+  return updatedRequest;
+}
+
+export async function getFriends(): Promise<FriendListItem[]> {
+  const user = await getAuthenticatedUserOrThrow();
+
+  const { data: friendships, error: friendshipsError } = await supabase
+    .from('friends')
+    .select('id, user_low_id, user_high_id, created_at')
+    .or(`user_low_id.eq.${user.id},user_high_id.eq.${user.id}`)
+    .order('created_at', { ascending: false });
+
+  if (friendshipsError) {
+    throw new Error(`Unable to load friends: ${friendshipsError.message}`);
+  }
+
+  const links = friendships ?? [];
+
+  if (links.length === 0) {
+    return [];
+  }
+
+  const friendIds = links.map((link) => (link.user_low_id === user.id ? link.user_high_id : link.user_low_id));
+  const profileById = await getProfilesByIds(friendIds);
+
+  const result: FriendListItem[] = [];
+
+  for (const link of links) {
+    const friendId = link.user_low_id === user.id ? link.user_high_id : link.user_low_id;
+    const profile = profileById.get(friendId);
+
+    if (!profile) {
+      continue;
+    }
+
+    result.push({
+      friendshipId: link.id,
+      createdAt: link.created_at,
+      profile,
+    });
+  }
+
+  return result;
+}

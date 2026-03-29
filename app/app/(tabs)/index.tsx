@@ -1,565 +1,742 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, FlatList, Image, StyleSheet, Text, View } from 'react-native';
-import { Colors } from '@/constants/theme';
-import { supabase } from '@/services/supabase';
 import {
-  getWorkoutHistory,
-  getWorkoutStats,
-  type WorkoutHistoryItem,
-  type WorkoutStats,
-} from '@/services/workoutService';
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { Colors } from '@/constants/theme';
+import {
+  addComment,
+  getCurrentCommentAuthorProfile,
+  getWorkoutComments,
+  toggleLike,
+  type CommentAuthorProfile,
+  type WorkoutCommentWithProfile,
+} from '@/services/interactionService';
+import { getErrorMessage, getFeedWorkouts, type WorkoutFeedItem } from '@/services/workoutService';
+import { FeedCommentsModal } from '@/components/feed/FeedCommentsModal';
+import { WorkoutFeedCard } from '@/components/feed/WorkoutFeedCard';
 
 const palette = Colors.dark;
+const SCREEN_BG = '#050A12';
+const CARD_BG = '#111827';
+const FEED_PAGE_SIZE = 20;
 
-function formatDisplayName(value: string): string {
-  return value
-    .split(/[\s._-]+/)
-    .filter(Boolean)
-    .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1).toLowerCase())
-    .join(' ');
-}
+type FeedLikeInteractionState = {
+  hasLiked: boolean;
+  likesCount: number;
+  isPending: boolean;
+};
 
-function formatRelativeDate(iso: string): string {
-  const date = new Date(iso);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) return `${diffDays}d ago`;
-
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
-function formatDuration(startIso: string, endIso: string | null): string {
-  if (!endIso) return '--';
-  const startMs = new Date(startIso).getTime();
-  const endMs = new Date(endIso).getTime();
-  const minutes = Math.round((endMs - startMs) / 60000);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  const remainMinutes = minutes % 60;
-  return `${hours}h ${remainMinutes}m`;
-}
-
-function formatVolume(kg: number): string {
-  if (kg >= 1000) return `${(kg / 1000).toFixed(1)}t`;
-  return `${kg.toLocaleString()} kg`;
-}
-
-// ─── Stat Card ────────────────────────────────────────────
-
-function StatCard({
-  icon,
-  value,
-  label,
-  accentColor,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  value: string;
-  label: string;
-  accentColor?: string;
-}) {
-  return (
-    <View style={statStyles.card}>
-      <View style={[statStyles.iconWrap, { backgroundColor: (accentColor ?? palette.accent) + '18' }]}>
-        <Ionicons name={icon} size={18} color={accentColor ?? palette.accent} />
-      </View>
-      <Text style={statStyles.value}>{value}</Text>
-      <Text style={statStyles.label}>{label}</Text>
-    </View>
-  );
-}
-
-const statStyles = StyleSheet.create({
-  card: {
-    flex: 1,
-    backgroundColor: palette.surface,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: palette.border,
-    paddingVertical: 16,
-    paddingHorizontal: 14,
-    alignItems: 'flex-start',
-  },
-  iconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  value: {
-    color: palette.textPrimary,
-    fontSize: 22,
-    fontWeight: '800',
-    marginBottom: 2,
-  },
-  label: {
-    color: palette.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-});
-
-// ─── Workout Card ────────────────────────────────────────
-
-function WorkoutCard({ workout }: { workout: WorkoutHistoryItem }) {
-  const exerciseSummary = workout.exerciseNames.slice(0, 4);
-  const remaining = workout.exerciseNames.length - 4;
-
-  return (
-    <View style={cardStyles.container}>
-      <View style={cardStyles.headerRow}>
-        <View style={cardStyles.headerLeft}>
-          <Text style={cardStyles.workoutName} numberOfLines={1}>
-            {workout.name}
-          </Text>
-          <Text style={cardStyles.dateText}>{formatRelativeDate(workout.start_time)}</Text>
-        </View>
-        <View style={cardStyles.durationChip}>
-          <Ionicons name="time-outline" size={13} color={palette.accent} />
-          <Text style={cardStyles.durationText}>
-            {formatDuration(workout.start_time, workout.end_time)}
-          </Text>
-        </View>
-      </View>
-
-      <View style={cardStyles.metricsRow}>
-        <View style={cardStyles.metricItem}>
-          <Ionicons name="barbell-outline" size={14} color={palette.textMuted} />
-          <Text style={cardStyles.metricValue}>{workout.totalSets}</Text>
-          <Text style={cardStyles.metricLabel}>sets</Text>
-        </View>
-        <View style={cardStyles.metricDivider} />
-        <View style={cardStyles.metricItem}>
-          <Ionicons name="fitness-outline" size={14} color={palette.textMuted} />
-          <Text style={cardStyles.metricValue}>{formatVolume(workout.totalVolume)}</Text>
-          <Text style={cardStyles.metricLabel}>volume</Text>
-        </View>
-        <View style={cardStyles.metricDivider} />
-        <View style={cardStyles.metricItem}>
-          <Ionicons name="list-outline" size={14} color={palette.textMuted} />
-          <Text style={cardStyles.metricValue}>{workout.exerciseNames.length}</Text>
-          <Text style={cardStyles.metricLabel}>exercises</Text>
-        </View>
-      </View>
-
-      <View style={cardStyles.exerciseList}>
-        {exerciseSummary.map((name, i) => (
-          <View key={`${workout.id}-${name}-${i}`} style={cardStyles.exerciseChip}>
-            <View style={cardStyles.exerciseDot} />
-            <Text style={cardStyles.exerciseChipText} numberOfLines={1}>
-              {name}
-            </Text>
-          </View>
-        ))}
-        {remaining > 0 && (
-          <View style={[cardStyles.exerciseChip, cardStyles.exerciseChipMore]}>
-            <Text style={cardStyles.exerciseChipMoreText}>+{remaining}</Text>
-          </View>
-        )}
-      </View>
-    </View>
-  );
-}
-
-const cardStyles = StyleSheet.create({
-  container: {
-    backgroundColor: palette.surface,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: palette.border,
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 14,
-  },
-  headerLeft: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  workoutName: {
-    color: palette.textPrimary,
-    fontSize: 18,
-    fontWeight: '800',
-    marginBottom: 3,
-  },
-  dateText: {
-    color: palette.textMuted,
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  durationChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: palette.accentSoft,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-  },
-  durationText: {
-    color: palette.accent,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: palette.surfaceAlt,
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginBottom: 14,
-  },
-  metricItem: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  metricValue: {
-    color: palette.textPrimary,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  metricLabel: {
-    color: palette.textMuted,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  metricDivider: {
-    width: 1,
-    height: 20,
-    backgroundColor: palette.border,
-    marginHorizontal: 8,
-  },
-  exerciseList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  exerciseChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: palette.surfaceAlt,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  exerciseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: palette.accent,
-  },
-  exerciseChipText: {
-    color: palette.textSecondary,
-    fontSize: 12,
-    fontWeight: '600',
-    maxWidth: 120,
-  },
-  exerciseChipMore: {
-    backgroundColor: palette.accentSoft,
-  },
-  exerciseChipMoreText: {
-    color: palette.accent,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-});
-
-// ─── Main Dashboard ──────────────────────────────────────
-
-export default function ProfileDashboardScreen() {
-  const [displayName, setDisplayName] = useState('Athlete');
-  const [workouts, setWorkouts] = useState<WorkoutHistoryItem[]>([]);
-  const [stats, setStats] = useState<WorkoutStats>({ totalWorkouts: 0, totalVolume: 0, totalSets: 0 });
+export default function FeedScreen() {
+  const [workouts, setWorkouts] = useState<WorkoutFeedItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [feedError, setFeedError] = useState<string | null>(null);
+  const [optimisticLikeState, setOptimisticLikeState] = useState<Record<string, FeedLikeInteractionState>>({});
+  const [commentsByWorkoutId, setCommentsByWorkoutId] = useState<Record<string, WorkoutCommentWithProfile[]>>({});
+  const [commentCountByWorkoutId, setCommentCountByWorkoutId] = useState<Record<string, number>>({});
+  const [selectedWorkoutForComments, setSelectedWorkoutForComments] = useState<WorkoutFeedItem | null>(null);
+  const [isCommentsLoading, setIsCommentsLoading] = useState(false);
+  const [isSendingComment, setIsSendingComment] = useState(false);
+  const [commentsError, setCommentsError] = useState<string | null>(null);
+  const [commentInputValue, setCommentInputValue] = useState('');
+  const [currentCommentAuthor, setCurrentCommentAuthor] = useState<CommentAuthorProfile | null>(null);
 
-  const todayLabel = useMemo(
-    () =>
-      new Date().toLocaleDateString('en-US', {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-      }),
-    []
-  );
-
-  const loadData = useCallback(async () => {
-    setIsLoading(true);
+  const loadFeedPage = useCallback(async (pageToLoad: number, mode: 'reset' | 'append') => {
+    if (mode === 'reset') {
+      setFeedError(null);
+    }
 
     try {
-      const { data } = await supabase.auth.getUser();
+      const data = await getFeedWorkouts(pageToLoad, FEED_PAGE_SIZE);
 
-      const metadata = (data.user?.user_metadata ?? {}) as {
-        username?: string;
-        full_name?: string;
-      };
+      if (mode === 'reset') {
+        setWorkouts(data);
+        setCurrentPage(0);
+        setHasMore(data.length === FEED_PAGE_SIZE);
 
-      const fromMetadata = metadata.full_name ?? metadata.username ?? '';
-      const fromEmail = data.user?.email?.split('@')[0] ?? '';
-      const rawName = fromMetadata || fromEmail || 'Athlete';
-      setDisplayName(formatDisplayName(rawName));
+        setOptimisticLikeState((currentState) => {
+          const validWorkoutIds = new Set(data.map((item) => item.id));
+          const nextState: Record<string, FeedLikeInteractionState> = {};
 
-      const [historyResult, statsResult] = await Promise.all([
-        getWorkoutHistory(20),
-        getWorkoutStats(),
-      ]);
+          for (const [workoutId, state] of Object.entries(currentState)) {
+            if (validWorkoutIds.has(workoutId)) {
+              nextState[workoutId] = state;
+            }
+          }
 
-      setWorkouts(historyResult);
-      setStats(statsResult);
+          return nextState;
+        });
+
+        setCommentsByWorkoutId((currentState) => {
+          const validWorkoutIds = new Set(data.map((item) => item.id));
+          const nextState: Record<string, WorkoutCommentWithProfile[]> = {};
+
+          for (const [workoutId, state] of Object.entries(currentState)) {
+            if (validWorkoutIds.has(workoutId)) {
+              nextState[workoutId] = state;
+            }
+          }
+
+          return nextState;
+        });
+
+        setCommentCountByWorkoutId((currentState) => {
+          const validWorkoutIds = new Set(data.map((item) => item.id));
+          const nextState: Record<string, number> = {};
+
+          for (const [workoutId, state] of Object.entries(currentState)) {
+            if (validWorkoutIds.has(workoutId)) {
+              nextState[workoutId] = state;
+            }
+          }
+
+          return nextState;
+        });
+
+        return;
+      }
+
+      if (data.length === 0) {
+        setHasMore(false);
+        return;
+      }
+
+      setWorkouts((currentState) => {
+        const byWorkoutId = new Map<string, WorkoutFeedItem>();
+
+        for (const workout of currentState) {
+          byWorkoutId.set(workout.id, workout);
+        }
+
+        for (const workout of data) {
+          byWorkoutId.set(workout.id, workout);
+        }
+
+        return [...byWorkoutId.values()];
+      });
+
+      setCurrentPage(pageToLoad);
+      setHasMore(data.length === FEED_PAGE_SIZE);
+    } catch (error) {
+      setFeedError(getErrorMessage(error));
+    }
+  }, []);
+
+  const ensureCurrentCommentAuthor = useCallback(async (): Promise<CommentAuthorProfile | null> => {
+    if (currentCommentAuthor) {
+      return currentCommentAuthor;
+    }
+
+    try {
+      const profile = await getCurrentCommentAuthorProfile();
+      setCurrentCommentAuthor(profile);
+      return profile;
     } catch {
-      // Silently fall back to empty state
+      return null;
+    }
+  }, [currentCommentAuthor]);
+
+  const loadCommentsForWorkout = useCallback(async (workoutId: string) => {
+    setCommentsError(null);
+    setIsCommentsLoading(true);
+
+    try {
+      const comments = await getWorkoutComments(workoutId);
+      setCommentsByWorkoutId((currentState) => ({
+        ...currentState,
+        [workoutId]: comments,
+      }));
+      setCommentCountByWorkoutId((currentState) => ({
+        ...currentState,
+        [workoutId]: comments.length,
+      }));
+    } catch (error) {
+      setCommentsError(getErrorMessage(error));
     } finally {
-      setIsLoading(false);
+      setIsCommentsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void loadData();
-  }, [loadData]);
+    const run = async () => {
+      setIsLoading(true);
+      await loadFeedPage(0, 'reset');
+      setIsLoading(false);
+    };
 
-  const renderWorkoutCard = useCallback(
-    ({ item }: { item: WorkoutHistoryItem }) => <WorkoutCard workout={item} />,
-    []
+    void run();
+  }, [loadFeedPage]);
+
+  const onRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await loadFeedPage(0, 'reset');
+    setIsRefreshing(false);
+  }, [loadFeedPage]);
+
+  const onEndReached = useCallback(async () => {
+    if (isLoading || isRefreshing || isLoadingMore || !hasMore) {
+      return;
+    }
+
+    setIsLoadingMore(true);
+
+    try {
+      await loadFeedPage(currentPage + 1, 'append');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [currentPage, hasMore, isLoading, isLoadingMore, isRefreshing, loadFeedPage]);
+
+  const openCommentsModal = useCallback(
+    (workout: WorkoutFeedItem) => {
+      setSelectedWorkoutForComments(workout);
+      setCommentInputValue('');
+      setCommentsError(null);
+      void ensureCurrentCommentAuthor();
+      void loadCommentsForWorkout(workout.id);
+    },
+    [ensureCurrentCommentAuthor, loadCommentsForWorkout]
   );
 
-  const keyExtractor = useCallback((item: WorkoutHistoryItem) => item.id, []);
+  const closeCommentsModal = useCallback(() => {
+    setSelectedWorkoutForComments(null);
+    setCommentInputValue('');
+    setCommentsError(null);
+  }, []);
 
-  const ListHeader = useMemo(
-    () => (
-      <>
-        {/* Logo */}
-        <View style={styles.logoRow}>
-          <Image
-            source={require('../../assets/images/logo.jpg')}
-            style={styles.logoImage}
-            resizeMode="contain"
-          />
-        </View>
+  const sendComment = useCallback(async () => {
+    if (!selectedWorkoutForComments || isSendingComment) {
+      return;
+    }
 
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.greeting}>Welcome back,</Text>
-            <Text style={styles.userName}>{displayName}</Text>
-          </View>
-          <View style={styles.dateChip}>
-            <Ionicons name="calendar-outline" size={13} color={palette.accent} />
-            <Text style={styles.dateChipText}>{todayLabel}</Text>
-          </View>
-        </View>
+    const workoutId = selectedWorkoutForComments.id;
+    const trimmedComment = commentInputValue.trim();
 
-        {/* Stats */}
-        <Text style={styles.sectionTitle}>Your Stats</Text>
-        <View style={styles.statsRow}>
-          <StatCard
-            icon="flame-outline"
-            value={String(stats.totalWorkouts)}
-            label="Workouts"
-            accentColor="#F97316"
-          />
-          <View style={{ width: 10 }} />
-          <StatCard
-            icon="trending-up-outline"
-            value={formatVolume(stats.totalVolume)}
-            label="Volume"
-            accentColor="#22C55E"
-          />
-          <View style={{ width: 10 }} />
-          <StatCard
-            icon="layers-outline"
-            value={String(stats.totalSets)}
-            label="Sets"
-            accentColor="#8B5CF6"
-          />
-        </View>
+    if (!trimmedComment) {
+      return;
+    }
 
-        {/* Recent History Title */}
-        <View style={styles.historyHeader}>
-          <Text style={styles.sectionTitle}>Recent History</Text>
-          <Text style={styles.historyCount}>
-            {workouts.length > 0 ? `${workouts.length} sessions` : ''}
-          </Text>
-        </View>
-      </>
-    ),
-    [displayName, todayLabel, stats, workouts.length]
-  );
+    const author = currentCommentAuthor;
+    const optimisticCommentId = `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const optimisticComment: WorkoutCommentWithProfile = {
+      id: optimisticCommentId,
+      workout_id: workoutId,
+      user_id: author?.id ?? 'optimistic-author',
+      content: trimmedComment,
+      created_at: new Date().toISOString(),
+      profile: author,
+    };
 
-  const ListEmpty = useMemo(
-    () =>
-      isLoading ? (
-        <View style={styles.loadingContainer}>
+    setCommentInputValue('');
+    setIsSendingComment(true);
+
+    setCommentsByWorkoutId((currentState) => {
+      const currentComments = currentState[workoutId] ?? [];
+
+      return {
+        ...currentState,
+        [workoutId]: [...currentComments, optimisticComment],
+      };
+    });
+
+    setCommentCountByWorkoutId((currentState) => {
+      const baseCount = currentState[workoutId] ?? selectedWorkoutForComments.comments_count;
+
+      return {
+        ...currentState,
+        [workoutId]: baseCount + 1,
+      };
+    });
+
+    try {
+      const savedComment = await addComment(workoutId, trimmedComment);
+
+      setCommentsByWorkoutId((currentState) => {
+        const currentComments = currentState[workoutId] ?? [];
+
+        return {
+          ...currentState,
+          [workoutId]: currentComments.map((comment) => {
+            if (comment.id !== optimisticCommentId) {
+              return comment;
+            }
+
+            return {
+              id: savedComment.id,
+              workout_id: savedComment.workout_id,
+              user_id: savedComment.user_id,
+              content: savedComment.content,
+              created_at: savedComment.created_at,
+              profile: comment.profile,
+            };
+          }),
+        };
+      });
+
+      void loadCommentsForWorkout(workoutId);
+      void ensureCurrentCommentAuthor();
+    } catch (error) {
+      setCommentsByWorkoutId((currentState) => {
+        const currentComments = currentState[workoutId] ?? [];
+
+        return {
+          ...currentState,
+          [workoutId]: currentComments.filter((comment) => comment.id !== optimisticCommentId),
+        };
+      });
+
+      setCommentCountByWorkoutId((currentState) => {
+        const baseCount = currentState[workoutId] ?? selectedWorkoutForComments.comments_count + 1;
+
+        return {
+          ...currentState,
+          [workoutId]: Math.max(0, baseCount - 1),
+        };
+      });
+
+      setCommentInputValue(trimmedComment);
+      Alert.alert('Unable to add comment', getErrorMessage(error));
+    } finally {
+      setIsSendingComment(false);
+    }
+  }, [
+    commentInputValue,
+    currentCommentAuthor,
+    ensureCurrentCommentAuthor,
+    isSendingComment,
+    loadCommentsForWorkout,
+    selectedWorkoutForComments,
+  ]);
+
+  const handleToggleLike = useCallback(async (workout: WorkoutFeedItem) => {
+    let previousState: FeedLikeInteractionState | undefined;
+    let optimisticState: FeedLikeInteractionState | null = null;
+
+    setOptimisticLikeState((currentState) => {
+      previousState = currentState[workout.id];
+
+      if (previousState?.isPending) {
+        return currentState;
+      }
+
+      const currentHasLiked = previousState?.hasLiked ?? workout.has_liked;
+      const currentLikesCount = previousState?.likesCount ?? workout.likes_count;
+
+      optimisticState = {
+        hasLiked: !currentHasLiked,
+        likesCount: Math.max(0, currentLikesCount + (!currentHasLiked ? 1 : -1)),
+        isPending: true,
+      };
+
+      return {
+        ...currentState,
+        [workout.id]: optimisticState,
+      };
+    });
+
+    if (!optimisticState) {
+      return;
+    }
+
+    const optimisticSnapshot = optimisticState;
+
+    try {
+      const result = await toggleLike(workout.id);
+
+      setOptimisticLikeState((currentState) => {
+        const existingState = currentState[workout.id] ?? optimisticSnapshot;
+        let resolvedLikesCount = existingState.likesCount;
+
+        if (result.liked !== existingState.hasLiked) {
+          resolvedLikesCount = Math.max(0, existingState.likesCount + (result.liked ? 1 : -1));
+        }
+
+        return {
+          ...currentState,
+          [workout.id]: {
+            hasLiked: result.liked,
+            likesCount: resolvedLikesCount,
+            isPending: false,
+          },
+        };
+      });
+    } catch (error) {
+      setOptimisticLikeState((currentState) => {
+        const nextState = { ...currentState };
+
+        if (previousState) {
+          nextState[workout.id] = {
+            ...previousState,
+            isPending: false,
+          };
+        } else {
+          delete nextState[workout.id];
+        }
+
+        return nextState;
+      });
+
+      Alert.alert('Unable to update like', getErrorMessage(error));
+    }
+  }, []);
+
+  const headerTitle = useMemo(() => {
+    return (
+      <View style={styles.headerWrap}>
+        <Text style={styles.title}>Global Feed</Text>
+        <Text style={styles.subtitle}>Your workouts and your friends' latest sessions.</Text>
+      </View>
+    );
+  }, []);
+
+  const emptyState = useMemo(() => {
+    if (isLoading) {
+      return (
+        <View style={styles.statusCard}>
           <ActivityIndicator size="small" color={palette.accent} />
-          <Text style={styles.loadingText}>Loading your workouts...</Text>
+          <Text style={styles.statusText}>Loading feed...</Text>
         </View>
-      ) : (
-        <View style={styles.emptyState}>
-          <View style={styles.emptyIconWrap}>
-            <Ionicons name="barbell-outline" size={28} color={palette.textMuted} />
-          </View>
-          <Text style={styles.emptyTitle}>No workouts yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Complete your first session and it will appear here.
-          </Text>
+      );
+    }
+
+    if (feedError) {
+      return (
+        <View style={styles.statusCard}>
+          <Text style={styles.statusTitle}>Unable to load feed</Text>
+          <Text style={styles.statusText}>{feedError}</Text>
         </View>
-      ),
-    [isLoading]
-  );
+      );
+    }
+
+    return (
+      <View style={styles.statusCard}>
+        <Text style={styles.statusTitle}>No workouts in feed yet</Text>
+        <Text style={styles.statusText}>Your timeline will fill as you and your friends train.</Text>
+      </View>
+    );
+  }, [feedError, isLoading]);
+
+  const selectedWorkoutComments = selectedWorkoutForComments
+    ? commentsByWorkoutId[selectedWorkoutForComments.id] ?? []
+    : [];
 
   return (
-    <FlatList
-      data={workouts}
-      renderItem={renderWorkoutCard}
-      keyExtractor={keyExtractor}
-      ListHeaderComponent={ListHeader}
-      ListEmptyComponent={ListEmpty}
-      style={styles.screen}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    />
+    <>
+      <FlatList
+        data={workouts}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => {
+          const interactionState = optimisticLikeState[item.id];
+
+          return (
+            <WorkoutFeedCard
+              workout={item}
+              likeCount={interactionState?.likesCount ?? item.likes_count}
+              commentsCount={commentCountByWorkoutId[item.id] ?? item.comments_count}
+              hasLiked={interactionState?.hasLiked ?? item.has_liked}
+              isLikePending={interactionState?.isPending ?? false}
+              onToggleLike={() => void handleToggleLike(item)}
+              onOpenComments={() => openCommentsModal(item)}
+            />
+          );
+        }}
+        ListHeaderComponent={headerTitle}
+        ListEmptyComponent={emptyState}
+        ListFooterComponent={
+          isLoadingMore ? (
+            <View style={styles.footerLoadingWrap}>
+              <ActivityIndicator size="small" color={palette.accent} />
+            </View>
+          ) : null
+        }
+        style={styles.screen}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        onEndReachedThreshold={0.5}
+        onEndReached={() => void onEndReached()}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => void onRefresh()}
+            tintColor={palette.accent}
+          />
+        }
+      />
+
+      <FeedCommentsModal
+        visible={selectedWorkoutForComments !== null}
+        workoutName={selectedWorkoutForComments?.name ?? 'Workout'}
+        comments={selectedWorkoutComments}
+        isLoading={isCommentsLoading}
+        isSending={isSendingComment}
+        errorMessage={commentsError}
+        inputValue={commentInputValue}
+        onChangeInput={setCommentInputValue}
+        onClose={closeCommentsModal}
+        onSend={() => void sendComment()}
+        onRetry={() => {
+          if (!selectedWorkoutForComments) {
+            return;
+          }
+
+          void loadCommentsForWorkout(selectedWorkoutForComments.id);
+        }}
+      />
+    </>
   );
 }
-
-// ─── Main Styles ──────────────────────────────────────────
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: palette.bgPrimary,
+    backgroundColor: SCREEN_BG,
   },
   content: {
     paddingHorizontal: 20,
     paddingTop: 24,
     paddingBottom: 40,
   },
-  logoRow: {
+  headerWrap: {
     marginBottom: 16,
-    alignItems: 'flex-start',
   },
-  logoImage: {
-    width: 176,
-    height: 54,
+  title: {
+    color: palette.textPrimary,
+    fontSize: 30,
+    fontWeight: '800',
+    marginBottom: 4,
   },
-  headerRow: {
+  subtitle: {
+    color: palette.textSecondary,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  card: {
+    backgroundColor: CARD_BG,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#1F2937',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 12,
+  },
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 24,
+    marginBottom: 10,
   },
-  greeting: {
-    color: palette.textMuted,
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 2,
-  },
-  userName: {
-    color: palette.textPrimary,
-    fontSize: 28,
-    fontWeight: '800',
-  },
-  dateChip: {
+  authorWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: palette.accentSoft,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    flex: 1,
+    paddingRight: 10,
   },
-  dateChipText: {
+  avatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    marginRight: 10,
+  },
+  avatarFallback: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    marginRight: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: palette.accentSoft,
+  },
+  avatarFallbackText: {
+    color: palette.accent,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  authorTextWrap: {
+    flex: 1,
+  },
+  authorName: {
+    color: palette.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  authorMeta: {
+    color: palette.textMuted,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  durationChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 4,
+    borderRadius: 999,
+    backgroundColor: palette.accentSoft,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  durationText: {
     color: palette.accent,
     fontSize: 12,
     fontWeight: '700',
   },
-  sectionTitle: {
-    color: palette.textPrimary,
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 12,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    marginBottom: 28,
-  },
-  historyHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  historyCount: {
-    color: palette.textMuted,
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  loadingContainer: {
-    backgroundColor: palette.surface,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: palette.border,
-    minHeight: 160,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-    gap: 12,
-  },
-  loadingText: {
-    color: palette.textMuted,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  emptyState: {
-    backgroundColor: palette.surface,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: palette.border,
-    minHeight: 200,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 28,
-  },
-  emptyIconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: palette.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  emptyTitle: {
+  workoutName: {
     color: palette.textPrimary,
     fontSize: 17,
-    fontWeight: '700',
-    marginBottom: 6,
+    fontWeight: '800',
+    marginBottom: 4,
   },
-  emptySubtitle: {
+  workoutNotes: {
+    color: palette.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 10,
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    backgroundColor: '#0D1624',
+    borderWidth: 1,
+    borderColor: '#253041',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    marginBottom: 10,
+  },
+  metricBlock: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  metricValue: {
+    color: palette.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  metricLabel: {
+    color: palette.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  metricDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: '#253041',
+    marginHorizontal: 8,
+  },
+  exerciseRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    columnGap: 6,
+    rowGap: 6,
+  },
+  exerciseChip: {
+    backgroundColor: '#0D1624',
+    borderWidth: 1,
+    borderColor: '#253041',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    maxWidth: '80%',
+  },
+  exerciseChipText: {
+    color: palette.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  moreChip: {
+    backgroundColor: palette.accentSoft,
+    borderColor: palette.accent,
+  },
+  moreChipText: {
+    color: palette.accent,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  interactionRow: {
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#253041',
+    paddingTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 10,
+  },
+  interactionButton: {
+    minHeight: 34,
+    borderRadius: 10,
+    backgroundColor: '#0D1624',
+    borderWidth: 1,
+    borderColor: '#253041',
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    columnGap: 6,
+  },
+  interactionButtonStatic: {
+    minHeight: 34,
+    borderRadius: 10,
+    backgroundColor: '#0D1624',
+    borderWidth: 1,
+    borderColor: '#253041',
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    columnGap: 6,
+  },
+  likeButtonActive: {
+    borderColor: '#EF4444',
+    backgroundColor: '#2A1118',
+  },
+  interactionText: {
+    color: palette.textMuted,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  likeTextActive: {
+    color: '#EF4444',
+  },
+  statusCard: {
+    backgroundColor: CARD_BG,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#1F2937',
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  statusTitle: {
+    color: palette.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  statusText: {
     color: palette.textMuted,
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
+    marginTop: 10,
+  },
+  footerLoadingWrap: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

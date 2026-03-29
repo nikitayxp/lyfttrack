@@ -37,7 +37,7 @@ export type WorkoutSetProgressDraft = WorkoutSetDraft & {
 export type CreateWorkoutWithSetsInput = {
   name: string;
   notes?: string | null;
-  routineId?: string | null;
+  templateId?: string | null;
   startTime: string;
   endTime: string;
   setDrafts: WorkoutSetDraft[];
@@ -51,7 +51,7 @@ export type CreateWorkoutWithSetsResult = {
 export type FinishWorkoutInput = {
   name: string;
   notes?: string | null;
-  routineId?: string | null;
+  templateId?: string | null;
   startTime: string;
   setDrafts: WorkoutSetProgressDraft[];
 };
@@ -700,7 +700,7 @@ export async function finishWorkout(input: FinishWorkoutInput): Promise<FinishWo
   const saveResult = await createWorkoutWithSets({
     name: input.name,
     notes: input.notes,
-    routineId: input.routineId,
+    templateId: input.templateId,
     startTime: input.startTime,
     endTime,
     setDrafts: completedSetDrafts,
@@ -726,7 +726,7 @@ export async function createWorkoutWithSets(
     user_id: user.id,
     name: input.name.trim() || 'Untitled Workout',
     notes: input.notes ?? null,
-    routine_id: normalizeOptionalId(input.routineId),
+    template_id: normalizeOptionalId(input.templateId),
     start_time: input.startTime,
     end_time: input.endTime,
   };

@@ -41,6 +41,7 @@ import type { Tables } from '@/types/database';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PlateCalculatorModal } from '@/components/workout/PlateCalculatorModal';
 import { WorkoutSummary } from '@/components/workout/WorkoutSummary';
+import { calculatePlateBreakdown, formatPlateWeight } from '@/utils/plateCalculator';
 
 type ExerciseRow = Tables<'exercises'>;
 type SetRow = Tables<'sets'>;
@@ -162,6 +163,30 @@ function sanitizeDecimalInput(value: string): string {
 
 function sanitizeIntegerInput(value: string): string {
   return value.replace(/[^0-9]/g, '');
+}
+
+function isBarbellExerciseEquipment(equipment: string | null | undefined): boolean {
+  if (!equipment) {
+    return false;
+  }
+
+  return equipment.trim().toLowerCase().includes('barbell');
+}
+
+function buildSetFocusKey(exerciseId: string, setId: string): string {
+  return `${exerciseId}:${setId}`;
+}
+
+function estimateOneRepMax(weight: number | null, reps: number | null): number | null {
+  if (weight === null || reps === null || !Number.isFinite(weight) || !Number.isFinite(reps)) {
+    return null;
+  }
+
+  if (weight <= 0 || reps <= 0) {
+    return null;
+  }
+
+  return weight * (1 + reps / 30);
 }
 
 function formatElapsedTime(seconds: number): string {
@@ -492,6 +517,7 @@ export default function ActiveWorkout() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [restEndAtMs, setRestEndAtMs] = useState<number | null>(null);
   const [restRemainingSeconds, setRestRemainingSeconds] = useState(0);
+  const [restTotalSeconds, setRestTotalSeconds] = useState(DEFAULT_REST_SECONDS);
   const [exercisePickerVisible, setExercisePickerVisible] = useState(false);
   const [selectedMuscleFilter, setSelectedMuscleFilter] = useState<ExerciseLibraryMuscleFilter>('all');
   const [selectedEquipmentFilter, setSelectedEquipmentFilter] = useState<ExerciseLibraryEquipmentFilter>('all');
@@ -517,6 +543,7 @@ export default function ActiveWorkout() {
   const [isSummaryVisible, setIsSummaryVisible] = useState(false);
   const [isPlateCalculatorVisible, setIsPlateCalculatorVisible] = useState(false);
   const [plateCalculatorInitialWeight, setPlateCalculatorInitialWeight] = useState('');
+  const [focusedWeightSetKey, setFocusedWeightSetKey] = useState<string | null>(null);
   const [isExerciseStatsVisible, setIsExerciseStatsVisible] = useState(false);
   const [statsExercise, setStatsExercise] = useState<ExerciseRow | null>(null);
   const [statsExerciseProgress, setStatsExerciseProgress] = useState<ExerciseProgressPoint[]>([]);
@@ -951,6 +978,7 @@ export default function ActiveWorkout() {
     const safeSeconds = ensurePositiveRestSeconds(seconds);
 
     hasTriggeredRestVibrationRef.current = false;
+    setRestTotalSeconds(safeSeconds);
     setRestRemainingSeconds(safeSeconds);
     setRestEndAtMs(startTimerFromNow(safeSeconds));
   }, []);
@@ -959,6 +987,7 @@ export default function ActiveWorkout() {
     hasTriggeredRestVibrationRef.current = false;
     setRestEndAtMs(null);
     setRestRemainingSeconds(0);
+    setRestTotalSeconds(DEFAULT_REST_SECONDS);
   }, []);
 
   const adjustRestTimer = useCallback((deltaSeconds: number) => {
@@ -969,8 +998,20 @@ export default function ActiveWorkout() {
       if (nextRemaining <= 0) {
         hasTriggeredRestVibrationRef.current = false;
         setRestRemainingSeconds(0);
+        setRestTotalSeconds(DEFAULT_REST_SECONDS);
         return null;
       }
+
+      setRestTotalSeconds((currentTotal) => {
+        const baseTotal = currentEndAtMs ? Math.max(currentTotal, currentRemaining) : nextRemaining;
+        const nextTotal = clampRestSeconds(baseTotal + deltaSeconds);
+
+        if (nextTotal <= 0) {
+          return nextRemaining;
+        }
+
+        return Math.max(nextRemaining, nextTotal);
+      });
 
       hasTriggeredRestVibrationRef.current = false;
       setRestRemainingSeconds(nextRemaining);
@@ -1020,6 +1061,15 @@ export default function ActiveWorkout() {
   const timerLabel = useMemo(() => formatElapsedTime(elapsedSeconds), [elapsedSeconds]);
   const restTimerLabel = useMemo(() => formatCountdown(restRemainingSeconds), [restRemainingSeconds]);
   const isRestTimerActive = restEndAtMs !== null;
+  const restTimerProgress = useMemo(() => {
+    if (!isRestTimerActive) {
+      return 0;
+    }
+
+    const total = Math.max(1, restTotalSeconds);
+    return Math.min(1, Math.max(0, restRemainingSeconds / total));
+  }, [isRestTimerActive, restRemainingSeconds, restTotalSeconds]);
+  const restTimerProgressRemaining = useMemo(() => Math.max(0, 1 - restTimerProgress), [restTimerProgress]);
   const liveStatsChartData = useMemo(
     () =>
       statsExerciseProgress.slice(-12).map((point) => ({
@@ -1030,8 +1080,24 @@ export default function ActiveWorkout() {
   );
 
   const openPlateCalculator = useCallback((weightInput: string) => {
+    setFocusedWeightSetKey(null);
     setPlateCalculatorInitialWeight(sanitizeDecimalInput(weightInput));
     setIsPlateCalculatorVisible(true);
+  }, []);
+
+  const handleWeightInputFocus = useCallback((exerciseId: string, setId: string, equipment: string | null) => {
+    if (!isBarbellExerciseEquipment(equipment)) {
+      setFocusedWeightSetKey(null);
+      return;
+    }
+
+    setFocusedWeightSetKey(buildSetFocusKey(exerciseId, setId));
+  }, []);
+
+  const handleWeightInputBlur = useCallback((exerciseId: string, setId: string) => {
+    const targetKey = buildSetFocusKey(exerciseId, setId);
+
+    setFocusedWeightSetKey((currentValue) => (currentValue === targetKey ? null : currentValue));
   }, []);
 
   const applyGhostSetToCurrent = useCallback(
@@ -1261,7 +1327,7 @@ export default function ActiveWorkout() {
       const result = await finishWorkout({
         name: 'Active Workout',
         notes: null,
-        routineId: routeTemplateId ? null : routeRoutineId ?? null,
+        templateId: routeTemplateId ?? null,
         startTime: workoutStartedAt,
         setDrafts,
       });
@@ -1329,36 +1395,48 @@ export default function ActiveWorkout() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.restTimerCard}>
-          <View style={styles.restTimerHeaderRow}>
-            <Text style={styles.restTimerTitle}>Rest Timer</Text>
-            <Text style={[styles.restTimerValue, isRestTimerActive && styles.restTimerValueActive]}>{restTimerLabel}</Text>
+        <View style={styles.restTimerInlineCard}>
+          <View style={styles.restTimerInlineHeaderRow}>
+            <View style={styles.restTimerInlineBadge}>
+              <Ionicons name="timer-outline" size={14} color={palette.textMuted} />
+              <Text style={styles.restTimerInlineBadgeText}>Rest</Text>
+            </View>
+
+            <Text style={[styles.restTimerInlineValue, isRestTimerActive && styles.restTimerInlineValueActive]}>
+              {restTimerLabel}
+            </Text>
           </View>
 
-          <View style={styles.restTimerActionsRow}>
+          <View style={styles.restTimerProgressTrack}>
+            <View style={[styles.restTimerProgressFill, { flex: restTimerProgress }]} />
+            <View style={{ flex: restTimerProgressRemaining }} />
+          </View>
+
+          <View style={styles.restTimerInlineActionsRow}>
             <TouchableOpacity
-              style={[styles.restTimerActionButton, !isRestTimerActive && styles.restTimerActionButtonDisabled]}
+              style={[styles.restTimerPillButton, !isRestTimerActive && styles.restTimerPillButtonDisabled]}
               activeOpacity={0.85}
               onPress={() => adjustRestTimer(-REST_STEP_SECONDS)}
               disabled={!isRestTimerActive}
             >
-              <Text style={styles.restTimerActionText}>-30s</Text>
+              <Text style={styles.restTimerPillButtonText}>-30s</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.restTimerPillButton} activeOpacity={0.85} onPress={() => adjustRestTimer(REST_STEP_SECONDS)}>
+              <Text style={styles.restTimerPillButtonText}>+30s</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.restTimerActionButton}
-              activeOpacity={0.85}
-              onPress={() => adjustRestTimer(REST_STEP_SECONDS)}
-            >
-              <Text style={styles.restTimerActionText}>+30s</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.restTimerActionButton, styles.restTimerSkipButton]}
+              style={[
+                styles.restTimerPillButton,
+                styles.restTimerSkipButton,
+                !isRestTimerActive && styles.restTimerPillButtonDisabled,
+              ]}
               activeOpacity={0.85}
               onPress={finishRestTimer}
+              disabled={!isRestTimerActive}
             >
-              <Text style={styles.restTimerActionText}>{isRestTimerActive ? 'Skip' : 'Finish'}</Text>
+              <Text style={styles.restTimerPillButtonText}>Skip</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1443,6 +1521,14 @@ export default function ActiveWorkout() {
                     setIndex
                   );
                   const isPrHit = isPrHunterHit(setItem, ghostSet);
+                  const isBarbellExercise = isBarbellExerciseEquipment(exercise.exercise.equipment);
+                  const focusKey = buildSetFocusKey(exercise.id, setItem.id);
+                  const isPlateTooltipVisible = isBarbellExercise && focusedWeightSetKey === focusKey;
+                  const platePreview = isPlateTooltipVisible ? calculatePlateBreakdown(setItem.weight ?? 0, 20) : null;
+                  const plateChipValues = platePreview
+                    ? platePreview.breakdown.flatMap((item) => Array.from({ length: item.countPerSide }, () => item.plate))
+                    : [];
+                  const estimatedOneRepMax = estimateOneRepMax(setItem.weight, setItem.reps);
                   const rirFeedbackColor = getRirFeedbackColor(setItem.rir);
                   const progressionHint = getProgressionHint(setItem.rir);
                   const setKey = `${exercise.id}:${setItem.id}`;
@@ -1485,20 +1571,25 @@ export default function ActiveWorkout() {
                           <TextInput
                             value={setItem.weightInput}
                             onChangeText={(value) => updateSetInput(exercise.id, setItem.id, 'weightInput', value)}
+                            onFocus={() => handleWeightInputFocus(exercise.id, setItem.id, exercise.exercise.equipment)}
+                            onPressIn={() => handleWeightInputFocus(exercise.id, setItem.id, exercise.exercise.equipment)}
+                            onBlur={() => handleWeightInputBlur(exercise.id, setItem.id)}
                             style={[styles.numericInput, styles.kgInput, setItem.completed && styles.numericInputCompleted]}
                             keyboardType="decimal-pad"
                             placeholder="0"
                             placeholderTextColor={palette.textMuted}
                           />
 
-                          <TouchableOpacity
-                            style={styles.plateButton}
-                            activeOpacity={0.85}
-                            onPress={() => openPlateCalculator(setItem.weightInput)}
-                            onLongPress={() => openPlateCalculator(setItem.weightInput)}
-                          >
-                            <Ionicons name="calculator-outline" size={14} color={palette.textSecondary} />
-                          </TouchableOpacity>
+                          {isBarbellExercise ? (
+                            <TouchableOpacity
+                              style={styles.plateButton}
+                              activeOpacity={0.85}
+                              onPress={() => openPlateCalculator(setItem.weightInput)}
+                              onLongPress={() => openPlateCalculator(setItem.weightInput)}
+                            >
+                              <Ionicons name="calculator-outline" size={14} color={palette.textSecondary} />
+                            </TouchableOpacity>
+                          ) : null}
                         </View>
 
                         <TextInput
@@ -1536,6 +1627,40 @@ export default function ActiveWorkout() {
                           />
                         </TouchableOpacity>
                       </View>
+
+                      {estimatedOneRepMax !== null ? (
+                        <View style={styles.estimatedOneRmWrap}>
+                          <Text style={styles.estimatedOneRmText}>{`🎯 Est. 1RM: ${formatPlateWeight(estimatedOneRepMax)}kg`}</Text>
+                        </View>
+                      ) : null}
+
+                      {isPlateTooltipVisible ? (
+                        <View style={styles.inlinePlateTooltip}>
+                          <Text style={styles.inlinePlateTitle}>Plate setup per side</Text>
+
+                          <View style={styles.inlinePlateChipRow}>
+                            <Text style={styles.inlinePlateBaseText}>Barra</Text>
+
+                            {plateChipValues.length > 0 ? <Text style={styles.inlinePlatePlusText}>+</Text> : null}
+
+                            {plateChipValues.length > 0 ? (
+                              plateChipValues.map((plateValue, plateIndex) => (
+                                <View key={`${setKey}-plate-${plateValue}-${plateIndex}`} style={styles.inlinePlateChip}>
+                                  <Text style={styles.inlinePlateChipText}>{formatPlateWeight(plateValue)}</Text>
+                                </View>
+                              ))
+                            ) : (
+                              <Text style={styles.inlinePlateEmptyText}>Apenas barra</Text>
+                            )}
+                          </View>
+
+                          {platePreview && platePreview.remainderPerSide > 0 ? (
+                            <Text style={styles.inlinePlateRemainderText}>
+                              {`Resto por lado: ${formatPlateWeight(platePreview.remainderPerSide)}kg`}
+                            </Text>
+                          ) : null}
+                        </View>
+                      ) : null}
 
                       {ghostSet ? (
                         <TouchableOpacity
@@ -1910,7 +2035,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
-  restTimerCard: {
+  restTimerInlineCard: {
     marginHorizontal: 14,
     marginTop: 10,
     borderRadius: 14,
@@ -1918,50 +2043,69 @@ const styles = StyleSheet.create({
     borderColor: palette.border,
     backgroundColor: palette.surface,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 9,
   },
-  restTimerHeaderRow: {
+  restTimerInlineHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  restTimerTitle: {
+  restTimerInlineBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 5,
+  },
+  restTimerInlineBadgeText: {
     color: palette.textMuted,
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
-  restTimerValue: {
+  restTimerInlineValue: {
     color: palette.textPrimary,
-    fontSize: 28,
+    fontSize: 20,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
-  restTimerValueActive: {
+  restTimerInlineValueActive: {
     color: '#22C55E',
   },
-  restTimerActionsRow: {
+  restTimerProgressTrack: {
     marginTop: 8,
     flexDirection: 'row',
-    columnGap: 8,
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: '#1E293B',
+    overflow: 'hidden',
   },
-  restTimerActionButton: {
+  restTimerProgressFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: '#22C55E',
+  },
+  restTimerInlineActionsRow: {
+    marginTop: 9,
+    flexDirection: 'row',
+    columnGap: 7,
+  },
+  restTimerPillButton: {
     flex: 1,
-    minHeight: 36,
-    borderRadius: 10,
+    minHeight: 32,
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: palette.inputBorder,
     backgroundColor: palette.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 10,
   },
-  restTimerActionButtonDisabled: {
+  restTimerPillButtonDisabled: {
     opacity: 0.45,
   },
-  restTimerActionText: {
+  restTimerPillButtonText: {
     color: palette.textPrimary,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
   },
   restTimerSkipButton: {
@@ -2144,6 +2288,85 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontSize: 11,
     fontWeight: '600',
+  },
+  estimatedOneRmWrap: {
+    marginTop: 4,
+    marginLeft: 8,
+    alignSelf: 'flex-start',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#2563EB',
+    backgroundColor: '#0C1D34',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  estimatedOneRmText: {
+    color: '#BFDBFE',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+    fontVariant: ['tabular-nums'],
+  },
+  inlinePlateTooltip: {
+    marginTop: 5,
+    marginLeft: 8,
+    marginBottom: 2,
+    alignSelf: 'flex-start',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#0B1320',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    rowGap: 5,
+  },
+  inlinePlateTitle: {
+    color: '#9FB1C9',
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  inlinePlateChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    columnGap: 6,
+    rowGap: 6,
+  },
+  inlinePlateBaseText: {
+    color: '#E2E8F0',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  inlinePlatePlusText: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  inlinePlateChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+    backgroundColor: '#11243F',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  inlinePlateChipText: {
+    color: '#EAF1FF',
+    fontSize: 11,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  inlinePlateEmptyText: {
+    color: '#CBD5E1',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  inlinePlateRemainderText: {
+    color: '#F59E0B',
+    fontSize: 11,
+    fontWeight: '700',
   },
   progressionHintWrap: {
     marginTop: 4,

@@ -1,7 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
+import { router, useFocusEffect } from 'expo-router';
+import * as Sharing from 'expo-sharing';
+import ViewShot from 'react-native-view-shot';
 import {
   ActivityIndicator,
+  Animated,
   Alert,
   FlatList,
   Image,
@@ -16,6 +20,7 @@ import {
   View,
 } from 'react-native';
 import { Colors } from '@/constants/theme';
+import { EmptyState } from '@/components/common/EmptyState';
 import { WorkoutFeedCard } from '@/components/feed/WorkoutFeedCard';
 import { getProfile, type ProfileRow } from '@/services/profileService';
 import { addWeight, getWeightHistory, type BodyMeasurementEntry } from '@/services/measurementService';
@@ -72,7 +77,7 @@ function getWeightTrend(
     return { trend: null, deltaText: 'Need one more entry for trend' };
   }
 
-  const delta = Number((latest.weight_kg - previous.weight_kg).toFixed(1));
+  const delta = Number((latest.weight - previous.weight).toFixed(1));
 
   if (!Number.isFinite(delta) || delta === 0) {
     return {
@@ -92,6 +97,53 @@ function getWeightTrend(
     trend: 'down',
     deltaText: `-${formatWeightKg(Math.abs(delta))} kg vs previous`,
   };
+}
+
+type SkeletonCardProps = {
+  compact?: boolean;
+  lines?: number;
+};
+
+function SkeletonCard({ compact = false, lines = 3 }: SkeletonCardProps) {
+  const opacity = useRef(new Animated.Value(0.35)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 0.75,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0.35,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    animation.start();
+
+    return () => {
+      animation.stop();
+    };
+  }, [opacity]);
+
+  return (
+    <View style={[styles.skeletonCard, compact && styles.skeletonCardCompact]}>
+      {Array.from({ length: lines }).map((_, index) => (
+        <Animated.View
+          key={`skeleton-${index}`}
+          style={[
+            styles.skeletonLine,
+            index === 0 ? styles.skeletonLineWide : styles.skeletonLineNarrow,
+            { opacity },
+          ]}
+        />
+      ))}
+    </View>
+  );
 }
 
 export default function ProfileScreen() {
@@ -116,6 +168,8 @@ export default function ProfileScreen() {
   const [isSavingWeight, setIsSavingWeight] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const trophyCardRefsByExerciseId = useRef<Record<string, ViewShot | null>>({});
+  const [sharingExerciseId, setSharingExerciseId] = useState<string | null>(null);
 
   const targetUserId = useMemo(() => {
     return profile?.id ?? authUserId;
@@ -241,6 +295,22 @@ export default function ProfileScreen() {
     void bootstrap();
   }, [bootstrap]);
 
+  const refreshProfileCard = useCallback(async () => {
+    try {
+      const profileData = await getProfile();
+      setProfile(profileData);
+      setProfileError(null);
+    } catch (error) {
+      setProfileError(getErrorMessage(error));
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshProfileCard();
+    }, [refreshProfileCard])
+  );
+
   const onRefresh = useCallback(async () => {
     if (!targetUserId) {
       return;
@@ -265,16 +335,24 @@ export default function ProfileScreen() {
     }
   }, [currentPage, hasMore, isBootstrapping, isLoadingMore, isRefreshing, loadUserHistoryPage, targetUserId]);
 
-  function handleEditProfile() {
-    Alert.alert('Edit Profile', 'Profile editing tools will be connected in the next step.');
-  }
+  const handleOpenStats = useCallback(() => {
+    router.push('/(tabs)/stats' as any);
+  }, []);
 
-  function handleSettings() {
-    Alert.alert('Settings', 'Settings panel will be connected in the next step.');
-  }
+  const handleOpenFriends = useCallback(() => {
+    router.push('/(tabs)/social' as any);
+  }, []);
+
+  const handleEditProfile = useCallback(() => {
+    router.push('/(tabs)/profile/edit' as any);
+  }, []);
+
+  const handleStartFreeWorkout = useCallback(() => {
+    router.push('/workout/active' as any);
+  }, []);
 
   const openWeightModal = useCallback(() => {
-    const initialValue = latestWeightEntry ? formatWeightKg(latestWeightEntry.weight_kg) : '';
+    const initialValue = latestWeightEntry ? formatWeightKg(latestWeightEntry.weight) : '';
     setWeightInput(initialValue === '--' ? '' : initialValue);
     setIsWeightModalVisible(true);
   }, [latestWeightEntry]);
@@ -316,6 +394,48 @@ export default function ProfileScreen() {
     }
   }, [isSavingWeight, weightInput]);
 
+  const handleShareTrophyCard = useCallback(
+    async (pr: AllTimePR) => {
+      if (sharingExerciseId) {
+        return;
+      }
+
+      setSharingExerciseId(pr.exerciseId);
+
+      try {
+        const isSharingAvailable = await Sharing.isAvailableAsync();
+
+        if (!isSharingAvailable) {
+          Alert.alert('Sharing unavailable', 'Your device cannot open the native share dialog on this platform.');
+          return;
+        }
+
+        const shotRef = trophyCardRefsByExerciseId.current[pr.exerciseId];
+
+        if (!shotRef || typeof shotRef.capture !== 'function') {
+          throw new Error('Unable to capture this PR card right now.');
+        }
+
+        const captureUri = await shotRef.capture();
+
+        if (!captureUri) {
+          throw new Error('Unable to capture this PR card right now.');
+        }
+
+        await Sharing.shareAsync(captureUri, {
+          mimeType: 'image/png',
+          dialogTitle: `${pr.exerciseName} PR`,
+          UTI: 'public.png',
+        });
+      } catch (error) {
+        Alert.alert('Unable to share PR card', getErrorMessage(error));
+      } finally {
+        setSharingExerciseId(null);
+      }
+    },
+    [sharingExerciseId, trophyCardRefsByExerciseId]
+  );
+
   const headerComponent = useMemo(() => {
     return (
       <View style={styles.headerWrap}>
@@ -343,15 +463,32 @@ export default function ProfileScreen() {
           <Text style={styles.displayName}>{displayName}</Text>
           <Text style={styles.handle}>{usernameHandle}</Text>
 
-          <View style={styles.actionsRow}>
-            <TouchableOpacity style={styles.primaryActionButton} activeOpacity={0.9} onPress={handleEditProfile}>
-              <Ionicons name="create-outline" size={16} color="#FFFFFF" />
-              <Text style={styles.primaryActionText}>Edit Profile</Text>
+          <View style={styles.quickActionsRow}>
+            <TouchableOpacity
+              style={[styles.quickActionButton, styles.quickActionButtonStats]}
+              activeOpacity={0.9}
+              onPress={handleOpenStats}
+            >
+              <Ionicons name="stats-chart-outline" size={16} color="#FFFFFF" />
+              <Text style={styles.quickActionText}>Ver Estatisticas</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.secondaryActionButton} activeOpacity={0.9} onPress={handleSettings}>
-              <Ionicons name="settings-outline" size={16} color={palette.textPrimary} />
-              <Text style={styles.secondaryActionText}>Settings</Text>
+            <TouchableOpacity
+              style={[styles.quickActionButton, styles.quickActionButtonSocial]}
+              activeOpacity={0.9}
+              onPress={handleOpenFriends}
+            >
+              <Ionicons name="people-outline" size={16} color="#FFFFFF" />
+              <Text style={styles.quickActionText}>Amigos</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.quickActionButton, styles.quickActionButtonEdit]}
+              activeOpacity={0.9}
+              onPress={handleEditProfile}
+            >
+              <Ionicons name="create-outline" size={16} color="#FFFFFF" />
+              <Text style={styles.quickActionText}>Editar Perfil</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -380,7 +517,7 @@ export default function ProfileScreen() {
 
           <View style={styles.bodyWeightPrimaryRow}>
             <Text style={styles.bodyWeightValue}>
-              {latestWeightEntry ? `${formatWeightKg(latestWeightEntry.weight_kg)} kg` : '--'}
+              {latestWeightEntry ? `${formatWeightKg(latestWeightEntry.weight)} kg` : '--'}
             </Text>
             {latestWeightEntry ? <Text style={styles.bodyWeightMeta}>{formatDateShort(latestWeightEntry.measured_at)}</Text> : null}
           </View>
@@ -416,10 +553,7 @@ export default function ProfileScreen() {
           </View>
 
           {isLoadingPerformance ? (
-            <View style={styles.statusCardCompact}>
-              <ActivityIndicator size="small" color={TROPHY_NEON} />
-              <Text style={styles.statusText}>Loading your all-time PR records...</Text>
-            </View>
+            <SkeletonCard compact lines={3} />
           ) : performanceError ? (
             <View style={styles.historyErrorCard}>
               <Text style={styles.historyErrorTitle}>Unable to load performance insights</Text>
@@ -433,16 +567,38 @@ export default function ProfileScreen() {
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trophyCarouselContent}>
               {allTimePrs.map((pr) => (
-                <View key={pr.exerciseId} style={styles.trophyCard}>
-                  <View style={styles.trophyBadge}>
-                    <Ionicons name="trophy" size={14} color="#111827" />
-                  </View>
+                <View key={pr.exerciseId} style={styles.trophyCardShell}>
+                  <ViewShot
+                    ref={(ref) => {
+                      trophyCardRefsByExerciseId.current[pr.exerciseId] = ref;
+                    }}
+                    options={{ format: 'png', quality: 1, result: 'tmpfile' }}
+                  >
+                    <View style={styles.trophyCard}>
+                      <View style={styles.trophyBadge}>
+                        <Ionicons name="trophy" size={14} color="#111827" />
+                      </View>
 
-                  <Text style={styles.trophyExerciseName} numberOfLines={2}>
-                    {pr.exerciseName}
-                  </Text>
-                  <Text style={styles.trophyValue}>{`${formatWeightKg(pr.maxWeight)} kg`}</Text>
-                  <Text style={styles.trophyDate}>{formatDateShort(pr.achievedAt)}</Text>
+                      <Text style={styles.trophyExerciseName} numberOfLines={2}>
+                        {pr.exerciseName}
+                      </Text>
+                      <Text style={styles.trophyValue}>{`${formatWeightKg(pr.maxWeight)} kg`}</Text>
+                      <Text style={styles.trophyDate}>{formatDateShort(pr.achievedAt)}</Text>
+                    </View>
+                  </ViewShot>
+
+                  <TouchableOpacity
+                    style={styles.trophyShareButton}
+                    activeOpacity={0.88}
+                    onPress={() => void handleShareTrophyCard(pr)}
+                    disabled={sharingExerciseId !== null}
+                  >
+                    {sharingExerciseId === pr.exerciseId ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Ionicons name="share-social-outline" size={15} color="#FFFFFF" />
+                    )}
+                  </TouchableOpacity>
                 </View>
               ))}
             </ScrollView>
@@ -469,7 +625,8 @@ export default function ProfileScreen() {
     bootstrap,
     displayName,
     handleEditProfile,
-    handleSettings,
+    handleOpenFriends,
+    handleOpenStats,
     historyError,
     initials,
     isLoadingPerformance,
@@ -479,36 +636,41 @@ export default function ProfileScreen() {
     performanceError,
     profile?.avatar_url,
     profileError,
+    sharingExerciseId,
     usernameHandle,
+    handleShareTrophyCard,
     weightTrend,
   ]);
 
   const emptyComponent = useMemo(() => {
     if (isBootstrapping) {
-      return (
-        <View style={styles.statusCard}>
-          <ActivityIndicator size="small" color={palette.accent} />
-          <Text style={styles.statusText}>Loading workout history...</Text>
-        </View>
-      );
+      return <SkeletonCard lines={3} />;
     }
 
     if (historyError) {
       return (
-        <View style={styles.statusCard}>
-          <Text style={styles.statusTitle}>History unavailable</Text>
-          <Text style={styles.statusText}>{historyError}</Text>
-        </View>
+        <EmptyState
+          icon="alert-circle-outline"
+          title="History unavailable"
+          description={historyError}
+          containerStyle={styles.statusCard}
+          descriptionStyle={styles.statusText}
+        />
       );
     }
 
     return (
-      <View style={styles.statusCard}>
-        <Text style={styles.statusTitle}>No workouts yet</Text>
-        <Text style={styles.statusText}>Start training and your full personal history will appear here.</Text>
-      </View>
+      <EmptyState
+        icon="barbell-outline"
+        title="Nenhum treino registrado"
+        description="Inicie um treino livre e desbloqueie seu historico, PRs e consistencia semanal."
+        actionLabel="Iniciar Treino Livre"
+        onActionPress={handleStartFreeWorkout}
+        containerStyle={styles.statusCard}
+        descriptionStyle={styles.statusText}
+      />
     );
-  }, [historyError, isBootstrapping]);
+  }, [handleStartFreeWorkout, historyError, isBootstrapping]);
 
   return (
     <>
@@ -723,39 +885,39 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 16,
   },
-  actionsRow: {
+  quickActionsRow: {
     width: '100%',
     flexDirection: 'row',
-    columnGap: 10,
+    columnGap: 8,
   },
-  primaryActionButton: {
+  quickActionButton: {
     flex: 1,
-    minHeight: 46,
-    borderRadius: 14,
+    minHeight: 44,
+    borderRadius: 12,
     borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    columnGap: 6,
+    paddingHorizontal: 8,
+  },
+  quickActionButtonStats: {
     borderColor: '#3B82F6',
     backgroundColor: '#1D4ED8',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    columnGap: 8,
   },
-  primaryActionText: {
+  quickActionButtonSocial: {
+    borderColor: '#0EA5E9',
+    backgroundColor: '#0369A1',
+  },
+  quickActionButtonEdit: {
+    borderColor: '#6366F1',
+    backgroundColor: '#4338CA',
+  },
+  quickActionText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '800',
-  },
-  secondaryActionButton: {
-    flex: 1,
-    minHeight: 46,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#1F2937',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    columnGap: 8,
+    textAlign: 'center',
   },
   bodyProgressCard: {
     borderRadius: 16,
@@ -847,9 +1009,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
+  skeletonCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#253041',
+    backgroundColor: '#0E1726',
+    minHeight: 110,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    justifyContent: 'center',
+    rowGap: 10,
+  },
+  skeletonCardCompact: {
+    minHeight: 82,
+  },
+  skeletonLine: {
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: '#334155',
+  },
+  skeletonLineWide: {
+    width: '88%',
+    alignSelf: 'center',
+  },
+  skeletonLineNarrow: {
+    width: '64%',
+    alignSelf: 'center',
+  },
   trophyCarouselContent: {
     columnGap: 10,
     paddingRight: 4,
+  },
+  trophyCardShell: {
+    position: 'relative',
   },
   trophyCard: {
     width: 170,
@@ -893,10 +1085,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  secondaryActionText: {
-    color: '#E5EDF9',
-    fontSize: 14,
-    fontWeight: '800',
+  trophyShareButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: 'rgba(2,6,23,0.68)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sectionTitleRow: {
     marginBottom: 10,

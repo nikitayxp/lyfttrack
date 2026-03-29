@@ -4,7 +4,7 @@ import type { Tables, TablesInsert } from '@/types/database';
 
 export type BodyMeasurementEntry = Pick<
   Tables<'body_measurements'>,
-  'id' | 'user_id' | 'weight_kg' | 'measured_at' | 'created_at'
+  'id' | 'user_id' | 'weight' | 'measured_at' | 'created_at'
 >;
 
 const MAX_HISTORY_ENTRIES = 30;
@@ -33,14 +33,14 @@ export async function addWeight(value: number): Promise<BodyMeasurementEntry> {
 
   const row: TablesInsert<'body_measurements'> = {
     user_id: user.id,
-    weight_kg: normalizedWeight,
+    weight: normalizedWeight,
     measured_at: new Date().toISOString(),
   };
 
   const { data, error } = await supabase
     .from('body_measurements')
     .insert(row)
-    .select('id, user_id, weight_kg, measured_at, created_at')
+    .select('id, user_id, weight, measured_at, created_at')
     .single();
 
   if (error || !data) {
@@ -55,7 +55,7 @@ export async function getWeightHistory(): Promise<BodyMeasurementEntry[]> {
 
   const { data, error } = await supabase
     .from('body_measurements')
-    .select('id, user_id, weight_kg, measured_at, created_at')
+    .select('id, user_id, weight, measured_at, created_at')
     .eq('user_id', user.id)
     .order('measured_at', { ascending: false })
     .limit(MAX_HISTORY_ENTRIES);

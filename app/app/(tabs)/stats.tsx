@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { BarChart, LineChart } from 'react-native-gifted-charts';
-import { Colors } from '@/constants/theme';
 import {
   getAllTimePRs,
   getExercisePersonalRecords,
@@ -16,7 +15,6 @@ import {
   type WeeklyVolumeByMuscle,
 } from '@/services/statsService';
 
-const palette = Colors.dark;
 const SCREEN_BG = '#050A12';
 const CARD_BG = '#111827';
 const CHART_NEON = '#3B82F6';
@@ -42,6 +40,53 @@ function formatNumericValue(value: number): string {
   }
 
   return Number.isInteger(safeValue) ? `${safeValue}` : safeValue.toFixed(1);
+}
+
+type SkeletonPanelProps = {
+  lines?: number;
+  minHeight?: number;
+};
+
+function SkeletonPanel({ lines = 3, minHeight = 190 }: SkeletonPanelProps) {
+  const opacity = useRef(new Animated.Value(0.35)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 0.72,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0.35,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    animation.start();
+
+    return () => {
+      animation.stop();
+    };
+  }, [opacity]);
+
+  return (
+    <View style={[styles.skeletonPanel, { minHeight }]}>
+      {Array.from({ length: lines }).map((_, index) => (
+        <Animated.View
+          key={`skeleton-line-${index}`}
+          style={[
+            styles.skeletonLine,
+            index === 0 ? styles.skeletonLineWide : styles.skeletonLineNarrow,
+            { opacity },
+          ]}
+        />
+      ))}
+    </View>
+  );
 }
 
 export default function StatsScreen() {
@@ -191,10 +236,7 @@ export default function StatsScreen() {
         <Text style={styles.cardSubtitle}>Completed sets in the last 7 days by muscle group.</Text>
 
         {isLoadingWeeklyVolume ? (
-          <View style={styles.chartStatusWrap}>
-            <ActivityIndicator size="small" color={CHART_NEON} />
-            <Text style={styles.placeholderText}>Calculating weekly balance...</Text>
-          </View>
+          <SkeletonPanel lines={4} minHeight={190} />
         ) : weeklyVolumeError ? (
           <View style={styles.chartStatusWrap}>
             <Text style={styles.errorText}>{weeklyVolumeError}</Text>
@@ -247,10 +289,7 @@ export default function StatsScreen() {
         <Text style={styles.cardTitle}>Exercise Focus</Text>
 
         {isLoadingExercises ? (
-          <View style={styles.inlineStatus}>
-            <ActivityIndicator size="small" color={palette.accent} />
-            <Text style={styles.inlineStatusText}>Loading exercises...</Text>
-          </View>
+          <SkeletonPanel lines={2} minHeight={60} />
         ) : exercises.length === 0 ? (
           <Text style={styles.placeholderText}>Complete a few workouts to unlock stats insights.</Text>
         ) : (
@@ -295,10 +334,7 @@ export default function StatsScreen() {
         <Text style={styles.cardSubtitle}>{selectedExerciseName ?? 'Select an exercise'} • {metricUnitLabel}</Text>
 
         {isLoadingStats ? (
-          <View style={styles.chartStatusWrap}>
-            <ActivityIndicator size="small" color={CHART_NEON} />
-            <Text style={styles.placeholderText}>Crunching your progress...</Text>
-          </View>
+          <SkeletonPanel lines={4} minHeight={190} />
         ) : errorMessage ? (
           <View style={styles.chartStatusWrap}>
             <Text style={styles.errorText}>{errorMessage}</Text>
@@ -468,11 +504,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  inlineStatusText: {
-    marginTop: 8,
-    color: '#94A3B8',
-    fontSize: 13,
-    fontWeight: '500',
+  skeletonPanel: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#1F2937',
+    backgroundColor: '#0D1624',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    rowGap: 10,
+  },
+  skeletonLine: {
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: '#334155',
+  },
+  skeletonLineWide: {
+    width: '88%',
+    alignSelf: 'center',
+  },
+  skeletonLineNarrow: {
+    width: '64%',
+    alignSelf: 'center',
   },
   chartWrap: {
     borderRadius: 12,

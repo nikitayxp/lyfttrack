@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
@@ -64,6 +65,19 @@ function relationLabel(relation: SocialSearchResult['relation']): string {
   if (relation === 'request_sent') return 'Pending';
   if (relation === 'request_received') return 'Requested You';
   return 'Add';
+}
+
+function openPublicProfile(userId: string) {
+  const normalizedUserId = userId.trim();
+
+  if (!normalizedUserId) {
+    return;
+  }
+
+  router.push({
+    pathname: '/(tabs)/public-profile/[id]' as any,
+    params: { id: normalizedUserId },
+  });
 }
 
 export default function SocialScreen() {
@@ -239,18 +253,24 @@ export default function SocialScreen() {
 
             return (
               <View key={result.id} style={styles.searchItem}>
-                {result.avatar_url ? (
-                  <Image source={{ uri: result.avatar_url }} style={styles.avatar} />
-                ) : (
-                  <View style={styles.avatarFallback}>
-                    <Text style={styles.avatarFallbackText}>{initialsOf(result)}</Text>
-                  </View>
-                )}
+                <TouchableOpacity
+                  style={styles.userLinkArea}
+                  activeOpacity={0.86}
+                  onPress={() => openPublicProfile(result.id)}
+                >
+                  {result.avatar_url ? (
+                    <Image source={{ uri: result.avatar_url }} style={styles.avatar} />
+                  ) : (
+                    <View style={styles.avatarFallback}>
+                      <Text style={styles.avatarFallbackText}>{initialsOf(result)}</Text>
+                    </View>
+                  )}
 
-                <View style={styles.userMetaWrap}>
-                  <Text style={styles.userName}>{displayNameOf(result)}</Text>
-                  <Text style={styles.userHandle}>@{result.username}</Text>
-                </View>
+                  <View style={styles.userMetaWrap}>
+                    <Text style={styles.userName}>{displayNameOf(result)}</Text>
+                    <Text style={styles.userHandle}>@{result.username}</Text>
+                  </View>
+                </TouchableOpacity>
 
                 <TouchableOpacity
                   style={[styles.userActionButton, !isActionable && styles.userActionButtonMuted]}
@@ -293,20 +313,31 @@ export default function SocialScreen() {
 
             return (
               <View key={request.id} style={styles.requestItem}>
-                {profile?.avatar_url ? (
-                  <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
-                ) : (
-                  <View style={styles.avatarFallback}>
-                    <Text style={styles.avatarFallbackText}>
-                      {profile ? initialsOf(profile) : fallbackName.slice(0, 2).toUpperCase()}
-                    </Text>
-                  </View>
-                )}
+                <TouchableOpacity
+                  style={styles.userLinkArea}
+                  activeOpacity={0.86}
+                  onPress={() => {
+                    if (profile?.id) {
+                      openPublicProfile(profile.id);
+                    }
+                  }}
+                  disabled={!profile?.id}
+                >
+                  {profile?.avatar_url ? (
+                    <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
+                  ) : (
+                    <View style={styles.avatarFallback}>
+                      <Text style={styles.avatarFallbackText}>
+                        {profile ? initialsOf(profile) : fallbackName.slice(0, 2).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
 
-                <View style={styles.userMetaWrap}>
-                  <Text style={styles.userName}>{profile ? displayNameOf(profile) : fallbackName}</Text>
-                  <Text style={styles.userHandle}>{profile ? `@${profile.username}` : 'Profile unavailable'}</Text>
-                </View>
+                  <View style={styles.userMetaWrap}>
+                    <Text style={styles.userName}>{profile ? displayNameOf(profile) : fallbackName}</Text>
+                    <Text style={styles.userHandle}>{profile ? `@${profile.username}` : 'Profile unavailable'}</Text>
+                  </View>
+                </TouchableOpacity>
 
                 <View style={styles.requestActionsWrap}>
                   <TouchableOpacity
@@ -351,7 +382,12 @@ export default function SocialScreen() {
           <Text style={styles.helperText}>When requests are accepted, friends appear here.</Text>
         ) : (
           friends.map((friend) => (
-            <View key={friend.friendshipId} style={styles.friendItem}>
+            <TouchableOpacity
+              key={friend.friendshipId}
+              style={styles.friendItem}
+              activeOpacity={0.86}
+              onPress={() => openPublicProfile(friend.profile.id)}
+            >
               {friend.profile.avatar_url ? (
                 <Image source={{ uri: friend.profile.avatar_url }} style={styles.avatar} />
               ) : (
@@ -366,7 +402,7 @@ export default function SocialScreen() {
               </View>
 
               <Ionicons name="people-outline" size={18} color={palette.textMuted} />
-            </View>
+            </TouchableOpacity>
           ))
         )}
       </View>
@@ -494,6 +530,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 10,
     marginBottom: 8,
+  },
+  userLinkArea: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 10,
   },
   avatar: {
     width: 38,

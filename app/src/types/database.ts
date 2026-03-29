@@ -55,21 +55,21 @@ export type Database = {
           id: string
           measured_at: string
           user_id: string
-          weight_kg: number
+          weight: number
         }
         Insert: {
           created_at?: string
           id?: string
           measured_at?: string
           user_id: string
-          weight_kg: number
+          weight: number
         }
         Update: {
           created_at?: string
           id?: string
           measured_at?: string
           user_id?: string
-          weight_kg?: number
+          weight?: number
         }
         Relationships: [
           {
@@ -521,7 +521,7 @@ export type Database = {
           id: string
           name: string
           notes: string | null
-          routine_id: string | null
+          template_id: string | null
           start_time: string
           user_id: string
         }
@@ -530,7 +530,7 @@ export type Database = {
           id?: string
           name: string
           notes?: string | null
-          routine_id?: string | null
+          template_id?: string | null
           start_time?: string
           user_id: string
         }
@@ -539,16 +539,16 @@ export type Database = {
           id?: string
           name?: string
           notes?: string | null
-          routine_id?: string | null
+          template_id?: string | null
           start_time?: string
           user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "workouts_routine_id_fkey"
-            columns: ["routine_id"]
+            foreignKeyName: "workouts_template_id_fkey"
+            columns: ["template_id"]
             isOneToOne: false
-            referencedRelation: "routines"
+            referencedRelation: "workout_templates"
             referencedColumns: ["id"]
           },
           {

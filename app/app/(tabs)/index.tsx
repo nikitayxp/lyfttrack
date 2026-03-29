@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
@@ -19,6 +19,7 @@ import {
   type WorkoutCommentWithProfile,
 } from '@/services/interactionService';
 import { getErrorMessage, getFeedWorkouts, type WorkoutFeedItem } from '@/services/workoutService';
+import { EmptyState } from '@/components/common/EmptyState';
 import { FeedCommentsModal } from '@/components/feed/FeedCommentsModal';
 import { WorkoutFeedCard } from '@/components/feed/WorkoutFeedCard';
 
@@ -214,6 +215,10 @@ export default function FeedScreen() {
     setCommentsError(null);
   }, []);
 
+  const handleOpenFriends = useCallback(() => {
+    router.push('/(tabs)/social' as any);
+  }, []);
+
   const sendComment = useCallback(async () => {
     if (!selectedWorkoutForComments || isSendingComment) {
       return;
@@ -394,7 +399,7 @@ export default function FeedScreen() {
     return (
       <View style={styles.headerWrap}>
         <Text style={styles.title}>Global Feed</Text>
-        <Text style={styles.subtitle}>Your workouts and your friends' latest sessions.</Text>
+        <Text style={styles.subtitle}>Your workouts and your friends&apos; latest sessions.</Text>
       </View>
     );
   }, []);
@@ -411,20 +416,32 @@ export default function FeedScreen() {
 
     if (feedError) {
       return (
-        <View style={styles.statusCard}>
-          <Text style={styles.statusTitle}>Unable to load feed</Text>
-          <Text style={styles.statusText}>{feedError}</Text>
-        </View>
+        <EmptyState
+          icon="alert-circle-outline"
+          title="Unable to load feed"
+          description={feedError}
+          actionLabel="Retry"
+          onActionPress={() => {
+            void loadFeedPage(0, 'reset');
+          }}
+          containerStyle={styles.statusCard}
+          descriptionStyle={styles.statusText}
+        />
       );
     }
 
     return (
-      <View style={styles.statusCard}>
-        <Text style={styles.statusTitle}>No workouts in feed yet</Text>
-        <Text style={styles.statusText}>Your timeline will fill as you and your friends train.</Text>
-      </View>
+      <EmptyState
+        icon="people-outline"
+        title="Feed vazio por enquanto"
+        description="Siga atletas e amigos para descobrir treinos e ganhar motivacao diaria."
+        actionLabel="Procurar Amigos"
+        onActionPress={handleOpenFriends}
+        containerStyle={styles.statusCard}
+        descriptionStyle={styles.statusText}
+      />
     );
-  }, [feedError, isLoading]);
+  }, [feedError, handleOpenFriends, isLoading, loadFeedPage]);
 
   const selectedWorkoutComments = selectedWorkoutForComments
     ? commentsByWorkoutId[selectedWorkoutForComments.id] ?? []
@@ -719,13 +736,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
-  },
-  statusTitle: {
-    color: palette.textPrimary,
-    fontSize: 16,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 8,
   },
   statusText: {
     color: palette.textMuted,

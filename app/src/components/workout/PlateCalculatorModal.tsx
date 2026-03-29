@@ -10,21 +10,12 @@ import {
   View,
 } from 'react-native';
 import { Colors } from '@/constants/theme';
+import {
+  calculatePlateBreakdown,
+  formatPlateWeight,
+} from '@/utils/plateCalculator';
 
 const palette = Colors.dark;
-const STANDARD_PLATES = [25, 20, 15, 10, 5, 2.5, 1.25] as const;
-
-type PlateBreakdownItem = {
-  plate: number;
-  countPerSide: number;
-};
-
-type PlateCalculationResult = {
-  perSideTarget: number;
-  loadableTotal: number;
-  remainderPerSide: number;
-  breakdown: PlateBreakdownItem[];
-};
 
 type PlateCalculatorModalProps = {
   visible: boolean;
@@ -58,49 +49,6 @@ function parseNonNegativeNumber(value: string): number {
   return Math.max(0, parsed);
 }
 
-function formatWeight(value: number): string {
-  if (!Number.isFinite(value)) {
-    return '0';
-  }
-
-  const normalized = value.toFixed(2);
-  return normalized.replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
-}
-
-function calculatePlateBreakdown(totalWeight: number, barWeight: number): PlateCalculationResult {
-  const normalizedTotalWeight = Math.max(0, totalWeight);
-  const normalizedBarWeight = Math.max(0, barWeight);
-  const loadableTotal = Math.max(0, normalizedTotalWeight - normalizedBarWeight);
-  const perSideTarget = loadableTotal / 2;
-
-  let remainingPerSide = perSideTarget;
-  const breakdown: PlateBreakdownItem[] = [];
-
-  for (const plate of STANDARD_PLATES) {
-    const countPerSide = Math.floor((remainingPerSide + 1e-6) / plate);
-
-    if (countPerSide <= 0) {
-      continue;
-    }
-
-    breakdown.push({
-      plate,
-      countPerSide,
-    });
-
-    remainingPerSide = Number((remainingPerSide - countPerSide * plate).toFixed(2));
-  }
-
-  const remainderPerSide = Math.max(0, Number(remainingPerSide.toFixed(2)));
-
-  return {
-    perSideTarget,
-    loadableTotal,
-    remainderPerSide,
-    breakdown,
-  };
-}
-
 export function PlateCalculatorModal({
   visible,
   onClose,
@@ -108,7 +56,7 @@ export function PlateCalculatorModal({
   defaultBarWeight = 20,
 }: PlateCalculatorModalProps) {
   const [totalWeightInput, setTotalWeightInput] = useState('');
-  const [barWeightInput, setBarWeightInput] = useState(formatWeight(defaultBarWeight));
+  const [barWeightInput, setBarWeightInput] = useState(formatPlateWeight(defaultBarWeight));
 
   useEffect(() => {
     if (!visible) {
@@ -116,14 +64,14 @@ export function PlateCalculatorModal({
     }
 
     if (typeof initialTotalWeight === 'number' && Number.isFinite(initialTotalWeight)) {
-      setTotalWeightInput(formatWeight(initialTotalWeight));
+      setTotalWeightInput(formatPlateWeight(initialTotalWeight));
     } else if (typeof initialTotalWeight === 'string') {
       setTotalWeightInput(sanitizeDecimalInput(initialTotalWeight));
     } else {
       setTotalWeightInput('');
     }
 
-    setBarWeightInput(formatWeight(defaultBarWeight));
+    setBarWeightInput(formatPlateWeight(defaultBarWeight));
   }, [defaultBarWeight, initialTotalWeight, visible]);
 
   const calculation = useMemo(() => {
@@ -181,12 +129,12 @@ export function PlateCalculatorModal({
           <View style={styles.summaryCard}>
             <View>
               <Text style={styles.summaryLabel}>Per Side</Text>
-              <Text style={styles.summaryValue}>{formatWeight(calculation.perSideTarget)} kg</Text>
+              <Text style={styles.summaryValue}>{formatPlateWeight(calculation.perSideTarget)} kg</Text>
             </View>
 
             <View>
               <Text style={styles.summaryLabel}>Loadable</Text>
-              <Text style={styles.summaryValue}>{formatWeight(calculation.loadableTotal)} kg</Text>
+              <Text style={styles.summaryValue}>{formatPlateWeight(calculation.loadableTotal)} kg</Text>
             </View>
           </View>
 
@@ -199,7 +147,7 @@ export function PlateCalculatorModal({
               calculation.breakdown.map((item) => (
                 <View key={`plate-${item.plate}`} style={styles.plateRow}>
                   <View style={styles.plateChip}>
-                    <Text style={styles.plateChipText}>{formatWeight(item.plate)} kg</Text>
+                    <Text style={styles.plateChipText}>{formatPlateWeight(item.plate)} kg</Text>
                   </View>
 
                   <Text style={styles.plateCountText}>x {item.countPerSide} each side</Text>
@@ -209,7 +157,7 @@ export function PlateCalculatorModal({
 
             {calculation.remainderPerSide > 0 ? (
               <Text style={styles.remainderText}>
-                Remainder per side: {formatWeight(calculation.remainderPerSide)} kg (no exact standard match)
+                Remainder per side: {formatPlateWeight(calculation.remainderPerSide)} kg (no exact standard match)
               </Text>
             ) : null}
           </View>

@@ -43,13 +43,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="routines"
-        options={{
-          title: 'Routines',
-          tabBarIcon: ({ color }) => <Ionicons name="list-outline" size={24} color={color} />,
-        }}
-      />
-      <Tabs.Screen
         name="workout"
         options={{
           title: 'Workout',
@@ -62,31 +55,48 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ color }) => <Ionicons name="person-circle-outline" size={24} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="exercises"
         options={{
-          title: 'Exercises',
-          tabBarIcon: ({ color }) => <Ionicons name="barbell-outline" size={22} color={color} />,
+          href: null,
         }}
       />
       <Tabs.Screen
         name="social"
         options={{
-          title: 'Social',
-          tabBarIcon: ({ color }) => <Ionicons name="people-outline" size={22} color={color} />,
+          href: null,
         }}
       />
       <Tabs.Screen
         name="stats"
         options={{
-          title: 'Stats',
-          tabBarIcon: ({ color }) => <Ionicons name="stats-chart-outline" size={22} color={color} />,
+          href: null,
         }}
       />
       <Tabs.Screen
-        name="profile"
+        name="routines"
         options={{
-          title: 'Settings',
-          tabBarIcon: ({ color }) => <Ionicons name="settings-outline" size={22} color={color} />,
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="profile/edit"
+        options={{
+          href: null,
+          title: 'Edit Profile',
+        }}
+      />
+      <Tabs.Screen
+        name="public-profile/[id]"
+        options={{
+          href: null,
+          title: 'Profile',
         }}
       />
     </Tabs>

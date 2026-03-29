@@ -6,6 +6,7 @@ import { getAuthenticatedUserOrThrow } from '@/services/workoutService';
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/database';
 
 export type ProfileRow = Tables<'profiles'>;
+export type PublicProfileView = Pick<ProfileRow, 'id' | 'username' | 'full_name' | 'avatar_url' | 'bio'>;
 
 export type UpdateProfileInput = {
   username?: string;
@@ -31,6 +32,15 @@ export function withAvatarCacheBuster(url: string | null | undefined, versionTok
 }
 
 function normalizeOptionalText(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeOptionalId(value: string | null | undefined): string | null {
   if (!value) {
     return null;
   }
@@ -175,6 +185,26 @@ export async function getProfile(): Promise<ProfileRow> {
   }
 
   return createProfileForExistingUser(user);
+}
+
+export async function getPublicProfileById(profileId: string): Promise<PublicProfileView | null> {
+  const normalizedProfileId = normalizeOptionalId(profileId);
+
+  if (!normalizedProfileId) {
+    throw new Error('Profile id is required.');
+  }
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, username, full_name, avatar_url, bio')
+    .eq('id', normalizedProfileId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Unable to load profile: ${error.message}`);
+  }
+
+  return data;
 }
 
 export async function updateProfile(input: UpdateProfileInput): Promise<ProfileRow> {

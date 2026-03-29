@@ -1,22 +1,23 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Bebas_Neue, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-space-grotesk",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const bebasNeue = Bebas_Neue({
+  variable: "--font-bebas-neue",
+  weight: "400",
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "LyftTrack Blog — Fitness Tracking Insights",
+  title: "LyftTrack - App Sample Website",
   description:
-    "The official LyftTrack blog. Tips on progressive overload, workout tracking, and building a stronger version of yourself.",
-  keywords: ["fitness", "workout tracker", "gym app", "progressive overload", "LyftTrack"],
+    "Official LyftTrack website experience with app showcase, bilingual blog, theme switch and interactive training previews.",
+  keywords: ["fitness", "workout tracker", "gym app", "LyftTrack", "blog", "training"],
 };
 
 export default function RootLayout({
@@ -25,10 +26,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+    <html lang="en">
+      <body className={`${spaceGrotesk.variable} ${bebasNeue.variable} antialiased`}>
         {children}
       </body>
     </html>

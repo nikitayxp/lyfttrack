@@ -23,7 +23,7 @@ export default function TabLayout() {
 
   return (
     <Tabs
-      initialRouteName="workout"
+      initialRouteName="index"
       screenOptions={{
         headerStyle: styles.header,
         headerTintColor: palette.textPrimary,
@@ -38,8 +38,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Profile',
-          tabBarIcon: ({ color }) => <Ionicons name="person-circle-outline" size={24} color={color} />,
+          title: 'Feed',
+          tabBarIcon: ({ color }) => <Ionicons name="newspaper-outline" size={23} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -66,6 +66,20 @@ export default function TabLayout() {
         options={{
           title: 'Exercises',
           tabBarIcon: ({ color }) => <Ionicons name="barbell-outline" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="social"
+        options={{
+          title: 'Social',
+          tabBarIcon: ({ color }) => <Ionicons name="people-outline" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="stats"
+        options={{
+          title: 'Stats',
+          tabBarIcon: ({ color }) => <Ionicons name="stats-chart-outline" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -111,11 +125,6 @@ const styles = StyleSheet.create({
     marginTop: -24,
     borderWidth: 4,
     borderColor: palette.tabBarBackground,
-    shadowColor: palette.accent,
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
   },
   workoutIconContainerFocused: {
     transform: [{ scale: 1.03 }],

@@ -71,9 +71,9 @@ function normalizeTemplateRestSeconds(value: number | null | undefined): number 
 }
 
 function normalizeTemplateExerciseInputs(
-  exercises: Array<string | TemplateExerciseSaveInput>
-): Array<{ exerciseId: string; restSeconds: number }> {
-  const result: Array<{ exerciseId: string; restSeconds: number }> = [];
+  exercises: (string | TemplateExerciseSaveInput)[]
+): { exerciseId: string; restSeconds: number }[] {
+  const result: { exerciseId: string; restSeconds: number }[] = [];
   const seen = new Set<string>();
 
   for (const entry of exercises) {
@@ -225,7 +225,7 @@ export async function getTemplateById(templateId: string): Promise<TemplateDetai
 
 export async function saveTemplate(
   name: string,
-  exercises: Array<string | TemplateExerciseSaveInput>
+  exercises: (string | TemplateExerciseSaveInput)[]
 ): Promise<TemplateDetail> {
   const user = await getAuthenticatedUserOrThrow();
   const normalizedName = normalizeTemplateName(name);

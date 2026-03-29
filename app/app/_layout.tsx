@@ -18,10 +18,9 @@ export default function RootLayout() {
   const redirectForSession = useCallback((session: Session | null) => {
     const currentSegments = segmentsRef.current;
     const inAuthGroup = currentSegments[0] === '(auth)';
-    const inTabsGroup = currentSegments[0] === '(tabs)';
 
     if (session) {
-      if (!inTabsGroup) {
+      if (inAuthGroup) {
         router.replace('/(tabs)' as any);
       }
 
@@ -77,7 +76,6 @@ export default function RootLayout() {
             presentation: 'fullScreenModal',
             animation: 'slide_from_bottom',
             statusBarStyle: 'light',
-            statusBarTranslucent: false,
           }}
         />
         <Stack.Screen
@@ -86,7 +84,6 @@ export default function RootLayout() {
             headerShown: false,
             animation: 'slide_from_right',
             statusBarStyle: 'light',
-            statusBarTranslucent: false,
           }}
         />
       </Stack>

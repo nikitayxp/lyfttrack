@@ -21,7 +21,16 @@ import {
 } from 'react-native';
 import { Colors } from '@/constants/theme';
 import { EmptyState } from '@/components/common/EmptyState';
+import { FeedCommentsModal } from '@/components/feed/FeedCommentsModal';
 import { WorkoutFeedCard } from '@/components/feed/WorkoutFeedCard';
+import {
+  addComment,
+  getCurrentCommentAuthorProfile,
+  getWorkoutComments,
+  toggleLike,
+  type CommentAuthorProfile,
+  type WorkoutCommentWithProfile,
+} from '@/services/interactionService';
 import { getProfile, type ProfileRow } from '@/services/profileService';
 import { addWeight, getWeightHistory, type BodyMeasurementEntry } from '@/services/measurementService';
 import { getAllTimePRs, getCurrentWorkoutStreak, type AllTimePR } from '@/services/statsService';
@@ -34,6 +43,12 @@ const CARD_BG = '#111827';
 const HISTORY_PAGE_SIZE = 20;
 const TROPHY_ACCENT = '#FACC15';
 const TROPHY_NEON = '#F59E0B';
+
+type FeedLikeInteractionState = {
+  hasLiked: boolean;
+  likesCount: number;
+  isPending: boolean;
+};
 
 function initialsFromName(value: string): string {
   return value
@@ -168,6 +183,15 @@ export default function ProfileScreen() {
   const [isSavingWeight, setIsSavingWeight] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [optimisticLikeState, setOptimisticLikeState] = useState<Record<string, FeedLikeInteractionState>>({});
+  const [commentsByWorkoutId, setCommentsByWorkoutId] = useState<Record<string, WorkoutCommentWithProfile[]>>({});
+  const [commentCountByWorkoutId, setCommentCountByWorkoutId] = useState<Record<string, number>>({});
+  const [selectedWorkoutForComments, setSelectedWorkoutForComments] = useState<WorkoutFeedItem | null>(null);
+  const [isCommentsLoading, setIsCommentsLoading] = useState(false);
+  const [isSendingComment, setIsSendingComment] = useState(false);
+  const [commentsError, setCommentsError] = useState<string | null>(null);
+  const [commentInputValue, setCommentInputValue] = useState('');
+  const [currentCommentAuthor, setCurrentCommentAuthor] = useState<CommentAuthorProfile | null>(null);
   const trophyCardRefsByExerciseId = useRef<Record<string, ViewShot | null>>({});
   const [sharingExerciseId, setSharingExerciseId] = useState<string | null>(null);
 
@@ -211,6 +235,46 @@ export default function ProfileScreen() {
         setWorkouts(data);
         setCurrentPage(0);
         setHasMore(data.length === HISTORY_PAGE_SIZE);
+
+        setOptimisticLikeState((currentState) => {
+          const validWorkoutIds = new Set(data.map((item) => item.id));
+          const nextState: Record<string, FeedLikeInteractionState> = {};
+
+          for (const [workoutId, state] of Object.entries(currentState)) {
+            if (validWorkoutIds.has(workoutId)) {
+              nextState[workoutId] = state;
+            }
+          }
+
+          return nextState;
+        });
+
+        setCommentsByWorkoutId((currentState) => {
+          const validWorkoutIds = new Set(data.map((item) => item.id));
+          const nextState: Record<string, WorkoutCommentWithProfile[]> = {};
+
+          for (const [workoutId, state] of Object.entries(currentState)) {
+            if (validWorkoutIds.has(workoutId)) {
+              nextState[workoutId] = state;
+            }
+          }
+
+          return nextState;
+        });
+
+        setCommentCountByWorkoutId((currentState) => {
+          const validWorkoutIds = new Set(data.map((item) => item.id));
+          const nextState: Record<string, number> = {};
+
+          for (const [workoutId, state] of Object.entries(currentState)) {
+            if (validWorkoutIds.has(workoutId)) {
+              nextState[workoutId] = state;
+            }
+          }
+
+          return nextState;
+        });
+
         return;
       }
 
@@ -335,6 +399,43 @@ export default function ProfileScreen() {
     }
   }, [currentPage, hasMore, isBootstrapping, isLoadingMore, isRefreshing, loadUserHistoryPage, targetUserId]);
 
+  const ensureCurrentCommentAuthor = useCallback(async (): Promise<CommentAuthorProfile | null> => {
+    if (currentCommentAuthor) {
+      return currentCommentAuthor;
+    }
+
+    try {
+      const profileData = await getCurrentCommentAuthorProfile();
+      setCurrentCommentAuthor(profileData);
+      return profileData;
+    } catch {
+      return null;
+    }
+  }, [currentCommentAuthor]);
+
+  const loadCommentsForWorkout = useCallback(async (workoutId: string) => {
+    setCommentsError(null);
+    setIsCommentsLoading(true);
+
+    try {
+      const comments = await getWorkoutComments(workoutId);
+
+      setCommentsByWorkoutId((currentState) => ({
+        ...currentState,
+        [workoutId]: comments,
+      }));
+
+      setCommentCountByWorkoutId((currentState) => ({
+        ...currentState,
+        [workoutId]: comments.length,
+      }));
+    } catch (error) {
+      setCommentsError(getErrorMessage(error));
+    } finally {
+      setIsCommentsLoading(false);
+    }
+  }, []);
+
   const handleOpenStats = useCallback(() => {
     router.push('/(tabs)/stats' as any);
   }, []);
@@ -349,6 +450,199 @@ export default function ProfileScreen() {
 
   const handleStartFreeWorkout = useCallback(() => {
     router.push('/workout/active' as any);
+  }, []);
+
+  const openCommentsModal = useCallback(
+    (workout: WorkoutFeedItem) => {
+      setSelectedWorkoutForComments(workout);
+      setCommentInputValue('');
+      setCommentsError(null);
+      void ensureCurrentCommentAuthor();
+      void loadCommentsForWorkout(workout.id);
+    },
+    [ensureCurrentCommentAuthor, loadCommentsForWorkout]
+  );
+
+  const closeCommentsModal = useCallback(() => {
+    setSelectedWorkoutForComments(null);
+    setCommentInputValue('');
+    setCommentsError(null);
+  }, []);
+
+  const sendComment = useCallback(async () => {
+    if (!selectedWorkoutForComments || isSendingComment) {
+      return;
+    }
+
+    const workoutId = selectedWorkoutForComments.id;
+    const trimmedComment = commentInputValue.trim();
+
+    if (!trimmedComment) {
+      return;
+    }
+
+    const author = currentCommentAuthor;
+    const optimisticCommentId = `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const optimisticComment: WorkoutCommentWithProfile = {
+      id: optimisticCommentId,
+      workout_id: workoutId,
+      user_id: author?.id ?? 'optimistic-author',
+      content: trimmedComment,
+      created_at: new Date().toISOString(),
+      profile: author,
+    };
+
+    setCommentInputValue('');
+    setIsSendingComment(true);
+
+    setCommentsByWorkoutId((currentState) => {
+      const currentComments = currentState[workoutId] ?? [];
+
+      return {
+        ...currentState,
+        [workoutId]: [...currentComments, optimisticComment],
+      };
+    });
+
+    setCommentCountByWorkoutId((currentState) => {
+      const baseCount = currentState[workoutId] ?? selectedWorkoutForComments.comments_count;
+
+      return {
+        ...currentState,
+        [workoutId]: baseCount + 1,
+      };
+    });
+
+    try {
+      const savedComment = await addComment(workoutId, trimmedComment);
+
+      setCommentsByWorkoutId((currentState) => {
+        const currentComments = currentState[workoutId] ?? [];
+
+        return {
+          ...currentState,
+          [workoutId]: currentComments.map((comment) => {
+            if (comment.id !== optimisticCommentId) {
+              return comment;
+            }
+
+            return {
+              id: savedComment.id,
+              workout_id: savedComment.workout_id,
+              user_id: savedComment.user_id,
+              content: savedComment.content,
+              created_at: savedComment.created_at,
+              profile: comment.profile,
+            };
+          }),
+        };
+      });
+
+      void loadCommentsForWorkout(workoutId);
+      void ensureCurrentCommentAuthor();
+    } catch (error) {
+      setCommentsByWorkoutId((currentState) => {
+        const currentComments = currentState[workoutId] ?? [];
+
+        return {
+          ...currentState,
+          [workoutId]: currentComments.filter((comment) => comment.id !== optimisticCommentId),
+        };
+      });
+
+      setCommentCountByWorkoutId((currentState) => {
+        const baseCount = currentState[workoutId] ?? selectedWorkoutForComments.comments_count + 1;
+
+        return {
+          ...currentState,
+          [workoutId]: Math.max(0, baseCount - 1),
+        };
+      });
+
+      setCommentInputValue(trimmedComment);
+      Alert.alert('Unable to add comment', getErrorMessage(error));
+    } finally {
+      setIsSendingComment(false);
+    }
+  }, [
+    commentInputValue,
+    currentCommentAuthor,
+    ensureCurrentCommentAuthor,
+    isSendingComment,
+    loadCommentsForWorkout,
+    selectedWorkoutForComments,
+  ]);
+
+  const handleToggleLike = useCallback(async (workout: WorkoutFeedItem) => {
+    let previousState: FeedLikeInteractionState | undefined;
+    let optimisticState: FeedLikeInteractionState | null = null;
+
+    setOptimisticLikeState((currentState) => {
+      previousState = currentState[workout.id];
+
+      if (previousState?.isPending) {
+        return currentState;
+      }
+
+      const currentHasLiked = previousState?.hasLiked ?? workout.has_liked;
+      const currentLikesCount = previousState?.likesCount ?? workout.likes_count;
+
+      optimisticState = {
+        hasLiked: !currentHasLiked,
+        likesCount: Math.max(0, currentLikesCount + (!currentHasLiked ? 1 : -1)),
+        isPending: true,
+      };
+
+      return {
+        ...currentState,
+        [workout.id]: optimisticState,
+      };
+    });
+
+    if (!optimisticState) {
+      return;
+    }
+
+    const optimisticSnapshot = optimisticState;
+
+    try {
+      const result = await toggleLike(workout.id);
+
+      setOptimisticLikeState((currentState) => {
+        const existingState = currentState[workout.id] ?? optimisticSnapshot;
+        let resolvedLikesCount = existingState.likesCount;
+
+        if (result.liked !== existingState.hasLiked) {
+          resolvedLikesCount = Math.max(0, existingState.likesCount + (result.liked ? 1 : -1));
+        }
+
+        return {
+          ...currentState,
+          [workout.id]: {
+            hasLiked: result.liked,
+            likesCount: resolvedLikesCount,
+            isPending: false,
+          },
+        };
+      });
+    } catch (error) {
+      setOptimisticLikeState((currentState) => {
+        const nextState = { ...currentState };
+
+        if (previousState) {
+          nextState[workout.id] = {
+            ...previousState,
+            isPending: false,
+          };
+        } else {
+          delete nextState[workout.id];
+        }
+
+        return nextState;
+      });
+
+      Alert.alert('Unable to update like', getErrorMessage(error));
+    }
   }, []);
 
   const openWeightModal = useCallback(() => {
@@ -672,20 +966,30 @@ export default function ProfileScreen() {
     );
   }, [handleStartFreeWorkout, historyError, isBootstrapping]);
 
+  const selectedWorkoutComments = selectedWorkoutForComments
+    ? commentsByWorkoutId[selectedWorkoutForComments.id] ?? []
+    : [];
+
   return (
     <>
       <FlatList
         data={workouts}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <WorkoutFeedCard
-            workout={item}
-            likeCount={item.likes_count}
-            commentsCount={item.comments_count}
-            hasLiked={item.has_liked}
-            disableInteractions
-          />
-        )}
+        renderItem={({ item }) => {
+          const interactionState = optimisticLikeState[item.id];
+
+          return (
+            <WorkoutFeedCard
+              workout={item}
+              likeCount={interactionState?.likesCount ?? item.likes_count}
+              commentsCount={commentCountByWorkoutId[item.id] ?? item.comments_count}
+              hasLiked={interactionState?.hasLiked ?? item.has_liked}
+              isLikePending={interactionState?.isPending ?? false}
+              onToggleLike={() => void handleToggleLike(item)}
+              onOpenComments={() => openCommentsModal(item)}
+            />
+          );
+        }}
         style={styles.screen}
         contentContainerStyle={styles.content}
         ListHeaderComponent={headerComponent}
@@ -749,6 +1053,26 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+
+      <FeedCommentsModal
+        visible={selectedWorkoutForComments !== null}
+        workoutName={selectedWorkoutForComments?.name ?? 'Workout'}
+        comments={selectedWorkoutComments}
+        isLoading={isCommentsLoading}
+        isSending={isSendingComment}
+        errorMessage={commentsError}
+        inputValue={commentInputValue}
+        onChangeInput={setCommentInputValue}
+        onClose={closeCommentsModal}
+        onSend={() => void sendComment()}
+        onRetry={() => {
+          if (!selectedWorkoutForComments) {
+            return;
+          }
+
+          void loadCommentsForWorkout(selectedWorkoutForComments.id);
+        }}
+      />
     </>
   );
 }

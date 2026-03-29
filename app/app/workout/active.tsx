@@ -30,8 +30,6 @@ import {
   type FinishWorkoutResult,
   getErrorMessage,
   getExercisesCatalog,
-  getPreviousExercisePerformance,
-  type PreviousExercisePerformanceSet,
   getRoutineById,
   type WorkoutSetProgressDraft,
 } from '@/services/workoutService';
@@ -39,9 +37,7 @@ import { getTemplateById } from '@/services/templateService';
 import { getExerciseProgress, type ExerciseProgressPoint } from '@/services/statsService';
 import type { Tables } from '@/types/database';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { PlateCalculatorModal } from '@/components/workout/PlateCalculatorModal';
 import { WorkoutSummary } from '@/components/workout/WorkoutSummary';
-import { calculatePlateBreakdown, formatPlateWeight } from '@/utils/plateCalculator';
 
 type ExerciseRow = Tables<'exercises'>;
 type SetRow = Tables<'sets'>;
@@ -51,7 +47,7 @@ const DEFAULT_REST_SECONDS = 90;
 const REST_STEP_SECONDS = 30;
 const INLINE_TEMPLATE_PRELOAD_KEY = '__inline_template_payload__';
 const LIVE_CHART_COLOR = '#3B82F6';
-const MUSCLE_FILTER_CHIP_OPTIONS: ReadonlyArray<{ key: ExerciseLibraryMuscleFilter; label: string }> = [
+const MUSCLE_FILTER_CHIP_OPTIONS: readonly { key: ExerciseLibraryMuscleFilter; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'chest', label: 'Chest' },
   { key: 'back', label: 'Back' },
@@ -59,7 +55,7 @@ const MUSCLE_FILTER_CHIP_OPTIONS: ReadonlyArray<{ key: ExerciseLibraryMuscleFilt
   { key: 'shoulders', label: 'Shoulders' },
   { key: 'arms', label: 'Arms' },
 ];
-const EQUIPMENT_FILTER_CHIP_OPTIONS: ReadonlyArray<{ key: ExerciseLibraryEquipmentFilter; label: string }> = [
+const EQUIPMENT_FILTER_CHIP_OPTIONS: readonly { key: ExerciseLibraryEquipmentFilter; label: string }[] = [
   { key: 'all', label: 'All Equipment' },
   { key: 'barbell', label: 'Barbell' },
   { key: 'dumbbell', label: 'Dumbbell' },
@@ -67,13 +63,7 @@ const EQUIPMENT_FILTER_CHIP_OPTIONS: ReadonlyArray<{ key: ExerciseLibraryEquipme
   { key: 'cable', label: 'Cable' },
 ];
 type SetTypeOption = Exclude<SetRow['set_type'], null>;
-const SET_TYPE_SEQUENCE: ReadonlyArray<SetTypeOption> = ['normal', 'warmup', 'drop', 'failure'];
 type SetInputField = 'weightInput' | 'repsInput' | 'rirInput';
-
-type ProgressionHint = {
-  message: string;
-  color: string;
-};
 
 type ActiveSet = Pick<SetRow, 'id' | 'set_number' | 'weight' | 'reps' | 'rir' | 'set_type'> & {
   completed: boolean;
@@ -93,53 +83,6 @@ type TemplatePreloadExercise = {
   exercise: ExerciseRow;
   restSeconds: number;
 };
-
-function formatGhostNumber(value: number | null): string {
-  if (value === null || !Number.isFinite(value)) {
-    return '-';
-  }
-
-  return Number.isInteger(value) ? `${value}` : value.toFixed(1);
-}
-
-function formatGhostSetLabel(previousSet: PreviousExercisePerformanceSet): string {
-  return `Last: ${formatGhostNumber(previousSet.weight)}kg x ${formatGhostNumber(previousSet.reps)} @ ${formatGhostNumber(previousSet.rir)} RIR`;
-}
-
-function formatInputFromNumber(value: number | null, mode: 'decimal' | 'integer'): string {
-  if (value === null || !Number.isFinite(value)) {
-    return '';
-  }
-
-  const safeValue = Math.max(0, value);
-
-  if (mode === 'integer') {
-    return `${Math.trunc(safeValue)}`;
-  }
-
-  const fixed = safeValue.toFixed(2);
-  return fixed.replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
-}
-
-function getGhostSetForRow(
-  previousSets: PreviousExercisePerformanceSet[],
-  setNumber: number | null,
-  rowIndex: number
-): PreviousExercisePerformanceSet | null {
-  if (previousSets.length === 0) {
-    return null;
-  }
-
-  if (setNumber !== null) {
-    const matchedBySetNumber = previousSets.find((setItem) => setItem.setNumber === setNumber);
-
-    if (matchedBySetNumber) {
-      return matchedBySetNumber;
-    }
-  }
-
-  return previousSets[rowIndex] ?? null;
-}
 
 function parseOptionalNumber(value: string): number | null {
   if (!value || value === '.') {
@@ -163,30 +106,6 @@ function sanitizeDecimalInput(value: string): string {
 
 function sanitizeIntegerInput(value: string): string {
   return value.replace(/[^0-9]/g, '');
-}
-
-function isBarbellExerciseEquipment(equipment: string | null | undefined): boolean {
-  if (!equipment) {
-    return false;
-  }
-
-  return equipment.trim().toLowerCase().includes('barbell');
-}
-
-function buildSetFocusKey(exerciseId: string, setId: string): string {
-  return `${exerciseId}:${setId}`;
-}
-
-function estimateOneRepMax(weight: number | null, reps: number | null): number | null {
-  if (weight === null || reps === null || !Number.isFinite(weight) || !Number.isFinite(reps)) {
-    return null;
-  }
-
-  if (weight <= 0 || reps <= 0) {
-    return null;
-  }
-
-  return weight * (1 + reps / 30);
 }
 
 function formatElapsedTime(seconds: number): string {
@@ -293,46 +212,6 @@ function normalizeSetTypeOption(current: SetRow['set_type']): SetTypeOption {
   return 'normal';
 }
 
-function getNextSetType(current: SetRow['set_type']): SetTypeOption {
-  const normalizedCurrent = normalizeSetTypeOption(current);
-  const currentIndex = SET_TYPE_SEQUENCE.indexOf(normalizedCurrent);
-
-  if (currentIndex < 0) {
-    return 'normal';
-  }
-
-  return SET_TYPE_SEQUENCE[(currentIndex + 1) % SET_TYPE_SEQUENCE.length];
-}
-
-function getSetTypeLabel(setType: SetRow['set_type']): string {
-  const normalized = normalizeSetTypeOption(setType);
-
-  if (normalized === 'warmup') return 'WU';
-  if (normalized === 'drop') return 'DR';
-  if (normalized === 'failure') return 'FL';
-  return 'N';
-}
-
-function getSetTypeChipStyle(setType: SetRow['set_type']) {
-  const normalized = normalizeSetTypeOption(setType);
-
-  if (normalized === 'warmup') return styles.setTypeChipWarmup;
-  if (normalized === 'drop') return styles.setTypeChipDrop;
-  if (normalized === 'failure') return styles.setTypeChipFailure;
-
-  return styles.setTypeChipNormal;
-}
-
-function getSetTypeRowStyle(setType: SetRow['set_type']) {
-  const normalized = normalizeSetTypeOption(setType);
-
-  if (normalized === 'warmup') return styles.setRowWarmup;
-  if (normalized === 'drop') return styles.setRowDrop;
-  if (normalized === 'failure') return styles.setRowFailure;
-
-  return null;
-}
-
 function getCompletedExerciseNames(exercises: ActiveExercise[]): string[] {
   const names = exercises
     .filter((exercise) => exercise.sets.some((setItem) => setItem.completed))
@@ -340,78 +219,6 @@ function getCompletedExerciseNames(exercises: ActiveExercise[]): string[] {
     .filter((name) => name.length > 0);
 
   return [...new Set(names)];
-}
-
-function isPrHunterHit(currentSet: ActiveSet, ghostSet: PreviousExercisePerformanceSet | null): boolean {
-  if (!ghostSet) {
-    return false;
-  }
-
-  const currentWeight = currentSet.weight;
-  const currentReps = currentSet.reps;
-  const ghostWeight = ghostSet.weight;
-  const ghostReps = ghostSet.reps;
-
-  if (
-    currentWeight === null ||
-    currentReps === null ||
-    ghostWeight === null ||
-    ghostReps === null ||
-    !Number.isFinite(currentWeight) ||
-    !Number.isFinite(currentReps) ||
-    !Number.isFinite(ghostWeight) ||
-    !Number.isFinite(ghostReps)
-  ) {
-    return false;
-  }
-
-  if (currentWeight > ghostWeight) {
-    return true;
-  }
-
-  return currentWeight === ghostWeight && currentReps > ghostReps;
-}
-
-function getRirFeedbackColor(rir: number | null): string | null {
-  if (rir === null || !Number.isFinite(rir)) {
-    return null;
-  }
-
-  if (rir <= 0) {
-    return '#EF4444';
-  }
-
-  if (rir <= 1) {
-    return '#F59E0B';
-  }
-
-  if (rir <= 3) {
-    return '#22C55E';
-  }
-
-  return '#22D3EE';
-}
-
-function getProgressionHint(rir: number | null): ProgressionHint | null {
-  if (rir === null || !Number.isFinite(rir)) {
-    return null;
-  }
-
-  if (rir >= 4) {
-    return {
-      message: '💡 Try +2.5kg next set',
-      color: '#86EFAC',
-    };
-  }
-
-  if (rir <= 1) {
-    return {
-      message: '🔥 Great intensity! Stay here.',
-      color: '#FBBF24',
-    };
-  }
-
-  return null;
 }
 
 function parseSerializedTemplateExercises(rawValue: string | string[] | undefined): TemplatePreloadExercise[] {
@@ -524,7 +331,6 @@ export default function ActiveWorkout() {
   const [createExerciseVisible, setCreateExerciseVisible] = useState(false);
   const [catalogExercises, setCatalogExercises] = useState<ExerciseRow[]>([]);
   const [activeExercises, setActiveExercises] = useState<ActiveExercise[]>([]);
-  const [ghostSetsByExerciseId, setGhostSetsByExerciseId] = useState<Record<string, PreviousExercisePerformanceSet[]>>({});
   const [preloadedRoutineId, setPreloadedRoutineId] = useState<string | null>(null);
   const [preloadedTemplateId, setPreloadedTemplateId] = useState<string | null>(null);
   const [isPreloadingRoutine, setIsPreloadingRoutine] = useState(false);
@@ -541,9 +347,6 @@ export default function ActiveWorkout() {
   const [finishSummary, setFinishSummary] = useState<FinishWorkoutResult | null>(null);
   const [summaryExerciseNames, setSummaryExerciseNames] = useState<string[]>([]);
   const [isSummaryVisible, setIsSummaryVisible] = useState(false);
-  const [isPlateCalculatorVisible, setIsPlateCalculatorVisible] = useState(false);
-  const [plateCalculatorInitialWeight, setPlateCalculatorInitialWeight] = useState('');
-  const [focusedWeightSetKey, setFocusedWeightSetKey] = useState<string | null>(null);
   const [isExerciseStatsVisible, setIsExerciseStatsVisible] = useState(false);
   const [statsExercise, setStatsExercise] = useState<ExerciseRow | null>(null);
   const [statsExerciseProgress, setStatsExerciseProgress] = useState<ExerciseProgressPoint[]>([]);
@@ -552,11 +355,7 @@ export default function ActiveWorkout() {
   const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const restTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasTriggeredRestVibrationRef = useRef(false);
-  const requestedGhostExerciseIdsRef = useRef<Set<string>>(new Set());
   const exerciseCatalogByFilterRef = useRef<Map<string, ExerciseRow[]>>(new Map());
-  const celebratedPrExerciseIdsRef = useRef<Set<string>>(new Set());
-  const previousPrHitSetIdsRef = useRef<Set<string>>(new Set());
-  const prBadgeScaleBySetKeyRef = useRef<Map<string, Animated.Value>>(new Map());
   const completionGlowByExerciseIdRef = useRef<Map<string, Animated.Value>>(new Map());
   const exerciseProgressCacheRef = useRef<Map<string, ExerciseProgressPoint[]>>(new Map());
   const requestedProgressExerciseIdsRef = useRef<Set<string>>(new Set());
@@ -727,53 +526,6 @@ export default function ActiveWorkout() {
     routeTemplateId,
   ]);
 
-  const hydrateGhostPerformances = useCallback(async (exerciseIds: string[]) => {
-    const normalizedExerciseIds = [...new Set(exerciseIds.map((id) => id.trim()).filter(Boolean))];
-    const pendingExerciseIds = normalizedExerciseIds.filter(
-      (exerciseId) => !requestedGhostExerciseIdsRef.current.has(exerciseId)
-    );
-
-    if (pendingExerciseIds.length === 0) {
-      return;
-    }
-
-    for (const exerciseId of pendingExerciseIds) {
-      requestedGhostExerciseIdsRef.current.add(exerciseId);
-    }
-
-    const results = await Promise.all(
-      pendingExerciseIds.map(async (exerciseId) => {
-        try {
-          const previousSets = await getPreviousExercisePerformance(exerciseId, null);
-
-          return {
-            exerciseId,
-            previousSets,
-          };
-        } catch {
-          return {
-            exerciseId,
-            previousSets: [] as PreviousExercisePerformanceSet[],
-          };
-        }
-      })
-    );
-
-    setGhostSetsByExerciseId((currentValue) => {
-      const nextValue = { ...currentValue };
-
-      for (const result of results) {
-        nextValue[result.exerciseId] = result.previousSets;
-      }
-
-      return nextValue;
-    });
-  }, []);
-
-  useEffect(() => {
-    void hydrateGhostPerformances(activeExercises.map((exercise) => exercise.exercise.id));
-  }, [activeExercises, hydrateGhostPerformances]);
-
   const loadExerciseProgressForModal = useCallback(async (exercise: ExerciseRow, forceRefresh = false) => {
     const normalizedExerciseId = exercise.id.trim();
 
@@ -864,18 +616,6 @@ export default function ActiveWorkout() {
     );
   }, [activeExercises]);
 
-  const getPrBadgeScaleValue = useCallback((setKey: string): Animated.Value => {
-    const existingScale = prBadgeScaleBySetKeyRef.current.get(setKey);
-
-    if (existingScale) {
-      return existingScale;
-    }
-
-    const newScale = new Animated.Value(1);
-    prBadgeScaleBySetKeyRef.current.set(setKey, newScale);
-    return newScale;
-  }, []);
-
   const getExerciseCompletionGlowValue = useCallback((exerciseId: string): Animated.Value => {
     const existingValue = completionGlowByExerciseIdRef.current.get(exerciseId);
 
@@ -910,69 +650,6 @@ export default function ActiveWorkout() {
     },
     [getExerciseCompletionGlowValue]
   );
-
-  const animatePrBadgePop = useCallback(
-    (setKey: string) => {
-      const scale = getPrBadgeScaleValue(setKey);
-
-      scale.stopAnimation();
-      scale.setValue(0.76);
-
-      Animated.sequence([
-        Animated.timing(scale, {
-          toValue: 1.24,
-          duration: 110,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scale, {
-          toValue: 1,
-          friction: 5,
-          tension: 170,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    },
-    [getPrBadgeScaleValue]
-  );
-
-  useEffect(() => {
-    const nextPrHitSetKeys = new Set<string>();
-    let shouldTriggerSuccessHaptic = false;
-
-    for (const exercise of activeExercises) {
-      const previousSets = ghostSetsByExerciseId[exercise.exercise.id] ?? [];
-
-      for (let setIndex = 0; setIndex < exercise.sets.length; setIndex += 1) {
-        const setItem = exercise.sets[setIndex];
-        const ghostSet = getGhostSetForRow(previousSets, setItem.set_number, setIndex);
-        const isPrHit = isPrHunterHit(setItem, ghostSet);
-        const setKey = `${exercise.id}:${setItem.id}`;
-
-        if (!isPrHit) {
-          continue;
-        }
-
-        nextPrHitSetKeys.add(setKey);
-
-        if (!previousPrHitSetIdsRef.current.has(setKey)) {
-          animatePrBadgePop(setKey);
-
-          if (!celebratedPrExerciseIdsRef.current.has(exercise.id)) {
-            celebratedPrExerciseIdsRef.current.add(exercise.id);
-            shouldTriggerSuccessHaptic = true;
-          }
-        }
-      }
-    }
-
-    previousPrHitSetIdsRef.current = nextPrHitSetKeys;
-
-    if (shouldTriggerSuccessHaptic) {
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {
-        Vibration.vibrate(30);
-      });
-    }
-  }, [activeExercises, animatePrBadgePop, ghostSetsByExerciseId]);
 
   const startRestTimer = useCallback((seconds = DEFAULT_REST_SECONDS) => {
     const safeSeconds = ensurePositiveRestSeconds(seconds);
@@ -1079,67 +756,6 @@ export default function ActiveWorkout() {
     [statsExerciseProgress]
   );
 
-  const openPlateCalculator = useCallback((weightInput: string) => {
-    setFocusedWeightSetKey(null);
-    setPlateCalculatorInitialWeight(sanitizeDecimalInput(weightInput));
-    setIsPlateCalculatorVisible(true);
-  }, []);
-
-  const handleWeightInputFocus = useCallback((exerciseId: string, setId: string, equipment: string | null) => {
-    if (!isBarbellExerciseEquipment(equipment)) {
-      setFocusedWeightSetKey(null);
-      return;
-    }
-
-    setFocusedWeightSetKey(buildSetFocusKey(exerciseId, setId));
-  }, []);
-
-  const handleWeightInputBlur = useCallback((exerciseId: string, setId: string) => {
-    const targetKey = buildSetFocusKey(exerciseId, setId);
-
-    setFocusedWeightSetKey((currentValue) => (currentValue === targetKey ? null : currentValue));
-  }, []);
-
-  const applyGhostSetToCurrent = useCallback(
-    (exerciseId: string, setId: string, ghostSet: PreviousExercisePerformanceSet) => {
-      const weightInput = formatInputFromNumber(ghostSet.weight, 'decimal');
-      const repsInput = formatInputFromNumber(ghostSet.reps, 'integer');
-      const rirInput = formatInputFromNumber(ghostSet.rir, 'decimal');
-
-      setActiveExercises((currentValue) =>
-        currentValue.map((exercise) => {
-          if (exercise.id !== exerciseId) {
-            return exercise;
-          }
-
-          return {
-            ...exercise,
-            sets: exercise.sets.map((setItem) => {
-              if (setItem.id !== setId) {
-                return setItem;
-              }
-
-              return {
-                ...setItem,
-                weightInput,
-                repsInput,
-                rirInput,
-                weight: parseOptionalNumber(weightInput),
-                reps: parseOptionalNumber(repsInput),
-                rir: parseOptionalNumber(rirInput),
-              };
-            }),
-          };
-        })
-      );
-
-      void Haptics.selectionAsync().catch(() => {
-        Vibration.vibrate(10);
-      });
-    },
-    []
-  );
-
   function toggleSetCompleted(exerciseId: string, setId: string) {
     setActiveExercises((currentValue) =>
       currentValue.map((exercise) => {
@@ -1155,34 +771,6 @@ export default function ActiveWorkout() {
         };
       })
     );
-  }
-
-  function cycleSetType(exerciseId: string, setId: string) {
-    setActiveExercises((currentValue) =>
-      currentValue.map((exercise) => {
-        if (exercise.id !== exerciseId) {
-          return exercise;
-        }
-
-        return {
-          ...exercise,
-          sets: exercise.sets.map((setItem) => {
-            if (setItem.id !== setId) {
-              return setItem;
-            }
-
-            return {
-              ...setItem,
-              set_type: getNextSetType(setItem.set_type),
-            };
-          }),
-        };
-      })
-    );
-
-    void Haptics.selectionAsync().catch(() => {
-      Vibration.vibrate(10);
-    });
   }
 
   const handleSetCompletionToggle = useCallback(
@@ -1357,12 +945,9 @@ export default function ActiveWorkout() {
     setActiveExercises([]);
     setExercisePickerVisible(false);
     setCreateExerciseVisible(false);
-    celebratedPrExerciseIdsRef.current.clear();
-    previousPrHitSetIdsRef.current.clear();
-    prBadgeScaleBySetKeyRef.current.clear();
     completionGlowByExerciseIdRef.current.clear();
 
-    router.replace('/(tabs)/index' as any);
+    router.replace('/(tabs)' as any);
   }, [clearElapsedTimer, clearRestTimer, finishRestTimer]);
 
   const routePreloadLabel = routeTemplateId ? 'template' : 'routine';
@@ -1514,83 +1099,22 @@ export default function ActiveWorkout() {
                   </View>
                 </View>
 
-                {exercise.sets.map((setItem, setIndex) => {
-                  const ghostSet = getGhostSetForRow(
-                    ghostSetsByExerciseId[exercise.exercise.id] ?? [],
-                    setItem.set_number,
-                    setIndex
-                  );
-                  const isPrHit = isPrHunterHit(setItem, ghostSet);
-                  const isBarbellExercise = isBarbellExerciseEquipment(exercise.exercise.equipment);
-                  const focusKey = buildSetFocusKey(exercise.id, setItem.id);
-                  const isPlateTooltipVisible = isBarbellExercise && focusedWeightSetKey === focusKey;
-                  const platePreview = isPlateTooltipVisible ? calculatePlateBreakdown(setItem.weight ?? 0, 20) : null;
-                  const plateChipValues = platePreview
-                    ? platePreview.breakdown.flatMap((item) => Array.from({ length: item.countPerSide }, () => item.plate))
-                    : [];
-                  const estimatedOneRepMax = estimateOneRepMax(setItem.weight, setItem.reps);
-                  const rirFeedbackColor = getRirFeedbackColor(setItem.rir);
-                  const progressionHint = getProgressionHint(setItem.rir);
-                  const setKey = `${exercise.id}:${setItem.id}`;
-
+                {exercise.sets.map((setItem) => {
                   return (
                     <View key={setItem.id} style={styles.setRowWrapper}>
-                      <View
-                        style={[
-                          styles.tableRow,
-                          setItem.completed && styles.completedRow,
-                          getSetTypeRowStyle(setItem.set_type),
-                        ]}
-                      >
-                        <View style={[styles.cellSet, styles.setCellWrap]}>
+                      <View style={[styles.tableRow, setItem.completed && styles.completedRow]}>
+                        <View style={styles.cellSet}>
                           <Text style={styles.setNumberText}>{setItem.set_number ?? '-'}</Text>
-
-                          <TouchableOpacity
-                            style={[styles.setTypeChip, getSetTypeChipStyle(setItem.set_type)]}
-                            activeOpacity={0.88}
-                            onPress={() => cycleSetType(exercise.id, setItem.id)}
-                          >
-                            <Text style={styles.setTypeChipText}>{getSetTypeLabel(setItem.set_type)}</Text>
-                          </TouchableOpacity>
-
-                          {isPrHit ? (
-                            <Animated.View
-                              style={[
-                                styles.prHunterBadge,
-                                {
-                                  transform: [{ scale: getPrBadgeScaleValue(setKey) }],
-                                },
-                              ]}
-                            >
-                              <Text style={styles.prHunterBadgeText}>🔥</Text>
-                            </Animated.View>
-                          ) : null}
                         </View>
 
-                        <View style={styles.cellKgWrap}>
-                          <TextInput
-                            value={setItem.weightInput}
-                            onChangeText={(value) => updateSetInput(exercise.id, setItem.id, 'weightInput', value)}
-                            onFocus={() => handleWeightInputFocus(exercise.id, setItem.id, exercise.exercise.equipment)}
-                            onPressIn={() => handleWeightInputFocus(exercise.id, setItem.id, exercise.exercise.equipment)}
-                            onBlur={() => handleWeightInputBlur(exercise.id, setItem.id)}
-                            style={[styles.numericInput, styles.kgInput, setItem.completed && styles.numericInputCompleted]}
-                            keyboardType="decimal-pad"
-                            placeholder="0"
-                            placeholderTextColor={palette.textMuted}
-                          />
-
-                          {isBarbellExercise ? (
-                            <TouchableOpacity
-                              style={styles.plateButton}
-                              activeOpacity={0.85}
-                              onPress={() => openPlateCalculator(setItem.weightInput)}
-                              onLongPress={() => openPlateCalculator(setItem.weightInput)}
-                            >
-                              <Ionicons name="calculator-outline" size={14} color={palette.textSecondary} />
-                            </TouchableOpacity>
-                          ) : null}
-                        </View>
+                        <TextInput
+                          value={setItem.weightInput}
+                          onChangeText={(value) => updateSetInput(exercise.id, setItem.id, 'weightInput', value)}
+                          style={[styles.numericInput, styles.kgInput, setItem.completed && styles.numericInputCompleted]}
+                          keyboardType="decimal-pad"
+                          placeholder="0"
+                          placeholderTextColor={palette.textMuted}
+                        />
 
                         <TextInput
                           value={setItem.repsInput}
@@ -1604,12 +1128,7 @@ export default function ActiveWorkout() {
                         <TextInput
                           value={setItem.rirInput}
                           onChangeText={(value) => updateSetInput(exercise.id, setItem.id, 'rirInput', value)}
-                          style={[
-                            styles.numericInput,
-                            styles.cellRir,
-                            setItem.completed && styles.numericInputCompleted,
-                            rirFeedbackColor ? { borderColor: rirFeedbackColor, color: rirFeedbackColor } : null,
-                          ]}
+                          style={[styles.numericInput, styles.cellRir, setItem.completed && styles.numericInputCompleted]}
                           keyboardType="decimal-pad"
                           placeholder="0"
                           placeholderTextColor={palette.textMuted}
@@ -1627,59 +1146,6 @@ export default function ActiveWorkout() {
                           />
                         </TouchableOpacity>
                       </View>
-
-                      {estimatedOneRepMax !== null ? (
-                        <View style={styles.estimatedOneRmWrap}>
-                          <Text style={styles.estimatedOneRmText}>{`🎯 Est. 1RM: ${formatPlateWeight(estimatedOneRepMax)}kg`}</Text>
-                        </View>
-                      ) : null}
-
-                      {isPlateTooltipVisible ? (
-                        <View style={styles.inlinePlateTooltip}>
-                          <Text style={styles.inlinePlateTitle}>Plate setup per side</Text>
-
-                          <View style={styles.inlinePlateChipRow}>
-                            <Text style={styles.inlinePlateBaseText}>Barra</Text>
-
-                            {plateChipValues.length > 0 ? <Text style={styles.inlinePlatePlusText}>+</Text> : null}
-
-                            {plateChipValues.length > 0 ? (
-                              plateChipValues.map((plateValue, plateIndex) => (
-                                <View key={`${setKey}-plate-${plateValue}-${plateIndex}`} style={styles.inlinePlateChip}>
-                                  <Text style={styles.inlinePlateChipText}>{formatPlateWeight(plateValue)}</Text>
-                                </View>
-                              ))
-                            ) : (
-                              <Text style={styles.inlinePlateEmptyText}>Apenas barra</Text>
-                            )}
-                          </View>
-
-                          {platePreview && platePreview.remainderPerSide > 0 ? (
-                            <Text style={styles.inlinePlateRemainderText}>
-                              {`Resto por lado: ${formatPlateWeight(platePreview.remainderPerSide)}kg`}
-                            </Text>
-                          ) : null}
-                        </View>
-                      ) : null}
-
-                      {ghostSet ? (
-                        <TouchableOpacity
-                          style={styles.ghostCopyButton}
-                          activeOpacity={0.85}
-                          onPress={() => applyGhostSetToCurrent(exercise.id, setItem.id, ghostSet)}
-                        >
-                          <Ionicons name="copy-outline" size={12} color="#6B7280" />
-                          <Text style={styles.ghostSetText}>{formatGhostSetLabel(ghostSet)}</Text>
-                        </TouchableOpacity>
-                      ) : null}
-
-                      {progressionHint ? (
-                        <View style={styles.progressionHintWrap}>
-                          <Text style={[styles.progressionHintText, { color: progressionHint.color }]}>
-                            {progressionHint.message}
-                          </Text>
-                        </View>
-                      ) : null}
                     </View>
                   );
                 })}
@@ -1974,12 +1440,6 @@ export default function ActiveWorkout() {
         exerciseNames={summaryExerciseNames}
         onShareAndFinish={handleShareAndFinish}
       />
-
-      <PlateCalculatorModal
-        visible={isPlateCalculatorVisible}
-        initialTotalWeight={plateCalculatorInitialWeight}
-        onClose={() => setIsPlateCalculatorVisible(false)}
-      />
     </SafeAreaView>
   );
 }
@@ -2259,195 +1719,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#13273F',
     borderRadius: 10,
   },
-  setRowWarmup: {
-    backgroundColor: 'rgba(234, 179, 8, 0.12)',
-    opacity: 0.9,
-  },
-  setRowDrop: {
-    backgroundColor: 'rgba(249, 115, 22, 0.16)',
-  },
-  setRowFailure: {
-    backgroundColor: 'rgba(127, 29, 29, 0.48)',
-  },
-  ghostCopyButton: {
-    marginTop: 4,
-    marginBottom: 2,
-    marginLeft: 8,
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    columnGap: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#1F2937',
-    backgroundColor: '#0B1320',
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-  },
-  ghostSetText: {
-    color: '#6B7280',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  estimatedOneRmWrap: {
-    marginTop: 4,
-    marginLeft: 8,
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#2563EB',
-    backgroundColor: '#0C1D34',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  estimatedOneRmText: {
-    color: '#BFDBFE',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.2,
-    fontVariant: ['tabular-nums'],
-  },
-  inlinePlateTooltip: {
-    marginTop: 5,
-    marginLeft: 8,
-    marginBottom: 2,
-    alignSelf: 'flex-start',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#0B1320',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    rowGap: 5,
-  },
-  inlinePlateTitle: {
-    color: '#9FB1C9',
-    fontSize: 10,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
-  inlinePlateChipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    columnGap: 6,
-    rowGap: 6,
-  },
-  inlinePlateBaseText: {
-    color: '#E2E8F0',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  inlinePlatePlusText: {
-    color: '#94A3B8',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  inlinePlateChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#3B82F6',
-    backgroundColor: '#11243F',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  inlinePlateChipText: {
-    color: '#EAF1FF',
-    fontSize: 11,
-    fontWeight: '800',
-    fontVariant: ['tabular-nums'],
-  },
-  inlinePlateEmptyText: {
-    color: '#CBD5E1',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  inlinePlateRemainderText: {
-    color: '#F59E0B',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  progressionHintWrap: {
-    marginTop: 4,
-    marginBottom: 2,
-    marginLeft: 10,
-  },
-  progressionHintText: {
-    fontSize: 11,
-    fontWeight: '700',
-    lineHeight: 16,
-  },
   cellSet: {
     width: 44,
     textAlign: 'center',
-  },
-  setCellWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    columnGap: 4,
   },
   setNumberText: {
     color: palette.textPrimary,
     fontSize: 14,
     fontWeight: '700',
   },
-  setTypeChip: {
-    minWidth: 30,
-    height: 18,
-    borderRadius: 999,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 5,
-  },
-  setTypeChipNormal: {
-    borderColor: '#334155',
-    backgroundColor: '#1F2937',
-  },
-  setTypeChipWarmup: {
-    borderColor: '#D97706',
-    backgroundColor: '#4B350C',
-  },
-  setTypeChipDrop: {
-    borderColor: '#EA580C',
-    backgroundColor: '#4A210D',
-  },
-  setTypeChipFailure: {
-    borderColor: '#B91C1C',
-    backgroundColor: '#3F1114',
-  },
-  setTypeChipText: {
-    color: '#F8FAFC',
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.25,
-  },
-  prHunterBadge: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#7C2D12',
-    backgroundColor: '#2A160E',
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-  },
-  prHunterBadgeText: {
-    fontSize: 10,
-    lineHeight: 12,
-  },
   cellKg: {
     width: 92,
   },
-  cellKgWrap: {
-    width: 92,
-    flexDirection: 'row',
-    alignItems: 'center',
-    columnGap: 6,
-  },
   kgInput: {
-    flex: 1,
-    minWidth: 0,
+    width: 92,
   },
   cellReps: {
     width: 64,
@@ -2471,16 +1756,6 @@ const styles = StyleSheet.create({
   numericInputCompleted: {
     borderColor: '#3B82F6',
     backgroundColor: '#1D3550',
-  },
-  plateButton: {
-    width: 24,
-    height: 24,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#1F2937',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   cellCheck: {
     width: 36,

@@ -31,9 +31,13 @@ export default function EditProfileScreen() {
   const [usernameInput, setUsernameInput] = useState('');
   const [fullNameInput, setFullNameInput] = useState('');
   const [bioInput, setBioInput] = useState('');
+  const [currentEmail, setCurrentEmail] = useState('');
+  const [pendingEmailInput, setPendingEmailInput] = useState('');
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
+  const [isSendingPasswordReset, setIsSendingPasswordReset] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -46,6 +50,19 @@ export default function EditProfileScreen() {
       setUsernameInput(profile.username ?? '');
       setFullNameInput(profile.full_name ?? '');
       setBioInput(profile.bio ?? '');
+
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
+
+      if (error) {
+        throw error;
+      }
+
+      const email = user?.email?.trim() ?? '';
+      setCurrentEmail(email);
+      setPendingEmailInput(email);
     } catch (error) {
       setErrorMessage(toErrorMessage(error));
     } finally {
@@ -125,6 +142,74 @@ export default function EditProfileScreen() {
     ]);
   }, [runSignOut]);
 
+  const handleUpdateEmail = useCallback(async () => {
+    if (isUpdatingEmail) {
+      return;
+    }
+
+    const normalizedEmail = pendingEmailInput.trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      Alert.alert('Validation', 'Email is required.');
+      return;
+    }
+
+    if (normalizedEmail === currentEmail.trim().toLowerCase()) {
+      Alert.alert('No changes', 'Use a different email to request an update.');
+      return;
+    }
+
+    setIsUpdatingEmail(true);
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        email: normalizedEmail,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      Alert.alert(
+        'Email update requested',
+        'Check your inbox to confirm the new email address before it becomes active.'
+      );
+    } catch (error) {
+      Alert.alert('Unable to update email', toErrorMessage(error));
+    } finally {
+      setIsUpdatingEmail(false);
+    }
+  }, [currentEmail, isUpdatingEmail, pendingEmailInput]);
+
+  const handlePasswordReset = useCallback(async () => {
+    if (isSendingPasswordReset) {
+      return;
+    }
+
+    const targetEmail = currentEmail.trim() || pendingEmailInput.trim();
+
+    if (!targetEmail) {
+      Alert.alert('Missing email', 'Set an email first to receive password reset instructions.');
+      return;
+    }
+
+    setIsSendingPasswordReset(true);
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(targetEmail);
+
+      if (error) {
+        throw error;
+      }
+
+      Alert.alert('Reset email sent', `Password reset instructions were sent to ${targetEmail}.`);
+    } catch (error) {
+      Alert.alert('Unable to send reset email', toErrorMessage(error));
+    } finally {
+      setIsSendingPasswordReset(false);
+    }
+  }, [currentEmail, isSendingPasswordReset, pendingEmailInput]);
+
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -196,6 +281,55 @@ export default function EditProfileScreen() {
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <Text style={styles.saveButtonText}>Salvar Alteracoes</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.accountCard}>
+              <Text style={styles.accountTitle}>Account Security</Text>
+              <Text style={styles.accountHint}>Current email: {currentEmail || 'Not available'}</Text>
+
+              <Text style={styles.inputLabel}>New Email</Text>
+              <TextInput
+                value={pendingEmailInput}
+                onChangeText={setPendingEmailInput}
+                style={styles.input}
+                placeholder="you@example.com"
+                placeholderTextColor={palette.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+              />
+
+              <TouchableOpacity
+                style={[styles.accountPrimaryButton, isUpdatingEmail && styles.accountActionDisabled]}
+                activeOpacity={0.9}
+                onPress={() => void handleUpdateEmail()}
+                disabled={isUpdatingEmail}
+              >
+                {isUpdatingEmail ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons name="mail-outline" size={16} color="#FFFFFF" />
+                    <Text style={styles.accountPrimaryButtonText}>Update Email</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.accountSecondaryButton, isSendingPasswordReset && styles.accountActionDisabled]}
+                activeOpacity={0.9}
+                onPress={() => void handlePasswordReset()}
+                disabled={isSendingPasswordReset}
+              >
+                {isSendingPasswordReset ? (
+                  <ActivityIndicator size="small" color="#BFDBFE" />
+                ) : (
+                  <>
+                    <Ionicons name="key-outline" size={16} color="#BFDBFE" />
+                    <Text style={styles.accountSecondaryButtonText}>Send Password Reset</Text>
+                  </>
                 )}
               </TouchableOpacity>
             </View>
@@ -363,6 +497,63 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '800',
+  },
+  accountCard: {
+    marginTop: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#1E3A8A',
+    backgroundColor: '#0B1734',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    rowGap: 8,
+  },
+  accountTitle: {
+    color: '#E0EAFF',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  accountHint: {
+    color: '#BBD3FF',
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 4,
+  },
+  accountPrimaryButton: {
+    marginTop: 8,
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#2563EB',
+    backgroundColor: '#1D4ED8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    columnGap: 8,
+  },
+  accountPrimaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  accountSecondaryButton: {
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#1E40AF',
+    backgroundColor: '#10234A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    columnGap: 8,
+  },
+  accountSecondaryButtonText: {
+    color: '#BFDBFE',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  accountActionDisabled: {
+    opacity: 0.75,
   },
   logoutButton: {
     marginTop: 14,

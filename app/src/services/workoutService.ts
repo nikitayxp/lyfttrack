@@ -249,6 +249,54 @@ type RawWorkoutDetailsSetRow = Pick<
   'id' | 'set_number' | 'weight' | 'reps' | 'rir' | 'set_type' | 'workout_exercise_id' | 'exercise_id'
 >;
 
+type SupabaseErrorMeta = {
+  code: string | null;
+  message: string;
+  details: string | null;
+  hint: string | null;
+};
+
+function isWorkoutExercisesTableMissing(error: unknown): boolean {
+  const meta = extractSupabaseErrorMeta(error);
+  const message = meta.message.toLowerCase();
+
+  return message.includes("could not find the table 'public.workout_exercises'") ||
+    (message.includes('workout_exercises') && message.includes('schema cache'));
+}
+
+function isWorkoutExerciseIdColumnMissing(error: unknown): boolean {
+  const meta = extractSupabaseErrorMeta(error);
+  const message = meta.message.toLowerCase();
+
+  return message.includes('workout_exercise_id') &&
+    (message.includes('schema cache') || message.includes('column') || message.includes('could not find'));
+}
+
+function extractSupabaseErrorMeta(error: unknown): SupabaseErrorMeta {
+  if (!error || typeof error !== 'object') {
+    return {
+      code: null,
+      message: 'Unknown error',
+      details: null,
+      hint: null,
+    };
+  }
+
+  const maybeError = error as {
+    code?: unknown;
+    message?: unknown;
+    details?: unknown;
+    hint?: unknown;
+  };
+
+  return {
+    code: typeof maybeError.code === 'string' ? maybeError.code : null,
+    message: typeof maybeError.message === 'string' ? maybeError.message : 'Unknown error',
+    details: typeof maybeError.details === 'string' ? maybeError.details : null,
+    hint: typeof maybeError.hint === 'string' ? maybeError.hint : null,
+  };
+}
+
 function extractRelationCount(rows: RelationCountRow[] | null | undefined): number {
   if (!rows || rows.length === 0) {
     return 0;
@@ -697,14 +745,28 @@ export async function finishWorkout(input: FinishWorkoutInput): Promise<FinishWo
   const endTime = new Date().toISOString();
   const completedSetDrafts = toCompletedSetDrafts(input.setDrafts);
 
-  const saveResult = await createWorkoutWithSets({
-    name: input.name,
-    notes: input.notes,
-    templateId: input.templateId,
-    startTime: input.startTime,
-    endTime,
-    setDrafts: completedSetDrafts,
-  });
+  let saveResult: CreateWorkoutWithSetsResult;
+
+  try {
+    saveResult = await createWorkoutWithSets({
+      name: input.name,
+      notes: input.notes,
+      templateId: input.templateId ?? null,
+      startTime: input.startTime,
+      endTime,
+      setDrafts: completedSetDrafts,
+    });
+  } catch (error) {
+    console.error('[finishWorkout] Unable to persist workout to Supabase', {
+      templateId: input.templateId ?? null,
+      startTime: input.startTime,
+      endTime,
+      totalSetDrafts: input.setDrafts.length,
+      completedSetDrafts: completedSetDrafts.length,
+      error: extractSupabaseErrorMeta(error),
+    });
+    throw error;
+  }
 
   return {
     workoutId: saveResult.workoutId,
@@ -722,22 +784,84 @@ export async function createWorkoutWithSets(
 ): Promise<CreateWorkoutWithSetsResult> {
   const user = await getAuthenticatedUserOrThrow();
 
-  const workoutInsert: TablesInsert<'workouts'> = {
+  const normalizedTemplateId = normalizeOptionalId(input.templateId);
+  let safeTemplateId: string | null = normalizedTemplateId;
+
+  if (normalizedTemplateId) {
+    const { data: ownedTemplate, error: ownedTemplateError } = await supabase
+      .from('workout_templates')
+      .select('id')
+      .eq('id', normalizedTemplateId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (ownedTemplateError) {
+      console.error('[createWorkoutWithSets] Failed to validate template_id, using null fallback', {
+        userId: user.id,
+        templateId: normalizedTemplateId,
+        error: extractSupabaseErrorMeta(ownedTemplateError),
+      });
+      safeTemplateId = null;
+    } else if (!ownedTemplate) {
+      console.error('[createWorkoutWithSets] Invalid template_id for user, using null fallback', {
+        userId: user.id,
+        templateId: normalizedTemplateId,
+      });
+      safeTemplateId = null;
+    }
+  }
+
+  let workoutInsert: TablesInsert<'workouts'> = {
     user_id: user.id,
     name: input.name.trim() || 'Untitled Workout',
     notes: input.notes ?? null,
-    template_id: normalizeOptionalId(input.templateId),
+    template_id: safeTemplateId ?? null,
     start_time: input.startTime,
     end_time: input.endTime,
   };
 
-  const { data: createdWorkout, error: workoutError } = await supabase
-    .from('workouts')
-    .insert(workoutInsert)
-    .select('id')
-    .single();
+  const insertWorkout = async (payload: TablesInsert<'workouts'>) => {
+    return supabase
+      .from('workouts')
+      .insert(payload)
+      .select('id')
+      .single();
+  };
+
+  let { data: createdWorkout, error: workoutError } = await insertWorkout(workoutInsert);
+
+  if (workoutError && workoutInsert.template_id !== null) {
+    const errorMeta = extractSupabaseErrorMeta(workoutError);
+    const shouldRetryWithoutTemplate =
+      errorMeta.code === '23503' ||
+      errorMeta.code === 'PGRST204' ||
+      errorMeta.message.toLowerCase().includes('template_id');
+
+    if (shouldRetryWithoutTemplate) {
+      console.error('[createWorkoutWithSets] workouts insert failed with template_id, retrying with null template_id', {
+        payload: workoutInsert,
+        error: errorMeta,
+      });
+
+      workoutInsert = {
+        ...workoutInsert,
+        template_id: null,
+      };
+
+      const retryResult = await insertWorkout(workoutInsert);
+      createdWorkout = retryResult.data;
+      workoutError = retryResult.error;
+    }
+  }
 
   if (workoutError || !createdWorkout) {
+    console.error('[createWorkoutWithSets] workouts insert failed', {
+      payload: workoutInsert,
+      templateIdInput: input.templateId ?? null,
+      normalizedTemplateId,
+      safeTemplateId,
+      error: extractSupabaseErrorMeta(workoutError),
+    });
     throw new Error(`Unable to create workout: ${workoutError?.message ?? 'Unknown error'}`);
   }
 
@@ -761,21 +885,28 @@ export async function createWorkoutWithSets(
       .select('id, exercise_id');
 
     if (workoutExercisesError) {
-      const { error: rollbackError } = await supabase.from('workouts').delete().eq('id', createdWorkout.id);
+      if (isWorkoutExercisesTableMissing(workoutExercisesError)) {
+        console.warn('[createWorkoutWithSets] workout_exercises table missing, continuing with legacy sets-only insertion', {
+          workoutId: createdWorkout.id,
+          error: extractSupabaseErrorMeta(workoutExercisesError),
+        });
+      } else {
+        const { error: rollbackError } = await supabase.from('workouts').delete().eq('id', createdWorkout.id);
 
-      if (rollbackError) {
+        if (rollbackError) {
+          throw new Error(
+            `Unable to create workout exercises: ${workoutExercisesError.message}. Rollback failed for workout ${createdWorkout.id}: ${rollbackError.message}`
+          );
+        }
+
         throw new Error(
-          `Unable to create workout exercises: ${workoutExercisesError.message}. Rollback failed for workout ${createdWorkout.id}: ${rollbackError.message}`
+          `Unable to create workout exercises: ${workoutExercisesError.message}. Workout ${createdWorkout.id} was rolled back successfully.`
         );
       }
-
-      throw new Error(
-        `Unable to create workout exercises: ${workoutExercisesError.message}. Workout ${createdWorkout.id} was rolled back successfully.`
-      );
-    }
-
-    for (const relation of insertedWorkoutExercises ?? []) {
-      workoutExerciseIdByExercise.set(relation.exercise_id, relation.id);
+    } else {
+      for (const relation of insertedWorkoutExercises ?? []) {
+        workoutExerciseIdByExercise.set(relation.exercise_id, relation.id);
+      }
     }
   }
 
@@ -793,7 +924,23 @@ export async function createWorkoutWithSets(
     };
   }
 
-  const { error: setsError } = await supabase.from('sets').insert(setRows);
+  const insertSets = async (rows: TablesInsert<'sets'>[]) => {
+    return supabase.from('sets').insert(rows);
+  };
+
+  let { error: setsError } = await insertSets(setRows);
+
+  if (setsError && isWorkoutExerciseIdColumnMissing(setsError)) {
+    const legacySetRows: TablesInsert<'sets'>[] = setRows.map(({ workout_exercise_id: _ignored, ...rest }) => rest);
+
+    console.warn('[createWorkoutWithSets] sets.workout_exercise_id column missing, retrying insert without it', {
+      workoutId: createdWorkout.id,
+      error: extractSupabaseErrorMeta(setsError),
+    });
+
+    const retryResult = await insertSets(legacySetRows);
+    setsError = retryResult.error;
+  }
 
   if (!setsError) {
     return {
@@ -1136,29 +1283,67 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
 
   const profileByUserId = await getPublicProfilesByIds([workout.user_id]);
 
-  const { data: rawWorkoutExercises, error: workoutExercisesError } = await supabase
+  const { data: rawWorkoutExercisesData, error: workoutExercisesError } = await supabase
     .from('workout_exercises')
     .select('id, order, rest_time, exercise_id, exercises(id, name, muscle_group, equipment)')
     .eq('workout_id', normalizedWorkoutId)
     .order('order', { ascending: true });
 
-  if (workoutExercisesError) {
+  if (workoutExercisesError && !isWorkoutExercisesTableMissing(workoutExercisesError)) {
     throw new Error(`Unable to load workout exercises: ${workoutExercisesError.message}`);
   }
 
-  const { data: rawSetRows, error: setRowsError } = await supabase
-    .from('sets')
-    .select('id, set_number, weight, reps, rir, set_type, workout_exercise_id, exercise_id')
-    .eq('workout_id', normalizedWorkoutId)
-    .order('set_number', { ascending: true })
-    .order('id', { ascending: true });
-
-  if (setRowsError) {
-    throw new Error(`Unable to load workout sets: ${setRowsError.message}`);
+  if (workoutExercisesError && isWorkoutExercisesTableMissing(workoutExercisesError)) {
+    console.warn('[getWorkoutDetails] workout_exercises table missing, using sets fallback grouping', {
+      workoutId: normalizedWorkoutId,
+      error: extractSupabaseErrorMeta(workoutExercisesError),
+    });
   }
 
-  const workoutExercises = (rawWorkoutExercises ?? []) as RawWorkoutExerciseDetailsRow[];
-  const setRows = (rawSetRows ?? []) as RawWorkoutDetailsSetRow[];
+  let rawSetRows: RawWorkoutDetailsSetRow[] | null = null;
+  let setRowsError: unknown = null;
+
+  {
+    const result = await supabase
+      .from('sets')
+      .select('id, set_number, weight, reps, rir, set_type, workout_exercise_id, exercise_id')
+      .eq('workout_id', normalizedWorkoutId)
+      .order('set_number', { ascending: true })
+      .order('id', { ascending: true });
+
+    rawSetRows = (result.data as RawWorkoutDetailsSetRow[] | null) ?? null;
+    setRowsError = result.error;
+  }
+
+  if (setRowsError && isWorkoutExerciseIdColumnMissing(setRowsError)) {
+    const legacyResult = await supabase
+      .from('sets')
+      .select('id, set_number, weight, reps, rir, set_type, exercise_id')
+      .eq('workout_id', normalizedWorkoutId)
+      .order('set_number', { ascending: true })
+      .order('id', { ascending: true });
+
+    if (legacyResult.error) {
+      setRowsError = legacyResult.error;
+    } else {
+      rawSetRows = ((legacyResult.data ?? []) as Omit<RawWorkoutDetailsSetRow, 'workout_exercise_id'>[]).map((row) => ({
+        ...row,
+        workout_exercise_id: null,
+      }));
+      setRowsError = null;
+
+      console.warn('[getWorkoutDetails] sets.workout_exercise_id column missing, using legacy set projection', {
+        workoutId: normalizedWorkoutId,
+      });
+    }
+  }
+
+  if (setRowsError) {
+    throw new Error(`Unable to load workout sets: ${toErrorMessage(setRowsError)}`);
+  }
+
+  const workoutExercises = (rawWorkoutExercisesData ?? []) as RawWorkoutExerciseDetailsRow[];
+  const setRows = rawSetRows ?? [];
 
   const exerciseInfoById = new Map<string, ExerciseSummary>();
 

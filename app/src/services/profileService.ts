@@ -272,7 +272,7 @@ export async function uploadAvatar(input: UploadAvatarInput): Promise<ProfileRow
     }
 
     fileData = await response.arrayBuffer();
-  } catch (_error) {
+  } catch {
     if (!input.base64Data) {
       throw new Error('Unable to read avatar file for upload.');
     }

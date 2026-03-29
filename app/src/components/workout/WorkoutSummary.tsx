@@ -1,13 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import {
   Modal,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const SCREEN_BG = '#050A12';
 const CARD_BG = '#111827';
@@ -55,7 +55,7 @@ export function WorkoutSummary({
 }: WorkoutSummaryProps) {
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onShareAndFinish}>
-      <SafeAreaView style={styles.screen}>
+      <SafeAreaView style={styles.screen} edges={['top', 'left', 'right', 'bottom']}>
         <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
           <View style={styles.heroWrap}>
             <Text style={styles.heroTitle}>Workout Complete! 🎉</Text>

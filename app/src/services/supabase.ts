@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { Database } from '@/types/database';
 
@@ -28,8 +29,7 @@ function createAuthStorage(): SupabaseStorage | undefined {
     };
   }
 
-  const asyncStorage = require('@react-native-async-storage/async-storage').default as SupabaseStorage;
-  return asyncStorage;
+  return AsyncStorage;
 }
 
 const authStorage = createAuthStorage();

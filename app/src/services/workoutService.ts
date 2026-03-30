@@ -119,9 +119,20 @@ export type WorkoutFeedItem = Pick<
   totalVolume: number;
   totalSets: number;
   exerciseNames: string[];
+  exerciseGroups: WorkoutFeedExerciseGroup[];
   likes_count: number;
   comments_count: number;
   has_liked: boolean;
+};
+
+export type WorkoutFeedExerciseSet = Pick<Tables<'sets'>, 'id' | 'set_number' | 'weight' | 'reps' | 'rir'> & {
+  set_type: WorkoutSetType;
+};
+
+export type WorkoutFeedExerciseGroup = {
+  exercise_id: string | null;
+  exercise_name: string;
+  sets: WorkoutFeedExerciseSet[];
 };
 
 export type RoutineFeedItem = Pick<Tables<'routines'>, 'id' | 'name' | 'notes' | 'created_at' | 'user_id'> & {
@@ -249,6 +260,13 @@ type RawWorkoutDetailsSetRow = Pick<
   'id' | 'set_number' | 'weight' | 'reps' | 'rir' | 'set_type' | 'workout_exercise_id' | 'exercise_id'
 >;
 
+type RawWorkoutFeedSetRow = Pick<
+  Tables<'sets'>,
+  'id' | 'workout_id' | 'exercise_id' | 'set_number' | 'weight' | 'reps' | 'rir' | 'set_type'
+> & {
+  exercises?: Pick<ExerciseCatalogItem, 'id' | 'name'> | Pick<ExerciseCatalogItem, 'id' | 'name'>[] | null;
+};
+
 type SupabaseErrorMeta = {
   code: string | null;
   message: string;
@@ -364,6 +382,94 @@ function sortWorkoutDetailsSets(a: WorkoutDetailsSet, b: WorkoutDetailsSet): num
   }
 
   return a.id.localeCompare(b.id);
+}
+
+function sortWorkoutFeedExerciseSets(a: WorkoutFeedExerciseSet, b: WorkoutFeedExerciseSet): number {
+  const aNumber = a.set_number ?? Number.MAX_SAFE_INTEGER;
+  const bNumber = b.set_number ?? Number.MAX_SAFE_INTEGER;
+
+  if (aNumber !== bNumber) {
+    return aNumber - bNumber;
+  }
+
+  return a.id.localeCompare(b.id);
+}
+
+type WorkoutFeedAggregate = {
+  totalVolume: number;
+  totalSets: number;
+  exerciseNames: string[];
+  exerciseGroups: WorkoutFeedExerciseGroup[];
+};
+
+function aggregateWorkoutFeedSets(rows: RawWorkoutFeedSetRow[]): Map<string, WorkoutFeedAggregate> {
+  const aggregateByWorkout = new Map<string, WorkoutFeedAggregate>();
+  const groupIndexByWorkout = new Map<string, Map<string, number>>();
+
+  for (const row of rows) {
+    const workoutId = normalizeOptionalId(row.workout_id);
+
+    if (!workoutId) {
+      continue;
+    }
+
+    const aggregate =
+      aggregateByWorkout.get(workoutId) ?? {
+        totalVolume: 0,
+        totalSets: 0,
+        exerciseNames: [],
+        exerciseGroups: [],
+      };
+
+    const groupIndex = groupIndexByWorkout.get(workoutId) ?? new Map<string, number>();
+    const exerciseData = resolveEmbeddedObject(row.exercises);
+    const normalizedExerciseName = normalizeOptionalText(exerciseData?.name) ?? 'Exercicio';
+    const normalizedExerciseId = normalizeOptionalId(row.exercise_id);
+    const groupKey = `${normalizedExerciseId ?? 'unknown'}:${normalizedExerciseName.toLowerCase()}`;
+
+    const weight = normalizeNumber(row.weight) ?? 0;
+    const reps = normalizeNumber(row.reps) ?? 0;
+
+    aggregate.totalSets += 1;
+    aggregate.totalVolume += Math.max(0, weight) * Math.max(0, reps);
+
+    if (!aggregate.exerciseNames.includes(normalizedExerciseName)) {
+      aggregate.exerciseNames.push(normalizedExerciseName);
+    }
+
+    let groupPosition = groupIndex.get(groupKey);
+
+    if (groupPosition === undefined) {
+      aggregate.exerciseGroups.push({
+        exercise_id: normalizedExerciseId,
+        exercise_name: normalizedExerciseName,
+        sets: [],
+      });
+
+      groupPosition = aggregate.exerciseGroups.length - 1;
+      groupIndex.set(groupKey, groupPosition);
+    }
+
+    aggregate.exerciseGroups[groupPosition].sets.push({
+      id: row.id,
+      set_number: row.set_number,
+      weight: row.weight,
+      reps: row.reps,
+      rir: row.rir,
+      set_type: normalizeSetType(row.set_type),
+    });
+
+    groupIndexByWorkout.set(workoutId, groupIndex);
+    aggregateByWorkout.set(workoutId, aggregate);
+  }
+
+  for (const aggregate of aggregateByWorkout.values()) {
+    for (const group of aggregate.exerciseGroups) {
+      group.sets.sort(sortWorkoutFeedExerciseSets);
+    }
+  }
+
+  return aggregateByWorkout;
 }
 
 function estimateOneRepMax(weight: number | null, reps: number | null): number | null {
@@ -1184,41 +1290,17 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
 
   const { data: allSets, error: setsError } = await supabase
     .from('sets')
-    .select('*, exercises(name)')
-    .in('workout_id', workoutIds);
+    .select('id, workout_id, exercise_id, set_number, weight, reps, rir, set_type, exercises(id, name)')
+    .in('workout_id', workoutIds)
+    .order('exercise_id', { ascending: true })
+    .order('set_number', { ascending: true })
+    .order('id', { ascending: true });
 
   if (setsError) {
     throw new Error(`Unable to load workout feed sets: ${setsError.message}`);
   }
 
-  type WorkoutAggregate = {
-    totalVolume: number;
-    totalSets: number;
-    exerciseNames: string[];
-  };
-
-  const aggregateByWorkout = new Map<string, WorkoutAggregate>();
-
-  for (const raw of allSets ?? []) {
-    const workoutId = raw.workout_id;
-    if (!workoutId) continue;
-
-    const exerciseData = raw.exercises as { name: string } | null;
-    const currentValue = aggregateByWorkout.get(workoutId) ?? {
-      totalVolume: 0,
-      totalSets: 0,
-      exerciseNames: [],
-    };
-
-    currentValue.totalSets += 1;
-    currentValue.totalVolume += (raw.weight ?? 0) * (raw.reps ?? 0);
-
-    if (exerciseData?.name && !currentValue.exerciseNames.includes(exerciseData.name)) {
-      currentValue.exerciseNames.push(exerciseData.name);
-    }
-
-    aggregateByWorkout.set(workoutId, currentValue);
-  }
+  const aggregateByWorkout = aggregateWorkoutFeedSets((allSets as RawWorkoutFeedSetRow[] | null) ?? []);
 
   return rawWorkouts.map((workout) => {
     const aggregate = aggregateByWorkout.get(workout.id);
@@ -1234,6 +1316,7 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
       totalVolume: Math.round(aggregate?.totalVolume ?? 0),
       totalSets: aggregate?.totalSets ?? 0,
       exerciseNames: aggregate?.exerciseNames ?? [],
+      exerciseGroups: aggregate?.exerciseGroups ?? [],
       likes_count: extractRelationCount(workout.workout_likes),
       comments_count: extractRelationCount(workout.workout_comments),
       has_liked: likedWorkoutIds.has(workout.id),
@@ -1590,44 +1673,17 @@ export async function getUserWorkouts(userId: string, page = 0, limit = 20): Pro
 
   const { data: allSets, error: setsError } = await supabase
     .from('sets')
-    .select('*, exercises(name)')
-    .in('workout_id', workoutIds);
+    .select('id, workout_id, exercise_id, set_number, weight, reps, rir, set_type, exercises(id, name)')
+    .in('workout_id', workoutIds)
+    .order('exercise_id', { ascending: true })
+    .order('set_number', { ascending: true })
+    .order('id', { ascending: true });
 
   if (setsError) {
     throw new Error(`Unable to load workout history sets: ${setsError.message}`);
   }
 
-  type WorkoutAggregate = {
-    totalVolume: number;
-    totalSets: number;
-    exerciseNames: string[];
-  };
-
-  const aggregateByWorkout = new Map<string, WorkoutAggregate>();
-
-  for (const raw of allSets ?? []) {
-    const workoutId = raw.workout_id;
-
-    if (!workoutId) {
-      continue;
-    }
-
-    const exerciseData = raw.exercises as { name: string } | null;
-    const currentValue = aggregateByWorkout.get(workoutId) ?? {
-      totalVolume: 0,
-      totalSets: 0,
-      exerciseNames: [],
-    };
-
-    currentValue.totalSets += 1;
-    currentValue.totalVolume += (raw.weight ?? 0) * (raw.reps ?? 0);
-
-    if (exerciseData?.name && !currentValue.exerciseNames.includes(exerciseData.name)) {
-      currentValue.exerciseNames.push(exerciseData.name);
-    }
-
-    aggregateByWorkout.set(workoutId, currentValue);
-  }
+  const aggregateByWorkout = aggregateWorkoutFeedSets((allSets as RawWorkoutFeedSetRow[] | null) ?? []);
 
   return rawWorkouts.map((workout) => {
     const aggregate = aggregateByWorkout.get(workout.id);
@@ -1643,6 +1699,7 @@ export async function getUserWorkouts(userId: string, page = 0, limit = 20): Pro
       totalVolume: Math.round(aggregate?.totalVolume ?? 0),
       totalSets: aggregate?.totalSets ?? 0,
       exerciseNames: aggregate?.exerciseNames ?? [],
+      exerciseGroups: aggregate?.exerciseGroups ?? [],
       likes_count: extractRelationCount(workout.workout_likes),
       comments_count: extractRelationCount(workout.workout_comments),
       has_liked: likedWorkoutIds.has(workout.id),

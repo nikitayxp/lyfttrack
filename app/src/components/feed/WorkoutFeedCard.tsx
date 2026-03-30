@@ -6,7 +6,7 @@ import type { WorkoutFeedItem } from '@/services/workoutService';
 import { formatRelativeTime } from '@/utils/dateUtils';
 
 const palette = Colors.dark;
-const CARD_BG = '#111111';
+const CARD_BG = '#0A0A0A';
 
 type WorkoutFeedCardProps = {
   workout: WorkoutFeedItem;
@@ -46,6 +46,38 @@ function formatVolume(value: number): string {
   return `${value.toLocaleString()} kg`;
 }
 
+function formatSetWeight(value: number | null): string {
+  if (value === null || !Number.isFinite(value) || value <= 0) {
+    return '--';
+  }
+
+  return Number.isInteger(value) ? `${value}` : value.toFixed(1);
+}
+
+function formatSetReps(value: number | null): string {
+  if (value === null || !Number.isFinite(value) || value <= 0) {
+    return '--';
+  }
+
+  return `${Math.max(0, Math.trunc(value))}`;
+}
+
+function formatSetRir(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) {
+    return '-';
+  }
+
+  return Number.isInteger(value) ? `${Math.trunc(value)}` : value.toFixed(1);
+}
+
+function formatSetNumber(value: number | null): string {
+  if (value === null || !Number.isFinite(value) || value <= 0) {
+    return '-';
+  }
+
+  return `${Math.max(1, Math.trunc(value))}`;
+}
+
 function profileDisplayName(workout: WorkoutFeedItem): string {
   const fullName = workout.profile?.full_name?.trim();
   const username = workout.profile?.username?.trim();
@@ -74,8 +106,6 @@ export function WorkoutFeedCard({
   disableInteractions = false,
 }: WorkoutFeedCardProps) {
   const displayName = profileDisplayName(workout);
-  const exercisePreview = workout.exerciseNames.slice(0, 4);
-  const remainingExercises = Math.max(0, workout.exerciseNames.length - exercisePreview.length);
 
   const resolvedLikeCount = likeCount ?? workout.likes_count;
   const resolvedCommentsCount = commentsCount ?? workout.comments_count;
@@ -113,7 +143,7 @@ export function WorkoutFeedCard({
         </View>
 
         <Text style={styles.workoutName}>{workout.name}</Text>
-        {workout.notes ? <Text style={styles.workoutNotes}>{workout.notes}</Text> : null}
+        {workout.notes ? <Text style={styles.workoutNotes} numberOfLines={2}>{workout.notes}</Text> : null}
 
         <View style={styles.metricsRow}>
           <View style={styles.metricBlock}>
@@ -132,20 +162,46 @@ export function WorkoutFeedCard({
           </View>
         </View>
 
-        <View style={styles.exerciseRow}>
-          {exercisePreview.map((exerciseName, index) => (
-            <View key={`${workout.id}-${exerciseName}-${index}`} style={styles.exerciseChip}>
-              <Text style={styles.exerciseChipText} numberOfLines={1}>
-                {exerciseName}
-              </Text>
-            </View>
-          ))}
-          {remainingExercises > 0 ? (
-            <View style={[styles.exerciseChip, styles.moreChip]}>
-              <Text style={styles.moreChipText}>+{remainingExercises}</Text>
-            </View>
-          ) : null}
-        </View>
+        {workout.exerciseGroups.length > 0 ? (
+          <View style={styles.exerciseGroupsWrap}>
+            {workout.exerciseGroups.map((group) => (
+              <View
+                key={`${workout.id}-${group.exercise_id ?? group.exercise_name}`}
+                style={styles.exerciseGroupCard}
+              >
+                <Text style={styles.exerciseGroupName}>{group.exercise_name}</Text>
+
+                <View style={styles.setHeaderRow}>
+                  <Text style={[styles.setHeaderText, styles.setColumnNumber]}>SET</Text>
+                  <Text style={[styles.setHeaderText, styles.setColumnWeight]}>KG</Text>
+                  <Text style={[styles.setHeaderText, styles.setColumnReps]}>REPS</Text>
+                  <Text style={[styles.setHeaderText, styles.setColumnRir]}>RIR</Text>
+                </View>
+
+                {group.sets.map((setItem) => (
+                  <View key={setItem.id} style={styles.setRow}>
+                    <Text style={[styles.setCellNumber, styles.setColumnNumber]}>
+                      {formatSetNumber(setItem.set_number)}
+                    </Text>
+                    <Text style={[styles.setCellWeight, styles.setColumnWeight]}>
+                      {formatSetWeight(setItem.weight)}
+                    </Text>
+                    <Text style={[styles.setCellReps, styles.setColumnReps]}>
+                      {formatSetReps(setItem.reps)}
+                    </Text>
+                    <Text style={[styles.setCellRir, styles.setColumnRir]}>
+                      {formatSetRir(setItem.rir)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.noSetsWrap}>
+            <Text style={styles.noSetsText}>Sem detalhe de sets para este treino.</Text>
+          </View>
+        )}
       </TouchableOpacity>
 
       <View style={styles.interactionRow}>
@@ -184,186 +240,254 @@ export function WorkoutFeedCard({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: CARD_BG,
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: palette.border,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    marginBottom: 8,
+    borderColor: '#1C1C1E',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    marginBottom: 6,
   },
   mainTouchArea: {
-    borderRadius: 4,
+    borderRadius: 0,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 6,
   },
   authorWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    paddingRight: 10,
+    paddingRight: 8,
   },
   avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    marginRight: 10,
+    width: 34,
+    height: 34,
+    borderRadius: 6,
+    marginRight: 8,
   },
   avatarFallback: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    marginRight: 10,
+    width: 34,
+    height: 34,
+    borderRadius: 6,
+    marginRight: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: palette.accentSoft,
+    backgroundColor: '#0A0A0A',
+    borderWidth: 1,
+    borderColor: '#1C1C1E',
   },
   avatarFallbackText: {
-    color: palette.accent,
-    fontSize: 14,
-    fontWeight: '800',
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
   },
   authorTextWrap: {
     flex: 1,
   },
   authorName: {
     color: palette.textPrimary,
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '700',
-    marginBottom: 2,
+    marginBottom: 0,
   },
   authorMeta: {
-    color: palette.textMuted,
-    fontSize: 12,
+    color: palette.textSecondary,
+    fontSize: 10,
     fontWeight: '700',
   },
   durationChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    columnGap: 4,
-    borderRadius: 4,
+    columnGap: 3,
+    borderRadius: 0,
     borderWidth: 1,
-    borderColor: palette.accent,
-    backgroundColor: palette.accentSoft,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
+    borderColor: '#1C1C1E',
+    backgroundColor: '#0A0A0A',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
   },
   durationText: {
-    color: palette.accent,
-    fontSize: 12,
+    color: '#FFFFFF',
+    fontSize: 10,
     fontWeight: '700',
   },
   workoutName: {
-    color: palette.textPrimary,
-    fontSize: 20,
-    fontWeight: '900',
-    marginBottom: 3,
-    letterSpacing: -0.6,
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 2,
   },
   workoutNotes: {
     color: palette.textSecondary,
-    fontSize: 13,
-    lineHeight: 19,
-    marginBottom: 10,
+    fontSize: 11,
+    lineHeight: 14,
+    marginBottom: 4,
   },
   metricsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 6,
-    backgroundColor: '#000000',
+    borderRadius: 0,
+    backgroundColor: '#0A0A0A',
     borderWidth: 1,
-    borderColor: palette.border,
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-    marginBottom: 7,
+    borderColor: '#1C1C1E',
+    paddingHorizontal: 4,
+    paddingVertical: 3,
+    marginBottom: 4,
   },
   metricBlock: {
     flex: 1,
     alignItems: 'center',
   },
   metricValue: {
-    color: palette.textPrimary,
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 2,
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 1,
   },
   metricLabel: {
-    color: palette.textMuted,
-    fontSize: 11,
+    color: palette.textSecondary,
+    fontSize: 9,
     fontWeight: '600',
     textTransform: 'uppercase',
-    letterSpacing: 0.4,
+    letterSpacing: 0.2,
   },
   metricDivider: {
     width: 1,
-    height: 24,
-    backgroundColor: palette.border,
-    marginHorizontal: 6,
+    height: 18,
+    backgroundColor: '#1C1C1E',
+    marginHorizontal: 4,
   },
-  exerciseRow: {
+  exerciseGroupsWrap: {
+    rowGap: 4,
+  },
+  exerciseGroupCard: {
+    borderRadius: 0,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+  },
+  exerciseGroupName: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  setHeaderRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    columnGap: 5,
-    rowGap: 5,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1C1C1E',
+    minHeight: 24,
   },
-  exerciseChip: {
-    backgroundColor: '#000000',
-    borderWidth: 1,
-    borderColor: palette.border,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    maxWidth: '80%',
-  },
-  exerciseChipText: {
+  setHeaderText: {
     color: palette.textSecondary,
-    fontSize: 12,
+    fontSize: 10,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.2,
+  },
+  setColumnNumber: {
+    width: 44,
+    textAlign: 'center',
+  },
+  setColumnWeight: {
+    width: 72,
+    textAlign: 'center',
+  },
+  setColumnReps: {
+    width: 72,
+    textAlign: 'center',
+  },
+  setColumnRir: {
+    width: 52,
+    textAlign: 'center',
+  },
+  setRow: {
+    minHeight: 26,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1C1C1E',
+    paddingVertical: 0,
+  },
+  setCellNumber: {
+    color: '#FFFFFF',
+    fontSize: 13,
     fontWeight: '600',
   },
-  moreChip: {
-    backgroundColor: palette.accentSoft,
-    borderColor: palette.accent,
+  setCellWeight: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
   },
-  moreChipText: {
-    color: palette.accent,
-    fontSize: 12,
+  setCellReps: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+  },
+  setCellRir: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+  },
+  noSetsWrap: {
+    borderRadius: 0,
+    borderWidth: 1,
+    borderColor: '#1C1C1E',
+    backgroundColor: '#0A0A0A',
+    minHeight: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  noSetsText: {
+    color: palette.textSecondary,
+    fontSize: 10,
     fontWeight: '700',
+    textAlign: 'center',
   },
   interactionRow: {
-    marginTop: 8,
+    marginTop: 5,
     borderTopWidth: 1,
-    borderTopColor: palette.border,
-    paddingTop: 6,
+    borderTopColor: '#1C1C1E',
+    paddingTop: 4,
     flexDirection: 'row',
     alignItems: 'center',
-    columnGap: 6,
+    columnGap: 4,
   },
   interactionButton: {
-    minHeight: 30,
-    borderRadius: 4,
-    backgroundColor: '#000000',
+    minHeight: 26,
+    borderRadius: 0,
+    backgroundColor: '#0A0A0A',
     borderWidth: 1,
-    borderColor: palette.border,
-    paddingHorizontal: 9,
+    borderColor: '#1C1C1E',
+    paddingHorizontal: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    columnGap: 5,
+    columnGap: 4,
   },
   interactionButtonStatic: {
-    minHeight: 30,
-    borderRadius: 4,
-    backgroundColor: '#000000',
+    minHeight: 26,
+    borderRadius: 0,
+    backgroundColor: '#0A0A0A',
     borderWidth: 1,
-    borderColor: palette.border,
-    paddingHorizontal: 9,
+    borderColor: '#1C1C1E',
+    paddingHorizontal: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    columnGap: 5,
+    columnGap: 4,
   },
   likeButtonActive: {
     borderColor: palette.accent,

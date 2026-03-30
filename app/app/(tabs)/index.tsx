@@ -1,12 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { Colors } from '@/constants/Colors';
@@ -18,6 +23,7 @@ import {
   type CommentAuthorProfile,
   type WorkoutCommentWithProfile,
 } from '@/services/interactionService';
+import { getActiveUsers, type SocialSearchResult } from '@/services/socialService';
 import { getErrorMessage, getFeedWorkouts, type WorkoutFeedItem } from '@/services/workoutService';
 import { EmptyState } from '@/components/common/EmptyState';
 import { FeedCommentsModal } from '@/components/feed/FeedCommentsModal';
@@ -27,6 +33,7 @@ const palette = Colors.dark;
 const SCREEN_BG = '#000000';
 const CARD_BG = '#111111';
 const FEED_PAGE_SIZE = 20;
+const ACTIVE_USERS_SEARCH_LIMIT = 40;
 
 type FeedLikeInteractionState = {
   hasLiked: boolean;
@@ -34,7 +41,31 @@ type FeedLikeInteractionState = {
   isPending: boolean;
 };
 
+function displayNameOf(profile: SocialSearchResult): string {
+  return profile.full_name?.trim() || profile.username;
+}
+
+function initialsOf(profile: SocialSearchResult): string {
+  return displayNameOf(profile)
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
+}
+
+function relationLabel(relation: SocialSearchResult['relation']): string {
+  if (relation === 'friends') return 'Amigos';
+  if (relation === 'request_sent') return 'Enviado';
+  if (relation === 'request_received') return 'Recebido';
+  return 'Atleta';
+}
+
 export default function FeedScreen() {
+  const searchInputRef = useRef<TextInput | null>(null);
+  const athleteSearchRequestRef = useRef(0);
+
   const [workouts, setWorkouts] = useState<WorkoutFeedItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -51,6 +82,10 @@ export default function FeedScreen() {
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [commentInputValue, setCommentInputValue] = useState('');
   const [currentCommentAuthor, setCurrentCommentAuthor] = useState<CommentAuthorProfile | null>(null);
+  const [athleteQuery, setAthleteQuery] = useState('');
+  const [activeUsers, setActiveUsers] = useState<SocialSearchResult[]>([]);
+  const [isLoadingActiveUsers, setIsLoadingActiveUsers] = useState(false);
+  const [activeUsersError, setActiveUsersError] = useState<string | null>(null);
 
   const loadFeedPage = useCallback(async (pageToLoad: number, mode: 'reset' | 'append') => {
     if (mode === 'reset') {
@@ -133,6 +168,61 @@ export default function FeedScreen() {
     }
   }, []);
 
+  const loadActiveUsers = useCallback(async (queryValue: string) => {
+    const normalizedQuery = queryValue.trim();
+
+    if (normalizedQuery.length === 0) {
+      athleteSearchRequestRef.current += 1;
+      setActiveUsers([]);
+      setActiveUsersError(null);
+      setIsLoadingActiveUsers(false);
+      return;
+    }
+
+    const requestId = ++athleteSearchRequestRef.current;
+
+    setIsLoadingActiveUsers(true);
+    setActiveUsersError(null);
+
+    try {
+      const users = await getActiveUsers(normalizedQuery, ACTIVE_USERS_SEARCH_LIMIT);
+
+      if (requestId !== athleteSearchRequestRef.current) {
+        return;
+      }
+
+      setActiveUsers(users);
+    } catch (error) {
+      if (requestId !== athleteSearchRequestRef.current) {
+        return;
+      }
+
+      setActiveUsers([]);
+      setActiveUsersError(getErrorMessage(error));
+    } finally {
+      if (requestId === athleteSearchRequestRef.current) {
+        setIsLoadingActiveUsers(false);
+      }
+    }
+  }, []);
+
+  const openPublicProfile = useCallback((userId: string) => {
+    const normalizedUserId = userId.trim();
+
+    if (!normalizedUserId) {
+      return;
+    }
+
+    router.push({
+      pathname: '/(tabs)/profile/[id]' as any,
+      params: { id: normalizedUserId },
+    });
+  }, []);
+
+  const focusAthleteSearch = useCallback(() => {
+    searchInputRef.current?.focus();
+  }, []);
+
   const ensureCurrentCommentAuthor = useCallback(async (): Promise<CommentAuthorProfile | null> => {
     if (currentCommentAuthor) {
       return currentCommentAuthor;
@@ -178,11 +268,32 @@ export default function FeedScreen() {
     void run();
   }, [loadFeedPage]);
 
+  useEffect(() => {
+    const normalizedQuery = athleteQuery.trim();
+
+    if (normalizedQuery.length === 0) {
+      athleteSearchRequestRef.current += 1;
+      setActiveUsers([]);
+      setActiveUsersError(null);
+      setIsLoadingActiveUsers(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      void loadActiveUsers(normalizedQuery);
+    }, 260);
+
+    return () => clearTimeout(timer);
+  }, [athleteQuery, loadActiveUsers]);
+
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await loadFeedPage(0, 'reset');
+    await Promise.all([
+      loadFeedPage(0, 'reset'),
+      athleteQuery.trim().length > 0 ? loadActiveUsers(athleteQuery) : Promise.resolve(),
+    ]);
     setIsRefreshing(false);
-  }, [loadFeedPage]);
+  }, [athleteQuery, loadActiveUsers, loadFeedPage]);
 
   const onEndReached = useCallback(async () => {
     if (isLoading || isRefreshing || isLoadingMore || !hasMore) {
@@ -213,10 +324,6 @@ export default function FeedScreen() {
     setSelectedWorkoutForComments(null);
     setCommentInputValue('');
     setCommentsError(null);
-  }, []);
-
-  const handleOpenFriends = useCallback(() => {
-    router.push('/(tabs)/social' as any);
   }, []);
 
   const sendComment = useCallback(async () => {
@@ -396,13 +503,83 @@ export default function FeedScreen() {
   }, []);
 
   const headerTitle = useMemo(() => {
+    const hasAthleteQuery = athleteQuery.trim().length > 0;
+
     return (
       <View style={styles.headerWrap}>
         <Text style={styles.title}>FEED DE TREINO</Text>
         <Text style={styles.subtitle}>As tuas ultimas sessoes e os treinos da tua rede.</Text>
+
+        <View style={styles.athleteSearchCard}>
+          <View style={styles.athleteSearchInputWrap}>
+            <Ionicons name="search-outline" size={16} color={palette.textMuted} />
+            <TextInput
+              ref={searchInputRef}
+              value={athleteQuery}
+              onChangeText={setAthleteQuery}
+              style={styles.athleteSearchInput}
+              placeholder="Pesquisar atletas..."
+              placeholderTextColor={palette.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+          </View>
+
+          {hasAthleteQuery ? isLoadingActiveUsers ? (
+            <View style={styles.athleteStatusRow}>
+              <ActivityIndicator size="small" color={palette.accent} />
+              <Text style={styles.athleteStatusText}>A pesquisar atletas...</Text>
+            </View>
+          ) : activeUsersError ? (
+            <View style={styles.athleteStatusRow}>
+              <Text style={styles.athleteErrorText}>{activeUsersError}</Text>
+            </View>
+          ) : activeUsers.length === 0 ? (
+            <View style={styles.athleteStatusRow}>
+              <Text style={styles.athleteStatusText}>Sem resultados para esta pesquisa.</Text>
+            </View>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.athleteRailContent}
+            >
+              {activeUsers.map((user) => (
+                <TouchableOpacity
+                  key={user.id}
+                  style={styles.athleteRailItem}
+                  activeOpacity={0.88}
+                  onPress={() => openPublicProfile(user.id)}
+                >
+                  {user.avatar_url ? (
+                    <Image source={{ uri: user.avatar_url }} style={styles.athleteAvatar} />
+                  ) : (
+                    <View style={styles.athleteAvatarFallback}>
+                      <Text style={styles.athleteAvatarFallbackText}>{initialsOf(user)}</Text>
+                    </View>
+                  )}
+
+                  <View style={styles.athleteMetaWrap}>
+                    <Text style={styles.athleteName} numberOfLines={1}>
+                      {displayNameOf(user)}
+                    </Text>
+                    <Text style={styles.athleteHandle} numberOfLines={1}>
+                      @{user.username}
+                    </Text>
+                  </View>
+
+                  <View style={styles.relationPill}>
+                    <Text style={styles.relationPillText}>{relationLabel(user.relation)}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          ) : null}
+        </View>
       </View>
     );
-  }, []);
+  }, [activeUsers, activeUsersError, athleteQuery, isLoadingActiveUsers, openPublicProfile]);
 
   const emptyState = useMemo(() => {
     if (isLoading) {
@@ -435,13 +612,13 @@ export default function FeedScreen() {
         icon="trophy-outline"
         title="Feed vazio por enquanto"
         description="Segue atletas e amigos para encontrares novos treinos e manteres a motivacao diária."
-        actionLabel="Procurar atletas"
-        onActionPress={handleOpenFriends}
+        actionLabel="Explorar atletas"
+        onActionPress={focusAthleteSearch}
         containerStyle={styles.statusCard}
         descriptionStyle={styles.statusText}
       />
     );
-  }, [feedError, handleOpenFriends, isLoading, loadFeedPage]);
+  }, [feedError, focusAthleteSearch, isLoading, loadFeedPage]);
 
   const selectedWorkoutComments = selectedWorkoutForComments
     ? commentsByWorkoutId[selectedWorkoutForComments.id] ?? []
@@ -538,6 +715,122 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     lineHeight: 20,
+    marginBottom: 10,
+  },
+  athleteSearchCard: {
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: CARD_BG,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+  },
+  athleteSearchInputWrap: {
+    minHeight: 38,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: '#000000',
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 6,
+  },
+  athleteSearchInput: {
+    flex: 1,
+    color: palette.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+    paddingVertical: 8,
+  },
+  athleteStatusRow: {
+    marginTop: 8,
+    minHeight: 34,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: '#000000',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 8,
+  },
+  athleteStatusText: {
+    color: palette.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  athleteErrorText: {
+    color: palette.error,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  athleteRailContent: {
+    marginTop: 8,
+    columnGap: 6,
+    paddingRight: 2,
+  },
+  athleteRailItem: {
+    width: 184,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: '#000000',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 8,
+  },
+  athleteAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 4,
+  },
+  athleteAvatarFallback: {
+    width: 32,
+    height: 32,
+    borderRadius: 4,
+    backgroundColor: '#000000',
+    borderWidth: 1,
+    borderColor: palette.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  athleteAvatarFallbackText: {
+    color: palette.textPrimary,
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  athleteMetaWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  athleteName: {
+    color: palette.textPrimary,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  athleteHandle: {
+    marginTop: 1,
+    color: palette.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  relationPill: {
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: '#111111',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  relationPillText: {
+    color: palette.textSecondary,
+    fontSize: 9,
+    fontWeight: '800',
+    textTransform: 'uppercase',
   },
   statusCard: {
     backgroundColor: CARD_BG,

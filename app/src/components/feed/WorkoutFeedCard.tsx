@@ -1,12 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { ActivityIndicator, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Colors } from '@/constants/theme';
+import { Colors } from '@/constants/Colors';
 import type { WorkoutFeedItem } from '@/services/workoutService';
 import { formatRelativeTime } from '@/utils/dateUtils';
 
 const palette = Colors.dark;
-const CARD_BG = '#111827';
+const CARD_BG = '#111111';
 
 type WorkoutFeedCardProps = {
   workout: WorkoutFeedItem;
@@ -50,7 +50,7 @@ function profileDisplayName(workout: WorkoutFeedItem): string {
   const fullName = workout.profile?.full_name?.trim();
   const username = workout.profile?.username?.trim();
 
-  return fullName || username || 'Athlete';
+  return fullName || username || 'Atleta';
 }
 
 function initialsFromName(value: string): string {
@@ -118,7 +118,7 @@ export function WorkoutFeedCard({
         <View style={styles.metricsRow}>
           <View style={styles.metricBlock}>
             <Text style={styles.metricValue}>{workout.totalSets}</Text>
-            <Text style={styles.metricLabel}>Sets</Text>
+            <Text style={styles.metricLabel}>Series</Text>
           </View>
           <View style={styles.metricDivider} />
           <View style={styles.metricBlock}>
@@ -128,7 +128,7 @@ export function WorkoutFeedCard({
           <View style={styles.metricDivider} />
           <View style={styles.metricBlock}>
             <Text style={styles.metricValue}>{workout.exerciseNames.length}</Text>
-            <Text style={styles.metricLabel}>Exercises</Text>
+            <Text style={styles.metricLabel}>Exercicios</Text>
           </View>
         </View>
 
@@ -156,12 +156,12 @@ export function WorkoutFeedCard({
           disabled={interactionsDisabled || resolvedIsLikePending}
         >
           {resolvedIsLikePending ? (
-            <ActivityIndicator size="small" color={resolvedHasLiked ? '#EF4444' : palette.textMuted} />
+            <ActivityIndicator size="small" color={resolvedHasLiked ? palette.accent : palette.textMuted} />
           ) : (
             <Ionicons
               name={resolvedHasLiked ? 'heart' : 'heart-outline'}
               size={17}
-              color={resolvedHasLiked ? '#EF4444' : palette.textMuted}
+              color={resolvedHasLiked ? palette.accent : palette.textMuted}
             />
           )}
           <Text style={[styles.interactionText, resolvedHasLiked && styles.likeTextActive]}>{resolvedLikeCount}</Text>
@@ -173,7 +173,7 @@ export function WorkoutFeedCard({
           onPress={onOpenComments}
           disabled={!onOpenComments}
         >
-          <Ionicons name="chatbubble-ellipses-outline" size={17} color={palette.textMuted} />
+          <Ionicons name="chatbubble-outline" size={17} color={palette.textMuted} />
           <Text style={styles.interactionText}>{resolvedCommentsCount}</Text>
         </TouchableOpacity>
       </View>
@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
     backgroundColor: CARD_BG,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: palette.border,
     paddingHorizontal: 14,
     paddingVertical: 14,
     marginBottom: 12,
@@ -231,14 +231,14 @@ const styles = StyleSheet.create({
   },
   authorName: {
     color: palette.textPrimary,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     marginBottom: 2,
   },
   authorMeta: {
     color: palette.textMuted,
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '700',
   },
   durationChip: {
     flexDirection: 'row',
@@ -256,9 +256,10 @@ const styles = StyleSheet.create({
   },
   workoutName: {
     color: palette.textPrimary,
-    fontSize: 17,
-    fontWeight: '800',
+    fontSize: 24,
+    fontWeight: '900',
     marginBottom: 4,
+    letterSpacing: -0.4,
   },
   workoutNotes: {
     color: palette.textSecondary,
@@ -270,9 +271,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 12,
-    backgroundColor: '#0D1624',
+    backgroundColor: '#0A0A0A',
     borderWidth: 1,
-    borderColor: '#253041',
+    borderColor: palette.border,
     paddingHorizontal: 10,
     paddingVertical: 10,
     marginBottom: 10,
@@ -297,7 +298,7 @@ const styles = StyleSheet.create({
   metricDivider: {
     width: 1,
     height: 28,
-    backgroundColor: '#253041',
+    backgroundColor: palette.border,
     marginHorizontal: 8,
   },
   exerciseRow: {
@@ -307,9 +308,9 @@ const styles = StyleSheet.create({
     rowGap: 6,
   },
   exerciseChip: {
-    backgroundColor: '#0D1624',
+    backgroundColor: '#0A0A0A',
     borderWidth: 1,
-    borderColor: '#253041',
+    borderColor: palette.border,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -332,7 +333,7 @@ const styles = StyleSheet.create({
   interactionRow: {
     marginTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#253041',
+    borderTopColor: palette.border,
     paddingTop: 10,
     flexDirection: 'row',
     alignItems: 'center',
@@ -341,9 +342,9 @@ const styles = StyleSheet.create({
   interactionButton: {
     minHeight: 34,
     borderRadius: 10,
-    backgroundColor: '#0D1624',
+    backgroundColor: '#0A0A0A',
     borderWidth: 1,
-    borderColor: '#253041',
+    borderColor: palette.border,
     paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -353,9 +354,9 @@ const styles = StyleSheet.create({
   interactionButtonStatic: {
     minHeight: 34,
     borderRadius: 10,
-    backgroundColor: '#0D1624',
+    backgroundColor: '#0A0A0A',
     borderWidth: 1,
-    borderColor: '#253041',
+    borderColor: palette.border,
     paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -363,8 +364,8 @@ const styles = StyleSheet.create({
     columnGap: 6,
   },
   likeButtonActive: {
-    borderColor: '#EF4444',
-    backgroundColor: '#2A1118',
+    borderColor: palette.accent,
+    backgroundColor: palette.accentSoft,
   },
   interactionText: {
     color: palette.textMuted,
@@ -372,6 +373,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   likeTextActive: {
-    color: '#EF4444',
+    color: palette.accent,
   },
 });

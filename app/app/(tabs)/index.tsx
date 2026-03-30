@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Colors } from '@/constants/theme';
+import { Colors } from '@/constants/Colors';
 import {
   addComment,
   getCurrentCommentAuthorProfile,
@@ -24,8 +24,8 @@ import { FeedCommentsModal } from '@/components/feed/FeedCommentsModal';
 import { WorkoutFeedCard } from '@/components/feed/WorkoutFeedCard';
 
 const palette = Colors.dark;
-const SCREEN_BG = '#050A12';
-const CARD_BG = '#111827';
+const SCREEN_BG = '#000000';
+const CARD_BG = '#111111';
 const FEED_PAGE_SIZE = 20;
 
 type FeedLikeInteractionState = {
@@ -310,7 +310,7 @@ export default function FeedScreen() {
       });
 
       setCommentInputValue(trimmedComment);
-      Alert.alert('Unable to add comment', getErrorMessage(error));
+      Alert.alert('Nao foi possivel publicar o comentario', getErrorMessage(error));
     } finally {
       setIsSendingComment(false);
     }
@@ -391,15 +391,15 @@ export default function FeedScreen() {
         return nextState;
       });
 
-      Alert.alert('Unable to update like', getErrorMessage(error));
+      Alert.alert('Nao foi possivel atualizar o gosto', getErrorMessage(error));
     }
   }, []);
 
   const headerTitle = useMemo(() => {
     return (
       <View style={styles.headerWrap}>
-        <Text style={styles.title}>Global Feed</Text>
-        <Text style={styles.subtitle}>Your workouts and your friends&apos; latest sessions.</Text>
+        <Text style={styles.title}>FEED DE TREINO</Text>
+        <Text style={styles.subtitle}>As tuas ultimas sessoes e os treinos da tua rede.</Text>
       </View>
     );
   }, []);
@@ -409,7 +409,7 @@ export default function FeedScreen() {
       return (
         <View style={styles.statusCard}>
           <ActivityIndicator size="small" color={palette.accent} />
-          <Text style={styles.statusText}>Loading feed...</Text>
+          <Text style={styles.statusText}>A carregar feed...</Text>
         </View>
       );
     }
@@ -418,9 +418,9 @@ export default function FeedScreen() {
       return (
         <EmptyState
           icon="alert-circle-outline"
-          title="Unable to load feed"
+          title="Nao foi possivel carregar o feed"
           description={feedError}
-          actionLabel="Retry"
+          actionLabel="Tentar novamente"
           onActionPress={() => {
             void loadFeedPage(0, 'reset');
           }}
@@ -432,10 +432,10 @@ export default function FeedScreen() {
 
     return (
       <EmptyState
-        icon="people-outline"
+        icon="trophy-outline"
         title="Feed vazio por enquanto"
-        description="Siga atletas e amigos para descobrir treinos e ganhar motivacao diaria."
-        actionLabel="Procurar Amigos"
+        description="Segue atletas e amigos para encontrares novos treinos e manteres a motivacao diária."
+        actionLabel="Procurar atletas"
         onActionPress={handleOpenFriends}
         containerStyle={styles.statusCard}
         descriptionStyle={styles.statusText}
@@ -492,7 +492,7 @@ export default function FeedScreen() {
 
       <FeedCommentsModal
         visible={selectedWorkoutForComments !== null}
-        workoutName={selectedWorkoutForComments?.name ?? 'Workout'}
+        workoutName={selectedWorkoutForComments?.name ?? 'Treino'}
         comments={selectedWorkoutComments}
         isLoading={isCommentsLoading}
         isSending={isSendingComment}
@@ -528,13 +528,15 @@ const styles = StyleSheet.create({
   },
   title: {
     color: palette.textPrimary,
-    fontSize: 30,
-    fontWeight: '800',
+    fontSize: 34,
+    fontWeight: '900',
     marginBottom: 4,
+    letterSpacing: -0.8,
   },
   subtitle: {
     color: palette.textSecondary,
-    fontSize: 15,
+    fontSize: 14,
+    fontWeight: '700',
     lineHeight: 22,
   },
   card: {
@@ -730,7 +732,7 @@ const styles = StyleSheet.create({
     backgroundColor: CARD_BG,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: palette.border,
     paddingHorizontal: 16,
     paddingVertical: 20,
     alignItems: 'center',

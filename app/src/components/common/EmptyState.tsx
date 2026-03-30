@@ -9,7 +9,7 @@ import {
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
-import { Colors } from '@/constants/theme';
+import { Colors } from '@/constants/Colors';
 
 const palette = Colors.dark;
 
@@ -29,7 +29,7 @@ type EmptyStateProps = {
 };
 
 export function EmptyState({
-  icon = 'sparkles-outline',
+  icon = 'trophy-outline',
   title,
   description,
   actionLabel,
@@ -65,7 +65,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: palette.surface,
+    backgroundColor: '#111111',
     paddingHorizontal: 18,
     paddingVertical: 20,
     alignItems: 'center',
@@ -76,8 +76,8 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: palette.accent,
-    backgroundColor: palette.accentSoft,
+    borderColor: palette.border,
+    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,

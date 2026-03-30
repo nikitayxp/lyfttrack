@@ -12,7 +12,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Colors } from '@/constants/theme';
+import { Colors } from '@/constants/Colors';
+import { EmptyState } from '@/components/common/EmptyState';
 import { FeedCommentsModal } from '@/components/feed/FeedCommentsModal';
 import { WorkoutFeedCard } from '@/components/feed/WorkoutFeedCard';
 import {
@@ -27,8 +28,8 @@ import { getPublicProfileById, type PublicProfileView } from '@/services/profile
 import { getErrorMessage, getUserWorkouts, type WorkoutFeedItem } from '@/services/workoutService';
 
 const palette = Colors.dark;
-const SCREEN_BG = '#050A12';
-const CARD_BG = '#111827';
+const SCREEN_BG = '#000000';
+const CARD_BG = '#111111';
 const FEED_PAGE_SIZE = 20;
 
 type FeedLikeInteractionState = {
@@ -47,7 +48,7 @@ function readRouteId(value: string | string[] | undefined): string | null {
 
 function profileDisplayName(profile: PublicProfileView | null): string {
   if (!profile) {
-    return 'Athlete';
+    return 'Atleta';
   }
 
   return profile.full_name?.trim() || profile.username;
@@ -91,7 +92,7 @@ export default function PublicProfileScreen() {
       }
 
       if (!profileId) {
-        setError('Invalid profile id.');
+        setError('ID de perfil invalido.');
         setProfile(null);
         setWorkouts([]);
         setIsLoading(false);
@@ -110,7 +111,7 @@ export default function PublicProfileScreen() {
         if (!profileData) {
           setProfile(null);
           setWorkouts([]);
-          setError('Profile not found.');
+          setError('Perfil nao encontrado.');
           return;
         }
 
@@ -316,7 +317,7 @@ export default function PublicProfileScreen() {
       });
 
       setCommentInputValue(trimmedComment);
-      Alert.alert('Unable to add comment', getErrorMessage(sendError));
+      Alert.alert('Nao foi possivel publicar o comentario', getErrorMessage(sendError));
     } finally {
       setIsSendingComment(false);
     }
@@ -397,7 +398,7 @@ export default function PublicProfileScreen() {
         return nextState;
       });
 
-      Alert.alert('Unable to update like', getErrorMessage(toggleError));
+      Alert.alert('Nao foi possivel atualizar o gosto', getErrorMessage(toggleError));
     }
   }, []);
 
@@ -418,20 +419,20 @@ export default function PublicProfileScreen() {
           <TouchableOpacity style={styles.backButton} activeOpacity={0.86} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={20} color={palette.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.title}>Public Profile</Text>
+          <Text style={styles.title}>PERFIL</Text>
           <View style={styles.backButtonPlaceholder} />
         </View>
 
         {isLoading ? (
           <View style={styles.statusCard}>
             <ActivityIndicator size="small" color={palette.accent} />
-            <Text style={styles.statusText}>Loading profile...</Text>
+            <Text style={styles.statusText}>A carregar perfil...</Text>
           </View>
         ) : error ? (
           <View style={styles.statusCard}>
             <Text style={styles.errorText}>{error}</Text>
             <TouchableOpacity style={styles.retryButton} activeOpacity={0.86} onPress={() => void loadData('initial')}>
-              <Text style={styles.retryButtonText}>Retry</Text>
+              <Text style={styles.retryButtonText}>Tentar novamente</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -452,18 +453,22 @@ export default function PublicProfileScreen() {
 
               <View style={styles.metricChip}>
                 <Ionicons name="barbell-outline" size={14} color={palette.accent} />
-                <Text style={styles.metricChipText}>{`${workouts.length} recent workouts`}</Text>
+                <Text style={styles.metricChipText}>{`${workouts.length} treinos recentes`}</Text>
               </View>
             </View>
 
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Workout Feed</Text>
+              <Text style={styles.sectionTitle}>TREINOS</Text>
             </View>
 
             {workouts.length === 0 ? (
-              <View style={styles.statusCard}>
-                <Text style={styles.statusText}>No public workouts yet.</Text>
-              </View>
+              <EmptyState
+                icon="trophy-outline"
+                title="Sem treinos publicos"
+                description="Este atleta ainda nao partilhou sessoes recentes."
+                containerStyle={styles.statusCard}
+                descriptionStyle={styles.statusText}
+              />
             ) : (
               workouts.map((workout) => {
                 const interactionState = optimisticLikeState[workout.id];
@@ -488,7 +493,7 @@ export default function PublicProfileScreen() {
 
       <FeedCommentsModal
         visible={selectedWorkoutForComments !== null}
-        workoutName={selectedWorkoutForComments?.name ?? 'Workout'}
+        workoutName={selectedWorkoutForComments?.name ?? 'Treino'}
         comments={selectedWorkoutComments}
         isLoading={isCommentsLoading}
         isSending={isSendingComment}
@@ -516,7 +521,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 18,
-    paddingTop: 20,
+    paddingTop: 26,
     paddingBottom: 30,
     rowGap: 14,
   },
@@ -530,8 +535,8 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#253041',
-    backgroundColor: '#0D1624',
+    borderColor: palette.border,
+    backgroundColor: '#111111',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -541,50 +546,52 @@ const styles = StyleSheet.create({
   },
   title: {
     color: palette.textPrimary,
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: 0.6,
   },
   profileCard: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: palette.border,
     backgroundColor: CARD_BG,
     alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 18,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
   },
   avatar: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    marginBottom: 10,
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    marginBottom: 14,
   },
   avatarFallback: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    marginBottom: 10,
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    marginBottom: 14,
     backgroundColor: palette.accentSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarFallbackText: {
     color: palette.accent,
-    fontSize: 24,
-    fontWeight: '800',
+    fontSize: 30,
+    fontWeight: '900',
   },
   nameText: {
     color: palette.textPrimary,
-    fontSize: 20,
-    fontWeight: '800',
+    fontSize: 30,
+    fontWeight: '900',
     marginBottom: 3,
     textAlign: 'center',
+    letterSpacing: -0.5,
   },
   usernameText: {
     color: palette.textMuted,
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 8,
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 12,
   },
   bioText: {
     color: palette.textSecondary,
@@ -617,12 +624,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: palette.textPrimary,
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '900',
+    letterSpacing: 0.6,
   },
   statusCard: {
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: palette.border,
     backgroundColor: CARD_BG,
     paddingHorizontal: 14,
     paddingVertical: 14,

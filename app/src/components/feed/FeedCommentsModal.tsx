@@ -14,13 +14,13 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors } from '@/constants/theme';
+import { Colors } from '@/constants/Colors';
 import type { WorkoutCommentWithProfile } from '@/services/interactionService';
 import { formatRelativeTime } from '@/utils/dateUtils';
 
 const palette = Colors.dark;
-const HEADER_BG = '#050A12';
-const SHEET_BG = '#111827';
+const HEADER_BG = '#000000';
+const SHEET_BG = '#000000';
 
 type FeedCommentsModalProps = {
   visible: boolean;
@@ -37,7 +37,7 @@ type FeedCommentsModalProps = {
 };
 
 function displayNameOf(comment: WorkoutCommentWithProfile): string {
-  return comment.profile?.full_name?.trim() || comment.profile?.username || 'Athlete';
+  return comment.profile?.full_name?.trim() || comment.profile?.username || 'Atleta';
 }
 
 function initialsOf(comment: WorkoutCommentWithProfile): string {
@@ -70,7 +70,7 @@ export function FeedCommentsModal({
       return (
         <View style={styles.statusWrap}>
           <ActivityIndicator size="small" color={palette.accent} />
-          <Text style={styles.statusText}>Loading comments...</Text>
+          <Text style={styles.statusText}>A carregar comentarios...</Text>
         </View>
       );
     }
@@ -78,10 +78,10 @@ export function FeedCommentsModal({
     if (errorMessage) {
       return (
         <View style={styles.statusWrap}>
-          <Text style={styles.errorTitle}>Unable to load comments</Text>
+          <Text style={styles.errorTitle}>Nao foi possivel carregar comentarios</Text>
           <Text style={styles.errorText}>{errorMessage}</Text>
           <TouchableOpacity style={styles.retryButton} activeOpacity={0.88} onPress={onRetry}>
-            <Text style={styles.retryButtonText}>Retry</Text>
+            <Text style={styles.retryButtonText}>Tentar novamente</Text>
           </TouchableOpacity>
         </View>
       );
@@ -89,7 +89,7 @@ export function FeedCommentsModal({
 
     return (
       <View style={styles.statusWrap}>
-        <Text style={styles.statusText}>No comments yet. Be the first.</Text>
+        <Text style={styles.statusText}>Ainda sem comentarios. Sê o primeiro.</Text>
       </View>
     );
   }, [errorMessage, isLoading, onRetry]);
@@ -106,7 +106,7 @@ export function FeedCommentsModal({
             <Ionicons name="close" size={22} color={palette.textPrimary} />
           </TouchableOpacity>
           <View style={styles.headerTextWrap}>
-            <Text style={styles.headerTitle}>Comments</Text>
+            <Text style={styles.headerTitle}>Comentarios</Text>
             <Text style={styles.headerSubtitle} numberOfLines={1}>
               {workoutName}
             </Text>
@@ -148,7 +148,7 @@ export function FeedCommentsModal({
               value={inputValue}
               onChangeText={onChangeInput}
               style={styles.input}
-              placeholder="Write a comment..."
+              placeholder="Escreve um comentario..."
               placeholderTextColor={palette.textMuted}
               multiline
               maxLength={1000}
@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: HEADER_BG,
     borderBottomWidth: 1,
-    borderBottomColor: '#1F2937',
+    borderBottomColor: palette.border,
     paddingHorizontal: 14,
     paddingBottom: 10,
     flexDirection: 'row',
@@ -192,9 +192,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#111827',
+    backgroundColor: '#111111',
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: palette.border,
   },
   headerTextWrap: {
     flex: 1,
@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   errorText: {
-    color: '#FFD7DE',
+    color: palette.textSecondary,
     fontSize: 13,
     textAlign: 'center',
     marginTop: 8,
@@ -268,8 +268,8 @@ const styles = StyleSheet.create({
   commentItem: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#253041',
-    backgroundColor: '#0D1624',
+    borderColor: palette.border,
+    backgroundColor: '#111111',
     paddingHorizontal: 10,
     paddingVertical: 10,
     flexDirection: 'row',
@@ -323,8 +323,8 @@ const styles = StyleSheet.create({
   },
   inputRow: {
     borderTopWidth: 1,
-    borderTopColor: '#1F2937',
-    backgroundColor: '#111827',
+    borderTopColor: palette.border,
+    backgroundColor: '#111111',
     paddingTop: 10,
     paddingHorizontal: 12,
     flexDirection: 'row',
@@ -337,8 +337,8 @@ const styles = StyleSheet.create({
     minHeight: 40,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#253041',
-    backgroundColor: '#0D1624',
+    borderColor: palette.border,
+    backgroundColor: '#000000',
     color: palette.textPrimary,
     paddingHorizontal: 12,
     paddingVertical: 9,

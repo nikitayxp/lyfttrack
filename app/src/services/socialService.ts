@@ -34,6 +34,14 @@ function normalizeOptionalId(value: string | null | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function normalizeSearchTerm(value: string): string {
+  return value
+    .trim()
+    .replace(/[%_]/g, '')
+    .replace(/[(),]/g, ' ')
+    .replace(/\s+/g, ' ');
+}
+
 function normalizeUuidSortKey(value: string): string {
   return value.trim().toLowerCase().replace(/-/g, '');
 }
@@ -104,16 +112,18 @@ function toErrorCode(error: unknown): string | null {
 
 export async function searchUsers(query: string): Promise<SocialSearchResult[]> {
   const user = await getAuthenticatedUserOrThrow();
-  const normalizedQuery = query.trim();
+  const normalizedQuery = normalizeSearchTerm(query);
 
   if (normalizedQuery.length < 2) {
     return [];
   }
 
+  const pattern = `%${normalizedQuery}%`;
+
   const { data: users, error: usersError } = await supabase
     .from('profiles')
     .select('id, username, full_name, avatar_url')
-    .ilike('username', `%${normalizedQuery}%`)
+    .or(`username.ilike.${pattern},full_name.ilike.${pattern}`)
     .neq('id', user.id)
     .order('username', { ascending: true })
     .limit(20);

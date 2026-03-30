@@ -13,7 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Colors } from '@/constants/theme';
+import { Colors } from '@/constants/Colors';
 import {
   acceptRequest,
   getFriends,
@@ -27,15 +27,15 @@ import {
 } from '@/services/socialService';
 
 const palette = Colors.dark;
-const SCREEN_BG = '#050A12';
-const CARD_BG = '#111827';
+const SCREEN_BG = '#000000';
+const CARD_BG = '#111111';
 
 function toErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
   }
 
-  return 'Unknown error';
+  return 'Erro desconhecido.';
 }
 
 function displayNameOf(profile: {
@@ -61,10 +61,10 @@ function initialsOf(profile: {
 }
 
 function relationLabel(relation: SocialSearchResult['relation']): string {
-  if (relation === 'friends') return 'Friends';
-  if (relation === 'request_sent') return 'Pending';
-  if (relation === 'request_received') return 'Requested You';
-  return 'Add';
+  if (relation === 'friends') return 'Amigos';
+  if (relation === 'request_sent') return 'Pendente';
+  if (relation === 'request_received') return 'Pediu-te';
+  return 'Adicionar';
 }
 
 function openPublicProfile(userId: string) {
@@ -75,7 +75,7 @@ function openPublicProfile(userId: string) {
   }
 
   router.push({
-    pathname: '/(tabs)/public-profile/[id]' as any,
+    pathname: '/(tabs)/profile/[id]' as any,
     params: { id: normalizedUserId },
   });
 }
@@ -170,7 +170,7 @@ export default function SocialScreen() {
         await sendFriendRequest(userId);
         await Promise.all([loadSocialState(), runSearch(query)]);
       } catch (error) {
-        Alert.alert('Unable to send request', toErrorMessage(error));
+        Alert.alert('Nao foi possivel enviar o pedido', toErrorMessage(error));
       } finally {
         setSendingUserId(null);
       }
@@ -186,7 +186,7 @@ export default function SocialScreen() {
         await acceptRequest(requestId);
         await Promise.all([loadSocialState(), runSearch(query)]);
       } catch (error) {
-        Alert.alert('Unable to accept request', toErrorMessage(error));
+        Alert.alert('Nao foi possivel aceitar o pedido', toErrorMessage(error));
       } finally {
         setProcessingRequestId(null);
       }
@@ -202,7 +202,7 @@ export default function SocialScreen() {
         await rejectRequest(requestId);
         await Promise.all([loadSocialState(), runSearch(query)]);
       } catch (error) {
-        Alert.alert('Unable to reject request', toErrorMessage(error));
+        Alert.alert('Nao foi possivel rejeitar o pedido', toErrorMessage(error));
       } finally {
         setProcessingRequestId(null);
       }
@@ -216,18 +216,18 @@ export default function SocialScreen() {
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void refreshAll()} tintColor={palette.accent} />}
     >
-      <Text style={styles.title}>Social</Text>
-      <Text style={styles.subtitle}>Search athletes, accept requests and build your circle.</Text>
+      <Text style={styles.title}>REDE</Text>
+      <Text style={styles.subtitle}>Pesquisa atletas, gere pedidos e fortalece a tua equipa.</Text>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Search by Username</Text>
+        <Text style={styles.cardTitle}>Pesquisar atletas</Text>
         <View style={styles.searchRow}>
           <Ionicons name="search-outline" size={18} color={palette.textMuted} />
           <TextInput
             value={query}
             onChangeText={setQuery}
             style={styles.searchInput}
-            placeholder="Type at least 2 characters"
+            placeholder="Escreve pelo menos 2 caracteres"
             placeholderTextColor={palette.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
@@ -237,14 +237,14 @@ export default function SocialScreen() {
         {isSearching ? (
           <View style={styles.inlineStatus}>
             <ActivityIndicator size="small" color={palette.accent} />
-            <Text style={styles.inlineStatusText}>Searching...</Text>
+            <Text style={styles.inlineStatusText}>A pesquisar...</Text>
           </View>
         ) : searchError ? (
           <Text style={styles.errorText}>{searchError}</Text>
         ) : !hasSearchQuery ? (
-          <Text style={styles.helperText}>Start typing to discover users.</Text>
+          <Text style={styles.helperText}>Comeca a escrever para encontrares perfis.</Text>
         ) : searchResults.length === 0 ? (
-          <Text style={styles.helperText}>No users found for this username.</Text>
+          <Text style={styles.helperText}>Nao encontrámos utilizadores para esta pesquisa.</Text>
         ) : (
           searchResults.map((result) => {
             const relation = result.relation;
@@ -292,24 +292,24 @@ export default function SocialScreen() {
 
       <View style={styles.card}>
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.cardTitle}>Pending Requests</Text>
+          <Text style={styles.cardTitle}>Pedidos pendentes</Text>
           <Text style={styles.countText}>{pendingRequests.length}</Text>
         </View>
 
         {isLoadingSocial ? (
           <View style={styles.inlineStatus}>
             <ActivityIndicator size="small" color={palette.accent} />
-            <Text style={styles.inlineStatusText}>Loading requests...</Text>
+            <Text style={styles.inlineStatusText}>A carregar pedidos...</Text>
           </View>
         ) : socialError ? (
           <Text style={styles.errorText}>{socialError}</Text>
         ) : pendingRequests.length === 0 ? (
-          <Text style={styles.helperText}>No pending requests right now.</Text>
+          <Text style={styles.helperText}>Nao tens pedidos pendentes neste momento.</Text>
         ) : (
           pendingRequests.map((request) => {
             const isProcessing = processingRequestId === request.id;
             const profile = request.fromProfile;
-            const fallbackName = profile?.username ?? 'Unknown user';
+            const fallbackName = profile?.username ?? 'Utilizador desconhecido';
 
             return (
               <View key={request.id} style={styles.requestItem}>
@@ -335,7 +335,7 @@ export default function SocialScreen() {
 
                   <View style={styles.userMetaWrap}>
                     <Text style={styles.userName}>{profile ? displayNameOf(profile) : fallbackName}</Text>
-                    <Text style={styles.userHandle}>{profile ? `@${profile.username}` : 'Profile unavailable'}</Text>
+                    <Text style={styles.userHandle}>{profile ? `@${profile.username}` : 'Perfil indisponivel'}</Text>
                   </View>
                 </TouchableOpacity>
 
@@ -349,7 +349,7 @@ export default function SocialScreen() {
                     {isProcessing ? (
                       <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
-                      <Text style={styles.requestButtonText}>Accept</Text>
+                      <Text style={styles.requestButtonText}>Aceitar</Text>
                     )}
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -358,7 +358,7 @@ export default function SocialScreen() {
                     onPress={() => void handleReject(request.id)}
                     disabled={isProcessing}
                   >
-                    <Text style={styles.requestButtonText}>Reject</Text>
+                    <Text style={styles.requestButtonText}>Rejeitar</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -369,17 +369,17 @@ export default function SocialScreen() {
 
       <View style={styles.card}>
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.cardTitle}>Friends</Text>
+          <Text style={styles.cardTitle}>Amigos</Text>
           <Text style={styles.countText}>{friends.length}</Text>
         </View>
 
         {isLoadingSocial ? (
           <View style={styles.inlineStatus}>
             <ActivityIndicator size="small" color={palette.accent} />
-            <Text style={styles.inlineStatusText}>Loading friends...</Text>
+            <Text style={styles.inlineStatusText}>A carregar amigos...</Text>
           </View>
         ) : friends.length === 0 ? (
-          <Text style={styles.helperText}>When requests are accepted, friends appear here.</Text>
+          <Text style={styles.helperText}>Quando aceitares pedidos, os amigos aparecem aqui.</Text>
         ) : (
           friends.map((friend) => (
             <TouchableOpacity
@@ -423,13 +423,15 @@ const styles = StyleSheet.create({
   },
   title: {
     color: palette.textPrimary,
-    fontSize: 30,
-    fontWeight: '800',
+    fontSize: 34,
+    fontWeight: '900',
     marginBottom: 4,
+    letterSpacing: -0.8,
   },
   subtitle: {
     color: palette.textSecondary,
-    fontSize: 15,
+    fontSize: 14,
+    fontWeight: '700',
     lineHeight: 22,
     marginBottom: 2,
   },
@@ -437,7 +439,7 @@ const styles = StyleSheet.create({
     backgroundColor: CARD_BG,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: palette.border,
     paddingHorizontal: 14,
     paddingVertical: 14,
   },
@@ -463,7 +465,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: palette.inputBorder,
-    backgroundColor: '#0D1420',
+    backgroundColor: '#0A0A0A',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
@@ -503,8 +505,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#253041',
-    backgroundColor: '#0D1624',
+    borderColor: palette.border,
+    backgroundColor: '#0A0A0A',
     paddingHorizontal: 10,
     paddingVertical: 10,
     marginBottom: 8,
@@ -512,8 +514,8 @@ const styles = StyleSheet.create({
   requestItem: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#253041',
-    backgroundColor: '#0D1624',
+    borderColor: palette.border,
+    backgroundColor: '#0A0A0A',
     paddingHorizontal: 10,
     paddingVertical: 10,
     marginBottom: 8,
@@ -525,8 +527,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#253041',
-    backgroundColor: '#0D1624',
+    borderColor: palette.border,
+    backgroundColor: '#0A0A0A',
     paddingHorizontal: 10,
     paddingVertical: 10,
     marginBottom: 8,
@@ -582,7 +584,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   userActionButtonMuted: {
-    backgroundColor: '#253041',
+    backgroundColor: '#27272A',
   },
   userActionText: {
     color: '#FFFFFF',
@@ -604,7 +606,7 @@ const styles = StyleSheet.create({
     backgroundColor: palette.accent,
   },
   rejectButton: {
-    backgroundColor: '#374151',
+    backgroundColor: '#3F3F46',
   },
   requestButtonText: {
     color: '#FFFFFF',

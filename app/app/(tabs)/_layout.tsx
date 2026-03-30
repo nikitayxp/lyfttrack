@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { useMemo } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
-import { Colors } from '@/constants/theme';
+import { Colors } from '@/constants/Colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const palette = Colors.dark;
@@ -43,9 +43,16 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="search"
+        options={{
+          title: 'Pesquisar',
+          tabBarIcon: ({ color }) => <Ionicons name="search-outline" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="workout"
         options={{
-          title: 'Workout',
+          title: 'Treinar',
           tabBarLabelStyle: styles.workoutLabel,
           tabBarIcon: ({ focused }) => (
             <View style={[styles.workoutIconContainer, focused && styles.workoutIconContainerFocused]}>
@@ -57,7 +64,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: 'Perfil',
           tabBarIcon: ({ color }) => <Ionicons name="person-circle-outline" size={24} color={color} />,
         }}
       />
@@ -96,7 +103,14 @@ export default function TabLayout() {
         name="public-profile/[id]"
         options={{
           href: null,
-          title: 'Profile',
+          title: 'Perfil',
+        }}
+      />
+      <Tabs.Screen
+        name="profile/[id]"
+        options={{
+          href: null,
+          title: 'Perfil',
         }}
       />
     </Tabs>

@@ -27,7 +27,7 @@ const webViewportFill: ViewStyle = {
 const styles = StyleSheet.create({
   desktopBackground: {
     flex: 1,
-    backgroundColor: '#020617',
+    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -38,11 +38,7 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     overflow: 'hidden',
     borderWidth: 10,
-    borderColor: '#1E293B',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.5,
-    shadowRadius: 30,
+    borderColor: '#27272A',
   },
 });
 
@@ -147,7 +143,7 @@ export default function RootLayout() {
   return (
     <View
       style={[
-        { flex: 1, backgroundColor: '#020617' },
+        { flex: 1, backgroundColor: '#000000' },
         Platform.OS === 'web' && webViewportFill,
       ]}
     >

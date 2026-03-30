@@ -13,7 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Colors } from '@/constants/theme';
+import { Colors } from '@/constants/Colors';
 import { getProfile, updateProfile } from '@/services/profileService';
 import { supabase } from '@/services/supabase';
 
@@ -24,7 +24,7 @@ function toErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  return 'Unknown error';
+  return 'Erro desconhecido.';
 }
 
 export default function EditProfileScreen() {
@@ -82,7 +82,7 @@ export default function EditProfileScreen() {
     const normalizedUsername = usernameInput.trim();
 
     if (!normalizedUsername) {
-      Alert.alert('Validation', 'Username is required.');
+      Alert.alert('Validacao', 'O nome de utilizador e obrigatorio.');
       return;
     }
 
@@ -95,14 +95,14 @@ export default function EditProfileScreen() {
         bio: bioInput,
       });
 
-      Alert.alert('Profile Updated', 'Your profile changes were saved.', [
+      Alert.alert('Perfil atualizado', 'As alteracoes foram guardadas com sucesso.', [
         {
           text: 'OK',
           onPress: () => router.back(),
         },
       ]);
     } catch (error) {
-      Alert.alert('Unable to update profile', toErrorMessage(error));
+      Alert.alert('Nao foi possivel atualizar o perfil', toErrorMessage(error));
     } finally {
       setIsSaving(false);
     }
@@ -122,20 +122,20 @@ export default function EditProfileScreen() {
         throw error;
       }
     } catch (error) {
-      Alert.alert('Unable to logout', toErrorMessage(error));
+      Alert.alert('Nao foi possivel terminar sessao', toErrorMessage(error));
     } finally {
       setIsSigningOut(false);
     }
   }, [isSigningOut]);
 
   const handleLogout = useCallback(() => {
-    Alert.alert('Logout', 'Do you want to sign out from your account?', [
+    Alert.alert('Terminar sessao', 'Queres sair da tua conta?', [
       {
-        text: 'Cancel',
+        text: 'Cancelar',
         style: 'cancel',
       },
       {
-        text: 'Logout',
+        text: 'Sair',
         style: 'destructive',
         onPress: () => void runSignOut(),
       },
@@ -150,12 +150,12 @@ export default function EditProfileScreen() {
     const normalizedEmail = pendingEmailInput.trim().toLowerCase();
 
     if (!normalizedEmail) {
-      Alert.alert('Validation', 'Email is required.');
+      Alert.alert('Validacao', 'O email e obrigatorio.');
       return;
     }
 
     if (normalizedEmail === currentEmail.trim().toLowerCase()) {
-      Alert.alert('No changes', 'Use a different email to request an update.');
+      Alert.alert('Sem alteracoes', 'Usa um email diferente para pedir atualizacao.');
       return;
     }
 
@@ -171,11 +171,11 @@ export default function EditProfileScreen() {
       }
 
       Alert.alert(
-        'Email update requested',
-        'Check your inbox to confirm the new email address before it becomes active.'
+        'Atualizacao de email pedida',
+        'Confirma o novo email na tua caixa de entrada antes de ficar ativo.'
       );
     } catch (error) {
-      Alert.alert('Unable to update email', toErrorMessage(error));
+      Alert.alert('Nao foi possivel atualizar o email', toErrorMessage(error));
     } finally {
       setIsUpdatingEmail(false);
     }
@@ -189,7 +189,7 @@ export default function EditProfileScreen() {
     const targetEmail = currentEmail.trim() || pendingEmailInput.trim();
 
     if (!targetEmail) {
-      Alert.alert('Missing email', 'Set an email first to receive password reset instructions.');
+      Alert.alert('Email em falta', 'Define primeiro um email para receber instrucoes de recuperacao.');
       return;
     }
 
@@ -202,9 +202,9 @@ export default function EditProfileScreen() {
         throw error;
       }
 
-      Alert.alert('Reset email sent', `Password reset instructions were sent to ${targetEmail}.`);
+      Alert.alert('Email enviado', `As instrucoes de recuperacao foram enviadas para ${targetEmail}.`);
     } catch (error) {
-      Alert.alert('Unable to send reset email', toErrorMessage(error));
+      Alert.alert('Nao foi possivel enviar o email de recuperacao', toErrorMessage(error));
     } finally {
       setIsSendingPasswordReset(false);
     }
@@ -216,30 +216,30 @@ export default function EditProfileScreen() {
         <View style={styles.headerRow}>
           <TouchableOpacity style={styles.backButton} activeOpacity={0.88} onPress={() => router.back()}>
             <Ionicons name="chevron-back" size={18} color={palette.textPrimary} />
-            <Text style={styles.backButtonText}>Back</Text>
+            <Text style={styles.backButtonText}>Voltar</Text>
           </TouchableOpacity>
         </View>
 
         <Text style={styles.title}>Editar Perfil</Text>
-        <Text style={styles.subtitle}>Atualiza teus dados publicos e controla a sessao.</Text>
+        <Text style={styles.subtitle}>Atualiza os teus dados publicos e controla a sessao.</Text>
 
         {isLoading ? (
           <View style={styles.statusCard}>
             <ActivityIndicator size="small" color={palette.accent} />
-            <Text style={styles.statusText}>Loading profile...</Text>
+            <Text style={styles.statusText}>A carregar perfil...</Text>
           </View>
         ) : errorMessage ? (
           <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Unable to load profile</Text>
+            <Text style={styles.errorTitle}>Nao foi possivel carregar o perfil</Text>
             <Text style={styles.errorText}>{errorMessage}</Text>
             <TouchableOpacity style={styles.retryButton} activeOpacity={0.88} onPress={() => void loadProfile()}>
-              <Text style={styles.retryButtonText}>Retry</Text>
+              <Text style={styles.retryButtonText}>Tentar novamente</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <>
             <View style={styles.formCard}>
-              <Text style={styles.inputLabel}>Username</Text>
+              <Text style={styles.inputLabel}>Nome de utilizador</Text>
               <TextInput
                 value={usernameInput}
                 onChangeText={setUsernameInput}
@@ -250,22 +250,22 @@ export default function EditProfileScreen() {
                 autoCorrect={false}
               />
 
-              <Text style={styles.inputLabel}>Full Name</Text>
+              <Text style={styles.inputLabel}>Nome completo</Text>
               <TextInput
                 value={fullNameInput}
                 onChangeText={setFullNameInput}
                 style={styles.input}
-                placeholder="Your full name"
+                placeholder="O teu nome completo"
                 placeholderTextColor={palette.textMuted}
                 autoCapitalize="words"
               />
 
-              <Text style={styles.inputLabel}>Bio</Text>
+              <Text style={styles.inputLabel}>Biografia</Text>
               <TextInput
                 value={bioInput}
                 onChangeText={setBioInput}
                 style={[styles.input, styles.bioInput]}
-                placeholder="Tell people about your training focus"
+                placeholder="Partilha o teu foco de treino"
                 placeholderTextColor={palette.textMuted}
                 multiline
                 textAlignVertical="top"
@@ -280,16 +280,16 @@ export default function EditProfileScreen() {
                 {isSaving ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.saveButtonText}>Salvar Alteracoes</Text>
+                  <Text style={styles.saveButtonText}>Guardar alteracoes</Text>
                 )}
               </TouchableOpacity>
             </View>
 
             <View style={styles.accountCard}>
-              <Text style={styles.accountTitle}>Account Security</Text>
-              <Text style={styles.accountHint}>Current email: {currentEmail || 'Not available'}</Text>
+              <Text style={styles.accountTitle}>Seguranca da conta</Text>
+              <Text style={styles.accountHint}>Email atual: {currentEmail || 'Indisponivel'}</Text>
 
-              <Text style={styles.inputLabel}>New Email</Text>
+              <Text style={styles.inputLabel}>Novo email</Text>
               <TextInput
                 value={pendingEmailInput}
                 onChangeText={setPendingEmailInput}
@@ -312,7 +312,7 @@ export default function EditProfileScreen() {
                 ) : (
                   <>
                     <Ionicons name="mail-outline" size={16} color="#FFFFFF" />
-                    <Text style={styles.accountPrimaryButtonText}>Update Email</Text>
+                    <Text style={styles.accountPrimaryButtonText}>Atualizar email</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -324,11 +324,11 @@ export default function EditProfileScreen() {
                 disabled={isSendingPasswordReset}
               >
                 {isSendingPasswordReset ? (
-                  <ActivityIndicator size="small" color="#BFDBFE" />
+                  <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <>
-                    <Ionicons name="key-outline" size={16} color="#BFDBFE" />
-                    <Text style={styles.accountSecondaryButtonText}>Send Password Reset</Text>
+                    <Ionicons name="key-outline" size={16} color="#FFFFFF" />
+                    <Text style={styles.accountSecondaryButtonText}>Enviar recuperacao de palavra-passe</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -341,11 +341,11 @@ export default function EditProfileScreen() {
               disabled={isSigningOut}
             >
               {isSigningOut ? (
-                <ActivityIndicator size="small" color="#FECACA" />
+                <ActivityIndicator size="small" color={palette.error} />
               ) : (
                 <>
-                  <Ionicons name="log-out-outline" size={18} color="#FECACA" />
-                  <Text style={styles.logoutButtonText}>Logout</Text>
+                  <Ionicons name="log-out-outline" size={18} color={palette.error} />
+                  <Text style={styles.logoutButtonText}>Terminar sessao</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -374,8 +374,8 @@ const styles = StyleSheet.create({
     minHeight: 36,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#0F172A',
+    borderColor: palette.border,
+    backgroundColor: '#111111',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -383,7 +383,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   backButtonText: {
-    color: '#E2E8F0',
+    color: palette.textSecondary,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -451,13 +451,13 @@ const styles = StyleSheet.create({
   formCard: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#273247',
-    backgroundColor: '#0E1726',
+    borderColor: palette.border,
+    backgroundColor: '#111111',
     paddingHorizontal: 14,
     paddingVertical: 14,
   },
   inputLabel: {
-    color: '#E2E8F0',
+    color: palette.textSecondary,
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -469,9 +469,9 @@ const styles = StyleSheet.create({
     minHeight: 46,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#111827',
-    color: '#FFFFFF',
+    borderColor: palette.border,
+    backgroundColor: '#000000',
+    color: palette.textPrimary,
     paddingHorizontal: 12,
     fontSize: 15,
     fontWeight: '600',
@@ -485,8 +485,8 @@ const styles = StyleSheet.create({
     minHeight: 46,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#3B82F6',
-    backgroundColor: '#1D4ED8',
+    borderColor: palette.accent,
+    backgroundColor: palette.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -502,19 +502,19 @@ const styles = StyleSheet.create({
     marginTop: 14,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#1E3A8A',
-    backgroundColor: '#0B1734',
+    borderColor: palette.border,
+    backgroundColor: '#111111',
     paddingHorizontal: 14,
     paddingVertical: 14,
     rowGap: 8,
   },
   accountTitle: {
-    color: '#E0EAFF',
+    color: palette.textPrimary,
     fontSize: 15,
     fontWeight: '800',
   },
   accountHint: {
-    color: '#BBD3FF',
+    color: palette.textSecondary,
     fontSize: 12,
     lineHeight: 18,
     marginBottom: 4,
@@ -524,8 +524,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#2563EB',
-    backgroundColor: '#1D4ED8',
+    borderColor: palette.accent,
+    backgroundColor: palette.accent,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -540,15 +540,15 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#1E40AF',
-    backgroundColor: '#10234A',
+    borderColor: palette.border,
+    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     columnGap: 8,
   },
   accountSecondaryButtonText: {
-    color: '#BFDBFE',
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '800',
   },
@@ -560,8 +560,8 @@ const styles = StyleSheet.create({
     minHeight: 46,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#7F1D1D',
-    backgroundColor: '#2A1118',
+    borderColor: palette.border,
+    backgroundColor: '#111111',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -571,7 +571,7 @@ const styles = StyleSheet.create({
     opacity: 0.75,
   },
   logoutButtonText: {
-    color: '#FECACA',
+    color: palette.error,
     fontSize: 15,
     fontWeight: '800',
   },

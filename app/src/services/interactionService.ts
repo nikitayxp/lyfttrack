@@ -1,6 +1,7 @@
 import { supabase } from '@/services/supabase';
 import { getAuthenticatedUserOrThrow } from '@/services/workoutService';
 import type { Tables, TablesInsert } from '@/types/database';
+import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 
 export type WorkoutLikeRow = Tables<'workout_likes'>;
 export type WorkoutCommentRow = Tables<'workout_comments'>;
@@ -35,14 +36,13 @@ function normalizeOptionalId(value: string | null | undefined): string | null {
 }
 
 function normalizeCommentContent(value: string): string {
-  const trimmed = value.trim();
+  const trimmed = sanitizeText(value, {
+    maxLength: INPUT_LIMITS.commentMax,
+    allowEmpty: false,
+  });
 
-  if (trimmed.length < 1) {
+  if (!trimmed || trimmed.length < 1) {
     throw new Error('Comment cannot be empty.');
-  }
-
-  if (trimmed.length > 1000) {
-    throw new Error('Comment must be 1000 characters or less.');
   }
 
   return trimmed;

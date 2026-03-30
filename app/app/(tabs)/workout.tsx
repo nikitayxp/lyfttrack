@@ -31,6 +31,7 @@ import {
 } from '@/services/workoutService';
 import type { Tables } from '@/types/database';
 import { EmptyState } from '@/components/common/EmptyState';
+import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 
 const palette = Colors.dark;
 const CARD_BG = '#111827';
@@ -303,7 +304,14 @@ export default function WorkoutScreen() {
   }
 
   async function handleCreateRoutine() {
-    const normalizedName = routineNameInput.trim();
+    const normalizedName = sanitizeText(routineNameInput, {
+      maxLength: INPUT_LIMITS.nameMax,
+      allowEmpty: false,
+    });
+    const normalizedNotes = sanitizeText(routineNotesInput, {
+      maxLength: INPUT_LIMITS.notesMax,
+      allowEmpty: true,
+    });
 
     if (!normalizedName) {
       Alert.alert('Validation', 'Routine name is required.');
@@ -318,7 +326,7 @@ export default function WorkoutScreen() {
     setIsCreatingRoutine(true);
 
     try {
-      await createRoutine(normalizedName, routineNotesInput, selectedRoutineExerciseIds);
+      await createRoutine(normalizedName, normalizedNotes, selectedRoutineExerciseIds);
       setIsCreateRoutineModalVisible(false);
       resetRoutineForm();
       setHasLoadedRoutines(false);
@@ -331,7 +339,18 @@ export default function WorkoutScreen() {
   }
 
   async function handleCreateExercise() {
-    const normalizedName = exerciseNameInput.trim();
+    const normalizedName = sanitizeText(exerciseNameInput, {
+      maxLength: INPUT_LIMITS.nameMax,
+      allowEmpty: false,
+    });
+    const normalizedMuscleGroup = sanitizeText(muscleGroupInput, {
+      maxLength: INPUT_LIMITS.nameMax,
+      allowEmpty: true,
+    });
+    const normalizedEquipment = sanitizeText(equipmentInput, {
+      maxLength: INPUT_LIMITS.nameMax,
+      allowEmpty: true,
+    });
 
     if (!normalizedName) {
       Alert.alert('Validation', 'Exercise name is required.');
@@ -343,8 +362,8 @@ export default function WorkoutScreen() {
     try {
       await createExercise({
         name: normalizedName,
-        muscleGroup: muscleGroupInput,
-        equipment: equipmentInput,
+        muscleGroup: normalizedMuscleGroup,
+        equipment: normalizedEquipment,
       });
 
       setIsCreateExerciseModalVisible(false);
@@ -359,7 +378,10 @@ export default function WorkoutScreen() {
   }
 
   async function handleCreateTemplate() {
-    const normalizedName = templateNameInput.trim();
+    const normalizedName = sanitizeText(templateNameInput, {
+      maxLength: INPUT_LIMITS.nameMax,
+      allowEmpty: false,
+    });
 
     if (!normalizedName) {
       Alert.alert('Validation', 'Template name is required.');
@@ -710,11 +732,12 @@ export default function WorkoutScreen() {
 
             <TextInput
               value={templateNameInput}
-              onChangeText={setTemplateNameInput}
+              onChangeText={(value) => setTemplateNameInput(value.substring(0, INPUT_LIMITS.nameMax))}
               style={styles.modalInput}
               placeholder="Template Name"
               placeholderTextColor={palette.textMuted}
               autoCapitalize="words"
+              maxLength={INPUT_LIMITS.nameMax}
             />
 
             <Text style={styles.modalSectionTitle}>Exercises ({selectedTemplateExercises.length})</Text>
@@ -856,21 +879,23 @@ export default function WorkoutScreen() {
 
             <TextInput
               value={routineNameInput}
-              onChangeText={setRoutineNameInput}
+              onChangeText={(value) => setRoutineNameInput(value.substring(0, INPUT_LIMITS.nameMax))}
               style={styles.modalInput}
               placeholder="Routine Name"
               placeholderTextColor={palette.textMuted}
               autoCapitalize="words"
+              maxLength={INPUT_LIMITS.nameMax}
             />
             <TextInput
               value={routineNotesInput}
-              onChangeText={setRoutineNotesInput}
+              onChangeText={(value) => setRoutineNotesInput(value.substring(0, INPUT_LIMITS.notesMax))}
               style={[styles.modalInput, styles.modalNotesInput]}
               placeholder="Notes (optional)"
               placeholderTextColor={palette.textMuted}
               autoCapitalize="sentences"
               multiline
               textAlignVertical="top"
+              maxLength={INPUT_LIMITS.notesMax}
             />
 
             <Text style={styles.modalSectionTitle}>Exercises ({selectedRoutineExerciseIds.length})</Text>
@@ -974,27 +999,30 @@ export default function WorkoutScreen() {
 
             <TextInput
               value={exerciseNameInput}
-              onChangeText={setExerciseNameInput}
+              onChangeText={(value) => setExerciseNameInput(value.substring(0, INPUT_LIMITS.nameMax))}
               placeholder="Name"
               placeholderTextColor={palette.textMuted}
               style={styles.modalInput}
               autoCapitalize="words"
+              maxLength={INPUT_LIMITS.nameMax}
             />
             <TextInput
               value={muscleGroupInput}
-              onChangeText={setMuscleGroupInput}
+              onChangeText={(value) => setMuscleGroupInput(value.substring(0, INPUT_LIMITS.nameMax))}
               placeholder="Muscle Group"
               placeholderTextColor={palette.textMuted}
               style={styles.modalInput}
               autoCapitalize="words"
+              maxLength={INPUT_LIMITS.nameMax}
             />
             <TextInput
               value={equipmentInput}
-              onChangeText={setEquipmentInput}
+              onChangeText={(value) => setEquipmentInput(value.substring(0, INPUT_LIMITS.nameMax))}
               placeholder="Equipment"
               placeholderTextColor={palette.textMuted}
               style={styles.modalInput}
               autoCapitalize="words"
+              maxLength={INPUT_LIMITS.nameMax}
             />
 
             <View style={styles.modalButtonRow}>

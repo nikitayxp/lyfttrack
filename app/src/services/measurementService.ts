@@ -1,6 +1,7 @@
 import { supabase } from '@/services/supabase';
 import { getAuthenticatedUserOrThrow } from '@/services/workoutService';
 import type { Tables, TablesInsert } from '@/types/database';
+import { toSafeNumber } from '@/utils/inputValidation';
 
 type BodyMeasurementRowWithMeasured = Pick<
   Tables<'body_measurements'>,
@@ -25,11 +26,15 @@ export type BodyMeasurementEntry = {
 const MAX_HISTORY_ENTRIES = 30;
 
 function normalizeWeightInput(value: number): number {
-  if (!Number.isFinite(value)) {
+  const normalized = toSafeNumber(value, {
+    min: 0,
+    max: 500,
+    decimals: 2,
+  });
+
+  if (normalized === null) {
     throw new Error('O peso tem de ser um numero valido.');
   }
-
-  const normalized = Number(value.toFixed(2));
 
   if (normalized <= 0) {
     throw new Error('O peso tem de ser superior a 0 kg.');

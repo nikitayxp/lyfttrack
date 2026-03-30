@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { supabase } from '@/services/supabase';
 import { getAuthenticatedUserOrThrow } from '@/services/workoutService';
 import type { Tables, TablesInsert } from '@/types/database';
+import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 
 export type WorkoutTemplateRow = Tables<'workout_templates'>;
 export type TemplateExerciseRow = Tables<'template_exercises'>;
@@ -48,14 +49,17 @@ function normalizeOptionalId(value: string | null | undefined): string | null {
 }
 
 function normalizeTemplateName(value: string): string {
-  const normalized = value.trim();
+  const normalized = sanitizeText(value, {
+    maxLength: INPUT_LIMITS.nameMax,
+    allowEmpty: false,
+  });
+
+  if (!normalized) {
+    throw new Error('Template name is required.');
+  }
 
   if (normalized.length < 2) {
     throw new Error('Template name must have at least 2 characters.');
-  }
-
-  if (normalized.length > 120) {
-    throw new Error('Template name must be 120 characters or less.');
   }
 
   return normalized;
@@ -78,7 +82,10 @@ function normalizeTemplateExerciseInputs(
 
   for (const entry of exercises) {
     const rawExerciseId = typeof entry === 'string' ? entry : entry.exerciseId;
-    const normalized = rawExerciseId.trim();
+    const normalized = sanitizeText(rawExerciseId, {
+      maxLength: INPUT_LIMITS.nameMax,
+      allowEmpty: true,
+    });
 
     if (!normalized || seen.has(normalized)) {
       continue;

@@ -38,6 +38,14 @@ import { getExerciseProgress, type ExerciseProgressPoint } from '@/services/stat
 import type { Tables } from '@/types/database';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WorkoutSummary } from '@/components/workout/WorkoutSummary';
+import {
+  INPUT_LIMITS,
+  sanitizeDecimalText,
+  sanitizeIntegerText,
+  sanitizeText,
+  toSafeInteger,
+  toSafeNumber,
+} from '@/utils/inputValidation';
 
 type ExerciseRow = Tables<'exercises'>;
 type SetRow = Tables<'sets'>;
@@ -84,28 +92,34 @@ type TemplatePreloadExercise = {
   restSeconds: number;
 };
 
-function parseOptionalNumber(value: string): number | null {
-  if (!value || value === '.') {
-    return null;
-  }
-
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
+function parseOptionalWeight(value: string): number | null {
+  return toSafeNumber(value, {
+    min: 0,
+    max: INPUT_LIMITS.weightMax,
+    decimals: 2,
+  });
 }
 
 function sanitizeDecimalInput(value: string): string {
-  const digitsAndDot = value.replace(/[^0-9.]/g, '');
-  const [head, ...tail] = digitsAndDot.split('.');
-
-  if (tail.length === 0) {
-    return head;
-  }
-
-  return `${head}.${tail.join('')}`;
+  return sanitizeDecimalText(value);
 }
 
 function sanitizeIntegerInput(value: string): string {
-  return value.replace(/[^0-9]/g, '');
+  return sanitizeIntegerText(value);
+}
+
+function parseOptionalReps(value: string): number | null {
+  return toSafeInteger(value, {
+    min: 0,
+    max: INPUT_LIMITS.repsMax,
+  });
+}
+
+function parseOptionalRir(value: string): number | null {
+  return toSafeInteger(value, {
+    min: 0,
+    max: INPUT_LIMITS.rirMax,
+  });
 }
 
 function formatElapsedTime(seconds: number): string {
@@ -174,9 +188,9 @@ function createSet(
     id: `${exerciseId}-set-${setNumber}-${Math.random().toString(36).slice(2, 8)}`,
     set_number: setNumber,
     set_type: initial?.setType ?? 'normal',
-    weight: parseOptionalNumber(weightInput),
-    reps: parseOptionalNumber(repsInput),
-    rir: parseOptionalNumber(rirInput),
+    weight: parseOptionalWeight(weightInput),
+    reps: parseOptionalReps(repsInput),
+    rir: parseOptionalRir(rirInput),
     completed: false,
     weightInput,
     repsInput,
@@ -812,25 +826,31 @@ export default function ActiveWorkout() {
             }
 
             if (field === 'weightInput') {
+              const normalizedWeight = parseOptionalWeight(sanitizedValue);
+
               return {
                 ...setItem,
-                weightInput: sanitizedValue,
-                weight: parseOptionalNumber(sanitizedValue),
+                weightInput: normalizedWeight === null ? sanitizedValue : String(normalizedWeight),
+                weight: normalizedWeight,
               };
             }
 
             if (field === 'repsInput') {
+              const normalizedReps = parseOptionalReps(sanitizedValue);
+
               return {
                 ...setItem,
-                repsInput: sanitizedValue,
-                reps: parseOptionalNumber(sanitizedValue),
+                repsInput: normalizedReps === null ? sanitizedValue : String(normalizedReps),
+                reps: normalizedReps,
               };
             }
 
+            const normalizedRir = parseOptionalRir(sanitizedValue);
+
             return {
               ...setItem,
-              rirInput: sanitizedValue,
-              rir: parseOptionalNumber(sanitizedValue),
+              rirInput: normalizedRir === null ? sanitizedValue : String(normalizedRir),
+              rir: normalizedRir,
             };
           }),
         };
@@ -861,7 +881,18 @@ export default function ActiveWorkout() {
   }
 
   async function handleCreateExercise() {
-    const normalizedName = newExerciseName.trim();
+    const normalizedName = sanitizeText(newExerciseName, {
+      maxLength: INPUT_LIMITS.nameMax,
+      allowEmpty: false,
+    });
+    const normalizedMuscleGroup = sanitizeText(newExerciseMuscleGroup, {
+      maxLength: INPUT_LIMITS.nameMax,
+      allowEmpty: true,
+    });
+    const normalizedEquipment = sanitizeText(newExerciseEquipment, {
+      maxLength: INPUT_LIMITS.nameMax,
+      allowEmpty: true,
+    });
 
     if (!normalizedName) {
       Alert.alert('Validation', 'Exercise name is required.');
@@ -873,8 +904,8 @@ export default function ActiveWorkout() {
     try {
       const createdExercise = await createExercise({
         name: normalizedName,
-        muscleGroup: newExerciseMuscleGroup,
-        equipment: newExerciseEquipment,
+        muscleGroup: normalizedMuscleGroup,
+        equipment: normalizedEquipment,
       });
 
       setNewExerciseName('');
@@ -903,10 +934,23 @@ export default function ActiveWorkout() {
       const setDrafts: WorkoutSetProgressDraft[] = activeExercises.flatMap((exercise) =>
         exercise.sets.map((setItem) => ({
           exerciseId: exercise.exercise.id,
-          setNumber: setItem.set_number,
-          weight: setItem.weight,
-          reps: setItem.reps,
-          rir: setItem.rir,
+          setNumber: toSafeInteger(setItem.set_number, {
+            min: 1,
+            max: INPUT_LIMITS.setNumberMax,
+          }),
+          weight: toSafeNumber(setItem.weight, {
+            min: 0,
+            max: INPUT_LIMITS.weightMax,
+            decimals: 2,
+          }),
+          reps: toSafeInteger(setItem.reps, {
+            min: 0,
+            max: INPUT_LIMITS.repsMax,
+          }),
+          rir: toSafeInteger(setItem.rir, {
+            min: 0,
+            max: INPUT_LIMITS.rirMax,
+          }),
           completed: setItem.completed,
           setType: normalizeSetTypeOption(setItem.set_type),
         }))
@@ -1303,27 +1347,30 @@ export default function ActiveWorkout() {
 
             <TextInput
               value={newExerciseName}
-              onChangeText={setNewExerciseName}
+              onChangeText={(value) => setNewExerciseName(value.substring(0, INPUT_LIMITS.nameMax))}
               style={styles.modalInput}
               placeholder="Name"
               placeholderTextColor={palette.textMuted}
               autoCapitalize="words"
+              maxLength={INPUT_LIMITS.nameMax}
             />
             <TextInput
               value={newExerciseMuscleGroup}
-              onChangeText={setNewExerciseMuscleGroup}
+              onChangeText={(value) => setNewExerciseMuscleGroup(value.substring(0, INPUT_LIMITS.nameMax))}
               style={styles.modalInput}
               placeholder="Muscle Group"
               placeholderTextColor={palette.textMuted}
               autoCapitalize="words"
+              maxLength={INPUT_LIMITS.nameMax}
             />
             <TextInput
               value={newExerciseEquipment}
-              onChangeText={setNewExerciseEquipment}
+              onChangeText={(value) => setNewExerciseEquipment(value.substring(0, INPUT_LIMITS.nameMax))}
               style={styles.modalInput}
               placeholder="Equipment"
               placeholderTextColor={palette.textMuted}
               autoCapitalize="words"
+              maxLength={INPUT_LIMITS.nameMax}
             />
 
             <View style={styles.modalButtonRow}>

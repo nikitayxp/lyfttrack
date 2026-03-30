@@ -22,6 +22,7 @@ import {
   type RoutineSummary,
 } from '@/services/workoutService';
 import type { Tables } from '@/types/database';
+import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 
 const palette = Colors.dark;
 
@@ -111,7 +112,14 @@ export default function RoutinesScreen() {
   }
 
   async function handleCreateRoutine() {
-    const normalizedName = routineNameInput.trim();
+    const normalizedName = sanitizeText(routineNameInput, {
+      maxLength: INPUT_LIMITS.nameMax,
+      allowEmpty: false,
+    });
+    const normalizedNotes = sanitizeText(routineNotesInput, {
+      maxLength: INPUT_LIMITS.notesMax,
+      allowEmpty: true,
+    });
 
     if (!normalizedName) {
       Alert.alert('Validation', 'Routine name is required.');
@@ -126,7 +134,7 @@ export default function RoutinesScreen() {
     setIsCreatingRoutine(true);
 
     try {
-      await createRoutine(normalizedName, routineNotesInput, selectedExerciseIds);
+      await createRoutine(normalizedName, normalizedNotes, selectedExerciseIds);
       setIsCreateModalVisible(false);
       resetRoutineForm();
       await loadRoutines();
@@ -204,21 +212,23 @@ export default function RoutinesScreen() {
 
             <TextInput
               value={routineNameInput}
-              onChangeText={setRoutineNameInput}
+              onChangeText={(value) => setRoutineNameInput(value.substring(0, INPUT_LIMITS.nameMax))}
               style={styles.modalInput}
               placeholder="Routine Name"
               placeholderTextColor={palette.textMuted}
               autoCapitalize="words"
+              maxLength={INPUT_LIMITS.nameMax}
             />
             <TextInput
               value={routineNotesInput}
-              onChangeText={setRoutineNotesInput}
+              onChangeText={(value) => setRoutineNotesInput(value.substring(0, INPUT_LIMITS.notesMax))}
               style={[styles.modalInput, styles.modalNotesInput]}
               placeholder="Notes (optional)"
               placeholderTextColor={palette.textMuted}
               autoCapitalize="sentences"
               multiline
               textAlignVertical="top"
+              maxLength={INPUT_LIMITS.notesMax}
             />
 
             <Text style={styles.modalSectionTitle}>Exercises ({selectedExerciseIds.length})</Text>

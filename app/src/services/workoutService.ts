@@ -1,6 +1,7 @@
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/services/supabase';
 import type { Tables, TablesInsert } from '@/types/database';
+import { INPUT_LIMITS, sanitizeText, toSafeInteger, toSafeNumber } from '@/utils/inputValidation';
 
 export type ExerciseCatalogItem = Tables<'exercises'>;
 export type ExerciseLibraryMuscleFilter = 'all' | 'chest' | 'back' | 'legs' | 'shoulders' | 'arms';
@@ -211,6 +212,36 @@ function normalizeOptionalText(value: string | null | undefined): string | null 
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeRequiredName(value: string, label: string): string {
+  const normalized = sanitizeText(value, { maxLength: INPUT_LIMITS.nameMax, allowEmpty: false });
+
+  if (!normalized || normalized.length < 2) {
+    throw new Error(`${label} must have at least 2 characters.`);
+  }
+
+  return normalized;
+}
+
+function normalizeWriteText(value: string | null | undefined, maxLength: number): string | null {
+  return sanitizeText(value, { maxLength, allowEmpty: true });
+}
+
+function normalizeIsoTimestamp(value: string, label: string): string {
+  const normalized = sanitizeText(value, { maxLength: 64, allowEmpty: false, stripTags: false });
+
+  if (!normalized) {
+    throw new Error(`${label} is required.`);
+  }
+
+  const parsed = new Date(normalized);
+
+  if (!Number.isFinite(parsed.getTime())) {
+    throw new Error(`${label} must be a valid datetime.`);
+  }
+
+  return parsed.toISOString();
 }
 
 function normalizeExerciseIdList(exerciseIds: string[]): string[] {
@@ -490,24 +521,41 @@ function buildSetInsertRow(
   workoutExerciseId: string | null = null
 ): TablesInsert<'sets'> | null {
   const normalizedExerciseId = draft.exerciseId?.trim();
-  const normalizedSetNumber = draft.setNumber ?? null;
+  const normalizedSetNumber = toSafeInteger(draft.setNumber, {
+    min: 1,
+    max: INPUT_LIMITS.setNumberMax,
+  });
 
   if (!normalizedExerciseId) {
     return null;
   }
 
-  if (!normalizedSetNumber || !Number.isFinite(normalizedSetNumber) || normalizedSetNumber < 1) {
+  if (!normalizedSetNumber) {
     return null;
   }
+
+  const normalizedWeight = toSafeNumber(draft.weight, {
+    min: 0,
+    max: INPUT_LIMITS.weightMax,
+    decimals: 2,
+  });
+  const normalizedReps = toSafeInteger(draft.reps, {
+    min: 0,
+    max: INPUT_LIMITS.repsMax,
+  });
+  const normalizedRir = toSafeInteger(draft.rir, {
+    min: 0,
+    max: INPUT_LIMITS.rirMax,
+  });
 
   return {
     workout_id: workoutId,
     workout_exercise_id: workoutExerciseId,
     exercise_id: normalizedExerciseId,
     set_number: Math.trunc(normalizedSetNumber),
-    weight: normalizeNumber(draft.weight),
-    reps: normalizeNumber(draft.reps),
-    rir: normalizeNumber(draft.rir),
+    weight: normalizedWeight,
+    reps: normalizedReps,
+    rir: normalizedRir,
     set_type: normalizeSetType(draft.setType),
   };
 }
@@ -553,12 +601,15 @@ export function calculateWorkoutVolume(setDrafts: WorkoutSetProgressDraft[]): nu
       continue;
     }
 
-    const weight = draft.weight ?? 0;
-    const reps = draft.reps ?? 0;
-
-    if (!Number.isFinite(weight) || !Number.isFinite(reps)) {
-      continue;
-    }
+    const weight = toSafeNumber(draft.weight, {
+      min: 0,
+      max: INPUT_LIMITS.weightMax,
+      decimals: 2,
+    }) ?? 0;
+    const reps = toSafeInteger(draft.reps, {
+      min: 0,
+      max: INPUT_LIMITS.repsMax,
+    }) ?? 0;
 
     total += Math.max(0, weight) * Math.max(0, reps);
   }
@@ -635,18 +686,14 @@ export async function getExercisesCatalog(filters: ExerciseCatalogFilters = {}):
 
 export async function createExercise(input: CreateExerciseInput): Promise<ExerciseCatalogItem> {
   const user = await getAuthenticatedUserOrThrow();
-  const normalizedName = input.name.trim();
-
-  if (normalizedName.length < 2) {
-    throw new Error('Exercise name must have at least 2 characters.');
-  }
+  const normalizedName = normalizeRequiredName(input.name, 'Exercise name');
 
   const insertRow: TablesInsert<'exercises'> = {
     name: normalizedName,
     created_by: user.id,
     is_custom: true,
-    muscle_group: normalizeOptionalText(input.muscleGroup),
-    equipment: normalizeOptionalText(input.equipment),
+    muscle_group: normalizeWriteText(input.muscleGroup, INPUT_LIMITS.nameMax),
+    equipment: normalizeWriteText(input.equipment, INPUT_LIMITS.nameMax),
   };
 
   const { data, error } = await supabase.from('exercises').insert(insertRow).select('*').single();
@@ -790,10 +837,7 @@ export async function createRoutine(
 ): Promise<RoutineRow> {
   const user = await getAuthenticatedUserOrThrow();
 
-  const normalizedName = name.trim();
-  if (normalizedName.length < 2) {
-    throw new Error('Routine name must have at least 2 characters.');
-  }
+  const normalizedName = normalizeRequiredName(name, 'Routine name');
 
   const normalizedExerciseIds = normalizeExerciseIdList(exerciseIds);
   if (normalizedExerciseIds.length === 0) {
@@ -803,7 +847,7 @@ export async function createRoutine(
   const routineInsert: TablesInsert<'routines'> = {
     user_id: user.id,
     name: normalizedName,
-    notes: normalizeOptionalText(notes),
+    notes: normalizeWriteText(notes, INPUT_LIMITS.notesMax),
   };
 
   const { data: createdRoutine, error: routineError } = await supabase
@@ -889,6 +933,17 @@ export async function createWorkoutWithSets(
   input: CreateWorkoutWithSetsInput
 ): Promise<CreateWorkoutWithSetsResult> {
   const user = await getAuthenticatedUserOrThrow();
+  const normalizedStartTime = normalizeIsoTimestamp(input.startTime, 'Workout start time');
+  const normalizedEndTime = normalizeIsoTimestamp(input.endTime, 'Workout end time');
+  const normalizedWorkoutName = sanitizeText(input.name, {
+    maxLength: INPUT_LIMITS.nameMax,
+    allowEmpty: true,
+  }) ?? 'Untitled Workout';
+  const normalizedWorkoutNotes = normalizeWriteText(input.notes, INPUT_LIMITS.notesMax);
+
+  if (new Date(normalizedEndTime).getTime() < new Date(normalizedStartTime).getTime()) {
+    throw new Error('Workout end time must be after start time.');
+  }
 
   const normalizedTemplateId = normalizeOptionalId(input.templateId);
   let safeTemplateId: string | null = normalizedTemplateId;
@@ -919,11 +974,11 @@ export async function createWorkoutWithSets(
 
   let workoutInsert: TablesInsert<'workouts'> = {
     user_id: user.id,
-    name: input.name.trim() || 'Untitled Workout',
-    notes: input.notes ?? null,
+    name: normalizedWorkoutName,
+    notes: normalizedWorkoutNotes,
     template_id: safeTemplateId ?? null,
-    start_time: input.startTime,
-    end_time: input.endTime,
+    start_time: normalizedStartTime,
+    end_time: normalizedEndTime,
   };
 
   const insertWorkout = async (payload: TablesInsert<'workouts'>) => {

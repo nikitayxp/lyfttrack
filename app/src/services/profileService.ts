@@ -4,6 +4,7 @@ import { decode as decodeBase64 } from 'base64-arraybuffer';
 import { supabase } from '@/services/supabase';
 import { getAuthenticatedUserOrThrow } from '@/services/workoutService';
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/database';
+import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 
 export type ProfileRow = Tables<'profiles'>;
 export type PublicProfileView = Pick<ProfileRow, 'id' | 'username' | 'full_name' | 'avatar_url' | 'bio'>;
@@ -31,13 +32,16 @@ export function withAvatarCacheBuster(url: string | null | undefined, versionTok
   return `${url}${separator}v=${versionToken}`;
 }
 
-function normalizeOptionalText(value: string | null | undefined): string | null {
-  if (!value) {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
+function normalizeOptionalText(
+  value: string | null | undefined,
+  maxLength: number,
+  stripTags = true
+): string | null {
+  return sanitizeText(value, {
+    maxLength,
+    allowEmpty: true,
+    stripTags,
+  });
 }
 
 function normalizeOptionalId(value: string | null | undefined): string | null {
@@ -82,7 +86,7 @@ function buildCreateProfileRow(user: User, username: string): TablesInsert<'prof
   return {
     id: user.id,
     username,
-    full_name: normalizeOptionalText(metadata.full_name),
+    full_name: normalizeOptionalText(metadata.full_name, INPUT_LIMITS.nameMax),
     avatar_url: null,
     bio: null,
   };
@@ -214,7 +218,7 @@ export async function updateProfile(input: UpdateProfileInput): Promise<ProfileR
   const updateRow: TablesUpdate<'profiles'> = {};
 
   if (input.username !== undefined) {
-    const normalizedUsername = sanitizeUsername(input.username);
+    const normalizedUsername = sanitizeUsername(input.username).slice(0, INPUT_LIMITS.nameMax);
 
     if (normalizedUsername.length < 3) {
       throw new Error('Username must have at least 3 valid characters.');
@@ -224,15 +228,15 @@ export async function updateProfile(input: UpdateProfileInput): Promise<ProfileR
   }
 
   if (input.fullName !== undefined) {
-    updateRow.full_name = normalizeOptionalText(input.fullName);
+    updateRow.full_name = normalizeOptionalText(input.fullName, INPUT_LIMITS.nameMax);
   }
 
   if (input.bio !== undefined) {
-    updateRow.bio = normalizeOptionalText(input.bio);
+    updateRow.bio = normalizeOptionalText(input.bio, INPUT_LIMITS.bioMax);
   }
 
   if (input.avatarUrl !== undefined) {
-    updateRow.avatar_url = normalizeOptionalText(input.avatarUrl);
+    updateRow.avatar_url = normalizeOptionalText(input.avatarUrl, 500, false);
   }
 
   if (Object.keys(updateRow).length === 0) {

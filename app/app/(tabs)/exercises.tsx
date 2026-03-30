@@ -15,6 +15,7 @@ import {
 import { Colors } from '@/constants/theme';
 import type { Tables } from '@/types/database';
 import { createExercise, getErrorMessage, getExercisesCatalog } from '@/services/workoutService';
+import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 
 type ExerciseRow = Tables<'exercises'>;
 const palette = Colors.dark;
@@ -49,7 +50,18 @@ export default function ExercisesScreen() {
   }, [loadExercises]);
 
   async function handleCreateExercise() {
-    const normalizedName = exerciseNameInput.trim();
+    const normalizedName = sanitizeText(exerciseNameInput, {
+      maxLength: INPUT_LIMITS.nameMax,
+      allowEmpty: false,
+    });
+    const normalizedMuscleGroup = sanitizeText(muscleGroupInput, {
+      maxLength: INPUT_LIMITS.nameMax,
+      allowEmpty: true,
+    });
+    const normalizedEquipment = sanitizeText(equipmentInput, {
+      maxLength: INPUT_LIMITS.nameMax,
+      allowEmpty: true,
+    });
 
     if (!normalizedName) {
       Alert.alert('Validation', 'Exercise name is required.');
@@ -61,8 +73,8 @@ export default function ExercisesScreen() {
     try {
       await createExercise({
         name: normalizedName,
-        muscleGroup: muscleGroupInput,
-        equipment: equipmentInput,
+        muscleGroup: normalizedMuscleGroup,
+        equipment: normalizedEquipment,
       });
 
       setExerciseNameInput('');
@@ -171,27 +183,30 @@ export default function ExercisesScreen() {
 
             <TextInput
               value={exerciseNameInput}
-              onChangeText={setExerciseNameInput}
+              onChangeText={(value) => setExerciseNameInput(value.substring(0, INPUT_LIMITS.nameMax))}
               placeholder="Name"
               placeholderTextColor={palette.textMuted}
               style={styles.modalInput}
               autoCapitalize="words"
+              maxLength={INPUT_LIMITS.nameMax}
             />
             <TextInput
               value={muscleGroupInput}
-              onChangeText={setMuscleGroupInput}
+              onChangeText={(value) => setMuscleGroupInput(value.substring(0, INPUT_LIMITS.nameMax))}
               placeholder="Muscle Group"
               placeholderTextColor={palette.textMuted}
               style={styles.modalInput}
               autoCapitalize="words"
+              maxLength={INPUT_LIMITS.nameMax}
             />
             <TextInput
               value={equipmentInput}
-              onChangeText={setEquipmentInput}
+              onChangeText={(value) => setEquipmentInput(value.substring(0, INPUT_LIMITS.nameMax))}
               placeholder="Equipment"
               placeholderTextColor={palette.textMuted}
               style={styles.modalInput}
               autoCapitalize="words"
+              maxLength={INPUT_LIMITS.nameMax}
             />
 
             <View style={styles.modalButtonRow}>

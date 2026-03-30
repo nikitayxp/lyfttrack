@@ -16,6 +16,7 @@ import {
 import { Colors } from '@/constants/Colors';
 import { getProfile, updateProfile } from '@/services/profileService';
 import { supabase } from '@/services/supabase';
+import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 
 const palette = Colors.dark;
 
@@ -79,7 +80,18 @@ export default function EditProfileScreen() {
       return;
     }
 
-    const normalizedUsername = usernameInput.trim();
+    const normalizedUsername = sanitizeText(usernameInput, {
+      maxLength: INPUT_LIMITS.nameMax,
+      allowEmpty: false,
+    });
+    const normalizedFullName = sanitizeText(fullNameInput, {
+      maxLength: INPUT_LIMITS.nameMax,
+      allowEmpty: true,
+    });
+    const normalizedBio = sanitizeText(bioInput, {
+      maxLength: INPUT_LIMITS.bioMax,
+      allowEmpty: true,
+    });
 
     if (!normalizedUsername) {
       Alert.alert('Validacao', 'O nome de utilizador e obrigatorio.');
@@ -91,8 +103,8 @@ export default function EditProfileScreen() {
     try {
       await updateProfile({
         username: normalizedUsername,
-        fullName: fullNameInput,
-        bio: bioInput,
+        fullName: normalizedFullName,
+        bio: normalizedBio,
       });
 
       Alert.alert('Perfil atualizado', 'As alteracoes foram guardadas com sucesso.', [
@@ -242,33 +254,36 @@ export default function EditProfileScreen() {
               <Text style={styles.inputLabel}>Nome de utilizador</Text>
               <TextInput
                 value={usernameInput}
-                onChangeText={setUsernameInput}
+                onChangeText={(value) => setUsernameInput(value.substring(0, INPUT_LIMITS.nameMax))}
                 style={styles.input}
                 placeholder="username"
                 placeholderTextColor={palette.textMuted}
                 autoCapitalize="none"
                 autoCorrect={false}
+                maxLength={INPUT_LIMITS.nameMax}
               />
 
               <Text style={styles.inputLabel}>Nome completo</Text>
               <TextInput
                 value={fullNameInput}
-                onChangeText={setFullNameInput}
+                onChangeText={(value) => setFullNameInput(value.substring(0, INPUT_LIMITS.nameMax))}
                 style={styles.input}
                 placeholder="O teu nome completo"
                 placeholderTextColor={palette.textMuted}
                 autoCapitalize="words"
+                maxLength={INPUT_LIMITS.nameMax}
               />
 
               <Text style={styles.inputLabel}>Biografia</Text>
               <TextInput
                 value={bioInput}
-                onChangeText={setBioInput}
+                onChangeText={(value) => setBioInput(value.substring(0, INPUT_LIMITS.bioMax))}
                 style={[styles.input, styles.bioInput]}
                 placeholder="Partilha o teu foco de treino"
                 placeholderTextColor={palette.textMuted}
                 multiline
                 textAlignVertical="top"
+                maxLength={INPUT_LIMITS.bioMax}
               />
 
               <TouchableOpacity

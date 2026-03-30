@@ -36,6 +36,7 @@ import { addWeight, getWeightHistory, type BodyMeasurementEntry } from '@/servic
 import { getAllTimePRs, getCurrentWorkoutStreak, type AllTimePR } from '@/services/statsService';
 import { supabase } from '@/services/supabase';
 import { getErrorMessage, getUserWorkouts, type WorkoutFeedItem } from '@/services/workoutService';
+import { toSafeNumber } from '@/utils/inputValidation';
 
 const palette = Colors.dark;
 const SCREEN_BG = palette.bgPrimary;
@@ -663,10 +664,13 @@ export default function ProfileScreen() {
       return;
     }
 
-    const normalizedInput = weightInput.replace(',', '.').trim();
-    const parsedValue = Number(normalizedInput);
+    const parsedValue = toSafeNumber(weightInput, {
+      min: 0,
+      max: 500,
+      decimals: 2,
+    });
 
-    if (!normalizedInput || !Number.isFinite(parsedValue) || parsedValue <= 0) {
+    if (parsedValue === null || parsedValue <= 0) {
       Alert.alert('Validacao', 'Introduz um peso valido em kg.');
       return;
     }
@@ -1026,6 +1030,7 @@ export default function ProfileScreen() {
               placeholderTextColor={palette.textMuted}
               style={styles.quickLogInput}
               editable={!isSavingWeight}
+              maxLength={8}
             />
 
             <View style={styles.quickLogActionsRow}>

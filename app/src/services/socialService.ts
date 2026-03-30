@@ -264,27 +264,14 @@ export async function getActiveUsers(query = '', limit: number | null = null): P
   }
 
   const safeLimit = limit === null ? null : normalizeResultLimit(limit, 60);
-  const recentActiveUserIds = await getActiveUserIdsByRecentWorkouts(user.id);
-
-  if (recentActiveUserIds.length === 0) {
-    return [];
-  }
-
-  const candidatePool = recentActiveUserIds;
-  const recentIndexByUserId = new Map(candidatePool.map((id, index) => [id, index]));
+  const pattern = `%${normalizedQuery}%`;
 
   let profilesQuery = supabase
     .from('profiles')
     .select('id, username, full_name, avatar_url')
-    .in('id', candidatePool);
-
-  if (normalizedQuery.length > 0) {
-    const pattern = `%${normalizedQuery}%`;
-
-    profilesQuery = profilesQuery
-      .or(`username.ilike.${pattern},full_name.ilike.${pattern}`)
-      .order('username', { ascending: true });
-  }
+    .neq('id', user.id)
+    .or(`username.ilike.${pattern},full_name.ilike.${pattern}`)
+    .order('username', { ascending: true });
 
   if (safeLimit !== null) {
     profilesQuery = profilesQuery.limit(safeLimit);
@@ -312,11 +299,15 @@ export async function getActiveUsers(query = '', limit: number | null = null): P
     relation: relationByUserId.get(candidate.id) ?? 'none',
   }));
 
-  if (normalizedQuery.length > 0) {
+  const recentActiveUserIds = await getActiveUserIdsByRecentWorkouts(user.id);
+
+  if (recentActiveUserIds.length === 0) {
     return results;
   }
 
-  const sortedResults = results.sort((a, b) => {
+  const recentIndexByUserId = new Map(recentActiveUserIds.map((id, index) => [id, index]));
+
+  return results.sort((a, b) => {
     const aIndex = recentIndexByUserId.get(a.id) ?? Number.MAX_SAFE_INTEGER;
     const bIndex = recentIndexByUserId.get(b.id) ?? Number.MAX_SAFE_INTEGER;
 
@@ -326,12 +317,6 @@ export async function getActiveUsers(query = '', limit: number | null = null): P
 
     return a.username.localeCompare(b.username);
   });
-
-  if (safeLimit !== null) {
-    return sortedResults.slice(0, safeLimit);
-  }
-
-  return sortedResults;
 }
 
 export async function sendFriendRequest(userId: string): Promise<FriendRequestRow> {

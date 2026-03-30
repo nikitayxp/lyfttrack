@@ -129,7 +129,9 @@ export function WebsiteExperience() {
           <motion.div className="minimal-actions" variants={heroItemVariants}>
             <motion.a
               className="minimal-cta"
-              href="#como-funciona"
+              href="https://lyfttrack-app.vercel.app"
+              target="_blank"
+              rel="noopener noreferrer"
               whileHover={{
                 scale: 1.045,
                 y: -1,

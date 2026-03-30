@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
+import {
+  Platform,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+  type ViewStyle,
+} from 'react-native';
 import { router, Stack, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Colors } from '@/constants/theme';
@@ -8,6 +14,15 @@ import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-c
 import type { Session } from '@supabase/supabase-js';
 
 const palette = Colors.dark;
+
+/** Largura mínima (px) para mostrar o mockup de telemóvel na Web; ≤ isto = app a fullscreen como no device. */
+const DESKTOP_WEB_MOCKUP_MIN_WIDTH = 768;
+
+/** react-native-web aceita `vh`; o tipo `DimensionValue` do RN ainda não inclui esta string. */
+const webViewportFill: ViewStyle = {
+  width: '100%',
+  minHeight: '100vh' as ViewStyle['minHeight'],
+};
 
 const styles = StyleSheet.create({
   desktopBackground: {
@@ -33,7 +48,8 @@ const styles = StyleSheet.create({
 
 export default function RootLayout() {
   const { width } = useWindowDimensions();
-  const isDesktopWeb = Platform.OS === 'web' && width > 768;
+  const isDesktopWeb =
+    Platform.OS === 'web' && width > DESKTOP_WEB_MOCKUP_MIN_WIDTH;
 
   const segments = useSegments();
   const segmentsRef = useRef<string[]>(segments);
@@ -119,7 +135,7 @@ export default function RootLayout() {
 
   if (isDesktopWeb) {
     return (
-      <View style={styles.desktopBackground}>
+      <View style={[styles.desktopBackground, Platform.OS === 'web' && webViewportFill]}>
         <View style={styles.deviceMockup}>
           <StatusBar style="light" />
           {layout}
@@ -129,7 +145,12 @@ export default function RootLayout() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#020617' }}>
+    <View
+      style={[
+        { flex: 1, backgroundColor: '#020617' },
+        Platform.OS === 'web' && webViewportFill,
+      ]}
+    >
       {layout}
       <StatusBar style="light" />
     </View>

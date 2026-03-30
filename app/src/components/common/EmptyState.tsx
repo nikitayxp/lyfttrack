@@ -62,19 +62,19 @@ export function EmptyState({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 16,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: '#111111',
-    paddingHorizontal: 18,
-    paddingVertical: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   iconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 4,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: '#000000',
@@ -84,8 +84,8 @@ const styles = StyleSheet.create({
   },
   title: {
     color: palette.textPrimary,
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '900',
     textAlign: 'center',
   },
   description: {
@@ -96,9 +96,9 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   actionButton: {
-    marginTop: 14,
-    minHeight: 40,
-    borderRadius: 12,
+    marginTop: 12,
+    minHeight: 34,
+    borderRadius: 4,
     backgroundColor: palette.accent,
     alignItems: 'center',
     justifyContent: 'center',

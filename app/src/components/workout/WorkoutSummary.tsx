@@ -8,10 +8,9 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Colors } from '@/constants/Colors';
 
-const SCREEN_BG = '#050A12';
-const CARD_BG = '#111827';
-const MUTED_TEXT = '#94A3B8';
+const palette = Colors.dark;
 
 type WorkoutSummaryProps = {
   visible: boolean;
@@ -58,13 +57,16 @@ export function WorkoutSummary({
       <SafeAreaView style={styles.screen} edges={['top', 'left', 'right', 'bottom']}>
         <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
           <View style={styles.heroWrap}>
-            <Text style={styles.heroTitle}>Workout Complete! 🎉</Text>
-            <Text style={styles.heroSubtitle}>Great consistency. Your session is now locked in.</Text>
+            <View style={styles.heroIconWrap}>
+              <Ionicons name="checkmark-circle" size={18} color={palette.accent} />
+            </View>
+            <Text style={styles.heroTitle}>TREINO CONCLUIDO</Text>
+            <Text style={styles.heroSubtitle}>Sessao guardada. Mantem o ritmo e continua consistente.</Text>
           </View>
 
           <View style={styles.metricRow}>
             <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>Time</Text>
+              <Text style={styles.metricLabel}>Tempo</Text>
               <Text style={styles.metricValue}>{formatDuration(durationSeconds)}</Text>
             </View>
 
@@ -74,20 +76,20 @@ export function WorkoutSummary({
             </View>
 
             <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>Sets</Text>
+              <Text style={styles.metricLabel}>Series</Text>
               <Text style={styles.metricValue}>{completedSetCount}</Text>
             </View>
           </View>
 
           <View style={styles.exercisesCard}>
-            <Text style={styles.exercisesTitle}>Exercises</Text>
+            <Text style={styles.exercisesTitle}>Exercicios</Text>
 
             {exerciseNames.length === 0 ? (
-              <Text style={styles.emptyText}>No completed exercises in this session.</Text>
+              <Text style={styles.emptyText}>Sem exercicios concluidos nesta sessao.</Text>
             ) : (
               exerciseNames.map((exerciseName, index) => (
                 <View key={`${exerciseName}-${index}`} style={styles.exerciseRow}>
-                  <Ionicons name="barbell-outline" size={16} color={MUTED_TEXT} />
+                  <Ionicons name="barbell-outline" size={16} color={palette.textMuted} />
                   <Text style={styles.exerciseName}>{exerciseName}</Text>
                 </View>
               ))
@@ -97,7 +99,8 @@ export function WorkoutSummary({
 
         <View style={styles.ctaWrap}>
           <TouchableOpacity style={styles.ctaButton} activeOpacity={0.9} onPress={onShareAndFinish}>
-            <Text style={styles.ctaText}>Share & Finish</Text>
+            <Ionicons name="share-social-outline" size={16} color="#FFFFFF" />
+            <Text style={styles.ctaText}>Partilhar e terminar</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -108,78 +111,90 @@ export function WorkoutSummary({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: SCREEN_BG,
+    backgroundColor: palette.bgPrimary,
   },
   content: {
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 18,
-    paddingTop: 26,
-    paddingBottom: 24,
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 20,
   },
   heroWrap: {
-    marginBottom: 18,
+    marginBottom: 14,
+  },
+  heroIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
   },
   heroTitle: {
-    color: '#FFFFFF',
-    fontSize: 34,
+    color: palette.textPrimary,
+    fontSize: 30,
     fontWeight: '900',
-    letterSpacing: 0.2,
-    marginBottom: 6,
+    letterSpacing: 0.3,
+    marginBottom: 5,
   },
   heroSubtitle: {
-    color: '#B7C4D8',
-    fontSize: 15,
-    lineHeight: 22,
+    color: palette.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600',
   },
   metricRow: {
     flexDirection: 'row',
-    columnGap: 8,
-    marginBottom: 14,
+    columnGap: 6,
+    marginBottom: 12,
   },
   metricCard: {
     flex: 1,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#253041',
-    backgroundColor: CARD_BG,
+    borderColor: palette.border,
+    backgroundColor: palette.surface,
     paddingHorizontal: 10,
-    paddingVertical: 12,
-    minHeight: 92,
+    paddingVertical: 10,
+    minHeight: 82,
     justifyContent: 'space-between',
   },
   metricLabel: {
-    color: MUTED_TEXT,
-    fontSize: 12,
+    color: palette.textMuted,
+    fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.35,
   },
   metricValue: {
-    color: '#FFFFFF',
-    fontSize: 18,
+    color: palette.textPrimary,
+    fontSize: 17,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
   exercisesCard: {
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#253041',
-    backgroundColor: CARD_BG,
+    borderColor: palette.border,
+    backgroundColor: palette.surface,
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
   exercisesTitle: {
-    color: '#FFFFFF',
-    fontSize: 18,
+    color: palette.textPrimary,
+    fontSize: 16,
     fontWeight: '800',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   emptyText: {
-    color: MUTED_TEXT,
-    fontSize: 14,
-    lineHeight: 20,
+    color: palette.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
   },
   exerciseRow: {
     flexDirection: 'row',
@@ -187,37 +202,41 @@ const styles = StyleSheet.create({
     columnGap: 8,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#1F2937',
-    backgroundColor: '#0D1624',
+    borderColor: palette.border,
+    backgroundColor: '#0A0A0A',
     paddingHorizontal: 10,
-    paddingVertical: 10,
-    marginBottom: 8,
+    paddingVertical: 9,
+    marginBottom: 7,
   },
   exerciseName: {
     flex: 1,
-    color: '#E5EDF9',
+    color: palette.textSecondary,
     fontSize: 14,
     fontWeight: '600',
   },
   ctaWrap: {
     borderTopWidth: 1,
-    borderTopColor: '#1F2937',
-    backgroundColor: SCREEN_BG,
-    paddingHorizontal: 18,
-    paddingTop: 12,
+    borderTopColor: palette.border,
+    backgroundColor: palette.bgPrimary,
+    paddingHorizontal: 16,
+    paddingTop: 10,
     paddingBottom: 16,
   },
   ctaButton: {
-    minHeight: 56,
-    borderRadius: 14,
+    minHeight: 50,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: palette.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#16A34A',
+    flexDirection: 'row',
+    columnGap: 8,
+    backgroundColor: palette.accent,
   },
   ctaText: {
     color: '#FFFFFF',
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '800',
-    letterSpacing: 0.25,
+    letterSpacing: 0.2,
   },
 });

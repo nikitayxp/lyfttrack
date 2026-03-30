@@ -38,11 +38,9 @@ import { supabase } from '@/services/supabase';
 import { getErrorMessage, getUserWorkouts, type WorkoutFeedItem } from '@/services/workoutService';
 
 const palette = Colors.dark;
-const SCREEN_BG = '#050A12';
-const CARD_BG = '#111827';
+const SCREEN_BG = palette.bgPrimary;
+const CARD_BG = palette.surface;
 const HISTORY_PAGE_SIZE = 20;
-const TROPHY_ACCENT = '#FACC15';
-const TROPHY_NEON = '#F59E0B';
 
 type FeedLikeInteractionState = {
   hasLiked: boolean;
@@ -75,7 +73,7 @@ function formatDateShort(value: string): string {
     return '--';
   }
 
-  return new Date(timestamp).toLocaleDateString('en-US', {
+  return new Date(timestamp).toLocaleDateString('pt-PT', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -89,7 +87,7 @@ function getWeightTrend(
   previous: BodyMeasurementEntry | null
 ): { trend: WeightTrend; deltaText: string } {
   if (!latest || !previous) {
-    return { trend: null, deltaText: 'Need one more entry for trend' };
+    return { trend: null, deltaText: 'Adiciona mais um registo para veres a tendencia' };
   }
 
   const delta = Number((latest.weight - previous.weight).toFixed(1));
@@ -97,20 +95,20 @@ function getWeightTrend(
   if (!Number.isFinite(delta) || delta === 0) {
     return {
       trend: 'flat',
-      deltaText: 'Stable vs previous entry',
+      deltaText: 'Estavel face ao registo anterior',
     };
   }
 
   if (delta > 0) {
     return {
       trend: 'up',
-      deltaText: `+${formatWeightKg(Math.abs(delta))} kg vs previous`,
+      deltaText: `+${formatWeightKg(Math.abs(delta))} kg face ao registo anterior`,
     };
   }
 
   return {
     trend: 'down',
-    deltaText: `-${formatWeightKg(Math.abs(delta))} kg vs previous`,
+    deltaText: `-${formatWeightKg(Math.abs(delta))} kg face ao registo anterior`,
   };
 }
 
@@ -203,7 +201,7 @@ export default function ProfileScreen() {
     const profileName = profile?.full_name?.trim() || profile?.username?.trim() || '';
     const emailName = email.split('@')[0] ?? '';
 
-    return profileName || emailName || 'Athlete';
+    return profileName || emailName || 'Atleta';
   }, [email, profile?.full_name, profile?.username]);
 
   const usernameHandle = useMemo(() => {
@@ -211,7 +209,7 @@ export default function ProfileScreen() {
       return `@${profile.username}`;
     }
 
-    return '@athlete';
+    return '@atleta';
   }, [profile?.username]);
 
   const initials = useMemo(() => initialsFromName(displayName), [displayName]);
@@ -344,7 +342,7 @@ export default function ProfileScreen() {
       setProfile(profileData);
 
       if (!resolvedUserId) {
-        throw new Error('Authenticated user id not found.');
+        throw new Error('ID do utilizador autenticado nao encontrado.');
       }
 
       await Promise.all([loadUserHistoryPage(resolvedUserId, 0, 'reset'), loadPerformanceData()]);
@@ -560,7 +558,7 @@ export default function ProfileScreen() {
       });
 
       setCommentInputValue(trimmedComment);
-      Alert.alert('Unable to add comment', getErrorMessage(error));
+      Alert.alert('Nao foi possivel adicionar o comentario', getErrorMessage(error));
     } finally {
       setIsSendingComment(false);
     }
@@ -641,7 +639,7 @@ export default function ProfileScreen() {
         return nextState;
       });
 
-      Alert.alert('Unable to update like', getErrorMessage(error));
+      Alert.alert('Nao foi possivel atualizar o gosto', getErrorMessage(error));
     }
   }, []);
 
@@ -669,7 +667,7 @@ export default function ProfileScreen() {
     const parsedValue = Number(normalizedInput);
 
     if (!normalizedInput || !Number.isFinite(parsedValue) || parsedValue <= 0) {
-      Alert.alert('Validation', 'Please enter a valid weight in kg.');
+      Alert.alert('Validacao', 'Introduz um peso valido em kg.');
       return;
     }
 
@@ -682,7 +680,7 @@ export default function ProfileScreen() {
       setIsWeightModalVisible(false);
       setWeightInput('');
     } catch (error) {
-      Alert.alert('Unable to save weight', getErrorMessage(error));
+      Alert.alert('Nao foi possivel guardar o peso', getErrorMessage(error));
     } finally {
       setIsSavingWeight(false);
     }
@@ -700,20 +698,20 @@ export default function ProfileScreen() {
         const isSharingAvailable = await Sharing.isAvailableAsync();
 
         if (!isSharingAvailable) {
-          Alert.alert('Sharing unavailable', 'Your device cannot open the native share dialog on this platform.');
+          Alert.alert('Partilha indisponivel', 'Este dispositivo nao consegue abrir o menu nativo de partilha nesta plataforma.');
           return;
         }
 
         const shotRef = trophyCardRefsByExerciseId.current[pr.exerciseId];
 
         if (!shotRef || typeof shotRef.capture !== 'function') {
-          throw new Error('Unable to capture this PR card right now.');
+          throw new Error('Nao foi possivel capturar este cartao de PR agora.');
         }
 
         const captureUri = await shotRef.capture();
 
         if (!captureUri) {
-          throw new Error('Unable to capture this PR card right now.');
+          throw new Error('Nao foi possivel capturar este cartao de PR agora.');
         }
 
         await Sharing.shareAsync(captureUri, {
@@ -722,7 +720,7 @@ export default function ProfileScreen() {
           UTI: 'public.png',
         });
       } catch (error) {
-        Alert.alert('Unable to share PR card', getErrorMessage(error));
+        Alert.alert('Nao foi possivel partilhar o cartao de PR', getErrorMessage(error));
       } finally {
         setSharingExerciseId(null);
       }
@@ -735,10 +733,10 @@ export default function ProfileScreen() {
       <View style={styles.headerWrap}>
         {profileError ? (
           <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Unable to load profile</Text>
+            <Text style={styles.errorTitle}>Nao foi possivel carregar o perfil</Text>
             <Text style={styles.errorText}>{profileError}</Text>
             <TouchableOpacity style={styles.retryButton} activeOpacity={0.88} onPress={() => void bootstrap()}>
-              <Text style={styles.retryButtonText}>Retry</Text>
+              <Text style={styles.retryButtonText}>Tentar novamente</Text>
             </TouchableOpacity>
           </View>
         ) : null}
@@ -788,20 +786,23 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.streakHeroCard}>
-          <Text style={styles.streakKicker}>Consistency Engine</Text>
-          <Text style={styles.streakHeadline}>{`🔥 ${currentWorkoutStreak} Week Streak!`}</Text>
+          <Text style={styles.streakKicker}>Consistencia semanal</Text>
+          <View style={styles.streakHeadlineRow}>
+            <Ionicons name="flame-outline" size={22} color={palette.accent} />
+            <Text style={styles.streakHeadline}>{`${currentWorkoutStreak} semanas seguidas`}</Text>
+          </View>
           <Text style={styles.streakSubtitle}>
             {currentWorkoutStreak > 0
-              ? 'You have trained every week in your active streak window.'
-              : 'Complete one workout this week to ignite your streak.'}
+              ? 'Treinaste todas as semanas durante o periodo ativo da tua streak.'
+              : 'Completa um treino esta semana para iniciar a tua streak.'}
           </Text>
         </View>
 
         <View style={styles.bodyProgressCard}>
           <View style={styles.bodyProgressHeaderRow}>
             <View style={styles.bodyProgressHeaderTextWrap}>
-              <Text style={styles.bodyProgressTitle}>Body Progress</Text>
-              <Text style={styles.bodyProgressSubtitle}>Track your bodyweight and weekly trend.</Text>
+              <Text style={styles.bodyProgressTitle}>Progresso corporal</Text>
+              <Text style={styles.bodyProgressSubtitle}>Acompanha o teu peso e tendencia semanal.</Text>
             </View>
 
             <TouchableOpacity style={styles.weightAddButton} activeOpacity={0.88} onPress={openWeightModal}>
@@ -813,7 +814,7 @@ export default function ProfileScreen() {
             <Text style={styles.bodyWeightValue}>
               {latestWeightEntry ? `${formatWeightKg(latestWeightEntry.weight)} kg` : '--'}
             </Text>
-            {latestWeightEntry ? <Text style={styles.bodyWeightMeta}>{formatDateShort(latestWeightEntry.measured_at)}</Text> : null}
+            {latestWeightEntry ? <Text style={styles.bodyWeightMeta}>{formatDateShort(latestWeightEntry.recorded_at)}</Text> : null}
           </View>
 
           <View style={styles.bodyTrendBadge}>
@@ -828,10 +829,10 @@ export default function ProfileScreen() {
               size={14}
               color={
                 weightTrend.trend === 'up'
-                  ? '#F87171'
+                  ? palette.error
                   : weightTrend.trend === 'down'
-                    ? '#22C55E'
-                    : '#CBD5E1'
+                    ? palette.success
+                    : palette.textMuted
               }
             />
             <Text style={styles.bodyTrendText}>{weightTrend.deltaText}</Text>
@@ -842,7 +843,7 @@ export default function ProfileScreen() {
           <View style={styles.sectionTitleRow}>
             <Text style={styles.sectionTitle}>Sala de Trofeus</Text>
             <View style={styles.sectionPill}>
-              <Text style={styles.sectionPillText}>PR Hall of Fame</Text>
+              <Text style={styles.sectionPillText}>Recordes pessoais</Text>
             </View>
           </View>
 
@@ -850,13 +851,13 @@ export default function ProfileScreen() {
             <SkeletonCard compact lines={3} />
           ) : performanceError ? (
             <View style={styles.historyErrorCard}>
-              <Text style={styles.historyErrorTitle}>Unable to load performance insights</Text>
+              <Text style={styles.historyErrorTitle}>Nao foi possivel carregar o resumo de performance</Text>
               <Text style={styles.historyErrorText}>{performanceError}</Text>
             </View>
           ) : allTimePrs.length === 0 ? (
             <View style={styles.statusCardCompact}>
-              <Text style={styles.statusTitle}>No trophies yet</Text>
-              <Text style={styles.statusText}>Finish a few workouts to unlock your golden PR cards.</Text>
+              <Text style={styles.statusTitle}>Sem trofeus ainda</Text>
+              <Text style={styles.statusText}>Conclui mais treinos para desbloquear os teus cartoes de recorde.</Text>
             </View>
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trophyCarouselContent}>
@@ -870,7 +871,7 @@ export default function ProfileScreen() {
                   >
                     <View style={styles.trophyCard}>
                       <View style={styles.trophyBadge}>
-                        <Ionicons name="trophy" size={14} color="#111827" />
+                        <Ionicons name="trophy" size={14} color="#FFFFFF" />
                       </View>
 
                       <Text style={styles.trophyExerciseName} numberOfLines={2}>
@@ -908,7 +909,7 @@ export default function ProfileScreen() {
 
         {historyError ? (
           <View style={styles.historyErrorCard}>
-            <Text style={styles.historyErrorTitle}>Unable to load workout history</Text>
+            <Text style={styles.historyErrorTitle}>Nao foi possivel carregar o historico de treinos</Text>
             <Text style={styles.historyErrorText}>{historyError}</Text>
           </View>
         ) : null}
@@ -945,7 +946,7 @@ export default function ProfileScreen() {
       return (
         <EmptyState
           icon="alert-circle-outline"
-          title="History unavailable"
+          title="Historico indisponivel"
           description={historyError}
           containerStyle={styles.statusCard}
           descriptionStyle={styles.statusText}
@@ -956,9 +957,9 @@ export default function ProfileScreen() {
     return (
       <EmptyState
         icon="barbell-outline"
-        title="Nenhum treino registrado"
-        description="Inicie um treino livre e desbloqueie seu historico, PRs e consistencia semanal."
-        actionLabel="Iniciar Treino Livre"
+        title="Sem treinos registados"
+        description="Inicia um treino livre para desbloquear historico, recordes e consistencia semanal."
+        actionLabel="Iniciar treino livre"
         onActionPress={handleStartFreeWorkout}
         containerStyle={styles.statusCard}
         descriptionStyle={styles.statusText}
@@ -1014,15 +1015,15 @@ export default function ProfileScreen() {
           <Pressable style={styles.quickLogDismissArea} onPress={closeWeightModal} />
 
           <View style={styles.quickLogCard}>
-            <Text style={styles.quickLogTitle}>Quick Weight Log</Text>
-            <Text style={styles.quickLogSubtitle}>Log today&apos;s bodyweight in kg.</Text>
+            <Text style={styles.quickLogTitle}>Registar peso</Text>
+            <Text style={styles.quickLogSubtitle}>Regista o teu peso corporal de hoje em kg.</Text>
 
             <TextInput
               value={weightInput}
               onChangeText={setWeightInput}
               keyboardType="decimal-pad"
               placeholder="Ex: 79.4"
-              placeholderTextColor="#6B7280"
+              placeholderTextColor={palette.textMuted}
               style={styles.quickLogInput}
               editable={!isSavingWeight}
             />
@@ -1034,7 +1035,7 @@ export default function ProfileScreen() {
                 onPress={closeWeightModal}
                 disabled={isSavingWeight}
               >
-                <Text style={styles.quickLogCancelText}>Cancel</Text>
+                <Text style={styles.quickLogCancelText}>Cancelar</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1044,9 +1045,9 @@ export default function ProfileScreen() {
                 disabled={isSavingWeight}
               >
                 {isSavingWeight ? (
-                  <ActivityIndicator size="small" color="#111827" />
+                  <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.quickLogSaveText}>Save</Text>
+                  <Text style={styles.quickLogSaveText}>Guardar</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1056,7 +1057,7 @@ export default function ProfileScreen() {
 
       <FeedCommentsModal
         visible={selectedWorkoutForComments !== null}
-        workoutName={selectedWorkoutForComments?.name ?? 'Workout'}
+        workoutName={selectedWorkoutForComments?.name ?? 'Treino'}
         comments={selectedWorkoutComments}
         isLoading={isCommentsLoading}
         isSending={isSendingComment}
@@ -1083,203 +1084,211 @@ const styles = StyleSheet.create({
     backgroundColor: SCREEN_BG,
   },
   content: {
-    paddingHorizontal: 18,
-    paddingTop: 24,
-    paddingBottom: 34,
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 18,
   },
   headerWrap: {
-    marginBottom: 4,
+    marginBottom: 2,
   },
   errorCard: {
-    borderRadius: 14,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#7F1D1D',
-    backgroundColor: '#2A1118',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 10,
+    borderColor: palette.border,
+    backgroundColor: CARD_BG,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    marginBottom: 8,
   },
   errorTitle: {
-    color: '#FCA5A5',
+    color: palette.error,
     fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 6,
+    fontWeight: '900',
+    marginBottom: 4,
   },
   errorText: {
-    color: '#FECACA',
-    fontSize: 13,
-    lineHeight: 19,
+    color: palette.textSecondary,
+    fontSize: 12,
+    lineHeight: 16,
   },
   retryButton: {
-    marginTop: 10,
-    minHeight: 38,
-    borderRadius: 12,
-    backgroundColor: '#DC2626',
+    marginTop: 8,
+    minHeight: 32,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
   },
   retryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
+    color: palette.textPrimary,
+    fontSize: 11,
+    fontWeight: '900',
+    textTransform: 'uppercase',
   },
   heroCard: {
-    borderRadius: 18,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#253041',
+    borderColor: palette.border,
     backgroundColor: CARD_BG,
-    paddingHorizontal: 16,
-    paddingVertical: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
     alignItems: 'center',
-    marginBottom: 12,
-  },
-  streakHeroCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#EA580C',
-    backgroundColor: '#30140A',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 12,
-    shadowColor: '#FB923C',
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
-  },
-  streakKicker: {
-    color: '#FDBA74',
-    fontSize: 11,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.45,
     marginBottom: 6,
   },
+  streakHeroCard: {
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: CARD_BG,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 6,
+  },
+  streakKicker: {
+    color: palette.accent,
+    fontSize: 10,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 2,
+  },
+  streakHeadlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 6,
+    marginBottom: 2,
+  },
   streakHeadline: {
-    color: '#FFEDD5',
-    fontSize: 28,
+    color: palette.textPrimary,
+    fontSize: 34,
     fontWeight: '900',
     fontVariant: ['tabular-nums'],
-    marginBottom: 4,
+    letterSpacing: -0.8,
   },
   streakSubtitle: {
-    color: '#FED7AA',
-    fontSize: 12,
-    lineHeight: 18,
-    fontWeight: '600',
+    color: palette.textMuted,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '700',
   },
   avatarFrame: {
-    width: 126,
-    height: 126,
-    borderRadius: 63,
-    borderWidth: 3,
-    borderColor: '#3B82F6',
-    backgroundColor: '#122744',
+    width: 90,
+    height: 90,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 14,
+    marginBottom: 8,
   },
   avatarImage: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 84,
+    height: 84,
+    borderRadius: 4,
   },
   avatarFallback: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 84,
+    height: 84,
+    borderRadius: 4,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#12335E',
+    backgroundColor: '#000000',
   },
   avatarFallbackText: {
-    color: '#FFFFFF',
-    fontSize: 38,
+    color: palette.textPrimary,
+    fontSize: 30,
     fontWeight: '900',
   },
   displayName: {
-    color: '#FFFFFF',
-    fontSize: 27,
+    color: palette.textPrimary,
+    fontSize: 32,
     fontWeight: '900',
-    marginBottom: 4,
+    marginBottom: 0,
+    letterSpacing: -0.9,
   },
   handle: {
-    color: '#94A3B8',
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 16,
+    color: palette.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 8,
   },
   quickActionsRow: {
     width: '100%',
     flexDirection: 'row',
-    columnGap: 8,
+    columnGap: 4,
   },
   quickActionButton: {
     flex: 1,
-    minHeight: 44,
-    borderRadius: 12,
+    minHeight: 34,
+    borderRadius: 6,
     borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    columnGap: 6,
-    paddingHorizontal: 8,
+    columnGap: 4,
+    paddingHorizontal: 6,
   },
   quickActionButtonStats: {
-    borderColor: '#3B82F6',
-    backgroundColor: '#1D4ED8',
+    borderColor: palette.accent,
+    backgroundColor: '#000000',
   },
   quickActionButtonSocial: {
-    borderColor: '#0EA5E9',
-    backgroundColor: '#0369A1',
+    borderColor: palette.border,
+    backgroundColor: '#000000',
   },
   quickActionButtonEdit: {
-    borderColor: '#6366F1',
-    backgroundColor: '#4338CA',
+    borderColor: palette.border,
+    backgroundColor: '#000000',
   },
   quickActionText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '800',
+    color: palette.textPrimary,
+    fontSize: 10,
+    fontWeight: '900',
+    textTransform: 'uppercase',
     textAlign: 'center',
   },
   bodyProgressCard: {
-    borderRadius: 16,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#2B3342',
-    backgroundColor: '#0D1624',
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    marginBottom: 12,
+    borderColor: palette.border,
+    backgroundColor: CARD_BG,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    marginBottom: 6,
   },
   bodyProgressHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
-    columnGap: 8,
+    marginBottom: 6,
+    columnGap: 6,
   },
   bodyProgressHeaderTextWrap: {
     flex: 1,
   },
   bodyProgressTitle: {
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: '800',
-    marginBottom: 2,
+    color: palette.textPrimary,
+    fontSize: 20,
+    fontWeight: '900',
+    marginBottom: 1,
   },
   bodyProgressSubtitle: {
-    color: '#94A3B8',
-    fontSize: 12,
+    color: palette.textMuted,
+    fontSize: 11,
     fontWeight: '600',
   },
   weightAddButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
+    width: 30,
+    height: 30,
+    borderRadius: 4,
     borderWidth: 1,
-    borderColor: '#2563EB',
-    backgroundColor: '#1D4ED8',
+    borderColor: palette.border,
+    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1290,67 +1299,68 @@ const styles = StyleSheet.create({
     columnGap: 10,
   },
   bodyWeightValue: {
-    color: '#FFFFFF',
-    fontSize: 30,
+    color: palette.textPrimary,
+    fontSize: 42,
     fontWeight: '900',
     fontVariant: ['tabular-nums'],
+    letterSpacing: -1,
   },
   bodyWeightMeta: {
-    color: '#94A3B8',
-    fontSize: 12,
+    color: palette.textMuted,
+    fontSize: 11,
     fontWeight: '700',
-    marginBottom: 5,
+    marginBottom: 4,
   },
   bodyTrendBadge: {
-    marginTop: 10,
+    marginTop: 6,
     alignSelf: 'flex-start',
-    borderRadius: 999,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#111B2B',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderColor: palette.border,
+    backgroundColor: '#000000',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     flexDirection: 'row',
     alignItems: 'center',
-    columnGap: 6,
+    columnGap: 5,
   },
   bodyTrendText: {
-    color: '#CBD5E1',
-    fontSize: 12,
+    color: palette.textSecondary,
+    fontSize: 11,
     fontWeight: '700',
   },
   hallWrap: {
-    marginBottom: 12,
+    marginBottom: 6,
   },
   statusCardCompact: {
-    borderRadius: 12,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#253041',
+    borderColor: palette.border,
     backgroundColor: CARD_BG,
-    minHeight: 82,
+    minHeight: 64,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   skeletonCard: {
-    borderRadius: 12,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#253041',
-    backgroundColor: '#0E1726',
-    minHeight: 110,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
+    borderColor: palette.border,
+    backgroundColor: CARD_BG,
+    minHeight: 80,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
     justifyContent: 'center',
-    rowGap: 10,
+    rowGap: 6,
   },
   skeletonCardCompact: {
-    minHeight: 82,
+    minHeight: 64,
   },
   skeletonLine: {
-    height: 10,
-    borderRadius: 999,
-    backgroundColor: '#334155',
+    height: 6,
+    borderRadius: 2,
+    backgroundColor: palette.border,
   },
   skeletonLineWide: {
     width: '88%',
@@ -1361,210 +1371,210 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   trophyCarouselContent: {
-    columnGap: 10,
-    paddingRight: 4,
+    columnGap: 6,
+    paddingRight: 2,
   },
   trophyCardShell: {
     position: 'relative',
   },
   trophyCard: {
-    width: 170,
-    borderRadius: 16,
+    width: 138,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#A16207',
-    backgroundColor: '#1F1700',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    shadowColor: '#F59E0B',
-    shadowOpacity: 0.26,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
+    borderColor: palette.border,
+    backgroundColor: CARD_BG,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   trophyBadge: {
     alignSelf: 'flex-start',
-    borderRadius: 999,
-    backgroundColor: TROPHY_ACCENT,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    marginBottom: 10,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: palette.accent,
+    backgroundColor: '#000000',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    marginBottom: 6,
   },
   trophyExerciseName: {
-    color: '#FDE68A',
-    fontSize: 15,
-    fontWeight: '800',
-    lineHeight: 20,
-    minHeight: 40,
-    marginBottom: 8,
+    color: palette.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 16,
+    minHeight: 28,
+    marginBottom: 4,
   },
   trophyValue: {
-    color: '#FEF08A',
-    fontSize: 26,
+    color: palette.textPrimary,
+    fontSize: 28,
     fontWeight: '900',
     fontVariant: ['tabular-nums'],
+    letterSpacing: -0.8,
   },
   trophyDate: {
-    marginTop: 4,
-    color: '#FDBA74',
-    fontSize: 12,
+    marginTop: 2,
+    color: palette.textMuted,
+    fontSize: 10,
     fontWeight: '700',
   },
   trophyShareButton: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 30,
-    height: 30,
-    borderRadius: 9,
+    top: 4,
+    right: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 4,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
-    backgroundColor: 'rgba(2,6,23,0.68)',
+    borderColor: palette.border,
+    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
   },
   sectionTitleRow: {
-    marginBottom: 10,
+    marginBottom: 6,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   sectionTitle: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '800',
+    color: palette.textPrimary,
+    fontSize: 32,
+    fontWeight: '900',
+    letterSpacing: -0.8,
   },
   sectionPill: {
-    borderRadius: 999,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#0D1624',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    borderColor: palette.border,
+    backgroundColor: '#000000',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
   sectionPillText: {
-    color: '#94A3B8',
-    fontSize: 11,
-    fontWeight: '700',
+    color: palette.textMuted,
+    fontSize: 10,
+    fontWeight: '800',
     textTransform: 'uppercase',
   },
   historyErrorCard: {
-    borderRadius: 12,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#7F1D1D',
-    backgroundColor: '#2A1118',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 10,
+    borderColor: palette.border,
+    backgroundColor: CARD_BG,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 6,
   },
   historyErrorTitle: {
-    color: '#FCA5A5',
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 4,
+    color: palette.error,
+    fontSize: 15,
+    fontWeight: '900',
+    marginBottom: 3,
   },
   historyErrorText: {
-    color: '#FECACA',
+    color: palette.textSecondary,
     fontSize: 12,
-    lineHeight: 18,
+    lineHeight: 16,
   },
   statusCard: {
-    borderRadius: 16,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#253041',
+    borderColor: palette.border,
     backgroundColor: CARD_BG,
-    minHeight: 110,
+    minHeight: 88,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 18,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
   },
   statusTitle: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 6,
+    color: palette.textPrimary,
+    fontSize: 14,
+    fontWeight: '900',
+    marginBottom: 3,
     textAlign: 'center',
   },
   statusText: {
-    marginTop: 8,
-    color: '#94A3B8',
-    fontSize: 13,
+    marginTop: 4,
+    color: palette.textMuted,
+    fontSize: 12,
     fontWeight: '600',
     textAlign: 'center',
-    lineHeight: 19,
+    lineHeight: 17,
   },
   footerLoadingWrap: {
-    paddingVertical: 14,
+    paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   quickLogBackdrop: {
     flex: 1,
     justifyContent: 'center',
-    backgroundColor: 'rgba(2, 6, 23, 0.78)',
-    paddingHorizontal: 18,
+    backgroundColor: palette.overlay,
+    paddingHorizontal: 12,
   },
   quickLogDismissArea: {
     ...StyleSheet.absoluteFillObject,
   },
   quickLogCard: {
-    borderRadius: 18,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#0B1320',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    borderColor: palette.border,
+    backgroundColor: CARD_BG,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
   },
   quickLogTitle: {
-    color: '#FFFFFF',
-    fontSize: 22,
+    color: palette.textPrimary,
+    fontSize: 24,
     fontWeight: '900',
-    marginBottom: 4,
+    marginBottom: 2,
+    letterSpacing: -0.8,
   },
   quickLogSubtitle: {
-    color: '#94A3B8',
-    fontSize: 13,
-    lineHeight: 19,
-    marginBottom: 12,
+    color: palette.textMuted,
+    fontSize: 11,
+    lineHeight: 16,
+    marginBottom: 8,
   },
   quickLogInput: {
-    minHeight: 48,
-    borderRadius: 14,
+    minHeight: 40,
+    borderRadius: 4,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#111827',
-    color: '#FFFFFF',
-    paddingHorizontal: 12,
-    fontSize: 18,
-    fontWeight: '700',
+    borderColor: palette.border,
+    backgroundColor: '#000000',
+    color: palette.textPrimary,
+    paddingHorizontal: 10,
+    fontSize: 20,
+    fontWeight: '900',
   },
   quickLogActionsRow: {
-    marginTop: 14,
+    marginTop: 8,
     flexDirection: 'row',
-    columnGap: 10,
+    columnGap: 6,
   },
   quickLogCancelButton: {
     flex: 1,
-    minHeight: 44,
-    borderRadius: 12,
+    minHeight: 34,
+    borderRadius: 4,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#111827',
+    borderColor: palette.border,
+    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
   },
   quickLogCancelText: {
-    color: '#CBD5E1',
-    fontSize: 14,
-    fontWeight: '700',
+    color: palette.textSecondary,
+    fontSize: 12,
+    fontWeight: '800',
   },
   quickLogSaveButton: {
     flex: 1,
-    minHeight: 44,
-    borderRadius: 12,
+    minHeight: 34,
+    borderRadius: 4,
     borderWidth: 1,
-    borderColor: TROPHY_NEON,
-    backgroundColor: TROPHY_ACCENT,
+    borderColor: palette.accent,
+    backgroundColor: palette.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1572,8 +1582,9 @@ const styles = StyleSheet.create({
     opacity: 0.75,
   },
   quickLogSaveText: {
-    color: '#111827',
-    fontSize: 14,
+    color: '#FFFFFF',
+    fontSize: 12,
     fontWeight: '900',
+    textTransform: 'uppercase',
   },
 });

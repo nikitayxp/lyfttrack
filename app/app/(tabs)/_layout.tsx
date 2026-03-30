@@ -6,19 +6,26 @@ import { Colors } from '@/constants/Colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const palette = Colors.dark;
+const WEB_MOBILE_TAB_BAR_HEIGHT = 62;
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  const isWeb = Platform.OS === 'web';
+  const nativeBottomInset = Math.max(insets.bottom, 10);
+  const tabBarHeight = isWeb
+    ? WEB_MOBILE_TAB_BAR_HEIGHT
+    : (Platform.OS === 'ios' ? 72 : 64) + nativeBottomInset;
 
   const tabBarStyle = useMemo(
     () => [
       styles.tabBar,
       {
-        height: (Platform.OS === 'ios' ? 72 : 64) + Math.max(insets.bottom, 10),
-        paddingBottom: Math.max(insets.bottom, 10),
+        height: tabBarHeight,
+        paddingBottom: isWeb ? 8 : nativeBottomInset,
+        paddingTop: isWeb ? 6 : 8,
       },
     ],
-    [insets.bottom]
+    [isWeb, nativeBottomInset, tabBarHeight]
   );
 
   return (
@@ -96,7 +103,7 @@ export default function TabLayout() {
         name="profile/edit"
         options={{
           href: null,
-          title: 'Edit Profile',
+          title: 'Editar perfil',
         }}
       />
       <Tabs.Screen
@@ -129,7 +136,6 @@ const styles = StyleSheet.create({
     backgroundColor: palette.tabBarBackground,
     borderTopColor: palette.border,
     borderTopWidth: 1,
-    paddingTop: 8,
   },
   tabLabel: {
     fontSize: 11,
@@ -140,14 +146,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   workoutIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 52,
+    height: 52,
+    borderRadius: 14,
     backgroundColor: palette.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -24,
-    borderWidth: 4,
+    marginTop: -20,
+    borderWidth: 3,
     borderColor: palette.tabBarBackground,
   },
   workoutIconContainerFocused: {

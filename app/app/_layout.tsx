@@ -21,10 +21,25 @@ const DESKTOP_WEB_MOCKUP_MIN_WIDTH = 768;
 /** react-native-web aceita `vh`; o tipo `DimensionValue` do RN ainda não inclui esta string. */
 const webViewportFill: ViewStyle = {
   width: '100%',
-  minHeight: '100vh' as ViewStyle['minHeight'],
+  height: '100%' as ViewStyle['height'],
+  minHeight: '100dvh' as ViewStyle['minHeight'],
 };
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  safeArea: {
+    flex: 1,
+  },
+  safeAreaWeb: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    minHeight: '100%',
+    backgroundColor: '#000000',
+  },
   desktopBackground: {
     flex: 1,
     backgroundColor: '#000000',
@@ -44,8 +59,9 @@ const styles = StyleSheet.create({
 
 export default function RootLayout() {
   const { width } = useWindowDimensions();
-  const isDesktopWeb =
-    Platform.OS === 'web' && width > DESKTOP_WEB_MOCKUP_MIN_WIDTH;
+  const isWeb = Platform.OS === 'web';
+  const isDesktopWeb = isWeb && width > DESKTOP_WEB_MOCKUP_MIN_WIDTH;
+  const safeAreaStyle = isWeb ? styles.safeAreaWeb : styles.safeArea;
 
   const segments = useSegments();
   const segmentsRef = useRef<string[]>(segments);
@@ -53,6 +69,64 @@ export default function RootLayout() {
   useEffect(() => {
     segmentsRef.current = segments;
   }, [segments]);
+
+  useEffect(() => {
+    if (!isWeb || typeof document === 'undefined') {
+      return;
+    }
+
+    const html = document.documentElement;
+    const body = document.body;
+    const root = document.getElementById('root');
+
+    const previous = {
+      htmlHeight: html.style.height,
+      htmlMinHeight: html.style.minHeight,
+      bodyHeight: body.style.height,
+      bodyMinHeight: body.style.minHeight,
+      bodyMargin: body.style.margin,
+      bodyBackground: body.style.backgroundColor,
+      rootHeight: root?.style.height ?? '',
+      rootMinHeight: root?.style.minHeight ?? '',
+      rootDisplay: root?.style.display ?? '',
+      rootFlexDirection: root?.style.flexDirection ?? '',
+      rootBackground: root?.style.backgroundColor ?? '',
+    };
+
+    html.style.height = '100%';
+    html.style.minHeight = '100%';
+
+    body.style.height = '100%';
+    body.style.minHeight = '100%';
+    body.style.margin = '0';
+    body.style.backgroundColor = '#000000';
+
+    if (root) {
+      root.style.height = '100%';
+      root.style.minHeight = '100%';
+      root.style.display = 'flex';
+      root.style.flexDirection = 'column';
+      root.style.backgroundColor = '#000000';
+    }
+
+    return () => {
+      html.style.height = previous.htmlHeight;
+      html.style.minHeight = previous.htmlMinHeight;
+
+      body.style.height = previous.bodyHeight;
+      body.style.minHeight = previous.bodyMinHeight;
+      body.style.margin = previous.bodyMargin;
+      body.style.backgroundColor = previous.bodyBackground;
+
+      if (root) {
+        root.style.height = previous.rootHeight;
+        root.style.minHeight = previous.rootMinHeight;
+        root.style.display = previous.rootDisplay;
+        root.style.flexDirection = previous.rootFlexDirection;
+        root.style.backgroundColor = previous.rootBackground;
+      }
+    };
+  }, [isWeb]);
 
   const redirectForSession = useCallback((session: Session | null) => {
     const currentSegments = segmentsRef.current;
@@ -99,7 +173,7 @@ export default function RootLayout() {
   }, [redirectForSession]);
 
   const layout = (
-    <SafeAreaProvider style={{ flex: 1 }} initialMetrics={initialWindowMetrics}>
+    <SafeAreaProvider style={safeAreaStyle} initialMetrics={isWeb ? undefined : initialWindowMetrics}>
       <Stack
         screenOptions={{
           headerShown: false,
@@ -131,7 +205,7 @@ export default function RootLayout() {
 
   if (isDesktopWeb) {
     return (
-      <View style={[styles.desktopBackground, Platform.OS === 'web' && webViewportFill]}>
+      <View style={[styles.desktopBackground, isWeb && webViewportFill]}>
         <View style={styles.deviceMockup}>
           <StatusBar style="light" />
           {layout}
@@ -141,12 +215,7 @@ export default function RootLayout() {
   }
 
   return (
-    <View
-      style={[
-        { flex: 1, backgroundColor: '#000000' },
-        Platform.OS === 'web' && webViewportFill,
-      ]}
-    >
+    <View style={[styles.root, isWeb && webViewportFill]}>
       {layout}
       <StatusBar style="light" />
     </View>

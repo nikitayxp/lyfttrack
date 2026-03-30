@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { router, Stack, useSegments } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { Colors } from '@/constants/theme';
 import { supabase } from '@/services/supabase';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
@@ -7,7 +9,32 @@ import type { Session } from '@supabase/supabase-js';
 
 const palette = Colors.dark;
 
+const styles = StyleSheet.create({
+  desktopBackground: {
+    flex: 1,
+    backgroundColor: '#020617',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deviceMockup: {
+    width: 390,
+    height: 844,
+    backgroundColor: '#000',
+    borderRadius: 40,
+    overflow: 'hidden',
+    borderWidth: 10,
+    borderColor: '#1E293B',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.5,
+    shadowRadius: 30,
+  },
+});
+
 export default function RootLayout() {
+  const { width } = useWindowDimensions();
+  const isDesktopWeb = Platform.OS === 'web' && width > 768;
+
   const segments = useSegments();
   const segmentsRef = useRef<string[]>(segments);
 
@@ -59,8 +86,8 @@ export default function RootLayout() {
     };
   }, [redirectForSession]);
 
-  return (
-    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+  const layout = (
+    <SafeAreaProvider style={{ flex: 1 }} initialMetrics={initialWindowMetrics}>
       <Stack
         screenOptions={{
           headerShown: false,
@@ -88,5 +115,23 @@ export default function RootLayout() {
         />
       </Stack>
     </SafeAreaProvider>
+  );
+
+  if (isDesktopWeb) {
+    return (
+      <View style={styles.desktopBackground}>
+        <View style={styles.deviceMockup}>
+          <StatusBar style="light" />
+          {layout}
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ flex: 1, backgroundColor: '#020617' }}>
+      {layout}
+      <StatusBar style="light" />
+    </View>
   );
 }

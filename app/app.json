@@ -7,11 +7,14 @@
     "icon": "./assets/images/icon.png",
     "scheme": "lyfttrack",
     "userInterfaceStyle": "dark",
+    "backgroundColor": "#020617",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
     },
     "android": {
+      "userInterfaceStyle": "dark",
+      "backgroundColor": "#020617",
       "package": "com.lyfttrack.mobile",
       "versionCode": 1,
       "adaptiveIcon": {
@@ -41,9 +44,9 @@
           "image": "./assets/images/splash.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#0F172A",
+          "backgroundColor": "#020617",
           "dark": {
-            "backgroundColor": "#0F172A"
+            "backgroundColor": "#020617"
           }
         }
       ]

@@ -57,6 +57,7 @@ export function AuthAmbientGlow({ children }: AuthAmbientGlowProps) {
         <Animated.View style={[styles.orbBase, styles.orbOne, orbOneStyle]} />
         <Animated.View style={[styles.orbBase, styles.orbTwo, orbTwoStyle]} />
       </View>
+
       {children}
     </View>
   );

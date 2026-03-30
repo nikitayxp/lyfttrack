@@ -16,7 +16,7 @@ const bebasNeue = Bebas_Neue({
 export const metadata: Metadata = {
   title: "LyftTrack - App Sample Website",
   description:
-    "Official LyftTrack website experience with app showcase, bilingual blog, theme switch and interactive training previews.",
+    "Official LyftTrack website experience with app showcase, bilingual blog and interactive training previews.",
   keywords: ["fitness", "workout tracker", "gym app", "LyftTrack", "blog", "training"],
 };
 
@@ -26,7 +26,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="pt-PT">
       <body className={`${spaceGrotesk.variable} ${bebasNeue.variable} antialiased`}>
         {children}
       </body>

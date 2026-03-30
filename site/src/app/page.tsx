@@ -1,5 +1,5 @@
-import { WebsiteExperience } from '@/components/home/website-experience';
+import { LandingShell } from '@/components/home/landing-shell';
 
 export default function HomePage() {
-  return <WebsiteExperience />;
+  return <LandingShell />;
 }

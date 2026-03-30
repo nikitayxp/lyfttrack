@@ -1,35 +1,57 @@
 @import "tailwindcss";
 
 :root {
-  --bg-page: #050a12;
-  --bg-surface: #101b2d;
-  --bg-elevated: #162640;
-  --text-primary: #f7fbff;
-  --text-secondary: #b9cbe6;
-  --text-muted: #87a0c4;
-  --accent: #007aff;
-  --accent-strong: #1d4ed8;
-  --accent-soft: rgba(0, 122, 255, 0.18);
-  --border: #263954;
-  --border-strong: #355178;
-  --focus-ring: rgba(56, 154, 255, 0.35);
+  --bg-page: #000000;
+  --bg-surface: #111111;
+  --bg-elevated: #18181b;
+  --text-primary: #f8fafc;
+  --text-secondary: #d4d4d8;
+  --text-muted: #a1a1aa;
+  --accent: #3b82f6;
+  --accent-strong: #2563eb;
+  --accent-soft: rgba(59, 130, 246, 0.18);
+  --border: #27272a;
+  --border-strong: #3f3f46;
+  --focus-ring: rgba(59, 130, 246, 0.32);
   --shadow: 0 16px 36px rgba(0, 0, 0, 0.35);
-}
 
-:root[data-theme='light'] {
-  --bg-page: #f2f7ff;
-  --bg-surface: #ffffff;
-  --bg-elevated: #e9f2ff;
-  --text-primary: #0b1a33;
-  --text-secondary: #2a436a;
-  --text-muted: #4d6a96;
-  --accent: #007aff;
-  --accent-strong: #1d4ed8;
-  --accent-soft: rgba(0, 122, 255, 0.12);
-  --border: #c7d8f3;
-  --border-strong: #94b4e5;
-  --focus-ring: rgba(0, 122, 255, 0.22);
-  --shadow: 0 16px 30px rgba(46, 85, 145, 0.15);
+  --hero-bg: #000000;
+  --hero-bg-elevated: #111111;
+  --hero-grid-line: rgba(255, 255, 255, 0.04);
+  --hero-text-primary: #f8fafc;
+  --hero-text-muted: #d4d4d8;
+  --hero-text-soft: #a1a1aa;
+  --hero-text-gradient-start: #ffffff;
+  --hero-text-gradient-end: #d4d4d8;
+  --hero-text-card-gradient-end: #a1a1aa;
+  --hero-card-start: #111111;
+  --hero-card-end: #000000;
+  --hero-card-border: rgba(255, 255, 255, 0.06);
+  --hero-card-sheen: rgba(59, 130, 246, 0.12);
+  --hero-bezel: #111111;
+  --hero-bezel-stroke: #3f3f46;
+  --hero-screen: #000000;
+  --hero-hardware-start: #3f3f46;
+  --hero-hardware-end: #18181b;
+  --hero-glare: rgba(255, 255, 255, 0.08);
+  --hero-widget-top: rgba(255, 255, 255, 0.04);
+  --hero-widget-bottom: rgba(255, 255, 255, 0.01);
+  --hero-widget-border: rgba(255, 255, 255, 0.05);
+  --hero-badge-top: rgba(17, 17, 17, 0.88);
+  --hero-badge-bottom: rgba(0, 0, 0, 0.7);
+  --hero-badge-border: rgba(255, 255, 255, 0.08);
+  --hero-ring-track: rgba(255, 255, 255, 0.05);
+  --hero-accent: #3b82f6;
+  --hero-accent-strong: #2563eb;
+  --hero-table-head: #a1a1aa;
+  --hero-cell: #ffffff;
+  --hero-secondary-btn-bg: #111111;
+  --hero-secondary-btn-border: #27272a;
+  --hero-secondary-btn-text: #ffffff;
+  --hero-header-bg: rgba(0, 0, 0, 0.55);
+  --hero-header-border: rgba(255, 255, 255, 0.14);
+  --hero-header-pill-bg: rgba(17, 17, 17, 0.82);
+  --hero-header-text: #f8fafc;
 }
 
 * {
@@ -48,8 +70,8 @@ html {
 
 body {
   background:
-    radial-gradient(circle at 14% -8%, rgba(0, 122, 255, 0.23), transparent 34%),
-    radial-gradient(circle at 88% 12%, rgba(29, 78, 216, 0.15), transparent 38%),
+    radial-gradient(circle at 14% -8%, color-mix(in srgb, var(--accent) 26%, transparent), transparent 34%),
+    radial-gradient(circle at 88% 12%, color-mix(in srgb, var(--accent-strong) 16%, transparent), transparent 38%),
     var(--bg-page);
   color: var(--text-primary);
   font-family: var(--font-space-grotesk), system-ui, -apple-system, sans-serif;

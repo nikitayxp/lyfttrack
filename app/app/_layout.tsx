@@ -11,6 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Colors } from '@/constants/theme';
 import { supabase } from '@/services/supabase';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
+import NeuralBackground from '@/components/ui/flow-field-background';
 import type { Session } from '@supabase/supabase-js';
 
 const palette = Colors.dark;
@@ -42,9 +43,15 @@ const styles = StyleSheet.create({
   },
   desktopBackground: {
     flex: 1,
+    position: 'relative',
     backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  desktopFlowLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
   },
   deviceMockup: {
     width: 390,
@@ -54,6 +61,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 10,
     borderColor: '#27272A',
+    zIndex: 10,
   },
 });
 
@@ -61,9 +69,9 @@ export default function RootLayout() {
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
   const isDesktopWeb = isWeb && width > DESKTOP_WEB_MOCKUP_MIN_WIDTH;
-  const safeAreaStyle = isWeb ? styles.safeAreaWeb : styles.safeArea;
-
   const segments = useSegments();
+  const inAuthGroup = segments[0] === '(auth)';
+  const safeAreaStyle = isWeb ? styles.safeAreaWeb : styles.safeArea;
   const segmentsRef = useRef<string[]>(segments);
 
   useEffect(() => {
@@ -206,6 +214,16 @@ export default function RootLayout() {
   if (isDesktopWeb) {
     return (
       <View style={[styles.desktopBackground, isWeb && webViewportFill]}>
+        {inAuthGroup ? (
+          <View pointerEvents="none" style={styles.desktopFlowLayer}>
+            <NeuralBackground
+              color="#3B82F6"
+              trailOpacity={0.1}
+              speed={0.35}
+            />
+          </View>
+        ) : null}
+
         <View style={styles.deviceMockup}>
           <StatusBar style="light" />
           {layout}

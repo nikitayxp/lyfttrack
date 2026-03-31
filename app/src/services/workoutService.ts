@@ -136,6 +136,7 @@ export type WorkoutFeedItem = Pick<
   likes_count: number;
   comments_count: number;
   has_liked: boolean;
+  latest_comment?: { content: string; author: string } | null;
 };
 
 export type WorkoutFeedExerciseSet = Pick<Tables<'sets'>, 'id' | 'set_number' | 'weight' | 'reps' | 'rir'> & {
@@ -1403,6 +1404,24 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
 
   const aggregateByWorkout = aggregateWorkoutFeedSets((allSets as RawWorkoutFeedSetRow[] | null) ?? []);
 
+  const { data: latestCommentsData } = await supabase
+    .from('workout_comments')
+    .select('workout_id, content, profiles(username)')
+    .in('workout_id', workoutIds)
+    .order('created_at', { ascending: false });
+
+  const latestCommentByWorkout = new Map<string, { content: string; author: string }>();
+
+  for (const comment of latestCommentsData ?? []) {
+    const wId = normalizeOptionalId(comment.workout_id);
+    if (!wId || latestCommentByWorkout.has(wId)) continue;
+    
+    latestCommentByWorkout.set(wId, {
+      content: comment.content,
+      author: (comment.profiles as any)?.username ?? 'Atleta',
+    });
+  }
+
   return rawWorkouts.map((workout) => {
     const aggregate = aggregateByWorkout.get(workout.id);
 
@@ -1421,6 +1440,7 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
       likes_count: extractRelationCount(workout.workout_likes),
       comments_count: extractRelationCount(workout.workout_comments),
       has_liked: likedWorkoutIds.has(workout.id),
+      latest_comment: latestCommentByWorkout.get(workout.id) ?? null,
     };
   });
 }

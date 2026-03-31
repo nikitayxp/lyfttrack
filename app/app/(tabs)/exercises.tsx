@@ -24,6 +24,15 @@ type ExerciseRow = Tables<'exercises'>;
 const palette = Colors.dark;
 const cardLayoutTransition = LinearTransition.springify().damping(16).stiffness(180);
 
+const MUSCLE_GROUPS = [
+  { id: 'Peito', label: 'Peito', color: '#EF4444' },
+  { id: 'Costas', label: 'Costas', color: '#3B82F6' },
+  { id: 'Pernas', label: 'Pernas', color: '#10B981' },
+  { id: 'Braços', label: 'Braços', color: '#F59E0B' },
+  { id: 'Ombros', label: 'Ombros', color: '#8B5CF6' },
+  { id: 'Core', label: 'Core', color: '#EC4899' },
+];
+
 export default function ExercisesScreen() {
   const isWeb = Platform.OS === 'web';
   const [exercises, setExercises] = useState<ExerciseRow[]>([]);
@@ -124,6 +133,16 @@ export default function ExercisesScreen() {
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
   }, [query, exercises]);
 
+  const ModalWrapper = isWeb ? View : Modal;
+  const modalProps = isWeb 
+    ? { style: [StyleSheet.absoluteFill, { zIndex: 9999 }] }
+    : {
+        visible: isCreateModalVisible,
+        transparent: true,
+        animationType: 'slide' as const,
+        onRequestClose: () => setIsCreateModalVisible(false),
+      };
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Animated.View
@@ -198,12 +217,8 @@ export default function ExercisesScreen() {
         ))
       )}
 
-      <Modal
-        visible={isCreateModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setIsCreateModalVisible(false)}
-      >
+      {(!isCreateModalVisible && isWeb) ? null : (
+      <ModalWrapper {...modalProps}>
         <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
           <Pressable style={styles.modalDismissArea} onPress={() => setIsCreateModalVisible(false)} />
 
@@ -220,15 +235,26 @@ export default function ExercisesScreen() {
               autoCapitalize="words"
               maxLength={INPUT_LIMITS.nameMax}
             />
-            <TextInput
-              value={muscleGroupInput}
-              onChangeText={(value) => setMuscleGroupInput(value.substring(0, INPUT_LIMITS.nameMax))}
-              placeholder="Muscle Group"
-              placeholderTextColor={palette.textMuted}
-              style={styles.modalInput}
-              autoCapitalize="words"
-              maxLength={INPUT_LIMITS.nameMax}
-            />
+            <Text style={styles.modalSectionTitle}>Grupo Muscular</Text>
+            <View style={styles.muscleGrid}>
+              {MUSCLE_GROUPS.map((mg) => {
+                const isSelected = muscleGroupInput === mg.id;
+                return (
+                  <TouchableOpacity
+                    key={mg.id}
+                    style={[
+                      styles.muscleChip, 
+                      isSelected && { borderColor: mg.color, backgroundColor: `${mg.color}15` }
+                    ]}
+                    onPress={() => setMuscleGroupInput(mg.id)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.muscleColorDot, { backgroundColor: mg.color }]} />
+                    <Text style={[styles.muscleChipText, isSelected && { color: mg.color, fontWeight: '700' }]}>{mg.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
             <TextInput
               value={equipmentInput}
               onChangeText={(value) => setEquipmentInput(value.substring(0, INPUT_LIMITS.nameMax))}
@@ -263,7 +289,8 @@ export default function ExercisesScreen() {
             </View>
           </View>
         </View>
-      </Modal>
+      </ModalWrapper>
+      )}
     </ScrollView>
   );
 }
@@ -462,6 +489,43 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
     marginBottom: 14,
+  },
+  modalSectionTitle: {
+    color: palette.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+    marginTop: 4,
+    marginLeft: 2,
+  },
+  muscleGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  muscleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: palette.inputBorder,
+    backgroundColor: palette.inputBackground,
+  },
+  muscleColorDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  muscleChipText: {
+    color: palette.textSecondary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   modalInput: {
     backgroundColor: palette.inputBackground,

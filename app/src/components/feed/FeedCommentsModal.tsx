@@ -95,8 +95,17 @@ export function FeedCommentsModal({
     );
   }, [errorMessage, isLoading, onRetry]);
 
+  if (!visible && isWeb) {
+    return null;
+  }
+
+  const ModalWrapper = isWeb ? View : Modal;
+  const wrapperProps = isWeb 
+    ? { style: [StyleSheet.absoluteFill, { zIndex: 9999, backgroundColor: SHEET_BG }] }
+    : { visible, animationType: 'slide' as const, presentationStyle: 'fullScreen' as const, onRequestClose: onClose };
+
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+    <ModalWrapper {...wrapperProps}>
       <KeyboardAvoidingView
         style={[styles.screen, isWeb && styles.screenWeb]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -171,7 +180,7 @@ export function FeedCommentsModal({
           </View>
         </View>
       </KeyboardAvoidingView>
-    </Modal>
+    </ModalWrapper>
   );
 }
 

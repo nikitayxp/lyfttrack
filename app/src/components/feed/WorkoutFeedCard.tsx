@@ -162,46 +162,13 @@ export function WorkoutFeedCard({
           </View>
         </View>
 
-        {workout.exerciseGroups.length > 0 ? (
-          <View style={styles.exerciseGroupsWrap}>
-            {workout.exerciseGroups.map((group) => (
-              <View
-                key={`${workout.id}-${group.exercise_id ?? group.exercise_name}`}
-                style={styles.exerciseGroupCard}
-              >
-                <Text style={styles.exerciseGroupName}>{group.exercise_name}</Text>
-
-                <View style={styles.setHeaderRow}>
-                  <Text style={[styles.setHeaderText, styles.setColumnNumber]}>SET</Text>
-                  <Text style={[styles.setHeaderText, styles.setColumnWeight]}>KG</Text>
-                  <Text style={[styles.setHeaderText, styles.setColumnReps]}>REPS</Text>
-                  <Text style={[styles.setHeaderText, styles.setColumnRir]}>RIR</Text>
-                </View>
-
-                {group.sets.map((setItem) => (
-                  <View key={setItem.id} style={styles.setRow}>
-                    <Text style={[styles.setCellNumber, styles.setColumnNumber]}>
-                      {formatSetNumber(setItem.set_number)}
-                    </Text>
-                    <Text style={[styles.setCellWeight, styles.setColumnWeight]}>
-                      {formatSetWeight(setItem.weight)}
-                    </Text>
-                    <Text style={[styles.setCellReps, styles.setColumnReps]}>
-                      {formatSetReps(setItem.reps)}
-                    </Text>
-                    <Text style={[styles.setCellRir, styles.setColumnRir]}>
-                      {formatSetRir(setItem.rir)}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            ))}
+        {workout.exerciseNames.length > 0 ? (
+          <View style={styles.exercisePreviewWrap}>
+            <Text style={styles.exercisePreviewText} numberOfLines={2}>
+              {workout.exerciseNames.join(' • ')}
+            </Text>
           </View>
-        ) : (
-          <View style={styles.noSetsWrap}>
-            <Text style={styles.noSetsText}>Sem detalhe de sets para este treino.</Text>
-          </View>
-        )}
+        ) : null}
       </TouchableOpacity>
 
       <View style={styles.interactionRow}>
@@ -233,6 +200,13 @@ export function WorkoutFeedCard({
           <Text style={styles.interactionText}>{resolvedCommentsCount}</Text>
         </TouchableOpacity>
       </View>
+
+      {('latest_comment' in workout && (workout as any).latest_comment) ? (
+        <TouchableOpacity style={styles.latestCommentWrap} activeOpacity={0.85} onPress={onOpenComments}>
+          <Text style={styles.latestCommentAuthor}>{(workout as any).latest_comment.author}</Text>
+          <Text style={styles.latestCommentContent} numberOfLines={1}>{(workout as any).latest_comment.content}</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }
@@ -500,5 +474,33 @@ const styles = StyleSheet.create({
   },
   likeTextActive: {
     color: palette.accent,
+  },
+  exercisePreviewWrap: {
+    marginTop: 8,
+    paddingHorizontal: 4,
+  },
+  exercisePreviewText: {
+    color: palette.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  latestCommentWrap: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#1C1C1E',
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 6,
+  },
+  latestCommentAuthor: {
+    color: palette.textPrimary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  latestCommentContent: {
+    color: palette.textSecondary,
+    fontSize: 12,
+    flex: 1,
   },
 });

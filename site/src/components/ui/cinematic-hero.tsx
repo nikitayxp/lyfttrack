@@ -382,7 +382,7 @@ export function CinematicHero({
         scrollTrigger: {
           trigger: containerRef.current,
           start: 'top top',
-          end: '+=6200',
+          end: '+=4200',
           pin: true,
           scrub: 1,
           anticipatePin: 1,
@@ -446,7 +446,8 @@ export function CinematicHero({
           'pullback'
         )
         .to('.cta-wrapper', { scale: 1, filter: 'blur(0px)', ease: 'expo.inOut', duration: 1.8 }, 'pullback')
-        .to('.main-card', { y: -window.innerHeight - 300, ease: 'power3.in', duration: 1.5 });
+        .to('.main-card', { y: -window.innerHeight - 300, ease: 'power3.in', duration: 1.5 })
+        .to({}, { duration: 2.5 });
     }, containerRef);
 
     return () => context.revert();
@@ -491,7 +492,7 @@ export function CinematicHero({
             {copy.ctaPrimary}
           </a>
           <Link
-            href="/blog/active-workout-system"
+            href="#features"
             className="hero-secondary-btn inline-flex items-center justify-center gap-2 rounded-[1.1rem] px-8 py-4 text-base font-bold transition-all"
           >
             <TrendingUp className="h-5 w-5" />

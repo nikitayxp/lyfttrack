@@ -3,6 +3,7 @@
 import { ChevronDown, Globe } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { CinematicHero, type HeroLanguage } from '@/components/ui/cinematic-hero';
+import { FeaturesSection } from '@/components/home/features-section';
 
 const LANGUAGE_STORAGE_KEY = 'lyfttrack.site.language';
 
@@ -88,6 +89,7 @@ export function LandingShell() {
       </header>
 
       <CinematicHero language={language} />
+      <FeaturesSection language={language} />
 
       <div
         className={`pointer-events-none fixed bottom-6 left-1/2 z-[130] hidden -translate-x-1/2 transition-all duration-500 md:bottom-8 md:block ${

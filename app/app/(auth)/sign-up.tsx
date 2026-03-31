@@ -25,22 +25,24 @@ export default function SignUpScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [feedback, setFeedback] = useState<{ message: string; type: 'error' | 'success' | 'info' } | null>(null);
 
   async function handleSignUp() {
+    setFeedback(null);
     const normalizedEmail = email.trim().toLowerCase();
 
     if (!normalizedEmail || !password.trim() || !confirmPassword.trim()) {
-      Alert.alert('Dados em falta', 'Preenche todos os campos para criares a conta.');
+      setFeedback({ message: 'Preenche todos os campos para criares a conta.', type: 'error' });
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert('Palavra-passe invalida', 'A palavra-passe deve ter pelo menos 6 caracteres.');
+      setFeedback({ message: 'A palavra-passe deve ter pelo menos 6 caracteres.', type: 'error' });
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('Palavras-passe diferentes', 'A confirmacao nao corresponde a palavra-passe.');
+      setFeedback({ message: 'A confirmação não corresponde à palavra-passe.', type: 'error' });
       return;
     }
 
@@ -53,12 +55,12 @@ export default function SignUpScreen() {
       });
 
       if (error) {
-        Alert.alert('Nao foi possivel criar conta', error.message);
+        setFeedback({ message: error.message, type: 'error' });
         return;
       }
 
       if (data.session) {
-        router.replace('/(tabs)/workout' as any);
+        router.replace('/(auth)/onboarding' as any);
         return;
       }
 
@@ -72,7 +74,7 @@ export default function SignUpScreen() {
   }
 
   function handleGooglePress() {
-    console.log('Google login pressed');
+    setFeedback({ message: 'Login via Google em desenvolvimento.', type: 'info' });
   }
 
   return (
@@ -89,6 +91,20 @@ export default function SignUpScreen() {
           </View>
 
           <View style={styles.formCard}>
+            {feedback ? (
+              <View style={[
+                styles.feedbackBanner, 
+                feedback.type === 'error' ? styles.feedbackError : feedback.type === 'success' ? styles.feedbackSuccess : styles.feedbackInfo
+              ]}>
+                <Ionicons 
+                  name={feedback.type === 'error' ? 'alert-circle' : feedback.type === 'success' ? 'checkmark-circle' : 'information-circle'} 
+                  size={16} 
+                  color={feedback.type === 'error' ? '#EF4444' : feedback.type === 'success' ? '#10B981' : '#3B82F6'} 
+                />
+                <Text style={styles.feedbackText}>{feedback.message}</Text>
+              </View>
+            ) : null}
+
             <Text style={styles.label}>Email</Text>
             <View style={styles.inputLine}>
               <TextInput
@@ -229,6 +245,33 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  feedbackBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    columnGap: 8,
+    marginBottom: 4,
+  },
+  feedbackError: {
+    backgroundColor: '#EF444415',
+    borderColor: '#EF444430',
+  },
+  feedbackSuccess: {
+    backgroundColor: '#10B98115',
+    borderColor: '#10B98130',
+  },
+  feedbackInfo: {
+    backgroundColor: '#3B82F615',
+    borderColor: '#3B82F630',
+  },
+  feedbackText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
   },
   inputLine: {
     minHeight: 46,

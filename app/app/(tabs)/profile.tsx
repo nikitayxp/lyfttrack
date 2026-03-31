@@ -807,18 +807,7 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <View style={styles.streakHeroCard}>
-          <Text style={styles.streakKicker}>Consistencia semanal</Text>
-          <View style={styles.streakHeadlineRow}>
-            <Ionicons name="flame-outline" size={22} color={palette.accent} />
-            <Text style={styles.streakHeadline}>{`${currentWorkoutStreak} semanas seguidas`}</Text>
-          </View>
-          <Text style={styles.streakSubtitle}>
-            {currentWorkoutStreak > 0
-              ? 'Treinaste todas as semanas durante o periodo ativo da tua streak.'
-              : 'Completa um treino esta semana para iniciar a tua streak.'}
-          </Text>
-        </View>
+
 
         <View style={styles.bodyProgressCard}>
           <View style={styles.bodyProgressHeaderRow}>
@@ -882,7 +871,7 @@ export default function ProfileScreen() {
               <Text style={styles.statusText}>Conclui mais treinos para desbloquear os teus cartoes de recorde.</Text>
             </View>
           ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trophyCarouselContent}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={isWeb} contentContainerStyle={styles.trophyCarouselContent}>
               {allTimePrs.map((pr) => (
                 <View key={pr.exerciseId} style={styles.trophyCardShell}>
                   <ViewShot
@@ -994,6 +983,8 @@ export default function ProfileScreen() {
     ? commentsByWorkoutId[selectedWorkoutForComments.id] ?? []
     : [];
 
+  const ModalWrapper = isWeb ? View : Modal;
+
   return (
     <>
       <FlatList
@@ -1033,7 +1024,12 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       />
 
-      <Modal visible={isWeightModalVisible} transparent animationType="fade" onRequestClose={closeWeightModal}>
+      {(!isWeightModalVisible && isWeb) ? null : (
+      <ModalWrapper
+        {...(isWeb 
+          ? { style: [StyleSheet.absoluteFill, { zIndex: 10000 }] } 
+          : { visible: isWeightModalVisible, transparent: true, animationType: 'fade' as const, onRequestClose: closeWeightModal })}
+      >
         <View style={[styles.quickLogBackdrop, isWeb && styles.quickLogBackdropWeb]}>
           <Pressable style={styles.quickLogDismissArea} onPress={closeWeightModal} />
 
@@ -1077,7 +1073,8 @@ export default function ProfileScreen() {
             </View>
           </View>
         </View>
-      </Modal>
+      </ModalWrapper>
+      )}
 
       <FeedCommentsModal
         visible={selectedWorkoutForComments !== null}

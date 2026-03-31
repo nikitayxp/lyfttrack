@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import {
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -52,56 +53,60 @@ export function WorkoutSummary({
   exerciseNames,
   onShareAndFinish,
 }: WorkoutSummaryProps) {
+  const isWeb = Platform.OS === 'web';
+
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onShareAndFinish}>
-      <SafeAreaView style={styles.screen} edges={['top', 'left', 'right', 'bottom']}>
-        <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-          <View style={styles.heroWrap}>
-            <View style={styles.heroIconWrap}>
-              <Ionicons name="checkmark-circle" size={18} color={palette.accent} />
+      <SafeAreaView style={[styles.screen, isWeb && styles.screenWeb]} edges={['top', 'left', 'right', 'bottom']}>
+        <View style={[styles.screenFrame, isWeb && styles.screenFrameWeb]}>
+          <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+            <View style={styles.heroWrap}>
+              <View style={styles.heroIconWrap}>
+                <Ionicons name="checkmark-circle" size={18} color={palette.accent} />
+              </View>
+              <Text style={styles.heroTitle}>TREINO CONCLUIDO</Text>
+              <Text style={styles.heroSubtitle}>Sessao guardada. Mantem o ritmo e continua consistente.</Text>
             </View>
-            <Text style={styles.heroTitle}>TREINO CONCLUIDO</Text>
-            <Text style={styles.heroSubtitle}>Sessao guardada. Mantem o ritmo e continua consistente.</Text>
+
+            <View style={styles.metricRow}>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Tempo</Text>
+                <Text style={styles.metricValue}>{formatDuration(durationSeconds)}</Text>
+              </View>
+
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Volume</Text>
+                <Text style={styles.metricValue}>{formatVolume(totalVolume)}</Text>
+              </View>
+
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Series</Text>
+                <Text style={styles.metricValue}>{completedSetCount}</Text>
+              </View>
+            </View>
+
+            <View style={styles.exercisesCard}>
+              <Text style={styles.exercisesTitle}>Exercicios</Text>
+
+              {exerciseNames.length === 0 ? (
+                <Text style={styles.emptyText}>Sem exercicios concluidos nesta sessao.</Text>
+              ) : (
+                exerciseNames.map((exerciseName, index) => (
+                  <View key={`${exerciseName}-${index}`} style={styles.exerciseRow}>
+                    <Ionicons name="barbell-outline" size={16} color={palette.textMuted} />
+                    <Text style={styles.exerciseName}>{exerciseName}</Text>
+                  </View>
+                ))
+              )}
+            </View>
+          </ScrollView>
+
+          <View style={styles.ctaWrap}>
+            <TouchableOpacity style={styles.ctaButton} activeOpacity={0.9} onPress={onShareAndFinish}>
+              <Ionicons name="share-social-outline" size={16} color="#FFFFFF" />
+              <Text style={styles.ctaText}>Partilhar e terminar</Text>
+            </TouchableOpacity>
           </View>
-
-          <View style={styles.metricRow}>
-            <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>Tempo</Text>
-              <Text style={styles.metricValue}>{formatDuration(durationSeconds)}</Text>
-            </View>
-
-            <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>Volume</Text>
-              <Text style={styles.metricValue}>{formatVolume(totalVolume)}</Text>
-            </View>
-
-            <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>Series</Text>
-              <Text style={styles.metricValue}>{completedSetCount}</Text>
-            </View>
-          </View>
-
-          <View style={styles.exercisesCard}>
-            <Text style={styles.exercisesTitle}>Exercicios</Text>
-
-            {exerciseNames.length === 0 ? (
-              <Text style={styles.emptyText}>Sem exercicios concluidos nesta sessao.</Text>
-            ) : (
-              exerciseNames.map((exerciseName, index) => (
-                <View key={`${exerciseName}-${index}`} style={styles.exerciseRow}>
-                  <Ionicons name="barbell-outline" size={16} color={palette.textMuted} />
-                  <Text style={styles.exerciseName}>{exerciseName}</Text>
-                </View>
-              ))
-            )}
-          </View>
-        </ScrollView>
-
-        <View style={styles.ctaWrap}>
-          <TouchableOpacity style={styles.ctaButton} activeOpacity={0.9} onPress={onShareAndFinish}>
-            <Ionicons name="share-social-outline" size={16} color="#FFFFFF" />
-            <Text style={styles.ctaText}>Partilhar e terminar</Text>
-          </TouchableOpacity>
         </View>
       </SafeAreaView>
     </Modal>
@@ -111,6 +116,27 @@ export function WorkoutSummary({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+    backgroundColor: palette.bgPrimary,
+  },
+  screenWeb: {
+    alignItems: 'center',
+    width: '100%',
+    height: '100%',
+    minHeight: '100%',
+    backgroundColor: palette.bgPrimary,
+  },
+  screenFrame: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: palette.bgPrimary,
+  },
+  screenFrameWeb: {
+    width: 393,
+    maxWidth: '100%',
+    marginLeft: 'auto',
+    marginRight: 'auto',
+    left: 0,
+    right: 0,
     backgroundColor: palette.bgPrimary,
   },
   content: {

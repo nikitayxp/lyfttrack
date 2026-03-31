@@ -8,6 +8,7 @@ import {
   Animated,
   Dimensions,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,7 +20,7 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Haptics from 'expo-haptics';
-import { deactivateKeepAwake, useKeepAwake } from 'expo-keep-awake';
+import { activateKeepAwake, deactivateKeepAwake } from 'expo-keep-awake';
 import { Colors } from '@/constants/theme';
 import {
   createExercise,
@@ -31,6 +32,7 @@ import {
   getErrorMessage,
   getExercisesCatalog,
   getRoutineById,
+  WorkoutSaveValidationError,
   type WorkoutSetProgressDraft,
 } from '@/services/workoutService';
 import { getTemplateById } from '@/services/templateService';
@@ -55,6 +57,7 @@ const DEFAULT_REST_SECONDS = 90;
 const REST_STEP_SECONDS = 30;
 const INLINE_TEMPLATE_PRELOAD_KEY = '__inline_template_payload__';
 const LIVE_CHART_COLOR = '#3B82F6';
+const ROOT_SCREEN_BG = palette.bgPrimary;
 const MUSCLE_FILTER_CHIP_OPTIONS: readonly { key: ExerciseLibraryMuscleFilter; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'chest', label: 'Chest' },
@@ -86,6 +89,8 @@ type ActiveExercise = {
   defaultRestSeconds: number;
   sets: ActiveSet[];
 };
+
+type ActiveExercisesUpdater = ActiveExercise[] | ((currentValue: ActiveExercise[]) => ActiveExercise[]);
 
 type TemplatePreloadExercise = {
   exercise: ExerciseRow;
@@ -235,6 +240,33 @@ function getCompletedExerciseNames(exercises: ActiveExercise[]): string[] {
   return [...new Set(names)];
 }
 
+function buildWorkoutSetDrafts(exercises: ActiveExercise[]): WorkoutSetProgressDraft[] {
+  return exercises.flatMap((exercise) =>
+    exercise.sets.map((setItem) => ({
+      exerciseId: exercise.exercise.id,
+      setNumber: toSafeInteger(setItem.set_number, {
+        min: 1,
+        max: INPUT_LIMITS.setNumberMax,
+      }),
+      weight: toSafeNumber(setItem.weight, {
+        min: 0,
+        max: INPUT_LIMITS.weightMax,
+        decimals: 2,
+      }),
+      reps: toSafeInteger(setItem.reps, {
+        min: 0,
+        max: INPUT_LIMITS.repsMax,
+      }),
+      rir: toSafeInteger(setItem.rir, {
+        min: 0,
+        max: INPUT_LIMITS.rirMax,
+      }),
+      completed: setItem.completed,
+      setType: normalizeSetTypeOption(setItem.set_type),
+    }))
+  );
+}
+
 function parseSerializedTemplateExercises(rawValue: string | string[] | undefined): TemplatePreloadExercise[] {
   const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
 
@@ -301,12 +333,12 @@ function buildCatalogCacheKey(filters: ExerciseCatalogFilters): string {
 
 export default function ActiveWorkout() {
   const insets = useSafeAreaInsets();
+  const isWeb = Platform.OS === 'web';
   const searchParams = useLocalSearchParams<{
     routineId?: string | string[];
     templateId?: string | string[];
     templateExercises?: string | string[];
   }>();
-  useKeepAwake();
 
   const routeRoutineId = useMemo(() => {
     const rawRoutineId = searchParams.routineId;
@@ -345,6 +377,7 @@ export default function ActiveWorkout() {
   const [createExerciseVisible, setCreateExerciseVisible] = useState(false);
   const [catalogExercises, setCatalogExercises] = useState<ExerciseRow[]>([]);
   const [activeExercises, setActiveExercises] = useState<ActiveExercise[]>([]);
+  const activeExercisesRef = useRef<ActiveExercise[]>([]);
   const [preloadedRoutineId, setPreloadedRoutineId] = useState<string | null>(null);
   const [preloadedTemplateId, setPreloadedTemplateId] = useState<string | null>(null);
   const [isPreloadingRoutine, setIsPreloadingRoutine] = useState(false);
@@ -374,6 +407,26 @@ export default function ActiveWorkout() {
   const exerciseProgressCacheRef = useRef<Map<string, ExerciseProgressPoint[]>>(new Map());
   const requestedProgressExerciseIdsRef = useRef<Set<string>>(new Set());
   const statsRequestVersionRef = useRef(0);
+  const keepAwakeStateRef = useRef<{ activated: boolean; deactivated: boolean }>({
+    activated: false,
+    deactivated: false,
+  });
+
+  const setActiveExercisesWithRef = useCallback((nextValue: ActiveExercisesUpdater) => {
+    setActiveExercises((currentValue) => {
+      const resolvedValue =
+        typeof nextValue === 'function'
+          ? (nextValue as (currentValue: ActiveExercise[]) => ActiveExercise[])(currentValue)
+          : nextValue;
+
+      activeExercisesRef.current = resolvedValue;
+      return resolvedValue;
+    });
+  }, []);
+
+  useEffect(() => {
+    activeExercisesRef.current = activeExercises;
+  }, [activeExercises]);
 
   const liveChartWidth = useMemo(() => Math.max(250, Dimensions.get('window').width - 72), []);
 
@@ -394,6 +447,52 @@ export default function ActiveWorkout() {
     clearInterval(restTimerRef.current);
     restTimerRef.current = null;
   }, []);
+
+  const activateKeepAwakeSafely = useCallback(() => {
+    if (Platform.OS === 'web') {
+      return;
+    }
+
+    const keepAwakeState = keepAwakeStateRef.current;
+    keepAwakeState.activated = false;
+    keepAwakeState.deactivated = false;
+
+    Promise.resolve(activateKeepAwake())
+      .then(() => {
+        keepAwakeState.activated = true;
+      })
+      .catch((error) => {
+        keepAwakeState.activated = false;
+        console.warn('Failed to activate keep awake:', error);
+      });
+  }, []);
+
+  const safeDeactivateKeepAwake = useCallback(() => {
+    if (Platform.OS === 'web') {
+      return;
+    }
+
+    const keepAwakeState = keepAwakeStateRef.current;
+
+    if (!keepAwakeState.activated || keepAwakeState.deactivated) {
+      return;
+    }
+
+    keepAwakeState.deactivated = true;
+
+    Promise.resolve(deactivateKeepAwake())
+      .then(() => {
+        keepAwakeState.activated = false;
+      })
+      .catch((error) => {
+        keepAwakeState.deactivated = false;
+        console.warn('Failed to deactivate keep awake:', error);
+      });
+  }, []);
+
+  useEffect(() => {
+    activateKeepAwakeSafely();
+  }, [activateKeepAwakeSafely]);
 
   useEffect(() => {
     const syncElapsedTimer = () => {
@@ -464,7 +563,7 @@ export default function ActiveWorkout() {
       try {
         const routine = await getRoutineById(normalizedRoutineId);
 
-        setActiveExercises(routine.exercises.map((entry) => createExerciseBlock(entry.exercise)));
+        setActiveExercisesWithRef(routine.exercises.map((entry) => createExerciseBlock(entry.exercise)));
         setPreloadedRoutineId(routine.id);
       } catch (error) {
         setRoutinePreloadError(getErrorMessage(error));
@@ -472,7 +571,7 @@ export default function ActiveWorkout() {
         setIsPreloadingRoutine(false);
       }
     },
-    [preloadedRoutineId]
+    [preloadedRoutineId, setActiveExercisesWithRef]
   );
 
   const preloadTemplate = useCallback(
@@ -493,7 +592,7 @@ export default function ActiveWorkout() {
       try {
         const template = await getTemplateById(normalizedTemplateId);
 
-        setActiveExercises(
+        setActiveExercisesWithRef(
           template.exercises.map((entry) => createExerciseBlock(entry.exercise, entry.rest_seconds ?? DEFAULT_REST_SECONDS))
         );
         setPreloadedTemplateId(template.id);
@@ -503,7 +602,7 @@ export default function ActiveWorkout() {
         setIsPreloadingTemplate(false);
       }
     },
-    [preloadedTemplateId]
+    [preloadedTemplateId, setActiveExercisesWithRef]
   );
 
   useEffect(() => {
@@ -514,7 +613,7 @@ export default function ActiveWorkout() {
         return;
       }
 
-      setActiveExercises(
+      setActiveExercisesWithRef(
         routeTemplateExercises.map((entry) => createExerciseBlock(entry.exercise, entry.restSeconds))
       );
       setPreloadedTemplateId(preloadKey);
@@ -536,6 +635,7 @@ export default function ActiveWorkout() {
     preloadRoutine,
     preloadTemplate,
     routeRoutineId,
+    setActiveExercisesWithRef,
     routeTemplateExercises,
     routeTemplateId,
   ]);
@@ -745,9 +845,9 @@ export default function ActiveWorkout() {
     return () => {
       clearElapsedTimer();
       clearRestTimer();
-      deactivateKeepAwake();
+      safeDeactivateKeepAwake();
     };
-  }, [clearElapsedTimer, clearRestTimer]);
+  }, [clearElapsedTimer, clearRestTimer, safeDeactivateKeepAwake]);
 
   const timerLabel = useMemo(() => formatElapsedTime(elapsedSeconds), [elapsedSeconds]);
   const restTimerLabel = useMemo(() => formatCountdown(restRemainingSeconds), [restRemainingSeconds]);
@@ -770,8 +870,8 @@ export default function ActiveWorkout() {
     [statsExerciseProgress]
   );
 
-  function toggleSetCompleted(exerciseId: string, setId: string) {
-    setActiveExercises((currentValue) =>
+  const toggleSetCompleted = useCallback((exerciseId: string, setId: string) => {
+    setActiveExercisesWithRef((currentValue) =>
       currentValue.map((exercise) => {
         if (exercise.id !== exerciseId) {
           return exercise;
@@ -785,11 +885,11 @@ export default function ActiveWorkout() {
         };
       })
     );
-  }
+  }, [setActiveExercisesWithRef]);
 
   const handleSetCompletionToggle = useCallback(
     (exerciseId: string, setId: string) => {
-      const targetExercise = activeExercises.find((exercise) => exercise.id === exerciseId);
+      const targetExercise = activeExercisesRef.current.find((exercise) => exercise.id === exerciseId);
       const targetSet = targetExercise?.sets.find((setItem) => setItem.id === setId);
 
       const willBeCompleted = targetSet ? !targetSet.completed : false;
@@ -806,13 +906,13 @@ export default function ActiveWorkout() {
         });
       }
     },
-    [activeExercises, animateExerciseCompletionGlow, startRestTimer]
+    [animateExerciseCompletionGlow, startRestTimer, toggleSetCompleted]
   );
 
   function updateSetInput(exerciseId: string, setId: string, field: SetInputField, value: string) {
     const sanitizedValue = field === 'weightInput' ? sanitizeDecimalInput(value) : sanitizeIntegerInput(value);
 
-    setActiveExercises((currentValue) =>
+    setActiveExercisesWithRef((currentValue) =>
       currentValue.map((exercise) => {
         if (exercise.id !== exerciseId) {
           return exercise;
@@ -859,7 +959,7 @@ export default function ActiveWorkout() {
   }
 
   function addSet(exerciseId: string) {
-    setActiveExercises((currentValue) =>
+    setActiveExercisesWithRef((currentValue) =>
       currentValue.map((exercise) => {
         if (exercise.id !== exerciseId) {
           return exercise;
@@ -876,7 +976,7 @@ export default function ActiveWorkout() {
   }
 
   function addExercise(exercise: ExerciseRow) {
-    setActiveExercises((currentValue) => [...currentValue, createExerciseBlock(exercise)]);
+    setActiveExercisesWithRef((currentValue) => [...currentValue, createExerciseBlock(exercise)]);
     setExercisePickerVisible(false);
   }
 
@@ -931,30 +1031,18 @@ export default function ActiveWorkout() {
     setIsSubmitting(true);
 
     try {
-      const setDrafts: WorkoutSetProgressDraft[] = activeExercises.flatMap((exercise) =>
-        exercise.sets.map((setItem) => ({
-          exerciseId: exercise.exercise.id,
-          setNumber: toSafeInteger(setItem.set_number, {
-            min: 1,
-            max: INPUT_LIMITS.setNumberMax,
-          }),
-          weight: toSafeNumber(setItem.weight, {
-            min: 0,
-            max: INPUT_LIMITS.weightMax,
-            decimals: 2,
-          }),
-          reps: toSafeInteger(setItem.reps, {
-            min: 0,
-            max: INPUT_LIMITS.repsMax,
-          }),
-          rir: toSafeInteger(setItem.rir, {
-            min: 0,
-            max: INPUT_LIMITS.rirMax,
-          }),
-          completed: setItem.completed,
-          setType: normalizeSetTypeOption(setItem.set_type),
-        }))
-      );
+      const finishSnapshot = activeExercisesRef.current.map((exercise) => ({
+        ...exercise,
+        sets: exercise.sets.map((setItem) => ({ ...setItem })),
+      }));
+
+      const setDrafts = buildWorkoutSetDrafts(finishSnapshot);
+      const completedSetCount = setDrafts.filter((draft) => draft.completed === true).length;
+
+      if (completedSetCount === 0) {
+        Alert.alert('No completed sets', 'Mark at least one set as completed before finishing the workout.');
+        return;
+      }
 
       const result = await finishWorkout({
         name: 'Active Workout',
@@ -964,11 +1052,21 @@ export default function ActiveWorkout() {
         setDrafts,
       });
 
+      if (result.insertedSetCount <= 0) {
+        Alert.alert('Workout not saved', 'No completed sets were saved. Please try again.');
+        return;
+      }
+
       setFinishSummary(result);
-      setSummaryExerciseNames(getCompletedExerciseNames(activeExercises));
+      setSummaryExerciseNames(getCompletedExerciseNames(finishSnapshot));
       setIsSummaryVisible(true);
       finishRestTimer();
     } catch (error) {
+      if (error instanceof WorkoutSaveValidationError) {
+        Alert.alert('Workout not saved', error.message);
+        return;
+      }
+
       Alert.alert('Unable to finish workout', getErrorMessage(error));
     } finally {
       setIsSubmitting(false);
@@ -976,7 +1074,7 @@ export default function ActiveWorkout() {
   }
 
   const handleShareAndFinish = useCallback(() => {
-    deactivateKeepAwake();
+    safeDeactivateKeepAwake();
     clearElapsedTimer();
     clearRestTimer();
     finishRestTimer();
@@ -986,23 +1084,23 @@ export default function ActiveWorkout() {
 
     // Reset state defensively to avoid phantom in-memory workout state.
     setElapsedSeconds(0);
-    setActiveExercises([]);
+    setActiveExercisesWithRef([]);
     setExercisePickerVisible(false);
     setCreateExerciseVisible(false);
     completionGlowByExerciseIdRef.current.clear();
 
     router.replace('/(tabs)' as any);
-  }, [clearElapsedTimer, clearRestTimer, finishRestTimer]);
+  }, [clearElapsedTimer, clearRestTimer, finishRestTimer, safeDeactivateKeepAwake, setActiveExercisesWithRef]);
 
   const routePreloadLabel = routeTemplateId ? 'template' : 'routine';
   const isPreloadingRoute = routeTemplateId ? isPreloadingTemplate : isPreloadingRoutine;
   const routePreloadError = routeTemplateId ? templatePreloadError : routinePreloadError;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={[styles.safeArea, isWeb && styles.safeAreaWeb]} edges={['top', 'left', 'right']}>
       <StatusBar style="light" />
 
-      <View style={styles.container}>
+      <View style={[styles.container, isWeb && styles.containerWeb]}>
         <View style={styles.headerRow}>
           <TouchableOpacity style={styles.iconButton} onPress={() => router.back()} activeOpacity={0.85}>
             <Ionicons name="close" size={26} color={palette.textPrimary} />
@@ -1221,10 +1319,10 @@ export default function ActiveWorkout() {
         animationType="slide"
         onRequestClose={() => setExercisePickerVisible(false)}
       >
-        <View style={styles.modalBackdrop}>
+        <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
           <Pressable style={styles.modalDismissArea} onPress={() => setExercisePickerVisible(false)} />
 
-          <View style={styles.modalSheet}>
+          <View style={[styles.modalSheet, isWeb && styles.modalSheetWeb]}>
             <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitle}>Select Exercise</Text>
               <TouchableOpacity
@@ -1338,10 +1436,10 @@ export default function ActiveWorkout() {
         animationType="slide"
         onRequestClose={() => setCreateExerciseVisible(false)}
       >
-        <View style={styles.modalBackdrop}>
+        <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
           <Pressable style={styles.modalDismissArea} onPress={() => setCreateExerciseVisible(false)} />
 
-          <View style={styles.modalSheet}>
+          <View style={[styles.modalSheet, isWeb && styles.modalSheetWeb]}>
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Create Exercise</Text>
 
@@ -1405,10 +1503,10 @@ export default function ActiveWorkout() {
         animationType="slide"
         onRequestClose={closeExerciseStatsModal}
       >
-        <View style={styles.modalBackdrop}>
+        <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
           <Pressable style={styles.modalDismissArea} onPress={closeExerciseStatsModal} />
 
-          <View style={styles.liveStatsSheet}>
+          <View style={[styles.liveStatsSheet, isWeb && styles.liveStatsSheetWeb]}>
             <View style={styles.modalHandle} />
 
             <View style={styles.liveStatsHeaderRow}>
@@ -1494,11 +1592,25 @@ export default function ActiveWorkout() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: palette.bgPrimary,
+    backgroundColor: ROOT_SCREEN_BG,
+  },
+  safeAreaWeb: {
+    alignItems: 'center',
+    width: '100%',
+    height: '100%',
+    minHeight: '100%',
+    backgroundColor: ROOT_SCREEN_BG,
   },
   container: {
     flex: 1,
-    backgroundColor: palette.bgPrimary,
+    backgroundColor: ROOT_SCREEN_BG,
+  },
+  containerWeb: {
+    width: 393,
+    maxWidth: '100%',
+    marginLeft: 'auto',
+    marginRight: 'auto',
+    backgroundColor: ROOT_SCREEN_BG,
   },
   headerRow: {
     flexDirection: 'row',
@@ -1860,6 +1972,15 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     backgroundColor: palette.overlay,
   },
+  modalBackdropWeb: {
+    width: 393,
+    maxWidth: '100%',
+    marginLeft: 'auto',
+    marginRight: 'auto',
+    left: 0,
+    right: 0,
+    alignSelf: 'center',
+  },
   modalDismissArea: {
     flex: 1,
   },
@@ -1874,6 +1995,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 20,
   },
+  modalSheetWeb: {
+    width: 393,
+    maxWidth: '100%',
+    marginLeft: 'auto',
+    marginRight: 'auto',
+    backgroundColor: palette.surface,
+  },
   liveStatsSheet: {
     maxHeight: '72%',
     backgroundColor: palette.surface,
@@ -1884,6 +2012,13 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingHorizontal: 16,
     paddingBottom: 18,
+  },
+  liveStatsSheetWeb: {
+    width: 393,
+    maxWidth: '100%',
+    marginLeft: 'auto',
+    marginRight: 'auto',
+    backgroundColor: palette.surface,
   },
   liveStatsHeaderRow: {
     flexDirection: 'row',

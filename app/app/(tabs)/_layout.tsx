@@ -6,7 +6,7 @@ import { Colors } from '@/constants/Colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const palette = Colors.dark;
-const WEB_MOBILE_TAB_BAR_HEIGHT = 62;
+const WEB_MOBILE_TAB_BAR_HEIGHT = 74;
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
@@ -21,8 +21,8 @@ export default function TabLayout() {
       styles.tabBar,
       {
         height: tabBarHeight,
-        paddingBottom: isWeb ? 8 : nativeBottomInset,
-        paddingTop: isWeb ? 6 : 8,
+        paddingBottom: isWeb ? 12 : Math.max(nativeBottomInset - 2, 10),
+        paddingTop: isWeb ? 8 : 8,
       },
     ],
     [isWeb, nativeBottomInset, tabBarHeight]
@@ -40,6 +40,7 @@ export default function TabLayout() {
         tabBarActiveTintColor: palette.accent,
         tabBarInactiveTintColor: palette.tabIconDefault,
         tabBarLabelStyle: styles.tabLabel,
+        tabBarItemStyle: styles.tabItem,
       }}
     >
       <Tabs.Screen
@@ -100,6 +101,13 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="profile/settings"
+        options={{
+          href: null,
+          title: 'Definicoes',
+        }}
+      />
+      <Tabs.Screen
         name="public-profile/[id]"
         options={{
           href: null,
@@ -130,23 +138,31 @@ const styles = StyleSheet.create({
     borderTopColor: palette.border,
     borderTopWidth: 1,
   },
+  tabItem: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   tabLabel: {
     fontSize: 11,
     fontWeight: '600',
+    marginTop: 1,
+    marginBottom: 1,
   },
   workoutLabel: {
     fontSize: 11,
     fontWeight: '700',
+    marginTop: 1,
+    marginBottom: 1,
   },
   workoutIconContainer: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
+    width: 50,
+    height: 50,
+    borderRadius: 15,
     backgroundColor: palette.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -20,
-    borderWidth: 3,
+    marginTop: -12,
+    borderWidth: 2,
     borderColor: palette.tabBarBackground,
   },
   workoutIconContainerFocused: {

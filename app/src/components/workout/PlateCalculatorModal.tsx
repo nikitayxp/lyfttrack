@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -55,6 +56,7 @@ export function PlateCalculatorModal({
   initialTotalWeight,
   defaultBarWeight = 20,
 }: PlateCalculatorModalProps) {
+  const isWeb = Platform.OS === 'web';
   const [totalWeightInput, setTotalWeightInput] = useState('');
   const [barWeightInput, setBarWeightInput] = useState(formatPlateWeight(defaultBarWeight));
 
@@ -83,10 +85,10 @@ export function PlateCalculatorModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
+      <View style={[styles.backdrop, isWeb && styles.backdropWeb]}>
         <Pressable style={styles.dismissArea} onPress={onClose} />
 
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, isWeb && styles.sheetWeb]}>
           <View style={styles.handle} />
 
           <View style={styles.headerRow}>
@@ -173,6 +175,15 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     backgroundColor: palette.overlay,
   },
+  backdropWeb: {
+    width: 393,
+    maxWidth: '100%',
+    marginLeft: 'auto',
+    marginRight: 'auto',
+    left: 0,
+    right: 0,
+    alignSelf: 'center',
+  },
   dismissArea: {
     flex: 1,
   },
@@ -185,6 +196,13 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingHorizontal: 16,
     paddingBottom: 24,
+  },
+  sheetWeb: {
+    width: 393,
+    maxWidth: '100%',
+    marginLeft: 'auto',
+    marginRight: 'auto',
+    backgroundColor: '#111827',
   },
   handle: {
     alignSelf: 'center',

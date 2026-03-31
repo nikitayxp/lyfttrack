@@ -13,6 +13,8 @@ type AuthAmbientGlowProps = {
   children: ReactNode;
 };
 
+const ROOT_SCREEN_BG = '#000000';
+
 export function AuthAmbientGlow({ children }: AuthAmbientGlowProps) {
   const orbOneScale = useSharedValue(1);
   const orbOneX = useSharedValue(-14);
@@ -66,7 +68,7 @@ export function AuthAmbientGlow({ children }: AuthAmbientGlowProps) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: ROOT_SCREEN_BG,
   },
   orbLayer: {
     ...StyleSheet.absoluteFillObject,

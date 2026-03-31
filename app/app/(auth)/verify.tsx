@@ -16,6 +16,7 @@ import { Radius, Spacing, Typography } from '@/constants/Styles';
 import { supabase } from '@/services/supabase';
 
 const palette = Colors.dark;
+const ROOT_SCREEN_BG = palette.bgPrimary;
 
 function readRouteValue(value: string | string[] | undefined): string {
   if (Array.isArray(value)) {
@@ -121,7 +122,7 @@ export default function VerifyScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: palette.bgPrimary,
+    backgroundColor: ROOT_SCREEN_BG,
   },
   container: {
     flex: 1,

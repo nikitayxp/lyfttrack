@@ -10,6 +10,7 @@ import {
   FlatList,
   Image,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -161,6 +162,7 @@ function SkeletonCard({ compact = false, lines = 3 }: SkeletonCardProps) {
 }
 
 export default function ProfileScreen() {
+  const isWeb = Platform.OS === 'web';
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [email, setEmail] = useState('');
@@ -445,6 +447,10 @@ export default function ProfileScreen() {
 
   const handleEditProfile = useCallback(() => {
     router.push('/(tabs)/profile/edit' as any);
+  }, []);
+
+  const handleOpenSettings = useCallback(() => {
+    router.push('/(tabs)/profile/settings' as any);
   }, []);
 
   const handleStartFreeWorkout = useCallback(() => {
@@ -746,6 +752,12 @@ export default function ProfileScreen() {
         ) : null}
 
         <View style={styles.heroCard}>
+          <View style={styles.heroTopBar}>
+            <TouchableOpacity style={styles.settingsButton} activeOpacity={0.88} onPress={handleOpenSettings}>
+              <Ionicons name="settings-outline" size={18} color={palette.textPrimary} />
+            </TouchableOpacity>
+          </View>
+
           <View style={styles.avatarFrame}>
             {profile?.avatar_url ? (
               <Image source={{ uri: profile.avatar_url }} style={styles.avatarImage} />
@@ -759,32 +771,38 @@ export default function ProfileScreen() {
           <Text style={styles.displayName}>{displayName}</Text>
           <Text style={styles.handle}>{usernameHandle}</Text>
 
-          <View style={styles.quickActionsRow}>
+          <View style={styles.quickActionsGrid}>
             <TouchableOpacity
-              style={[styles.quickActionButton, styles.quickActionButtonStats]}
+              style={styles.quickActionTile}
               activeOpacity={0.9}
               onPress={handleOpenStats}
             >
-              <Ionicons name="stats-chart-outline" size={16} color="#FFFFFF" />
-              <Text style={styles.quickActionText}>Ver Estatisticas</Text>
+              <View style={styles.quickActionIconWrap}>
+                <Ionicons name="stats-chart-outline" size={18} color={palette.accent} />
+              </View>
+              <Text style={styles.quickActionTileText}>Estatisticas</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.quickActionButton, styles.quickActionButtonSocial]}
+              style={styles.quickActionTile}
               activeOpacity={0.9}
               onPress={handleOpenFriends}
             >
-              <Ionicons name="people-outline" size={16} color="#FFFFFF" />
-              <Text style={styles.quickActionText}>Amigos</Text>
+              <View style={styles.quickActionIconWrap}>
+                <Ionicons name="people-outline" size={18} color={palette.accent} />
+              </View>
+              <Text style={styles.quickActionTileText}>Amigos</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.quickActionButton, styles.quickActionButtonEdit]}
+              style={styles.quickActionTile}
               activeOpacity={0.9}
               onPress={handleEditProfile}
             >
-              <Ionicons name="create-outline" size={16} color="#FFFFFF" />
-              <Text style={styles.quickActionText}>Editar Perfil</Text>
+              <View style={styles.quickActionIconWrap}>
+                <Ionicons name="create-outline" size={18} color={palette.accent} />
+              </View>
+              <Text style={styles.quickActionTileText}>Editar Perfil</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -925,6 +943,7 @@ export default function ProfileScreen() {
     displayName,
     handleEditProfile,
     handleOpenFriends,
+    handleOpenSettings,
     handleOpenStats,
     historyError,
     initials,
@@ -1015,10 +1034,10 @@ export default function ProfileScreen() {
       />
 
       <Modal visible={isWeightModalVisible} transparent animationType="fade" onRequestClose={closeWeightModal}>
-        <View style={styles.quickLogBackdrop}>
+        <View style={[styles.quickLogBackdrop, isWeb && styles.quickLogBackdropWeb]}>
           <Pressable style={styles.quickLogDismissArea} onPress={closeWeightModal} />
 
-          <View style={styles.quickLogCard}>
+          <View style={[styles.quickLogCard, isWeb && styles.quickLogCardWeb]}>
             <Text style={styles.quickLogTitle}>Registar peso</Text>
             <Text style={styles.quickLogSubtitle}>Regista o teu peso corporal de hoje em kg.</Text>
 
@@ -1089,12 +1108,12 @@ const styles = StyleSheet.create({
     backgroundColor: SCREEN_BG,
   },
   content: {
-    paddingHorizontal: 12,
-    paddingTop: 12,
-    paddingBottom: 18,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 28,
   },
   headerWrap: {
-    marginBottom: 2,
+    marginBottom: 8,
   },
   errorCard: {
     borderRadius: 6,
@@ -1133,23 +1152,39 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   heroCard: {
-    borderRadius: 6,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: CARD_BG,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 12,
+  },
+  heroTopBar: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: 8,
+  },
+  settingsButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   streakHeroCard: {
-    borderRadius: 6,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: CARD_BG,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginBottom: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 12,
   },
   streakKicker: {
     color: palette.accent,
@@ -1167,7 +1202,7 @@ const styles = StyleSheet.create({
   },
   streakHeadline: {
     color: palette.textPrimary,
-    fontSize: 34,
+    fontSize: 32,
     fontWeight: '900',
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.8,
@@ -1181,13 +1216,13 @@ const styles = StyleSheet.create({
   avatarFrame: {
     width: 90,
     height: 90,
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   avatarImage: {
     width: 84,
@@ -1216,55 +1251,54 @@ const styles = StyleSheet.create({
   },
   handle: {
     color: palette.textMuted,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  quickActionsRow: {
+  quickActionsGrid: {
     width: '100%',
     flexDirection: 'row',
-    columnGap: 4,
+    columnGap: 10,
   },
-  quickActionButton: {
+  quickActionTile: {
     flex: 1,
-    minHeight: 34,
-    borderRadius: 6,
+    minHeight: 74,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
-    columnGap: 4,
+    rowGap: 8,
     paddingHorizontal: 6,
+    paddingVertical: 10,
   },
-  quickActionButtonStats: {
+  quickActionIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    borderWidth: 1,
     borderColor: palette.accent,
-    backgroundColor: '#000000',
+    backgroundColor: 'rgba(59,130,246,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  quickActionButtonSocial: {
-    borderColor: palette.border,
-    backgroundColor: '#000000',
-  },
-  quickActionButtonEdit: {
-    borderColor: palette.border,
-    backgroundColor: '#000000',
-  },
-  quickActionText: {
+  quickActionTileText: {
     color: palette.textPrimary,
-    fontSize: 10,
-    fontWeight: '900',
+    fontSize: 11,
+    fontWeight: '800',
     textTransform: 'uppercase',
     textAlign: 'center',
+    letterSpacing: 0.35,
   },
   bodyProgressCard: {
-    borderRadius: 6,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: CARD_BG,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    marginBottom: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 12,
   },
   bodyProgressHeaderRow: {
     flexDirection: 'row',
@@ -1335,7 +1369,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   hallWrap: {
-    marginBottom: 6,
+    marginBottom: 14,
   },
   statusCardCompact: {
     borderRadius: 6,
@@ -1436,14 +1470,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sectionTitleRow: {
-    marginBottom: 6,
+    marginBottom: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   sectionTitle: {
     color: palette.textPrimary,
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '900',
     letterSpacing: -0.8,
   },
@@ -1462,13 +1496,13 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   historyErrorCard: {
-    borderRadius: 6,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: CARD_BG,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginBottom: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
   },
   historyErrorTitle: {
     color: palette.error,
@@ -1518,6 +1552,15 @@ const styles = StyleSheet.create({
     backgroundColor: palette.overlay,
     paddingHorizontal: 12,
   },
+  quickLogBackdropWeb: {
+    width: 393,
+    maxWidth: '100%',
+    marginLeft: 'auto',
+    marginRight: 'auto',
+    left: 0,
+    right: 0,
+    alignSelf: 'center',
+  },
   quickLogDismissArea: {
     ...StyleSheet.absoluteFillObject,
   },
@@ -1528,6 +1571,13 @@ const styles = StyleSheet.create({
     backgroundColor: CARD_BG,
     paddingHorizontal: 10,
     paddingVertical: 10,
+  },
+  quickLogCardWeb: {
+    width: 393,
+    maxWidth: '100%',
+    marginLeft: 'auto',
+    marginRight: 'auto',
+    backgroundColor: CARD_BG,
   },
   quickLogTitle: {
     color: palette.textPrimary,

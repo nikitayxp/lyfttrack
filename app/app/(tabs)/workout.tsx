@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Animated, { FadeInDown, FadeInUp, LinearTransition } from 'react-native-reanimated';
 import { Colors } from '@/constants/theme';
 import {
   getTemplates,
@@ -35,6 +37,7 @@ import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 
 const palette = Colors.dark;
 const CARD_BG = '#111827';
+const cardLayoutTransition = LinearTransition.springify().damping(16).stiffness(180);
 
 type ExerciseRow = Tables<'exercises'>;
 type SelectedTemplateExercise = {
@@ -69,6 +72,7 @@ function summarizeExercises(exerciseNames: string[]): string {
 }
 
 export default function WorkoutScreen() {
+  const isWeb = Platform.OS === 'web';
   const [activeMode, setActiveMode] = useState<WorkoutMode>('start');
 
   const [templates, setTemplates] = useState<TemplateSummary[]>([]);
@@ -102,6 +106,13 @@ export default function WorkoutScreen() {
   const [exerciseNameInput, setExerciseNameInput] = useState('');
   const [muscleGroupInput, setMuscleGroupInput] = useState('');
   const [equipmentInput, setEquipmentInput] = useState('');
+  const [animationEpoch, setAnimationEpoch] = useState(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      setAnimationEpoch((currentValue) => currentValue + 1);
+    }, [])
+  );
 
   const selectionOrder = useMemo(() => {
     return new Map(selectedTemplateExercises.map((entry, index) => [entry.exerciseId, index + 1]));
@@ -486,26 +497,31 @@ export default function WorkoutScreen() {
                 descriptionStyle={styles.statusText}
               />
             ) : (
-              templates.map((template) => (
-                <TouchableOpacity
-                  key={template.id}
-                  style={styles.quickStartCard}
-                  activeOpacity={0.88}
-                  onPress={() => void handleStartTemplate(template.id)}
-                  disabled={startingTemplateId !== null}
+              templates.map((template, index) => (
+                <Animated.View
+                  key={`${template.id}-${animationEpoch}`}
+                  entering={FadeInDown.delay(Math.min(index * 45, 260)).duration(320)}
+                  layout={cardLayoutTransition}
                 >
-                  <View style={styles.quickStartCardTextWrap}>
-                    <Text style={styles.quickStartTitle}>{template.name}</Text>
-                    <Text style={styles.quickStartMeta}>{template.exerciseCount} exercises</Text>
-                    <Text style={styles.quickStartSummary}>{summarizeExercises(template.exerciseNames)}</Text>
-                  </View>
+                  <TouchableOpacity
+                    style={styles.quickStartCard}
+                    activeOpacity={0.88}
+                    onPress={() => void handleStartTemplate(template.id)}
+                    disabled={startingTemplateId !== null}
+                  >
+                    <View style={styles.quickStartCardTextWrap}>
+                      <Text style={styles.quickStartTitle}>{template.name}</Text>
+                      <Text style={styles.quickStartMeta}>{template.exerciseCount} exercises</Text>
+                      <Text style={styles.quickStartSummary}>{summarizeExercises(template.exerciseNames)}</Text>
+                    </View>
 
-                  {startingTemplateId === template.id ? (
-                    <ActivityIndicator size="small" color={palette.accent} />
-                  ) : (
-                    <Ionicons name="play-circle-outline" size={20} color={palette.accent} />
-                  )}
-                </TouchableOpacity>
+                    {startingTemplateId === template.id ? (
+                      <ActivityIndicator size="small" color={palette.accent} />
+                    ) : (
+                      <Ionicons name="play-circle-outline" size={20} color={palette.accent} />
+                    )}
+                  </TouchableOpacity>
+                </Animated.View>
               ))
             )}
           </View>
@@ -553,26 +569,31 @@ export default function WorkoutScreen() {
                 descriptionStyle={styles.statusText}
               />
             ) : (
-              templates.map((template) => (
-                <TouchableOpacity
-                  key={template.id}
-                  style={styles.quickStartCard}
-                  activeOpacity={0.88}
-                  onPress={() => void handleStartTemplate(template.id)}
-                  disabled={startingTemplateId !== null}
+              templates.map((template, index) => (
+                <Animated.View
+                  key={`${template.id}-${animationEpoch}`}
+                  entering={FadeInDown.delay(Math.min(index * 45, 260)).duration(320)}
+                  layout={cardLayoutTransition}
                 >
-                  <View style={styles.quickStartCardTextWrap}>
-                    <Text style={styles.quickStartTitle}>{template.name}</Text>
-                    <Text style={styles.quickStartMeta}>{template.exerciseCount} exercises</Text>
-                    <Text style={styles.quickStartSummary}>{summarizeExercises(template.exerciseNames)}</Text>
-                  </View>
+                  <TouchableOpacity
+                    style={styles.quickStartCard}
+                    activeOpacity={0.88}
+                    onPress={() => void handleStartTemplate(template.id)}
+                    disabled={startingTemplateId !== null}
+                  >
+                    <View style={styles.quickStartCardTextWrap}>
+                      <Text style={styles.quickStartTitle}>{template.name}</Text>
+                      <Text style={styles.quickStartMeta}>{template.exerciseCount} exercises</Text>
+                      <Text style={styles.quickStartSummary}>{summarizeExercises(template.exerciseNames)}</Text>
+                    </View>
 
-                  {startingTemplateId === template.id ? (
-                    <ActivityIndicator size="small" color={palette.accent} />
-                  ) : (
-                    <Ionicons name="play-circle-outline" size={20} color={palette.accent} />
-                  )}
-                </TouchableOpacity>
+                    {startingTemplateId === template.id ? (
+                      <ActivityIndicator size="small" color={palette.accent} />
+                    ) : (
+                      <Ionicons name="play-circle-outline" size={20} color={palette.accent} />
+                    )}
+                  </TouchableOpacity>
+                </Animated.View>
               ))
             )}
           </View>
@@ -618,24 +639,30 @@ export default function WorkoutScreen() {
                 <Text style={styles.statusText}>Create your first routine to speed up workout starts.</Text>
               </View>
             ) : (
-              routines.map((routine) => (
-                <View key={routine.id} style={styles.routineCard}>
-                  <View style={styles.cardHead}>
-                    <Text style={styles.routineName}>{routine.name}</Text>
-                    <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
-                  </View>
-                  <Text style={styles.routineMeta}>{routine.exerciseCount} exercises</Text>
-                  <Text style={styles.routineNotes}>{routine.notes ?? 'No notes available.'}</Text>
+              routines.map((routine, index) => (
+                <Animated.View
+                  key={`${routine.id}-${animationEpoch}`}
+                  entering={FadeInDown.delay(Math.min(index * 45, 280)).duration(320)}
+                  layout={cardLayoutTransition}
+                >
+                  <View style={styles.routineCard}>
+                    <View style={styles.cardHead}>
+                      <Text style={styles.routineName}>{routine.name}</Text>
+                      <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
+                    </View>
+                    <Text style={styles.routineMeta}>{routine.exerciseCount} exercises</Text>
+                    <Text style={styles.routineNotes}>{routine.notes ?? 'No notes available.'}</Text>
 
-                  <TouchableOpacity
-                    style={styles.startRoutineButton}
-                    activeOpacity={0.88}
-                    onPress={() => handleStartRoutine(routine.id)}
-                  >
-                    <Ionicons name="play" size={15} color="#FFFFFF" />
-                    <Text style={styles.startRoutineButtonText}>Start Routine</Text>
-                  </TouchableOpacity>
-                </View>
+                    <TouchableOpacity
+                      style={styles.startRoutineButton}
+                      activeOpacity={0.88}
+                      onPress={() => handleStartRoutine(routine.id)}
+                    >
+                      <Ionicons name="play" size={15} color="#FFFFFF" />
+                      <Text style={styles.startRoutineButtonText}>Start Routine</Text>
+                    </TouchableOpacity>
+                  </View>
+                </Animated.View>
               ))
             )}
           </View>
@@ -699,19 +726,31 @@ export default function WorkoutScreen() {
               <Text style={styles.emptySubtitle}>Try another keyword or create a custom movement.</Text>
             </View>
           ) : (
-            groupedExercises.map(([muscle, groupedItems]) => (
-              <View key={muscle} style={styles.groupSection}>
-                <Text style={styles.groupTitle}>{muscle}</Text>
-                {groupedItems.map((exercise) => (
-                  <View key={exercise.id} style={styles.exerciseRow}>
-                    <View style={styles.exerciseTextWrap}>
-                      <Text style={styles.exerciseName}>{exercise.name}</Text>
-                      <Text style={styles.exerciseMeta}>{exercise.equipment ?? 'Bodyweight'}</Text>
-                    </View>
-                    <Text style={styles.exerciseMuscle}>{exercise.muscle_group ?? 'General'}</Text>
-                  </View>
-                ))}
-              </View>
+            groupedExercises.map(([muscle, groupedItems], muscleIndex) => (
+              <Animated.View
+                key={`${muscle}-${animationEpoch}`}
+                entering={FadeInUp.delay(Math.min(muscleIndex * 55, 260)).duration(340)}
+                layout={cardLayoutTransition}
+              >
+                <View style={styles.groupSection}>
+                  <Text style={styles.groupTitle}>{muscle}</Text>
+                  {groupedItems.map((exercise, exerciseIndex) => (
+                    <Animated.View
+                      key={`${exercise.id}-${animationEpoch}`}
+                      entering={FadeInDown.delay(Math.min(exerciseIndex * 35, 180)).duration(280)}
+                      layout={cardLayoutTransition}
+                    >
+                      <View style={styles.exerciseRow}>
+                        <View style={styles.exerciseTextWrap}>
+                          <Text style={styles.exerciseName}>{exercise.name}</Text>
+                          <Text style={styles.exerciseMeta}>{exercise.equipment ?? 'Bodyweight'}</Text>
+                        </View>
+                        <Text style={styles.exerciseMuscle}>{exercise.muscle_group ?? 'General'}</Text>
+                      </View>
+                    </Animated.View>
+                  ))}
+                </View>
+              </Animated.View>
             ))
           )}
         </>
@@ -723,10 +762,10 @@ export default function WorkoutScreen() {
         animationType="slide"
         onRequestClose={() => setIsCreateTemplateModalVisible(false)}
       >
-        <View style={styles.modalBackdrop}>
+        <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
           <Pressable style={styles.modalDismissArea} onPress={() => setIsCreateTemplateModalVisible(false)} />
 
-          <View style={styles.modalSheet}>
+          <View style={[styles.modalSheet, isWeb && styles.modalSheetWeb]}>
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Create Template</Text>
 
@@ -870,10 +909,10 @@ export default function WorkoutScreen() {
         animationType="slide"
         onRequestClose={() => setIsCreateRoutineModalVisible(false)}
       >
-        <View style={styles.modalBackdrop}>
+        <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
           <Pressable style={styles.modalDismissArea} onPress={() => setIsCreateRoutineModalVisible(false)} />
 
-          <View style={styles.modalSheet}>
+          <View style={[styles.modalSheet, isWeb && styles.modalSheetWeb]}>
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Create Routine</Text>
 
@@ -990,10 +1029,10 @@ export default function WorkoutScreen() {
         animationType="slide"
         onRequestClose={() => setIsCreateExerciseModalVisible(false)}
       >
-        <View style={styles.modalBackdrop}>
+        <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
           <Pressable style={styles.modalDismissArea} onPress={() => setIsCreateExerciseModalVisible(false)} />
 
-          <View style={styles.modalSheet}>
+          <View style={[styles.modalSheet, isWeb && styles.modalSheetWeb]}>
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Create Exercise</Text>
 
@@ -1362,6 +1401,15 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     backgroundColor: palette.overlay,
   },
+  modalBackdropWeb: {
+    width: 393,
+    maxWidth: '100%',
+    marginLeft: 'auto',
+    marginRight: 'auto',
+    left: 0,
+    right: 0,
+    alignSelf: 'center',
+  },
   modalDismissArea: {
     flex: 1,
   },
@@ -1375,6 +1423,13 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingHorizontal: 16,
     paddingBottom: 20,
+  },
+  modalSheetWeb: {
+    width: 393,
+    maxWidth: '100%',
+    marginLeft: 'auto',
+    marginRight: 'auto',
+    backgroundColor: palette.surface,
   },
   modalHandle: {
     alignSelf: 'center',

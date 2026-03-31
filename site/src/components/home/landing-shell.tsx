@@ -24,6 +24,10 @@ export function LandingShell() {
       return;
     }
 
+    if (window.innerWidth < 768) {
+      return;
+    }
+
     const dismissHint = () => {
       setShowScrollHint(false);
       setHintDismissed(true);
@@ -64,17 +68,17 @@ export function LandingShell() {
 
   return (
     <>
-      <header className="pointer-events-none fixed inset-x-0 top-0 z-[100] flex items-center justify-between px-4 py-4 md:px-7">
-        <div className="pointer-events-auto select-none text-2xl font-black leading-none tracking-tight">
+      <header className="pointer-events-none fixed inset-x-0 top-0 z-[100] flex items-center justify-between px-3 py-3 md:px-7 md:py-4">
+        <div className="pointer-events-auto select-none text-xl font-black leading-none tracking-tight sm:text-2xl">
           <span className="text-white">Lyft</span>
           <span style={{ color: '#3B82F6' }}>Track</span>
         </div>
 
-        <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-[var(--hero-header-border)] bg-[var(--hero-header-bg)] px-2 py-2 shadow-[0_10px_30px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+        <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-[var(--hero-header-border)] bg-[var(--hero-header-bg)] px-2 py-1.5 shadow-[0_10px_30px_rgba(0,0,0,0.22)] backdrop-blur-xl md:py-2">
           <button
             type="button"
             onClick={handleLanguageToggle}
-            className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[var(--hero-header-border)] bg-[var(--hero-header-pill-bg)] px-3 text-xs font-bold uppercase tracking-[0.08em] text-[var(--hero-header-text)] transition-transform hover:-translate-y-[1px]"
+            className="inline-flex min-h-8 items-center gap-2 rounded-full border border-[var(--hero-header-border)] bg-[var(--hero-header-pill-bg)] px-3 text-xs font-bold uppercase tracking-[0.08em] text-[var(--hero-header-text)] transition-transform hover:-translate-y-[1px] md:min-h-9"
             aria-label="Toggle language"
           >
             <Globe className="h-4 w-4" />
@@ -86,7 +90,7 @@ export function LandingShell() {
       <CinematicHero language={language} />
 
       <div
-        className={`pointer-events-none fixed bottom-6 left-1/2 z-[130] -translate-x-1/2 transition-all duration-500 md:bottom-8 ${
+        className={`pointer-events-none fixed bottom-6 left-1/2 z-[130] hidden -translate-x-1/2 transition-all duration-500 md:bottom-8 md:block ${
           showScrollHint ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
         }`}
         aria-hidden="true"

@@ -67,6 +67,18 @@ export type FinishWorkoutResult = {
   endTime: string;
 };
 
+export type WorkoutSaveValidationCode = 'no-completed-sets' | 'no-valid-set-rows';
+
+export class WorkoutSaveValidationError extends Error {
+  readonly code: WorkoutSaveValidationCode;
+
+  constructor(code: WorkoutSaveValidationCode, message: string) {
+    super(message);
+    this.name = 'WorkoutSaveValidationError';
+    this.code = code;
+  }
+}
+
 export type RoutineSummary = Pick<RoutineRow, 'id' | 'name' | 'notes'> & {
   exerciseCount: number;
 };
@@ -895,6 +907,13 @@ export async function finishWorkout(input: FinishWorkoutInput): Promise<FinishWo
   const endTime = new Date().toISOString();
   const completedSetDrafts = toCompletedSetDrafts(input.setDrafts);
 
+  if (completedSetDrafts.length === 0) {
+    throw new WorkoutSaveValidationError(
+      'no-completed-sets',
+      'Mark at least one set as completed before finishing the workout.'
+    );
+  }
+
   let saveResult: CreateWorkoutWithSetsResult;
 
   try {
@@ -907,6 +926,10 @@ export async function finishWorkout(input: FinishWorkoutInput): Promise<FinishWo
       setDrafts: completedSetDrafts,
     });
   } catch (error) {
+    if (error instanceof WorkoutSaveValidationError) {
+      throw error;
+    }
+
     console.error('[finishWorkout] Unable to persist workout to Supabase', {
       templateId: input.templateId ?? null,
       startTime: input.startTime,
@@ -932,6 +955,10 @@ export async function finishWorkout(input: FinishWorkoutInput): Promise<FinishWo
 export async function createWorkoutWithSets(
   input: CreateWorkoutWithSetsInput
 ): Promise<CreateWorkoutWithSetsResult> {
+  if (input.setDrafts.length === 0) {
+    throw new WorkoutSaveValidationError('no-valid-set-rows', 'No completed sets were provided for saving.');
+  }
+
   const user = await getAuthenticatedUserOrThrow();
   const normalizedStartTime = normalizeIsoTimestamp(input.startTime, 'Workout start time');
   const normalizedEndTime = normalizeIsoTimestamp(input.endTime, 'Workout end time');
@@ -1071,18 +1098,37 @@ export async function createWorkoutWithSets(
     }
   }
 
-  const setRows = input.setDrafts
+  const mappedSetRows = input.setDrafts
     .map((draft) => {
       const normalizedExerciseId = draft.exerciseId?.trim() ?? '';
       return buildSetInsertRow(createdWorkout.id, draft, workoutExerciseIdByExercise.get(normalizedExerciseId) ?? null);
-    })
-    .filter((row): row is TablesInsert<'sets'> => row !== null);
+    });
+
+  const setRows = mappedSetRows.filter((row): row is TablesInsert<'sets'> => row !== null);
+  const rejectedSetRows = mappedSetRows.length - setRows.length;
+
+  if (rejectedSetRows > 0) {
+    console.warn('[createWorkoutWithSets] Some set rows were dropped during validation', {
+      workoutId: createdWorkout.id,
+      attemptedSetRows: mappedSetRows.length,
+      insertedCandidateRows: setRows.length,
+      rejectedSetRows,
+    });
+  }
 
   if (setRows.length === 0) {
-    return {
-      workoutId: createdWorkout.id,
-      insertedSetCount: 0,
-    };
+    const { error: rollbackError } = await supabase.from('workouts').delete().eq('id', createdWorkout.id);
+
+    if (rollbackError) {
+      throw new Error(
+        `No valid sets were generated for insertion. Rollback failed for workout ${createdWorkout.id}: ${rollbackError.message}`
+      );
+    }
+
+    throw new WorkoutSaveValidationError(
+      'no-valid-set-rows',
+      'No valid completed sets were found to save. Please review your sets and try again.'
+    );
   }
 
   const insertSets = async (rows: TablesInsert<'sets'>[]) => {

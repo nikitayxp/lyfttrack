@@ -39,7 +39,6 @@ export default function EditProfileScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
   const [isSendingPasswordReset, setIsSendingPasswordReset] = useState(false);
-  const [isSigningOut, setIsSigningOut] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const loadProfile = useCallback(async () => {
@@ -120,40 +119,6 @@ export default function EditProfileScreen() {
     }
   }, [bioInput, fullNameInput, isSaving, usernameInput]);
 
-  const runSignOut = useCallback(async () => {
-    if (isSigningOut) {
-      return;
-    }
-
-    setIsSigningOut(true);
-
-    try {
-      const { error } = await supabase.auth.signOut();
-
-      if (error) {
-        throw error;
-      }
-    } catch (error) {
-      Alert.alert('Nao foi possivel terminar sessao', toErrorMessage(error));
-    } finally {
-      setIsSigningOut(false);
-    }
-  }, [isSigningOut]);
-
-  const handleLogout = useCallback(() => {
-    Alert.alert('Terminar sessao', 'Queres sair da tua conta?', [
-      {
-        text: 'Cancelar',
-        style: 'cancel',
-      },
-      {
-        text: 'Sair',
-        style: 'destructive',
-        onPress: () => void runSignOut(),
-      },
-    ]);
-  }, [runSignOut]);
-
   const handleUpdateEmail = useCallback(async () => {
     if (isUpdatingEmail) {
       return;
@@ -233,7 +198,7 @@ export default function EditProfileScreen() {
         </View>
 
         <Text style={styles.title}>Editar Perfil</Text>
-        <Text style={styles.subtitle}>Atualiza os teus dados publicos e controla a sessao.</Text>
+        <Text style={styles.subtitle}>Atualiza os teus dados publicos e preferencias da conta.</Text>
 
         {isLoading ? (
           <View style={styles.statusCard}>
@@ -349,21 +314,6 @@ export default function EditProfileScreen() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
-              style={[styles.logoutButton, isSigningOut && styles.logoutButtonDisabled]}
-              activeOpacity={0.9}
-              onPress={handleLogout}
-              disabled={isSigningOut}
-            >
-              {isSigningOut ? (
-                <ActivityIndicator size="small" color={palette.error} />
-              ) : (
-                <>
-                  <Ionicons name="log-out-outline" size={18} color={palette.error} />
-                  <Text style={styles.logoutButtonText}>Terminar sessao</Text>
-                </>
-              )}
-            </TouchableOpacity>
           </>
         )}
       </ScrollView>
@@ -569,25 +519,5 @@ const styles = StyleSheet.create({
   },
   accountActionDisabled: {
     opacity: 0.75,
-  },
-  logoutButton: {
-    marginTop: 14,
-    minHeight: 44,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: '#111111',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    columnGap: 8,
-  },
-  logoutButtonDisabled: {
-    opacity: 0.75,
-  },
-  logoutButtonText: {
-    color: palette.error,
-    fontSize: 15,
-    fontWeight: '800',
   },
 });

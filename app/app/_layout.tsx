@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect } from 'react';
 import {
   Platform,
   StyleSheet,
@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { router, Stack, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '@/constants/theme';
 import { supabase } from '@/services/supabase';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
@@ -26,10 +27,23 @@ const webViewportFill: ViewStyle = {
   minHeight: '100dvh' as ViewStyle['minHeight'],
 };
 
+const desktopShellWebShadow = {
+  boxShadow: '0px 24px 64px rgba(0, 0, 0, 0.42)',
+} as any;
+
 const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: '#000000',
+  },
+  webRoot: {
+    flex: 1,
+    position: 'relative',
+    backgroundColor: '#000000',
+  },
+  webRootDesktop: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   safeArea: {
     flex: 1,
@@ -39,29 +53,49 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     minHeight: '100%',
-    backgroundColor: '#000000',
+    backgroundColor: palette.bgPrimary,
   },
-  desktopBackground: {
-    flex: 1,
-    position: 'relative',
-    backgroundColor: '#000000',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  desktopFlowLayer: {
+  webFlowLayer: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 0,
   },
+  webBlueAuraTop: {
+    position: 'absolute',
+    width: 520,
+    height: 520,
+    borderRadius: 520,
+    top: -220,
+    left: -120,
+    opacity: 0.36,
+    zIndex: 1,
+  },
+  webBlueAuraBottom: {
+    position: 'absolute',
+    width: 560,
+    height: 560,
+    borderRadius: 560,
+    bottom: -250,
+    right: -140,
+    opacity: 0.28,
+    zIndex: 1,
+  },
   deviceMockup: {
-    width: 390,
-    height: 844,
-    backgroundColor: '#000',
+    width: 393,
+    height: 852,
+    maxHeight: '95vh' as ViewStyle['maxHeight'],
+    margin: 'auto' as any,
+    backgroundColor: palette.bgPrimary,
     borderRadius: 40,
     overflow: 'hidden',
-    borderWidth: 10,
-    borderColor: '#27272A',
+    borderWidth: 8,
+    borderColor: '#1a1a1a',
     zIndex: 10,
+    alignSelf: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.34,
+    shadowRadius: 28,
+    elevation: 20,
   },
 });
 
@@ -70,13 +104,7 @@ export default function RootLayout() {
   const isWeb = Platform.OS === 'web';
   const isDesktopWeb = isWeb && width > DESKTOP_WEB_MOCKUP_MIN_WIDTH;
   const segments = useSegments();
-  const inAuthGroup = segments[0] === '(auth)';
   const safeAreaStyle = isWeb ? styles.safeAreaWeb : styles.safeArea;
-  const segmentsRef = useRef<string[]>(segments);
-
-  useEffect(() => {
-    segmentsRef.current = segments;
-  }, [segments]);
 
   useEffect(() => {
     if (!isWeb || typeof document === 'undefined') {
@@ -90,6 +118,7 @@ export default function RootLayout() {
     const previous = {
       htmlHeight: html.style.height,
       htmlMinHeight: html.style.minHeight,
+      htmlBackground: html.style.backgroundColor,
       bodyHeight: body.style.height,
       bodyMinHeight: body.style.minHeight,
       bodyMargin: body.style.margin,
@@ -103,6 +132,7 @@ export default function RootLayout() {
 
     html.style.height = '100%';
     html.style.minHeight = '100%';
+    html.style.backgroundColor = '#000000';
 
     body.style.height = '100%';
     body.style.minHeight = '100%';
@@ -120,6 +150,7 @@ export default function RootLayout() {
     return () => {
       html.style.height = previous.htmlHeight;
       html.style.minHeight = previous.htmlMinHeight;
+      html.style.backgroundColor = previous.htmlBackground;
 
       body.style.height = previous.bodyHeight;
       body.style.minHeight = previous.bodyMinHeight;
@@ -137,8 +168,7 @@ export default function RootLayout() {
   }, [isWeb]);
 
   const redirectForSession = useCallback((session: Session | null) => {
-    const currentSegments = segmentsRef.current;
-    const inAuthGroup = currentSegments[0] === '(auth)';
+    const inAuthGroup = segments[0] === '(auth)';
 
     if (session) {
       if (inAuthGroup) {
@@ -151,7 +181,7 @@ export default function RootLayout() {
     if (!inAuthGroup) {
       router.replace('/(auth)' as any);
     }
-  }, []);
+  }, [segments]);
 
   useEffect(() => {
     let isMounted = true;
@@ -185,7 +215,9 @@ export default function RootLayout() {
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: palette.bgPrimary },
+          contentStyle: {
+            backgroundColor: palette.bgPrimary,
+          },
         }}
       >
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
@@ -194,7 +226,7 @@ export default function RootLayout() {
           name="workout/active"
           options={{
             headerShown: false,
-            presentation: 'fullScreenModal',
+            presentation: isWeb ? 'card' : 'fullScreenModal',
             animation: 'slide_from_bottom',
             statusBarStyle: 'light',
           }}
@@ -211,29 +243,36 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 
-  if (isDesktopWeb) {
+  if (isWeb) {
     return (
-      <View style={[styles.desktopBackground, isWeb && webViewportFill]}>
-        {inAuthGroup ? (
-          <View pointerEvents="none" style={styles.desktopFlowLayer}>
-            <NeuralBackground
-              color="#3B82F6"
-              trailOpacity={0.1}
-              speed={0.35}
-            />
-          </View>
-        ) : null}
-
-        <View style={styles.deviceMockup}>
-          <StatusBar style="light" />
-          {layout}
+      <View style={[styles.webRoot, isDesktopWeb && styles.webRootDesktop, webViewportFill]}>
+        <View pointerEvents="none" style={styles.webFlowLayer}>
+          <NeuralBackground color="#3B82F6" trailOpacity={0.12} speed={0.35} />
         </View>
+
+        <LinearGradient
+          pointerEvents="none"
+          colors={['rgba(59,130,246,0.50)', 'rgba(59,130,246,0.00)']}
+          start={{ x: 0.4, y: 0.2 }}
+          end={{ x: 0.85, y: 0.9 }}
+          style={styles.webBlueAuraTop}
+        />
+        <LinearGradient
+          pointerEvents="none"
+          colors={['rgba(56,189,248,0.42)', 'rgba(56,189,248,0.00)']}
+          start={{ x: 0.2, y: 0.15 }}
+          end={{ x: 0.8, y: 0.85 }}
+          style={styles.webBlueAuraBottom}
+        />
+
+        {isDesktopWeb ? <View style={[styles.deviceMockup, desktopShellWebShadow]}>{layout}</View> : layout}
+        <StatusBar style="light" />
       </View>
     );
   }
 
   return (
-    <View style={[styles.root, isWeb && webViewportFill]}>
+    <View style={styles.root}>
       {layout}
       <StatusBar style="light" />
     </View>

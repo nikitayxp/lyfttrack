@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Animated, { FadeInDown, FadeInUp, LinearTransition } from 'react-native-reanimated';
 import { Colors } from '@/constants/Colors';
 import {
   addComment,
@@ -34,6 +35,7 @@ const SCREEN_BG = '#000000';
 const CARD_BG = '#111111';
 const FEED_PAGE_SIZE = 20;
 const ACTIVE_USERS_SEARCH_LIMIT = 40;
+const feedCardLayoutTransition = LinearTransition.springify().damping(16).stiffness(180);
 
 type FeedLikeInteractionState = {
   hasLiked: boolean;
@@ -86,6 +88,13 @@ export default function FeedScreen() {
   const [activeUsers, setActiveUsers] = useState<SocialSearchResult[]>([]);
   const [isLoadingActiveUsers, setIsLoadingActiveUsers] = useState(false);
   const [activeUsersError, setActiveUsersError] = useState<string | null>(null);
+  const [animationEpoch, setAnimationEpoch] = useState(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      setAnimationEpoch((currentValue) => currentValue + 1);
+    }, [])
+  );
 
   const loadFeedPage = useCallback(async (pageToLoad: number, mode: 'reset' | 'append') => {
     if (mode === 'reset') {
@@ -506,7 +515,12 @@ export default function FeedScreen() {
     const hasAthleteQuery = athleteQuery.trim().length > 0;
 
     return (
-      <View style={styles.headerWrap}>
+      <Animated.View
+        key={`feed-header-${animationEpoch}`}
+        style={styles.headerWrap}
+        entering={FadeInUp.duration(320)}
+        layout={feedCardLayoutTransition}
+      >
         <Text style={styles.title}>FEED DE TREINO</Text>
         <Text style={styles.subtitle}>As tuas ultimas sessoes e os treinos da tua rede.</Text>
 
@@ -577,9 +591,9 @@ export default function FeedScreen() {
             </ScrollView>
           ) : null}
         </View>
-      </View>
+      </Animated.View>
     );
-  }, [activeUsers, activeUsersError, athleteQuery, isLoadingActiveUsers, openPublicProfile]);
+  }, [activeUsers, activeUsersError, athleteQuery, isLoadingActiveUsers, openPublicProfile, animationEpoch]);
 
   const emptyState = useMemo(() => {
     if (isLoading) {
@@ -629,19 +643,25 @@ export default function FeedScreen() {
       <FlatList
         data={workouts}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => {
+        renderItem={({ item, index }) => {
           const interactionState = optimisticLikeState[item.id];
 
           return (
-            <WorkoutFeedCard
-              workout={item}
-              likeCount={interactionState?.likesCount ?? item.likes_count}
-              commentsCount={commentCountByWorkoutId[item.id] ?? item.comments_count}
-              hasLiked={interactionState?.hasLiked ?? item.has_liked}
-              isLikePending={interactionState?.isPending ?? false}
-              onToggleLike={() => void handleToggleLike(item)}
-              onOpenComments={() => openCommentsModal(item)}
-            />
+            <Animated.View
+              key={`${item.id}-${animationEpoch}`}
+              entering={FadeInDown.delay(Math.min(index * 35, 260)).duration(300)}
+              layout={feedCardLayoutTransition}
+            >
+              <WorkoutFeedCard
+                workout={item}
+                likeCount={interactionState?.likesCount ?? item.likes_count}
+                commentsCount={commentCountByWorkoutId[item.id] ?? item.comments_count}
+                hasLiked={interactionState?.hasLiked ?? item.has_liked}
+                isLikePending={interactionState?.isPending ?? false}
+                onToggleLike={() => void handleToggleLike(item)}
+                onOpenComments={() => openCommentsModal(item)}
+              />
+            </Animated.View>
           );
         }}
         ListHeaderComponent={headerTitle}

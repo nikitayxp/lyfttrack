@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Animated, { FadeInDown, FadeInUp, LinearTransition } from 'react-native-reanimated';
 import { Colors } from '@/constants/theme';
 import {
   createRoutine,
@@ -25,10 +27,12 @@ import type { Tables } from '@/types/database';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 
 const palette = Colors.dark;
+const cardLayoutTransition = LinearTransition.springify().damping(16).stiffness(180);
 
 type ExerciseRow = Tables<'exercises'>;
 
 export default function RoutinesScreen() {
+  const isWeb = Platform.OS === 'web';
   const [routines, setRoutines] = useState<RoutineSummary[]>([]);
   const [isLoadingRoutines, setIsLoadingRoutines] = useState(true);
   const [routinesError, setRoutinesError] = useState<string | null>(null);
@@ -42,6 +46,13 @@ export default function RoutinesScreen() {
   const [catalogExercises, setCatalogExercises] = useState<ExerciseRow[]>([]);
   const [isLoadingCatalog, setIsLoadingCatalog] = useState(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [animationEpoch, setAnimationEpoch] = useState(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      setAnimationEpoch((currentValue) => currentValue + 1);
+    }, [])
+  );
 
   const loadRoutines = useCallback(async () => {
     setIsLoadingRoutines(true);
@@ -147,14 +158,20 @@ export default function RoutinesScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <TouchableOpacity
-        style={styles.newRoutineButton}
-        activeOpacity={0.9}
-        onPress={() => setIsCreateModalVisible(true)}
+      <Animated.View
+        key={`new-routine-${animationEpoch}`}
+        entering={FadeInUp.duration(320)}
+        layout={cardLayoutTransition}
       >
-        <Ionicons name="add" size={24} color="#FFFFFF" />
-        <Text style={styles.newRoutineButtonText}>New Routine</Text>
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.newRoutineButton}
+          activeOpacity={0.9}
+          onPress={() => setIsCreateModalVisible(true)}
+        >
+          <Ionicons name="add" size={24} color="#FFFFFF" />
+          <Text style={styles.newRoutineButtonText}>New Routine</Text>
+        </TouchableOpacity>
+      </Animated.View>
 
       <Text style={styles.sectionTitle}>Your Routines</Text>
       {isLoadingRoutines ? (
@@ -176,24 +193,30 @@ export default function RoutinesScreen() {
           <Text style={styles.statusText}>Create your first routine to speed up workout starts.</Text>
         </View>
       ) : (
-        routines.map((routine) => (
-          <View key={routine.id} style={styles.routineCard}>
-            <View style={styles.cardHead}>
-              <Text style={styles.routineName}>{routine.name}</Text>
-              <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
-            </View>
-            <Text style={styles.routineMeta}>{routine.exerciseCount} exercises</Text>
-            <Text style={styles.routineNotes}>{routine.notes ?? 'No notes available.'}</Text>
+        routines.map((routine, index) => (
+          <Animated.View
+            key={`${routine.id}-${animationEpoch}`}
+            entering={FadeInDown.delay(Math.min(index * 45, 280)).duration(320)}
+            layout={cardLayoutTransition}
+          >
+            <View style={styles.routineCard}>
+              <View style={styles.cardHead}>
+                <Text style={styles.routineName}>{routine.name}</Text>
+                <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
+              </View>
+              <Text style={styles.routineMeta}>{routine.exerciseCount} exercises</Text>
+              <Text style={styles.routineNotes}>{routine.notes ?? 'No notes available.'}</Text>
 
-            <TouchableOpacity
-              style={styles.startRoutineButton}
-              activeOpacity={0.88}
-              onPress={() => handleStartRoutine(routine.id)}
-            >
-              <Ionicons name="play" size={15} color="#FFFFFF" />
-              <Text style={styles.startRoutineButtonText}>Start Routine</Text>
-            </TouchableOpacity>
-          </View>
+              <TouchableOpacity
+                style={styles.startRoutineButton}
+                activeOpacity={0.88}
+                onPress={() => handleStartRoutine(routine.id)}
+              >
+                <Ionicons name="play" size={15} color="#FFFFFF" />
+                <Text style={styles.startRoutineButtonText}>Start Routine</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
         ))
       )}
 
@@ -203,10 +226,10 @@ export default function RoutinesScreen() {
         animationType="slide"
         onRequestClose={() => setIsCreateModalVisible(false)}
       >
-        <View style={styles.modalBackdrop}>
+        <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
           <Pressable style={styles.modalDismissArea} onPress={() => setIsCreateModalVisible(false)} />
 
-          <View style={styles.modalSheet}>
+          <View style={[styles.modalSheet, isWeb && styles.modalSheetWeb]}>
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Create Routine</Text>
 
@@ -257,32 +280,37 @@ export default function RoutinesScreen() {
               </View>
             ) : (
               <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
-                {catalogExercises.map((exercise) => {
+                {catalogExercises.map((exercise, index) => {
                   const selectedOrder = selectionOrder.get(exercise.id);
                   const isSelected = selectedOrder !== undefined;
 
                   return (
-                    <TouchableOpacity
-                      key={exercise.id}
-                      style={[styles.modalExerciseRow, isSelected && styles.modalExerciseRowSelected]}
-                      activeOpacity={0.88}
-                      onPress={() => toggleExerciseSelection(exercise.id)}
+                    <Animated.View
+                      key={`${exercise.id}-${animationEpoch}`}
+                      entering={FadeInDown.delay(Math.min(index * 25, 180)).duration(260)}
+                      layout={cardLayoutTransition}
                     >
-                      <View style={styles.modalExerciseTextWrap}>
-                        <Text style={styles.modalExerciseName}>{exercise.name}</Text>
-                        <Text style={styles.modalExerciseMeta}>
-                          {exercise.muscle_group ?? 'General'} - {exercise.equipment ?? 'Bodyweight'}
-                        </Text>
-                      </View>
-
-                      {isSelected ? (
-                        <View style={styles.orderBadge}>
-                          <Text style={styles.orderBadgeText}>{selectedOrder}</Text>
+                      <TouchableOpacity
+                        style={[styles.modalExerciseRow, isSelected && styles.modalExerciseRowSelected]}
+                        activeOpacity={0.88}
+                        onPress={() => toggleExerciseSelection(exercise.id)}
+                      >
+                        <View style={styles.modalExerciseTextWrap}>
+                          <Text style={styles.modalExerciseName}>{exercise.name}</Text>
+                          <Text style={styles.modalExerciseMeta}>
+                            {exercise.muscle_group ?? 'General'} - {exercise.equipment ?? 'Bodyweight'}
+                          </Text>
                         </View>
-                      ) : (
-                        <Ionicons name="add-circle-outline" size={22} color={palette.accent} />
-                      )}
-                    </TouchableOpacity>
+
+                        {isSelected ? (
+                          <View style={styles.orderBadge}>
+                            <Text style={styles.orderBadgeText}>{selectedOrder}</Text>
+                          </View>
+                        ) : (
+                          <Ionicons name="add-circle-outline" size={22} color={palette.accent} />
+                        )}
+                      </TouchableOpacity>
+                    </Animated.View>
                   );
                 })}
               </ScrollView>
@@ -438,6 +466,15 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     backgroundColor: palette.overlay,
   },
+  modalBackdropWeb: {
+    width: 393,
+    maxWidth: '100%',
+    marginLeft: 'auto',
+    marginRight: 'auto',
+    left: 0,
+    right: 0,
+    alignSelf: 'center',
+  },
   modalDismissArea: {
     flex: 1,
   },
@@ -451,6 +488,13 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingHorizontal: 16,
     paddingBottom: 20,
+  },
+  modalSheetWeb: {
+    width: 393,
+    maxWidth: '100%',
+    marginLeft: 'auto',
+    marginRight: 'auto',
+    backgroundColor: palette.surface,
   },
   modalHandle: {
     alignSelf: 'center',

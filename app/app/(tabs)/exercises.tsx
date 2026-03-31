@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Animated, { FadeInDown, FadeInUp, LinearTransition } from 'react-native-reanimated';
 import { Colors } from '@/constants/theme';
 import type { Tables } from '@/types/database';
 import { createExercise, getErrorMessage, getExercisesCatalog } from '@/services/workoutService';
@@ -19,8 +22,10 @@ import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 
 type ExerciseRow = Tables<'exercises'>;
 const palette = Colors.dark;
+const cardLayoutTransition = LinearTransition.springify().damping(16).stiffness(180);
 
 export default function ExercisesScreen() {
+  const isWeb = Platform.OS === 'web';
   const [exercises, setExercises] = useState<ExerciseRow[]>([]);
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -30,6 +35,13 @@ export default function ExercisesScreen() {
   const [exerciseNameInput, setExerciseNameInput] = useState('');
   const [muscleGroupInput, setMuscleGroupInput] = useState('');
   const [equipmentInput, setEquipmentInput] = useState('');
+  const [animationEpoch, setAnimationEpoch] = useState(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      setAnimationEpoch((currentValue) => currentValue + 1);
+    }, [])
+  );
 
   const loadExercises = useCallback(async () => {
     setIsLoading(true);
@@ -114,24 +126,30 @@ export default function ExercisesScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.toolbarRow}>
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={18} color={palette.textMuted} />
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search exercises"
-            placeholderTextColor={palette.textMuted}
-            style={styles.searchInput}
-            autoCorrect={false}
-            autoCapitalize="none"
-          />
-        </View>
+      <Animated.View
+        key={`toolbar-${animationEpoch}`}
+        entering={FadeInUp.duration(320)}
+        layout={cardLayoutTransition}
+      >
+        <View style={styles.toolbarRow}>
+          <View style={styles.searchBar}>
+            <Ionicons name="search" size={18} color={palette.textMuted} />
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search exercises"
+              placeholderTextColor={palette.textMuted}
+              style={styles.searchInput}
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+          </View>
 
-        <TouchableOpacity style={styles.customButton} onPress={() => setIsCreateModalVisible(true)} activeOpacity={0.88}>
-          <Text style={styles.customButtonText}>+ Custom</Text>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity style={styles.customButton} onPress={() => setIsCreateModalVisible(true)} activeOpacity={0.88}>
+            <Text style={styles.customButtonText}>+ Custom</Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
 
       {isLoading ? (
         <View style={styles.statusContainer}>
@@ -152,19 +170,31 @@ export default function ExercisesScreen() {
           <Text style={styles.emptySubtitle}>Try another keyword.</Text>
         </View>
       ) : (
-        groupedExercises.map(([muscle, groupedItems]) => (
-          <View key={muscle} style={styles.groupSection}>
-            <Text style={styles.groupTitle}>{muscle}</Text>
-            {groupedItems.map((exercise) => (
-              <View key={exercise.id} style={styles.exerciseRow}>
-                <View style={styles.exerciseTextWrap}>
-                  <Text style={styles.exerciseName}>{exercise.name}</Text>
-                  <Text style={styles.exerciseMeta}>{exercise.equipment ?? 'Bodyweight'}</Text>
-                </View>
-                <Text style={styles.exerciseMuscle}>{exercise.muscle_group ?? 'General'}</Text>
-              </View>
-            ))}
-          </View>
+        groupedExercises.map(([muscle, groupedItems], groupIndex) => (
+          <Animated.View
+            key={`${muscle}-${animationEpoch}`}
+            entering={FadeInUp.delay(Math.min(groupIndex * 50, 260)).duration(340)}
+            layout={cardLayoutTransition}
+          >
+            <View style={styles.groupSection}>
+              <Text style={styles.groupTitle}>{muscle}</Text>
+              {groupedItems.map((exercise, exerciseIndex) => (
+                <Animated.View
+                  key={`${exercise.id}-${animationEpoch}`}
+                  entering={FadeInDown.delay(Math.min(exerciseIndex * 28, 180)).duration(280)}
+                  layout={cardLayoutTransition}
+                >
+                  <View style={styles.exerciseRow}>
+                    <View style={styles.exerciseTextWrap}>
+                      <Text style={styles.exerciseName}>{exercise.name}</Text>
+                      <Text style={styles.exerciseMeta}>{exercise.equipment ?? 'Bodyweight'}</Text>
+                    </View>
+                    <Text style={styles.exerciseMuscle}>{exercise.muscle_group ?? 'General'}</Text>
+                  </View>
+                </Animated.View>
+              ))}
+            </View>
+          </Animated.View>
         ))
       )}
 
@@ -174,10 +204,10 @@ export default function ExercisesScreen() {
         animationType="slide"
         onRequestClose={() => setIsCreateModalVisible(false)}
       >
-        <View style={styles.modalBackdrop}>
+        <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
           <Pressable style={styles.modalDismissArea} onPress={() => setIsCreateModalVisible(false)} />
 
-          <View style={styles.modalSheet}>
+          <View style={[styles.modalSheet, isWeb && styles.modalSheetWeb]}>
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Create Exercise</Text>
 
@@ -390,6 +420,15 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     backgroundColor: palette.overlay,
   },
+  modalBackdropWeb: {
+    width: 393,
+    maxWidth: '100%',
+    marginLeft: 'auto',
+    marginRight: 'auto',
+    left: 0,
+    right: 0,
+    alignSelf: 'center',
+  },
   modalDismissArea: {
     flex: 1,
   },
@@ -402,6 +441,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 24,
+  },
+  modalSheetWeb: {
+    width: 393,
+    maxWidth: '100%',
+    marginLeft: 'auto',
+    marginRight: 'auto',
+    backgroundColor: palette.surface,
   },
   modalHandle: {
     alignSelf: 'center',

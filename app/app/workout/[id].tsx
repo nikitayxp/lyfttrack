@@ -24,6 +24,7 @@ import { formatRelativeTime } from '@/utils/dateUtils';
 const palette = Colors.dark;
 const SCREEN_BG = '#050A12';
 const CARD_BG = '#111827';
+const ROOT_SCREEN_BG = SCREEN_BG;
 
 function resolveRouteWorkoutId(rawValue: string | string[] | undefined): string | null {
   if (!rawValue) {
@@ -270,7 +271,7 @@ export default function WorkoutDetailsScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: SCREEN_BG,
+    backgroundColor: ROOT_SCREEN_BG,
   },
   headerRow: {
     flexDirection: 'row',
@@ -304,7 +305,7 @@ const styles = StyleSheet.create({
   },
   scroll: {
     flex: 1,
-    backgroundColor: SCREEN_BG,
+    backgroundColor: ROOT_SCREEN_BG,
   },
   content: {
     paddingHorizontal: 16,

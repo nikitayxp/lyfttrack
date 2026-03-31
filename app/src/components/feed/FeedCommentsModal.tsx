@@ -64,6 +64,7 @@ export function FeedCommentsModal({
   onRetry,
 }: FeedCommentsModalProps) {
   const insets = useSafeAreaInsets();
+  const isWeb = Platform.OS === 'web';
 
   const listEmptyState = useMemo(() => {
     if (isLoading) {
@@ -97,74 +98,76 @@ export function FeedCommentsModal({
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
       <KeyboardAvoidingView
-        style={styles.screen}
+        style={[styles.screen, isWeb && styles.screenWeb]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
       >
-        <View style={[styles.header, { paddingTop: insets.top + 10 }]}> 
-          <TouchableOpacity style={styles.closeButton} activeOpacity={0.88} onPress={onClose}>
-            <Ionicons name="close" size={22} color={palette.textPrimary} />
-          </TouchableOpacity>
-          <View style={styles.headerTextWrap}>
-            <Text style={styles.headerTitle}>Comentarios</Text>
-            <Text style={styles.headerSubtitle} numberOfLines={1}>
-              {workoutName}
-            </Text>
-          </View>
-          <View style={styles.headerRightSpacer} />
-        </View>
-
-        <View style={styles.content}>
-          <FlatList
-            data={comments}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <View style={styles.commentItem}>
-                {item.profile?.avatar_url ? (
-                  <Image source={{ uri: item.profile.avatar_url }} style={styles.avatar} />
-                ) : (
-                  <View style={styles.avatarFallback}>
-                    <Text style={styles.avatarFallbackText}>{initialsOf(item)}</Text>
-                  </View>
-                )}
-
-                <View style={styles.commentTextWrap}>
-                  <View style={styles.commentHeaderRow}>
-                    <Text style={styles.commentAuthor}>{displayNameOf(item)}</Text>
-                    <Text style={styles.commentTime}>{formatRelativeTime(item.created_at)}</Text>
-                  </View>
-                  <Text style={styles.commentBody}>{item.content}</Text>
-                </View>
-              </View>
-            )}
-            ListEmptyComponent={listEmptyState}
-            contentContainerStyle={styles.listContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          />
-
-          <View style={[styles.inputRow, { paddingBottom: Math.max(insets.bottom, 10) }]}> 
-            <TextInput
-              value={inputValue}
-              onChangeText={onChangeInput}
-              style={styles.input}
-              placeholder="Escreve um comentario..."
-              placeholderTextColor={palette.textMuted}
-              multiline
-              maxLength={1000}
-            />
-            <TouchableOpacity
-              style={[styles.sendButton, (isSending || inputValue.trim().length === 0) && styles.sendButtonDisabled]}
-              activeOpacity={0.88}
-              onPress={onSend}
-              disabled={isSending || inputValue.trim().length === 0}
-            >
-              {isSending ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Ionicons name="send" size={16} color="#FFFFFF" />
-              )}
+        <View style={[styles.screenFrame, isWeb && styles.screenFrameWeb]}>
+          <View style={[styles.header, { paddingTop: insets.top + 10 }]}> 
+            <TouchableOpacity style={styles.closeButton} activeOpacity={0.88} onPress={onClose}>
+              <Ionicons name="close" size={22} color={palette.textPrimary} />
             </TouchableOpacity>
+            <View style={styles.headerTextWrap}>
+              <Text style={styles.headerTitle}>Comentarios</Text>
+              <Text style={styles.headerSubtitle} numberOfLines={1}>
+                {workoutName}
+              </Text>
+            </View>
+            <View style={styles.headerRightSpacer} />
+          </View>
+
+          <View style={styles.content}>
+            <FlatList
+              data={comments}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <View style={styles.commentItem}>
+                  {item.profile?.avatar_url ? (
+                    <Image source={{ uri: item.profile.avatar_url }} style={styles.avatar} />
+                  ) : (
+                    <View style={styles.avatarFallback}>
+                      <Text style={styles.avatarFallbackText}>{initialsOf(item)}</Text>
+                    </View>
+                  )}
+
+                  <View style={styles.commentTextWrap}>
+                    <View style={styles.commentHeaderRow}>
+                      <Text style={styles.commentAuthor}>{displayNameOf(item)}</Text>
+                      <Text style={styles.commentTime}>{formatRelativeTime(item.created_at)}</Text>
+                    </View>
+                    <Text style={styles.commentBody}>{item.content}</Text>
+                  </View>
+                </View>
+              )}
+              ListEmptyComponent={listEmptyState}
+              contentContainerStyle={styles.listContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            />
+
+            <View style={[styles.inputRow, { paddingBottom: Math.max(insets.bottom, 10) }]}> 
+              <TextInput
+                value={inputValue}
+                onChangeText={onChangeInput}
+                style={styles.input}
+                placeholder="Escreve um comentario..."
+                placeholderTextColor={palette.textMuted}
+                multiline
+                maxLength={1000}
+              />
+              <TouchableOpacity
+                style={[styles.sendButton, (isSending || inputValue.trim().length === 0) && styles.sendButtonDisabled]}
+                activeOpacity={0.88}
+                onPress={onSend}
+                disabled={isSending || inputValue.trim().length === 0}
+              >
+                {isSending ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Ionicons name="send" size={16} color="#FFFFFF" />
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -175,6 +178,24 @@ export function FeedCommentsModal({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+    backgroundColor: SHEET_BG,
+  },
+  screenWeb: {
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  screenFrame: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: SHEET_BG,
+  },
+  screenFrameWeb: {
+    width: 393,
+    maxWidth: '100%',
+    marginLeft: 'auto',
+    marginRight: 'auto',
+    left: 0,
+    right: 0,
     backgroundColor: SHEET_BG,
   },
   header: {

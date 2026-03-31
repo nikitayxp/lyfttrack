@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Bebas_Neue, Space_Grotesk } from "next/font/google";
+import { Toaster } from "sonner";
+import { CookieConsentBanner } from "@/components/ui/cookie-consent-banner";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -47,6 +49,8 @@ export default function RootLayout({
     <html lang="pt-PT">
       <body className={`${spaceGrotesk.variable} ${bebasNeue.variable} antialiased`}>
         {children}
+        <CookieConsentBanner />
+        <Toaster position="bottom-center" richColors={false} />
       </body>
     </html>
   );

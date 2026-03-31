@@ -2,7 +2,9 @@
 
 import React, { useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { Activity, Dumbbell, TrendingUp } from 'lucide-react';
+import { Activity, Dumbbell, Layers, Rocket, TrendingUp } from 'lucide-react';
+import { toast } from 'sonner';
+import { createElement } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import NeuralBackground from '@/components/ui/flow-field-background';
@@ -387,7 +389,7 @@ export function CinematicHero({
         scrollTrigger: {
           trigger: containerRef.current,
           start: 'top top',
-          end: isMobile ? '+=3000' : '+=4200',
+          end: isMobile ? '+=4000' : '+=4200',
           pin: true,
           scrub: 1,
           anticipatePin: 1,
@@ -488,22 +490,88 @@ export function CinematicHero({
       <div className="cta-wrapper pointer-events-auto invisible absolute z-10 flex w-screen flex-col items-center justify-center px-4 text-center opacity-0 will-change-transform">
         <h2 className="text-silver-matte mb-6 text-3xl font-bold tracking-tight md:text-6xl lg:text-7xl">{copy.ctaHeading}</h2>
         <p className="hero-copy-muted mb-8 mx-auto max-w-xl text-base leading-relaxed md:mb-10 md:text-xl">{copy.ctaDescription}</p>
-        <div className="flex w-full max-w-md flex-col justify-center gap-4 sm:w-auto sm:max-w-none sm:flex-row">
+        <div className="flex w-full max-w-sm flex-col justify-center gap-3 sm:w-auto sm:max-w-none sm:flex-row sm:gap-4">
           <a
             href="https://lyfttrack-app.vercel.app/"
-            className="cta-blue inline-flex min-h-12 items-center justify-center gap-2 rounded-[1.1rem] px-8 py-4 text-base font-bold transition-all"
+            className="cta-blue inline-flex w-full min-h-12 items-center justify-center gap-2 rounded-[1.1rem] px-8 py-4 text-base font-bold transition-all sm:w-auto"
           >
-            <Dumbbell className="h-5 w-5" />
             {copy.ctaPrimary}
           </a>
           <Link
             href="#features"
             onClick={handleSystemScroll}
-            className="hero-secondary-btn inline-flex min-h-12 items-center justify-center gap-2 rounded-[1.1rem] px-8 py-4 text-base font-bold transition-all"
+            className="hero-secondary-btn inline-flex w-full min-h-12 items-center justify-center gap-2 rounded-[1.1rem] px-8 py-4 text-base font-bold transition-all sm:w-auto"
           >
-            <TrendingUp className="h-5 w-5" />
+            <Layers className="h-5 w-5" />
             {copy.ctaSecondary}
           </Link>
+        </div>
+
+        {/* App Store & Google Play badges */}
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              toast(language === 'pt'
+                ? 'Disponível Brevemente — a app está a ser afinada para o lançamento oficial.'
+                : 'Coming Soon — the app is being polished for the official launch.', {
+                icon: createElement(Rocket, { className: 'h-4 w-4 text-[#3B82F6]' }),
+                duration: 4000,
+                style: {
+                  background: '#111111',
+                  border: '1px solid rgba(59,130,246,0.25)',
+                  color: '#FFFFFF',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  borderRadius: '14px',
+                  padding: '14px 18px',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                },
+              });
+            }}
+            className="group inline-flex h-12 items-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.04] px-4 transition-all hover:-translate-y-px hover:border-white/20 hover:bg-white/[0.08]"
+            aria-label="App Store"
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-white" fill="currentColor" aria-hidden="true">
+              <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98l-.09.06c-1.06.61-1.78 1.65-1.77 3 .01 1.56.93 2.93 2.3 3.53-.17.46-.35.9-.58 1.35M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11"/>
+            </svg>
+            <div className="text-left">
+              <div className="text-[9px] font-semibold uppercase tracking-[0.1em] text-white/45">{language === 'pt' ? 'Disponível na' : 'Download on the'}</div>
+              <div className="text-sm font-bold leading-none text-white">App Store</div>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              toast(language === 'pt'
+                ? 'Disponível Brevemente — a app está a ser afinada para o lançamento oficial.'
+                : 'Coming Soon — the app is being polished for the official launch.', {
+                icon: createElement(Rocket, { className: 'h-4 w-4 text-[#3B82F6]' }),
+                duration: 4000,
+                style: {
+                  background: '#111111',
+                  border: '1px solid rgba(59,130,246,0.25)',
+                  color: '#FFFFFF',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  borderRadius: '14px',
+                  padding: '14px 18px',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                },
+              });
+            }}
+            className="group inline-flex h-12 items-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.04] px-4 transition-all hover:-translate-y-px hover:border-white/20 hover:bg-white/[0.08]"
+            aria-label="Google Play"
+          >
+            <svg viewBox="0 0 512 512" className="h-5 w-5 shrink-0 text-white" fill="currentColor" aria-hidden="true">
+              <path d="M48 59.49v393a4.33 4.33 0 0 0 7.37 3.07L274 256 55.37 56.42A4.33 4.33 0 0 0 48 59.49zM345.8 174L89.22 32.64l-.16-.09c-4.42-2.4-8.62 3.58-5 7.06L285.19 231.28zM84.08 472.39c-3.64 3.48.56 9.46 5 7.06l.16-.09L345.8 338l-60.61-57.26zM449.38 231l-71.65-39.46L310.36 256l67.37 63.7L449.38 281c19.49-10.77 19.49-39.23 0-50z"/>
+            </svg>
+            <div className="text-left">
+              <div className="text-[9px] font-semibold uppercase tracking-[0.1em] text-white/45">{language === 'pt' ? 'Disponível no' : 'Get it on'}</div>
+              <div className="text-sm font-bold leading-none text-white">Google Play</div>
+            </div>
+          </button>
         </div>
       </div>
 
@@ -514,18 +582,18 @@ export function CinematicHero({
         >
           <div className="card-sheen" aria-hidden="true" />
 
-          <div className="relative z-10 mx-auto flex h-full w-full max-w-7xl flex-col justify-around gap-4 px-4 py-5 lg:grid lg:grid-cols-2 lg:items-center lg:gap-10 lg:px-12 lg:py-0">
-            <div className="card-right-text gsap-reveal order-1 z-20 flex w-full max-w-full justify-center lg:order-2 lg:justify-start">
-              <h2 className="text-card-silver-matte break-words text-5xl font-black uppercase tracking-tighter sm:text-6xl md:text-[6rem] lg:text-[4.8rem] xl:text-[5.8rem]">
+          <div className="relative z-10 mx-auto flex h-full w-full max-w-7xl flex-col justify-center gap-3 px-4 py-4 sm:justify-around sm:gap-4 sm:py-5 lg:grid lg:grid-cols-2 lg:items-center lg:gap-10 lg:px-12 lg:py-0">
+            <div className="card-right-text gsap-reveal order-1 z-20 flex w-full max-w-full justify-center pt-10 md:pt-0 lg:order-2 lg:justify-start">
+              <h2 className="text-card-silver-matte break-words text-3xl font-black uppercase tracking-tighter sm:text-5xl md:text-[6rem] lg:text-[4.8rem] xl:text-[5.8rem]">
                 {copy.brandName}
               </h2>
             </div>
 
             <div
-              className="mockup-scroll-wrapper order-2 relative z-10 flex h-[260px] w-full items-center justify-center sm:h-[320px] md:h-[380px] lg:order-1 lg:h-[600px]"
+              className="mockup-scroll-wrapper order-2 relative z-10 flex h-[300px] w-full items-center justify-center sm:h-[340px] md:h-[380px] lg:order-1 lg:h-[600px]"
               style={{ perspective: '1000px' }}
             >
-              <div className="relative flex h-full w-full scale-[0.5] items-center justify-center sm:scale-[0.62] md:scale-[0.85] lg:scale-100">
+              <div className="relative flex h-full w-full scale-[0.52] items-center justify-center sm:scale-[0.6] md:scale-[0.85] lg:scale-100">
                 <div
                   ref={mockupRef}
                   className="iphone-bezel relative flex h-[580px] w-[280px] flex-col rounded-[3rem] will-change-transform"
@@ -613,7 +681,7 @@ export function CinematicHero({
                   </div>
                 </div>
 
-                <div className="floating-badge floating-ui-badge absolute left-0 top-2 z-30 flex scale-90 items-center gap-2 rounded-xl p-2 sm:left-[-8px] sm:top-4 sm:scale-95 sm:gap-3 sm:p-3 lg:left-[-80px] lg:top-12 lg:scale-100 lg:gap-3 lg:rounded-2xl lg:p-4">
+                <div className="floating-badge floating-ui-badge absolute -left-2 top-0 z-30 hidden items-center gap-2 rounded-xl p-2 sm:flex sm:left-[-8px] sm:top-4 sm:scale-95 sm:gap-3 sm:p-3 lg:left-[-80px] lg:top-12 lg:scale-100 lg:gap-3 lg:rounded-2xl lg:p-4">
                   <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--hero-widget-border)] bg-[var(--hero-widget-top)] lg:h-10 lg:w-10">
                     <TrendingUp className="h-4 w-4 text-[var(--hero-accent)]" />
                   </div>
@@ -623,7 +691,7 @@ export function CinematicHero({
                   </div>
                 </div>
 
-                <div className="floating-badge floating-ui-badge absolute bottom-4 right-0 z-30 flex scale-90 items-center gap-2 rounded-xl p-2 sm:bottom-8 sm:right-[-8px] sm:scale-95 sm:gap-3 sm:p-3 lg:bottom-20 lg:right-[-80px] lg:scale-100 lg:gap-3 lg:rounded-2xl lg:p-4">
+                <div className="floating-badge floating-ui-badge absolute bottom-0 -right-2 z-30 hidden items-center gap-2 rounded-xl p-2 sm:flex sm:bottom-8 sm:right-[-8px] sm:scale-95 sm:gap-3 sm:p-3 lg:bottom-20 lg:right-[-80px] lg:scale-100 lg:gap-3 lg:rounded-2xl lg:p-4">
                   <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--hero-widget-border)] bg-[var(--hero-widget-top)] lg:h-10 lg:w-10">
                     <Activity className="h-4 w-4 text-[var(--hero-accent)]" />
                   </div>
@@ -635,28 +703,24 @@ export function CinematicHero({
               </div>
             </div>
 
-            <div className="card-left-text gsap-reveal order-2 z-20 flex w-full flex-col justify-center px-3 text-center md:order-3 md:hidden lg:order-1 lg:px-0 lg:text-left">
-              <div className="mobile-hero-card mt-5 rounded-2xl border border-[var(--hero-widget-border)] bg-black/55 p-4 text-left">
-                <p className="hero-copy-soft text-[10px] font-bold uppercase tracking-[0.14em]">{copy.metricLabel}</p>
-                <p className="mt-1 text-2xl font-black tracking-tight text-[var(--hero-text-primary)]">{formattedMetricValue} kg</p>
-                <p className="hero-copy-muted mt-2 text-sm leading-relaxed">{copy.ctaDescription}</p>
-
-                <div className="mt-5 flex flex-col gap-3">
-                  <a
-                    href="https://lyfttrack-app.vercel.app/"
-                    className="cta-blue inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition-all"
-                  >
-                    <Dumbbell className="h-4 w-4" />
-                    {copy.ctaPrimary}
-                  </a>
-                  <Link
-                    href="#features"
-                    onClick={handleSystemScroll}
-                    className="hero-secondary-btn inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition-all"
-                  >
-                    <TrendingUp className="h-4 w-4" />
-                    {copy.ctaSecondary}
-                  </Link>
+            {/* Mobile-only badges row (replaces floating badges on small screens) */}
+            <div className="card-left-text gsap-reveal order-3 z-20 flex w-full items-center justify-center gap-3 px-1 sm:hidden">
+              <div className="floating-badge floating-ui-badge flex items-center gap-2 rounded-xl p-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--hero-widget-border)] bg-[var(--hero-widget-top)]">
+                  <TrendingUp className="h-3.5 w-3.5 text-[var(--hero-accent)]" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold tracking-tight text-[var(--hero-text-primary)]">{copy.badgeOneTitle}</p>
+                  <p className="hero-copy-soft text-[10px] font-medium">{copy.badgeOneSub}</p>
+                </div>
+              </div>
+              <div className="floating-badge floating-ui-badge flex items-center gap-2 rounded-xl p-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--hero-widget-border)] bg-[var(--hero-widget-top)]">
+                  <Activity className="h-3.5 w-3.5 text-[var(--hero-accent)]" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold tracking-tight text-[var(--hero-text-primary)]">{copy.badgeTwoTitle}</p>
+                  <p className="hero-copy-soft text-[10px] font-medium">{copy.badgeTwoSub}</p>
                 </div>
               </div>
             </div>

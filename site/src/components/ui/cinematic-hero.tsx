@@ -508,8 +508,8 @@ export function CinematicHero({
           <div className="card-sheen" aria-hidden="true" />
 
           <div className="relative z-10 mx-auto flex h-full w-full max-w-7xl flex-col justify-around gap-4 px-4 py-5 lg:grid lg:grid-cols-3 lg:items-center lg:gap-8 lg:px-12 lg:py-0">
-            <div className="card-right-text gsap-reveal order-1 z-20 flex w-full justify-center lg:order-3 lg:justify-end">
-              <h2 className="text-card-silver-matte text-5xl font-black uppercase tracking-tighter sm:text-6xl md:text-[6rem] lg:text-[8rem]">
+            <div className="card-right-text gsap-reveal order-1 z-20 flex w-full max-w-full justify-center lg:order-3 lg:justify-end">
+              <h2 className="text-card-silver-matte break-words text-5xl font-black uppercase tracking-tighter sm:text-6xl md:text-[6rem] lg:text-[5rem] xl:text-[6.5rem]">
                 {copy.brandName}
               </h2>
             </div>
@@ -656,6 +656,23 @@ export function CinematicHero({
               <p className="hero-copy-muted mx-auto hidden max-w-sm text-sm font-normal leading-relaxed md:block lg:mx-0 lg:max-w-none lg:text-lg">
                 <span className="font-semibold text-[var(--hero-text-primary)]">LyftTrack</span> {copy.cardDescription}
               </p>
+
+              <div className="mt-6 hidden flex-col gap-3 md:flex md:flex-row lg:mt-8">
+                <a
+                  href="https://lyfttrack-app.vercel.app/"
+                  className="cta-blue inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold transition-all shadow-lg shadow-blue-500/20 hover:-translate-y-0.5"
+                >
+                  <Dumbbell className="h-4 w-4" />
+                  {copy.ctaPrimary}
+                </a>
+                <Link
+                  href="/blog/active-workout-system"
+                  className="hero-secondary-btn inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold transition-all hover:-translate-y-0.5"
+                >
+                  <TrendingUp className="h-4 w-4" />
+                  {copy.ctaSecondary}
+                </Link>
+              </div>
             </div>
           </div>
         </div>

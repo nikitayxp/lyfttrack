@@ -1033,7 +1033,13 @@ export default function ActiveWorkout() {
     try {
       const finishSnapshot = activeExercisesRef.current.map((exercise) => ({
         ...exercise,
-        sets: exercise.sets.map((setItem) => ({ ...setItem })),
+        sets: exercise.sets.map((setItem) => {
+          const hasFilledData = setItem.weightInput.trim() !== '' || setItem.repsInput.trim() !== '';
+          if (!setItem.completed && hasFilledData) {
+            return { ...setItem, completed: true };
+          }
+          return { ...setItem };
+        }),
       }));
 
       const setDrafts = buildWorkoutSetDrafts(finishSnapshot);

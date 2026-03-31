@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
@@ -46,6 +46,12 @@ export default function OnboardingScreen() {
   return (
     <AuthAmbientGlow>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.screen}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
         <View style={styles.container}>
           <View style={styles.header}>
             <Text style={styles.title}>BEM-VINDO</Text>
@@ -101,6 +107,7 @@ export default function OnboardingScreen() {
             </TouchableOpacity>
           </View>
         </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </AuthAmbientGlow>
   );
@@ -110,9 +117,11 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
-  container: {
-    flex: 1,
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
+  },
+  container: {
     paddingHorizontal: Spacing.xxl,
     paddingVertical: Spacing.xl,
     rowGap: Spacing.xl,

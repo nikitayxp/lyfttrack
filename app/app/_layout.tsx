@@ -20,11 +20,11 @@ const palette = Colors.dark;
 /** Largura mínima (px) para mostrar o mockup de telemóvel na Web; ≤ isto = app a fullscreen como no device. */
 const DESKTOP_WEB_MOCKUP_MIN_WIDTH = 768;
 
-/** react-native-web aceita `vh`; o tipo `DimensionValue` do RN ainda não inclui esta string. */
 const webViewportFill: ViewStyle = {
   width: '100%',
   height: '100%' as ViewStyle['height'],
   minHeight: '100dvh' as ViewStyle['minHeight'],
+  overflow: 'hidden',
 };
 
 const desktopShellWebShadow = {
@@ -68,6 +68,7 @@ const styles = StyleSheet.create({
     left: -120,
     opacity: 0.36,
     zIndex: 1,
+    pointerEvents: 'none' as any,
   },
   webBlueAuraBottom: {
     position: 'absolute',
@@ -78,6 +79,7 @@ const styles = StyleSheet.create({
     right: -140,
     opacity: 0.28,
     zIndex: 1,
+    pointerEvents: 'none' as any,
   },
   deviceMockup: {
     width: 393,

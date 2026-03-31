@@ -6,6 +6,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -25,6 +26,7 @@ export default function SignUpScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [feedback, setFeedback] = useState<{ message: string; type: 'error' | 'success' | 'info' } | null>(null);
 
   async function handleSignUp() {
@@ -43,6 +45,11 @@ export default function SignUpScreen() {
 
     if (password !== confirmPassword) {
       setFeedback({ message: 'A confirmação não corresponde à palavra-passe.', type: 'error' });
+      return;
+    }
+
+    if (!termsAccepted) {
+      setFeedback({ message: 'Tens de aceitar os Termos de Serviço para continuar.', type: 'error' });
       return;
     }
 
@@ -80,6 +87,12 @@ export default function SignUpScreen() {
   return (
     <AuthAmbientGlow>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.screen}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
         <View style={styles.container}>
           <View style={styles.header}>
             <View style={styles.logoRow}>
@@ -152,7 +165,33 @@ export default function SignUpScreen() {
               />
             </View>
 
-            <TouchableOpacity style={styles.primaryButton} onPress={() => void handleSignUp()} disabled={loading}>
+            {/* Terms of Service */}
+            <TouchableOpacity
+              style={styles.termsRow}
+              onPress={() => setTermsAccepted((prev) => !prev)}
+              activeOpacity={0.7}
+              disabled={loading}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: termsAccepted }}
+            >
+              <View style={[styles.checkbox, termsAccepted && styles.checkboxChecked]}>
+                {termsAccepted && (
+                  <View style={styles.checkboxTick} />
+                )}
+              </View>
+              <Text style={styles.termsText}>
+                Concordo com os{' '}
+                <Text style={styles.termsLink}>Termos de Serviço</Text>
+                {' '}e a{' '}
+                <Text style={styles.termsLink}>Política de Privacidade</Text>
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.primaryButton, !termsAccepted && styles.primaryButtonDisabled]}
+              onPress={() => void handleSignUp()}
+              disabled={loading || !termsAccepted}
+            >
               {loading ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
@@ -180,6 +219,7 @@ export default function SignUpScreen() {
             </TouchableOpacity>
           </View>
         </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </AuthAmbientGlow>
   );
@@ -189,9 +229,11 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
-  container: {
-    flex: 1,
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
+  },
+  container: {
     paddingHorizontal: Spacing.xxl,
     paddingVertical: Spacing.xl,
     rowGap: Spacing.xl,
@@ -350,5 +392,49 @@ const styles = StyleSheet.create({
     color: palette.textMuted,
     fontSize: 14,
     fontWeight: '600',
+  },
+  termsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    columnGap: 10,
+    marginTop: 4,
+  },
+  checkbox: {
+    marginTop: 2,
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#27272A',
+    backgroundColor: 'rgba(17,17,17,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  checkboxChecked: {
+    borderColor: palette.accent,
+    backgroundColor: palette.accent,
+  },
+  checkboxTick: {
+    width: 10,
+    height: 6,
+    borderLeftWidth: 2,
+    borderBottomWidth: 2,
+    borderColor: '#FFFFFF',
+    transform: [{ rotate: '-45deg' }, { translateY: -1 }],
+  },
+  termsText: {
+    flex: 1,
+    color: palette.textSecondary,
+    fontSize: 13,
+    fontWeight: '500',
+    lineHeight: 20,
+  },
+  termsLink: {
+    color: palette.accent,
+    fontWeight: '700',
+  },
+  primaryButtonDisabled: {
+    opacity: 0.45,
   },
 });

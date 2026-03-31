@@ -6,6 +6,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -86,6 +87,12 @@ export default function SignInScreen() {
   return (
     <AuthAmbientGlow>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.screen}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
         <View style={styles.container}>
           <View style={styles.header}>
             <View style={styles.logoRow}>
@@ -177,6 +184,7 @@ export default function SignInScreen() {
             </TouchableOpacity>
           </View>
         </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </AuthAmbientGlow>
   );
@@ -186,9 +194,11 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
-  container: {
-    flex: 1,
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
+  },
+  container: {
     paddingHorizontal: Spacing.xxl,
     paddingVertical: Spacing.xl,
     rowGap: Spacing.xl,

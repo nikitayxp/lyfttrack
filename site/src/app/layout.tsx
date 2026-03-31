@@ -18,6 +18,24 @@ export const metadata: Metadata = {
   description:
     "Official LyftTrack website experience with app showcase, bilingual blog and interactive training previews.",
   keywords: ["fitness", "workout tracker", "gym app", "LyftTrack", "blog", "training"],
+  applicationName: "LyftTrack",
+  icons: {
+    icon: "/icon.png",
+    shortcut: "/icon.png",
+    apple: "/icon.png",
+  },
+  openGraph: {
+    title: "LyftTrack - Website",
+    description:
+      "Official LyftTrack website experience with app showcase, bilingual blog and interactive training previews.",
+    siteName: "LyftTrack",
+  },
+  twitter: {
+    card: "summary",
+    title: "LyftTrack - Website",
+    description:
+      "Official LyftTrack website experience with app showcase, bilingual blog and interactive training previews.",
+  },
 };
 
 export default function RootLayout({

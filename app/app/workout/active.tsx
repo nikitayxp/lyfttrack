@@ -1586,7 +1586,7 @@ export default function ActiveWorkout() {
       <WorkoutSummary
         visible={isSummaryVisible && finishSummary !== null}
         durationSeconds={finishSummary?.durationSeconds ?? 0}
-        totalVolume={finishSummary?.totalVolume ?? 0}
+        prCount={finishSummary?.prCount ?? 0}
         completedSetCount={finishSummary?.completedSetCount ?? 0}
         exerciseNames={summaryExerciseNames}
         onShareAndFinish={handleShareAndFinish}

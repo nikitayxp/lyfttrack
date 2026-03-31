@@ -16,7 +16,7 @@ const palette = Colors.dark;
 type WorkoutSummaryProps = {
   visible: boolean;
   durationSeconds: number;
-  totalVolume: number;
+  prCount: number;
   completedSetCount: number;
   exerciseNames: string[];
   onShareAndFinish: () => void;
@@ -35,20 +35,10 @@ function formatDuration(seconds: number): string {
   return [minutes, remainder].map((value) => value.toString().padStart(2, '0')).join(':');
 }
 
-function formatVolume(kg: number): string {
-  const safeValue = Math.max(0, Math.round(kg));
-
-  if (safeValue >= 1000) {
-    return `${(safeValue / 1000).toFixed(1)}t`;
-  }
-
-  return `${safeValue.toLocaleString()} kg`;
-}
-
 export function WorkoutSummary({
   visible,
   durationSeconds,
-  totalVolume,
+  prCount,
   completedSetCount,
   exerciseNames,
   onShareAndFinish,
@@ -75,13 +65,13 @@ export function WorkoutSummary({
               </View>
 
               <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Volume</Text>
-                <Text style={styles.metricValue}>{formatVolume(totalVolume)}</Text>
+                <Text style={styles.metricLabel}>Series</Text>
+                <Text style={styles.metricValue}>{completedSetCount}</Text>
               </View>
 
               <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Series</Text>
-                <Text style={styles.metricValue}>{completedSetCount}</Text>
+                <Text style={styles.metricLabel}>Recordes</Text>
+                <Text style={styles.metricValue}>{prCount}</Text>
               </View>
             </View>
 

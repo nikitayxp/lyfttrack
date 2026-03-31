@@ -38,12 +38,9 @@ function formatDuration(startIso: string, endIso: string | null): string {
   return `${hours}h ${minutes}m`;
 }
 
-function formatVolume(value: number): string {
-  if (value >= 1000) {
-    return `${(value / 1000).toFixed(1)}t`;
-  }
-
-  return `${value.toLocaleString()} kg`;
+function formatRecords(value: number | null | undefined): string {
+  if (value === null || value === undefined) return '--';
+  return `${value}`;
 }
 
 function formatSetWeight(value: number | null): string {
@@ -152,8 +149,8 @@ export function WorkoutFeedCard({
           </View>
           <View style={styles.metricDivider} />
           <View style={styles.metricBlock}>
-            <Text style={styles.metricValue}>{formatVolume(workout.totalVolume)}</Text>
-            <Text style={styles.metricLabel}>Volume</Text>
+            <Text style={styles.metricValue}>{formatRecords(workout.prCount)}</Text>
+            <Text style={styles.metricLabel}>Recordes</Text>
           </View>
           <View style={styles.metricDivider} />
           <View style={styles.metricBlock}>

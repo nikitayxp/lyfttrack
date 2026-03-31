@@ -65,6 +65,7 @@ export type FinishWorkoutResult = {
   durationSeconds: number;
   startTime: string;
   endTime: string;
+  prCount: number;
 };
 
 export type WorkoutSaveValidationCode = 'no-completed-sets' | 'no-valid-set-rows';
@@ -131,6 +132,7 @@ export type WorkoutFeedItem = Pick<
   profile: PublicProfile | null;
   totalVolume: number;
   totalSets: number;
+  prCount: number | null;
   exerciseNames: string[];
   exerciseGroups: WorkoutFeedExerciseGroup[];
   likes_count: number;
@@ -188,6 +190,7 @@ export type WorkoutDetails = Pick<
   exercises: WorkoutDetailsExercise[];
   totalVolume: number;
   totalSets: number;
+  prCount: number;
   durationSeconds: number;
   heaviestWeight: number | null;
   bestEstimated1RM: number | null;
@@ -904,6 +907,70 @@ export async function createRoutine(
 
 // ---------- Create Workout ----------
 
+async function countNewPersonalRecords(
+  currentWorkoutId: string,
+  completedSetDrafts: WorkoutSetDraft[],
+): Promise<number> {
+  const exerciseMaxWeights = new Map<string, number>();
+
+  for (const draft of completedSetDrafts) {
+    const exerciseId = (draft.exerciseId ?? '').trim();
+    if (!exerciseId) continue;
+
+    const weight = toSafeNumber(draft.weight, { min: 0, max: INPUT_LIMITS.weightMax, decimals: 2 }) ?? 0;
+    if (weight <= 0) continue;
+
+    const current = exerciseMaxWeights.get(exerciseId) ?? 0;
+    if (weight > current) {
+      exerciseMaxWeights.set(exerciseId, weight);
+    }
+  }
+
+  if (exerciseMaxWeights.size === 0) return 0;
+
+  const user = await getAuthenticatedUserOrThrow();
+
+  const { data: userWorkoutIds } = await supabase
+    .from('workouts')
+    .select('id')
+    .eq('user_id', user.id)
+    .neq('id', currentWorkoutId);
+
+  if (!userWorkoutIds || userWorkoutIds.length === 0) {
+    return exerciseMaxWeights.size;
+  }
+
+  const workoutIds = userWorkoutIds.map((w) => w.id);
+  const exerciseIds = [...exerciseMaxWeights.keys()];
+
+  const { data: previousSets } = await supabase
+    .from('sets')
+    .select('exercise_id, weight')
+    .in('workout_id', workoutIds)
+    .in('exercise_id', exerciseIds)
+    .not('weight', 'is', null);
+
+  const previousMaxMap = new Map<string, number>();
+  if (previousSets) {
+    for (const row of previousSets) {
+      if (!row.exercise_id) continue;
+      const weight = row.weight ?? 0;
+      const current = previousMaxMap.get(row.exercise_id) ?? 0;
+      if (weight > current) {
+        previousMaxMap.set(row.exercise_id, weight);
+      }
+    }
+  }
+
+  let prCount = 0;
+  for (const [exerciseId, newMax] of exerciseMaxWeights) {
+    const previousMax = previousMaxMap.get(exerciseId) ?? 0;
+    if (newMax > previousMax) prCount++;
+  }
+
+  return prCount;
+}
+
 export async function finishWorkout(input: FinishWorkoutInput): Promise<FinishWorkoutResult> {
   const endTime = new Date().toISOString();
   const completedSetDrafts = toCompletedSetDrafts(input.setDrafts);
@@ -942,6 +1009,13 @@ export async function finishWorkout(input: FinishWorkoutInput): Promise<FinishWo
     throw error;
   }
 
+  let prCount = 0;
+  try {
+    prCount = await countNewPersonalRecords(saveResult.workoutId, completedSetDrafts);
+  } catch {
+    // Non-critical — default to 0 if PR check fails
+  }
+
   return {
     workoutId: saveResult.workoutId,
     insertedSetCount: saveResult.insertedSetCount,
@@ -950,6 +1024,7 @@ export async function finishWorkout(input: FinishWorkoutInput): Promise<FinishWo
     durationSeconds: calculateDurationSeconds(input.startTime, endTime),
     startTime: input.startTime,
     endTime,
+    prCount,
   };
 }
 
@@ -1435,6 +1510,7 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
       profile: profileByUserId.get(workout.user_id) ?? null,
       totalVolume: Math.round(aggregate?.totalVolume ?? 0),
       totalSets: aggregate?.totalSets ?? 0,
+      prCount: null,
       exerciseNames: aggregate?.exerciseNames ?? [],
       exerciseGroups: aggregate?.exerciseGroups ?? [],
       likes_count: extractRelationCount(workout.workout_likes),
@@ -1731,6 +1807,59 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
     }
   }
 
+  let prCount = 0;
+  try {
+    const exerciseMaxInWorkout = new Map<string, number>();
+    for (const ex of detailsExercises) {
+      for (const s of ex.sets) {
+        const w = s.weight ?? 0;
+        if (w > 0) {
+          const cur = exerciseMaxInWorkout.get(ex.exercise_id) ?? 0;
+          if (w > cur) exerciseMaxInWorkout.set(ex.exercise_id, w);
+        }
+      }
+    }
+
+    if (exerciseMaxInWorkout.size > 0) {
+      const exerciseIds = [...exerciseMaxInWorkout.keys()];
+
+      const { data: otherWorkoutIds } = await supabase
+        .from('workouts')
+        .select('id')
+        .eq('user_id', workout.user_id)
+        .neq('id', workout.id);
+
+      if (otherWorkoutIds && otherWorkoutIds.length > 0) {
+        const wIds = otherWorkoutIds.map((w) => w.id);
+        const { data: prevSets } = await supabase
+          .from('sets')
+          .select('exercise_id, weight')
+          .in('workout_id', wIds)
+          .in('exercise_id', exerciseIds)
+          .not('weight', 'is', null);
+
+        const prevMaxMap = new Map<string, number>();
+        if (prevSets) {
+          for (const row of prevSets) {
+            if (!row.exercise_id) continue;
+            const w = row.weight ?? 0;
+            const cur = prevMaxMap.get(row.exercise_id) ?? 0;
+            if (w > cur) prevMaxMap.set(row.exercise_id, w);
+          }
+        }
+
+        for (const [exId, newMax] of exerciseMaxInWorkout) {
+          const prevMax = prevMaxMap.get(exId) ?? 0;
+          if (newMax > prevMax) prCount++;
+        }
+      } else {
+        prCount = exerciseMaxInWorkout.size;
+      }
+    }
+  } catch {
+    // Non-critical
+  }
+
   return {
     id: workout.id,
     user_id: workout.user_id,
@@ -1742,6 +1871,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
     exercises: detailsExercises,
     totalVolume: Math.round(totalVolume),
     totalSets: allSets.length,
+    prCount,
     durationSeconds: workout.end_time ? calculateDurationSeconds(workout.start_time, workout.end_time) : 0,
     heaviestWeight: hasWeight ? Number(heaviestWeight.toFixed(1)) : null,
     bestEstimated1RM: hasEstimated1RM ? Number(bestEstimated1RM.toFixed(1)) : null,
@@ -1819,6 +1949,7 @@ export async function getUserWorkouts(userId: string, page = 0, limit = 20): Pro
       profile: profileByUserId.get(workout.user_id) ?? null,
       totalVolume: Math.round(aggregate?.totalVolume ?? 0),
       totalSets: aggregate?.totalSets ?? 0,
+      prCount: null,
       exerciseNames: aggregate?.exerciseNames ?? [],
       exerciseGroups: aggregate?.exerciseGroups ?? [],
       likes_count: extractRelationCount(workout.workout_likes),

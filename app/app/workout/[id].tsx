@@ -51,14 +51,6 @@ function formatDurationFromSeconds(totalSeconds: number): string {
   return [minutes, seconds].map((value) => value.toString().padStart(2, '0')).join(':');
 }
 
-function formatVolume(totalVolume: number): string {
-  if (totalVolume >= 1000) {
-    return `${(totalVolume / 1000).toFixed(1)}t`;
-  }
-
-  return `${Math.round(totalVolume).toLocaleString()} kg`;
-}
-
 function formatNumericValue(value: number | null, mode: 'decimal' | 'integer'): string {
   if (value === null || !Number.isFinite(value)) {
     return '-';
@@ -204,13 +196,13 @@ export default function WorkoutDetailsScreen() {
               </View>
 
               <View style={styles.statCard}>
-                <Text style={styles.statLabel}>Volume</Text>
-                <Text style={styles.statValue}>{formatVolume(details.totalVolume)}</Text>
+                <Text style={styles.statLabel}>Series</Text>
+                <Text style={styles.statValue}>{details.totalSets}</Text>
               </View>
 
               <View style={styles.statCard}>
-                <Text style={styles.statLabel}>Sets</Text>
-                <Text style={styles.statValue}>{details.totalSets}</Text>
+                <Text style={styles.statLabel}>Recordes</Text>
+                <Text style={styles.statValue}>{details.prCount}</Text>
               </View>
 
               <View style={styles.statCard}>

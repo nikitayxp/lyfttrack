@@ -25,10 +25,6 @@ export function LandingShell() {
       return;
     }
 
-    if (window.innerWidth < 768) {
-      return;
-    }
-
     const dismissHint = () => {
       setShowScrollHint(false);
       setHintDismissed(true);
@@ -92,12 +88,12 @@ export function LandingShell() {
       <FeaturesSection language={language} />
 
       <div
-        className={`pointer-events-none fixed bottom-6 left-1/2 z-[130] hidden -translate-x-1/2 transition-all duration-500 md:bottom-8 md:block ${
+        className={`pointer-events-none fixed bottom-4 left-1/2 z-[130] -translate-x-1/2 transition-all duration-500 md:bottom-8 ${
           showScrollHint ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
         }`}
         aria-hidden="true"
       >
-        <div className="flex min-w-[180px] flex-col items-center gap-1 rounded-full border border-[var(--hero-header-border)] bg-black/55 px-4 py-2 backdrop-blur-xl">
+        <div className="flex min-w-[170px] flex-col items-center gap-1 rounded-full border border-[var(--hero-header-border)] bg-black/55 px-3 py-2 backdrop-blur-xl md:min-w-[180px] md:px-4">
           <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--hero-text-muted)]">
             {language === 'pt' ? 'Desce para explorar' : 'Scroll to explore'}
           </span>

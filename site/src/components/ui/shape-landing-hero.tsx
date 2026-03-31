@@ -1,7 +1,6 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Circle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function ElegantShape({
@@ -48,24 +47,7 @@ function ElegantShape({
     );
 }
 
-function HeroGeometric({
-    badge = "LyftTrack Elite",
-    title1 = "Eleva o teu treino",
-    title2 = "Domina a tua evolução",
-}: {
-    badge?: string;
-    title1?: string;
-    title2?: string;
-}) {
-    const fadeUpVariants = {
-        hidden: { opacity: 0, y: 30 },
-        visible: (i: number) => ({
-            opacity: 1,
-            y: 0,
-            transition: { duration: 1, delay: 0.5 + i * 0.2, ease: [0.25, 0.4, 0.25, 1] },
-        }),
-    };
-
+function HeroGeometric() {
     return (
         <div className="relative h-[150vh] w-full bg-[#030303]">
             <div className="sticky top-0 left-0 h-screen w-full flex items-center justify-center overflow-hidden">

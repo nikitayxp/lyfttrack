@@ -273,11 +273,11 @@ export function CinematicHero({
   );
 
   useEffect(() => {
-    if (window.matchMedia('(max-width: 767px)').matches) {
-      return;
-    }
-
     const handleMouseMove = (event: MouseEvent) => {
+      if (window.innerWidth < 768) {
+        return;
+      }
+
       if (window.scrollY > window.innerHeight * 2) {
         return;
       }
@@ -319,29 +319,6 @@ export function CinematicHero({
   useEffect(() => {
     const isMobile = window.innerWidth < 768;
 
-    if (isMobile) {
-      const mobileContext = gsap.context(() => {
-        gsap.set('.hero-text-wrapper', { autoAlpha: 1, clearProps: 'transform,filter' });
-        gsap.set('.cta-wrapper', { autoAlpha: 0 });
-        gsap.set('.main-card', { y: 0, autoAlpha: 1 });
-        gsap.set(['.card-left-text', '.card-right-text', '.mobile-hero-card'], { autoAlpha: 1 });
-
-        gsap.fromTo(
-          ['.text-track', '.text-days'],
-          { y: 18, autoAlpha: 0 },
-          { y: 0, autoAlpha: 1, ease: 'power3.out', duration: 0.75, stagger: 0.12 }
-        );
-
-        gsap.fromTo(
-          '.main-card',
-          { y: 20, autoAlpha: 0.2 },
-          { y: 0, autoAlpha: 1, ease: 'power3.out', duration: 0.8 }
-        );
-      }, containerRef);
-
-      return () => mobileContext.revert();
-    }
-
     const context = gsap.context(() => {
       gsap.set('.text-track', {
         autoAlpha: 0,
@@ -382,7 +359,7 @@ export function CinematicHero({
         scrollTrigger: {
           trigger: containerRef.current,
           start: 'top top',
-          end: '+=4200',
+          end: isMobile ? '+=3000' : '+=4200',
           pin: true,
           scrub: 1,
           anticipatePin: 1,
@@ -391,8 +368,8 @@ export function CinematicHero({
 
       scrollTimeline
         .to('.hero-text-wrapper', {
-          scale: 1.15,
-          filter: 'blur(20px)',
+          scale: isMobile ? 1.08 : 1.15,
+          filter: isMobile ? 'blur(12px)' : 'blur(20px)',
           opacity: 0.2,
           ease: 'power2.inOut',
           duration: 2,
@@ -401,7 +378,7 @@ export function CinematicHero({
         .to('.main-card', { width: '100%', height: '100%', borderRadius: '0px', ease: 'power3.inOut', duration: 1.5 })
         .fromTo(
           '.mockup-scroll-wrapper',
-          { y: 300, z: -500, rotationX: 50, rotationY: -30, autoAlpha: 0, scale: 0.6 },
+          { y: isMobile ? 180 : 300, z: -500, rotationX: 50, rotationY: -30, autoAlpha: 0, scale: isMobile ? 0.72 : 0.6 },
           { y: 0, z: 0, rotationX: 0, rotationY: 0, autoAlpha: 1, scale: 1, ease: 'expo.out', duration: 2.5 },
           '-=0.8'
         )
@@ -415,7 +392,7 @@ export function CinematicHero({
         .to('.counter-val', { innerHTML: metricValue, snap: { innerHTML: 1 }, duration: 2, ease: 'expo.out' }, '-=2.0')
         .fromTo(
           '.floating-badge',
-          { y: 100, autoAlpha: 0, scale: 0.7, rotationZ: -10 },
+          { y: isMobile ? 50 : 100, autoAlpha: 0, scale: isMobile ? 0.84 : 0.7, rotationZ: -10 },
           { y: 0, autoAlpha: 1, scale: 1, rotationZ: 0, ease: 'back.out(1.5)', duration: 1.5, stagger: 0.2 },
           '-=2.0'
         )
@@ -480,20 +457,20 @@ export function CinematicHero({
         </h1>
       </div>
 
-      <div className="cta-wrapper pointer-events-auto absolute z-10 hidden w-screen flex-col items-center justify-center px-4 text-center will-change-transform md:flex">
+      <div className="cta-wrapper pointer-events-auto invisible absolute z-10 flex w-screen flex-col items-center justify-center px-4 text-center opacity-0 will-change-transform">
         <h2 className="text-silver-matte mb-6 text-3xl font-bold tracking-tight md:text-6xl lg:text-7xl">{copy.ctaHeading}</h2>
-        <p className="hero-copy-muted mb-10 mx-auto max-w-xl text-base leading-relaxed md:text-xl">{copy.ctaDescription}</p>
-        <div className="flex flex-col gap-4 sm:flex-row">
+        <p className="hero-copy-muted mb-8 mx-auto max-w-xl text-base leading-relaxed md:mb-10 md:text-xl">{copy.ctaDescription}</p>
+        <div className="flex w-full max-w-md flex-col justify-center gap-4 sm:w-auto sm:max-w-none sm:flex-row">
           <a
             href="https://lyfttrack-app.vercel.app/"
-            className="cta-blue inline-flex items-center justify-center gap-2 rounded-[1.1rem] px-8 py-4 text-base font-bold transition-all"
+            className="cta-blue inline-flex min-h-12 items-center justify-center gap-2 rounded-[1.1rem] px-8 py-4 text-base font-bold transition-all"
           >
             <Dumbbell className="h-5 w-5" />
             {copy.ctaPrimary}
           </a>
           <Link
             href="#features"
-            className="hero-secondary-btn inline-flex items-center justify-center gap-2 rounded-[1.1rem] px-8 py-4 text-base font-bold transition-all"
+            className="hero-secondary-btn inline-flex min-h-12 items-center justify-center gap-2 rounded-[1.1rem] px-8 py-4 text-base font-bold transition-all"
           >
             <TrendingUp className="h-5 w-5" />
             {copy.ctaSecondary}
@@ -508,18 +485,18 @@ export function CinematicHero({
         >
           <div className="card-sheen" aria-hidden="true" />
 
-          <div className="relative z-10 mx-auto flex h-full w-full max-w-7xl flex-col justify-around gap-4 px-4 py-5 lg:grid lg:grid-cols-3 lg:items-center lg:gap-8 lg:px-12 lg:py-0">
-            <div className="card-right-text gsap-reveal order-1 z-20 flex w-full max-w-full justify-center lg:order-3 lg:justify-end">
-              <h2 className="text-card-silver-matte break-words text-5xl font-black uppercase tracking-tighter sm:text-6xl md:text-[6rem] lg:text-[5rem] xl:text-[6.5rem]">
+          <div className="relative z-10 mx-auto flex h-full w-full max-w-7xl flex-col justify-around gap-4 px-4 py-5 lg:grid lg:grid-cols-2 lg:items-center lg:gap-10 lg:px-12 lg:py-0">
+            <div className="card-right-text gsap-reveal order-1 z-20 flex w-full max-w-full justify-center lg:order-2 lg:justify-start">
+              <h2 className="text-card-silver-matte break-words text-5xl font-black uppercase tracking-tighter sm:text-6xl md:text-[6rem] lg:text-[4.8rem] xl:text-[5.8rem]">
                 {copy.brandName}
               </h2>
             </div>
 
             <div
-              className="mockup-scroll-wrapper order-2 relative z-10 hidden h-[380px] w-full items-center justify-center md:flex lg:order-2 lg:h-[600px]"
+              className="mockup-scroll-wrapper order-2 relative z-10 flex h-[260px] w-full items-center justify-center sm:h-[320px] md:h-[380px] lg:order-1 lg:h-[600px]"
               style={{ perspective: '1000px' }}
             >
-              <div className="relative flex h-full w-full scale-[0.72] items-center justify-center md:scale-[0.85] lg:scale-100">
+              <div className="relative flex h-full w-full scale-[0.5] items-center justify-center sm:scale-[0.62] md:scale-[0.85] lg:scale-100">
                 <div
                   ref={mockupRef}
                   className="iphone-bezel relative flex h-[580px] w-[280px] flex-col rounded-[3rem] will-change-transform"
@@ -607,7 +584,7 @@ export function CinematicHero({
                   </div>
                 </div>
 
-                <div className="floating-badge floating-ui-badge absolute left-[-15px] top-6 z-30 hidden items-center gap-3 rounded-xl p-3 lg:left-[-80px] lg:top-12 lg:flex lg:rounded-2xl lg:p-4">
+                <div className="floating-badge floating-ui-badge absolute left-0 top-2 z-30 flex scale-90 items-center gap-2 rounded-xl p-2 sm:left-[-8px] sm:top-4 sm:scale-95 sm:gap-3 sm:p-3 lg:left-[-80px] lg:top-12 lg:scale-100 lg:gap-3 lg:rounded-2xl lg:p-4">
                   <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--hero-widget-border)] bg-[var(--hero-widget-top)] lg:h-10 lg:w-10">
                     <TrendingUp className="h-4 w-4 text-[var(--hero-accent)]" />
                   </div>
@@ -617,7 +594,7 @@ export function CinematicHero({
                   </div>
                 </div>
 
-                <div className="floating-badge floating-ui-badge absolute bottom-12 right-[-15px] z-30 hidden items-center gap-3 rounded-xl p-3 lg:bottom-20 lg:right-[-80px] lg:flex lg:rounded-2xl lg:p-4">
+                <div className="floating-badge floating-ui-badge absolute bottom-4 right-0 z-30 flex scale-90 items-center gap-2 rounded-xl p-2 sm:bottom-8 sm:right-[-8px] sm:scale-95 sm:gap-3 sm:p-3 lg:bottom-20 lg:right-[-80px] lg:scale-100 lg:gap-3 lg:rounded-2xl lg:p-4">
                   <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--hero-widget-border)] bg-[var(--hero-widget-top)] lg:h-10 lg:w-10">
                     <Activity className="h-4 w-4 text-[var(--hero-accent)]" />
                   </div>
@@ -629,50 +606,28 @@ export function CinematicHero({
               </div>
             </div>
 
-            <div className="card-left-text gsap-reveal order-2 z-20 flex w-full flex-col justify-center px-3 text-center md:order-3 lg:order-1 lg:px-0 lg:text-left">
-              <h3 className="mb-0 text-xl font-bold tracking-tight text-[var(--hero-text-primary)] sm:text-2xl md:text-3xl lg:mb-5 lg:text-4xl">{copy.cardHeading}</h3>
-              <div className="mobile-hero-card mt-4 rounded-2xl border border-[var(--hero-widget-border)] bg-black/55 p-4 text-left md:hidden">
+            <div className="card-left-text gsap-reveal order-2 z-20 flex w-full flex-col justify-center px-3 text-center md:order-3 md:hidden lg:order-1 lg:px-0 lg:text-left">
+              <div className="mobile-hero-card mt-5 rounded-2xl border border-[var(--hero-widget-border)] bg-black/55 p-4 text-left">
                 <p className="hero-copy-soft text-[10px] font-bold uppercase tracking-[0.14em]">{copy.metricLabel}</p>
                 <p className="mt-1 text-2xl font-black tracking-tight text-[var(--hero-text-primary)]">{formattedMetricValue} kg</p>
                 <p className="hero-copy-muted mt-2 text-sm leading-relaxed">{copy.ctaDescription}</p>
 
-                <div className="mt-4 flex flex-col gap-2">
+                <div className="mt-5 flex flex-col gap-3">
                   <a
                     href="https://lyfttrack-app.vercel.app/"
-                    className="cta-blue inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition-all"
+                    className="cta-blue inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition-all"
                   >
                     <Dumbbell className="h-4 w-4" />
                     {copy.ctaPrimary}
                   </a>
                   <Link
                     href="/blog/active-workout-system"
-                    className="hero-secondary-btn inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition-all"
+                    className="hero-secondary-btn inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition-all"
                   >
                     <TrendingUp className="h-4 w-4" />
                     {copy.ctaSecondary}
                   </Link>
                 </div>
-              </div>
-
-              <p className="hero-copy-muted mx-auto hidden max-w-sm text-sm font-normal leading-relaxed md:block lg:mx-0 lg:max-w-none lg:text-lg">
-                <span className="font-semibold text-[var(--hero-text-primary)]">LyftTrack</span> {copy.cardDescription}
-              </p>
-
-              <div className="mt-6 hidden flex-col gap-3 md:flex md:flex-row lg:mt-8">
-                <a
-                  href="https://lyfttrack-app.vercel.app/"
-                  className="cta-blue inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold transition-all shadow-lg shadow-blue-500/20 hover:-translate-y-0.5"
-                >
-                  <Dumbbell className="h-4 w-4" />
-                  {copy.ctaPrimary}
-                </a>
-                <Link
-                  href="/blog/active-workout-system"
-                  className="hero-secondary-btn inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold transition-all hover:-translate-y-0.5"
-                >
-                  <TrendingUp className="h-4 w-4" />
-                  {copy.ctaSecondary}
-                </Link>
               </div>
             </div>
           </div>

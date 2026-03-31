@@ -14,7 +14,7 @@ const bebasNeue = Bebas_Neue({
 });
 
 export const metadata: Metadata = {
-  title: "LyftTrack - App Sample Website",
+  title: "LyftTrack - Website",
   description:
     "Official LyftTrack website experience with app showcase, bilingual blog and interactive training previews.",
   keywords: ["fitness", "workout tracker", "gym app", "LyftTrack", "blog", "training"],

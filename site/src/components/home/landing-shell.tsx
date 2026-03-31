@@ -9,7 +9,6 @@ const LANGUAGE_STORAGE_KEY = 'lyfttrack.site.language';
 
 export function LandingShell() {
   const [showScrollHint, setShowScrollHint] = useState(false);
-  const [hintDismissed, setHintDismissed] = useState(false);
   const [language, setLanguage] = useState<HeroLanguage>('pt');
 
   useEffect(() => {
@@ -21,43 +20,60 @@ export function LandingShell() {
   }, [language]);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || hintDismissed) {
+    if (typeof window === 'undefined') {
       return;
     }
 
+    const TOP_THRESHOLD = 24;
+    const BLUR_DISMISS_THRESHOLD = 110;
+    let idleTimer: number | null = null;
+
+    const clearHintTimer = () => {
+      if (idleTimer !== null) {
+        window.clearTimeout(idleTimer);
+        idleTimer = null;
+      }
+    };
+
+    const scheduleHint = () => {
+      clearHintTimer();
+      if (window.scrollY > TOP_THRESHOLD) {
+        return;
+      }
+
+      idleTimer = window.setTimeout(() => {
+        if (window.scrollY <= TOP_THRESHOLD) {
+          setShowScrollHint(true);
+        }
+      }, 3000);
+    };
+
     const dismissHint = () => {
       setShowScrollHint(false);
-      setHintDismissed(true);
-      window.clearTimeout(idleTimer);
+      clearHintTimer();
     };
 
     const handleScroll = () => {
-      if (window.scrollY > 24) {
+      if (window.scrollY >= BLUR_DISMISS_THRESHOLD) {
         dismissHint();
+        return;
+      }
+
+      if (window.scrollY <= TOP_THRESHOLD) {
+        setShowScrollHint(false);
+        scheduleHint();
       }
     };
 
-    const idleTimer = window.setTimeout(() => {
-      if (window.scrollY <= 24) {
-        setShowScrollHint(true);
-      }
-    }, 3000);
+    scheduleHint();
 
     window.addEventListener('scroll', handleScroll, { passive: true });
-    window.addEventListener('wheel', dismissHint, { passive: true });
-    window.addEventListener('touchstart', dismissHint, { passive: true });
-    window.addEventListener('pointerdown', dismissHint, { passive: true });
-    window.addEventListener('keydown', dismissHint);
 
     return () => {
-      window.clearTimeout(idleTimer);
+      clearHintTimer();
       window.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('wheel', dismissHint);
-      window.removeEventListener('touchstart', dismissHint);
-      window.removeEventListener('pointerdown', dismissHint);
-      window.removeEventListener('keydown', dismissHint);
     };
-  }, [hintDismissed]);
+  }, []);
 
   const handleLanguageToggle = () => {
     setLanguage((current) => (current === 'pt' ? 'en' : 'pt'));
@@ -85,6 +101,11 @@ export function LandingShell() {
       </header>
 
       <CinematicHero language={language} />
+      <div className="relative z-40 -mt-1 h-24 w-full overflow-hidden bg-[#050505]" aria-hidden="true">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+        <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-[var(--hero-accent)]/20 via-[var(--hero-accent)]/8 to-transparent blur-2xl" />
+        <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-b from-transparent via-[#060606]/60 to-[#050505]" />
+      </div>
       <FeaturesSection language={language} />
 
       <div

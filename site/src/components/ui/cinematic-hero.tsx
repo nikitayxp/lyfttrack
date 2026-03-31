@@ -271,6 +271,34 @@ export function CinematicHero({
     () => Math.max(0, Math.round(metricValue)).toLocaleString(language === 'pt' ? 'pt-PT' : 'en-US'),
     [language, metricValue]
   );
+  const handleSystemScroll = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const featuresSection = document.getElementById('features');
+    if (!featuresSection) {
+      return;
+    }
+
+    const currentY = window.scrollY;
+    const targetY = Math.max(0, featuresSection.getBoundingClientRect().top + currentY - 24);
+    const distance = targetY - currentY;
+
+    // If the user is already near the anchor, nudge down first so the gesture always feels responsive.
+    if (Math.abs(distance) < 140) {
+      const nudge = Math.min(window.innerHeight * 0.65, 420);
+      window.scrollTo({ top: currentY + nudge, behavior: 'smooth' });
+      window.setTimeout(() => {
+        window.scrollTo({ top: targetY, behavior: 'smooth' });
+      }, 260);
+      return;
+    }
+
+    window.scrollTo({ top: targetY, behavior: 'smooth' });
+  };
 
   useEffect(() => {
     const handleMouseMove = (event: MouseEvent) => {
@@ -470,6 +498,7 @@ export function CinematicHero({
           </a>
           <Link
             href="#features"
+            onClick={handleSystemScroll}
             className="hero-secondary-btn inline-flex min-h-12 items-center justify-center gap-2 rounded-[1.1rem] px-8 py-4 text-base font-bold transition-all"
           >
             <TrendingUp className="h-5 w-5" />
@@ -621,7 +650,8 @@ export function CinematicHero({
                     {copy.ctaPrimary}
                   </a>
                   <Link
-                    href="/blog/active-workout-system"
+                    href="#features"
+                    onClick={handleSystemScroll}
                     className="hero-secondary-btn inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition-all"
                   >
                     <TrendingUp className="h-4 w-4" />

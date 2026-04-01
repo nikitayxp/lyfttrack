@@ -6,7 +6,6 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
-  Dimensions,
   Modal,
   Platform,
   Pressable,
@@ -15,6 +14,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { Colors } from '@/constants/theme';
@@ -23,24 +23,25 @@ import {
   type ExerciseCatalogFilters,
   type ExerciseLibraryEquipmentFilter,
   type ExerciseLibraryMuscleFilter,
-  finishWorkout,
-  type FinishWorkoutResult,
   getAuthenticatedUserOrThrow,
   getErrorMessage,
   getExercisesCatalog,
   getRoutineById,
-  WorkoutSaveValidationError,
-  type WorkoutSetProgressDraft,
 } from '@/services/workoutService';
+import { finishWorkout } from '@/services/sessionRepository';
 import { getTemplateById } from '@/services/templateService';
 import { getExerciseProgress, type ExerciseProgressPoint } from '@/services/statsService';
 import { useWorkoutTimer } from '@/hooks/useWorkoutTimer';
+import {
+  WorkoutSaveValidationError,
+  type FinishWorkoutResult,
+  type WorkoutSetProgressDraft,
+} from '@/services/workoutSession.types';
 import {
   useActiveWorkoutState,
   createExerciseBlock,
   normalizeSetTypeOption,
   getCompletedExerciseNames,
-  normalizeExerciseRestSeconds,
   type ActiveExercise,
   type ExerciseRow,
 } from '@/hooks/useActiveWorkoutState';
@@ -57,7 +58,7 @@ import {
 
 const palette = Colors.dark;
 const DEFAULT_REST_SECONDS = 90;
-const REST_STEP_SECONDS = 30;
+const DESKTOP_WEB_MIN_WIDTH = 768;
 const LIVE_CHART_COLOR = '#3B82F6';
 const ROOT_SCREEN_BG = palette.bgPrimary;
 const MUSCLE_FILTER_CHIP_OPTIONS: readonly { key: ExerciseLibraryMuscleFilter; label: string }[] = [
@@ -76,6 +77,10 @@ const EQUIPMENT_FILTER_CHIP_OPTIONS: readonly { key: ExerciseLibraryEquipmentFil
   { key: 'cable', label: 'Cable' },
 ];
 
+type ExerciseStopwatchEntry = {
+  startedAtMs: number;
+};
+
 function formatElapsedTime(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
@@ -86,16 +91,6 @@ function formatElapsedTime(seconds: number): string {
   }
 
   return [minutes, remainder].map((value) => value.toString().padStart(2, '0')).join(':');
-}
-
-function formatCountdown(seconds: number): string {
-  const safeSeconds = Math.max(0, seconds);
-  const minutes = Math.floor(safeSeconds / 60)
-    .toString()
-    .padStart(2, '0');
-  const remainder = (safeSeconds % 60).toString().padStart(2, '0');
-
-  return `${minutes}:${remainder}`;
 }
 
 function buildWorkoutSetDrafts(exercises: ActiveExercise[]): WorkoutSetProgressDraft[] {
@@ -134,7 +129,9 @@ function buildCatalogCacheKey(filters: ExerciseCatalogFilters): string {
 
 export default function ActiveWorkout() {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
+  const isDesktopWeb = isWeb && windowWidth > DESKTOP_WEB_MIN_WIDTH;
   const modalAnimationType: 'fade' | 'slide' = isWeb ? 'fade' : 'slide';
   const searchParams = useLocalSearchParams<{
     routineId?: string | string[];
@@ -164,12 +161,6 @@ export default function ActiveWorkout() {
   const {
     workoutStartedAtMs,
     elapsedSeconds,
-    restEndAtMs,
-    restRemainingSeconds,
-    restTotalSeconds,
-    startRestTimer,
-    finishRestTimer,
-    adjustRestTimer,
     safeDeactivateKeepAwake,
   } = useWorkoutTimer();
   const workoutStartedAt = useMemo(() => new Date(workoutStartedAtMs).toISOString(), [workoutStartedAtMs]);
@@ -197,7 +188,6 @@ export default function ActiveWorkout() {
     acceptRecoveredDraft,
     discardRecoveredDraft,
   } = useActiveWorkoutState({
-    onSetCompleted: startRestTimer,
     userId: currentUserId ?? undefined,
     startTime: workoutStartedAt,
     templateId: routeTemplateId ?? null,
@@ -233,16 +223,10 @@ export default function ActiveWorkout() {
   const exerciseProgressCacheRef = useRef<Map<string, ExerciseProgressPoint[]>>(new Map());
   const requestedProgressExerciseIdsRef = useRef<Set<string>>(new Set());
   const statsRequestVersionRef = useRef(0);
+  const [exerciseStopwatchById, setExerciseStopwatchById] = useState<Record<string, ExerciseStopwatchEntry>>({});
+  const [stopwatchNowMs, setStopwatchNowMs] = useState(() => Date.now());
 
   const timerLabel = useMemo(() => formatElapsedTime(elapsedSeconds), [elapsedSeconds]);
-  const restTimerLabel = useMemo(() => formatCountdown(restRemainingSeconds), [restRemainingSeconds]);
-  const isRestTimerActive = restEndAtMs !== null;
-  const restTimerProgress = useMemo(() => {
-    if (!isRestTimerActive) return 0;
-    const total = Math.max(1, restTotalSeconds);
-    return Math.min(1, Math.max(0, restRemainingSeconds / total));
-  }, [isRestTimerActive, restRemainingSeconds, restTotalSeconds]);
-  const restTimerProgressRemaining = useMemo(() => Math.max(0, 1 - restTimerProgress), [restTimerProgress]);
   const liveStatsChartData = useMemo(
     () =>
       statsExerciseProgress.slice(-12).map((point) => ({
@@ -252,7 +236,73 @@ export default function ActiveWorkout() {
     [statsExerciseProgress]
   );
 
-  const liveChartWidth = useMemo(() => Math.max(250, Dimensions.get('window').width - 72), []);
+  const liveChartWidth = useMemo(() => Math.max(250, windowWidth - 72), [windowWidth]);
+
+  useEffect(() => {
+    if (Object.keys(exerciseStopwatchById).length === 0) {
+      return;
+    }
+
+    const intervalId = setInterval(() => {
+      setStopwatchNowMs(Date.now());
+    }, 250);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [exerciseStopwatchById]);
+
+  useEffect(() => {
+    setExerciseStopwatchById((currentValue) => {
+      const activeExerciseIds = new Set(activeExercises.map((exercise) => exercise.id));
+      let hasChanges = false;
+      const nextValue: Record<string, ExerciseStopwatchEntry> = {};
+
+      for (const [exerciseId, entry] of Object.entries(currentValue)) {
+        if (!activeExerciseIds.has(exerciseId)) {
+          hasChanges = true;
+          continue;
+        }
+
+        nextValue[exerciseId] = entry;
+      }
+
+      return hasChanges ? nextValue : currentValue;
+    });
+  }, [activeExercises]);
+
+  const isExerciseStopwatchRunning = useCallback(
+    (exerciseId: string) => Boolean(exerciseStopwatchById[exerciseId]),
+    [exerciseStopwatchById]
+  );
+
+  const getExerciseStopwatchSeconds = useCallback(
+    (exerciseId: string) => {
+      const entry = exerciseStopwatchById[exerciseId];
+
+      if (!entry) {
+        return 0;
+      }
+
+      return Math.max(0, Math.floor((stopwatchNowMs - entry.startedAtMs) / 1000));
+    },
+    [exerciseStopwatchById, stopwatchNowMs]
+  );
+
+  const toggleExerciseStopwatch = useCallback((exerciseId: string) => {
+    setExerciseStopwatchById((currentValue) => {
+      if (currentValue[exerciseId]) {
+        const nextValue = { ...currentValue };
+        delete nextValue[exerciseId];
+        return nextValue;
+      }
+
+      return {
+        ...currentValue,
+        [exerciseId]: { startedAtMs: Date.now() },
+      };
+    });
+  }, []);
 
   const loadExercises = useCallback(async (filters: ExerciseCatalogFilters, forceRefresh = false) => {
     const cacheKey = buildCatalogCacheKey(filters);
@@ -451,6 +501,50 @@ export default function ActiveWorkout() {
     );
   }, [activeExercises]);
 
+  const removeExercise = useCallback(
+    (exerciseIndex: number) => {
+      const exerciseId = activeExercisesRef.current[exerciseIndex]?.id;
+
+      setActiveExercisesWithRef((currentValue) => currentValue.filter((_, index) => index !== exerciseIndex));
+
+      if (exerciseId) {
+        setExerciseStopwatchById((currentValue) => {
+          if (!currentValue[exerciseId]) {
+            return currentValue;
+          }
+
+          const nextValue = { ...currentValue };
+          delete nextValue[exerciseId];
+          return nextValue;
+        });
+      }
+    },
+    [activeExercisesRef, setActiveExercisesWithRef]
+  );
+
+  const moveExercise = useCallback(
+    (exerciseIndex: number, direction: 'up' | 'down') => {
+      setActiveExercisesWithRef((currentValue) => {
+        const targetIndex = direction === 'up' ? exerciseIndex - 1 : exerciseIndex + 1;
+
+        if (exerciseIndex < 0 || exerciseIndex >= currentValue.length) {
+          return currentValue;
+        }
+
+        if (targetIndex < 0 || targetIndex >= currentValue.length) {
+          return currentValue;
+        }
+
+        const nextValue = [...currentValue];
+        const currentExercise = nextValue[exerciseIndex];
+        nextValue[exerciseIndex] = nextValue[targetIndex];
+        nextValue[targetIndex] = currentExercise;
+        return nextValue;
+      });
+    },
+    [setActiveExercisesWithRef]
+  );
+
   async function handleCreateExercise() {
     const normalizedName = sanitizeText(newExerciseName, {
       maxLength: INPUT_LIMITS.nameMax,
@@ -487,6 +581,7 @@ export default function ActiveWorkout() {
       exerciseCatalogByFilterRef.current.clear();
       await loadExercises({ muscle: selectedMuscleFilter, equipment: selectedEquipmentFilter }, true);
       addExercise(createdExercise);
+      setExercisePickerVisible(false);
     } catch (error) {
       Alert.alert('Unable to create exercise', getErrorMessage(error));
     } finally {
@@ -537,7 +632,6 @@ export default function ActiveWorkout() {
       setFinishSummary(result);
       setSummaryExerciseNames(getCompletedExerciseNames(finishSnapshot));
       setIsSummaryVisible(true);
-      finishRestTimer();
       await clearDraft();
     } catch (error) {
       if (error instanceof WorkoutSaveValidationError) {
@@ -553,10 +647,10 @@ export default function ActiveWorkout() {
 
   const handleShareAndFinish = useCallback(() => {
     safeDeactivateKeepAwake();
-    finishRestTimer();
     setIsSummaryVisible(false);
     setFinishSummary(null);
     setSummaryExerciseNames([]);
+    setExerciseStopwatchById({});
 
     // Reset state defensively to avoid phantom in-memory workout state.
     clearExercises();
@@ -564,7 +658,7 @@ export default function ActiveWorkout() {
     setCreateExerciseVisible(false);
 
     router.replace('/(tabs)' as any);
-  }, [clearExercises, finishRestTimer, safeDeactivateKeepAwake]);
+  }, [clearExercises, safeDeactivateKeepAwake]);
 
   const routePreloadLabel = routeTemplateId ? 'template' : 'routine';
   const isPreloadingRoute = routeTemplateId ? isPreloadingTemplate : isPreloadingRoutine;
@@ -620,53 +714,11 @@ export default function ActiveWorkout() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.restTimerInlineCard}>
-          <View style={styles.restTimerInlineHeaderRow}>
-            <View style={styles.restTimerInlineBadge}>
-              <Ionicons name="timer-outline" size={14} color={palette.textMuted} />
-              <Text style={styles.restTimerInlineBadgeText}>Rest</Text>
-            </View>
-
-            <Text style={[styles.restTimerInlineValue, isRestTimerActive && styles.restTimerInlineValueActive]}>
-              {restTimerLabel}
-            </Text>
-          </View>
-
-          <View style={styles.restTimerProgressTrack}>
-            <View style={[styles.restTimerProgressFill, { flex: restTimerProgress }]} />
-            <View style={{ flex: restTimerProgressRemaining }} />
-          </View>
-
-          <View style={styles.restTimerInlineActionsRow}>
-            <TouchableOpacity
-              style={[styles.restTimerPillButton, !isRestTimerActive && styles.restTimerPillButtonDisabled]}
-              activeOpacity={0.85}
-              onPress={() => adjustRestTimer(-REST_STEP_SECONDS)}
-              disabled={!isRestTimerActive}
-            >
-              <Text style={styles.restTimerPillButtonText}>-30s</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.restTimerPillButton} activeOpacity={0.85} onPress={() => adjustRestTimer(REST_STEP_SECONDS)}>
-              <Text style={styles.restTimerPillButtonText}>+30s</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.restTimerPillButton,
-                styles.restTimerSkipButton,
-                !isRestTimerActive && styles.restTimerPillButtonDisabled,
-              ]}
-              activeOpacity={0.85}
-              onPress={finishRestTimer}
-              disabled={!isRestTimerActive}
-            >
-              <Text style={styles.restTimerPillButtonText}>Skip</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={!isDesktopWeb}
+        >
           {isPreloadingRoute && activeExercises.length === 0 ? (
             <View style={styles.statusCard}>
               <ActivityIndicator size="small" color={palette.accent} />
@@ -702,100 +754,160 @@ export default function ActiveWorkout() {
               <Text style={styles.emptyWorkoutSubtitle}>Add an exercise to start logging your sets.</Text>
             </View>
           ) : (
-            activeExercises.map((exercise) => (
-              <View key={exercise.id} style={styles.exerciseCard}>
-                <Animated.View
-                  pointerEvents="none"
-                  style={[
-                    styles.exerciseCompletionGlow,
-                    {
-                      opacity: getExerciseCompletionGlowValue(exercise.id),
-                    },
-                  ]}
-                />
+            activeExercises.map((exercise, exerciseIndex) => {
+              const exerciseStopwatchSeconds = getExerciseStopwatchSeconds(exercise.id);
+              const isExerciseStopwatchActive = isExerciseStopwatchRunning(exercise.id);
 
-                <View style={styles.exerciseHeaderRow}>
-                  <View style={styles.exerciseHeaderTextWrap}>
-                    <Text style={styles.exerciseTitle}>{exercise.exercise.name}</Text>
-                    <Text style={styles.exerciseRestHint}>{`Rest ${exercise.defaultRestSeconds}s`}</Text>
+              return (
+                <View key={exercise.id} style={styles.exerciseCard}>
+                  <Animated.View
+                    style={[
+                      styles.exerciseCompletionGlow,
+                      styles.pointerEventsNone,
+                      {
+                        opacity: getExerciseCompletionGlowValue(exercise.id),
+                      },
+                    ]}
+                  />
+
+                  <View style={styles.exerciseHeaderRow}>
+                    <View style={styles.exerciseHeaderTextWrap}>
+                      <Text style={styles.exerciseTitle}>{exercise.exercise.name}</Text>
+                    </View>
+
+                    <View style={styles.exerciseHeaderActions}>
+                      <TouchableOpacity
+                        style={[
+                          styles.exerciseStopwatchButton,
+                          isExerciseStopwatchActive && styles.exerciseStopwatchButtonActive,
+                        ]}
+                        activeOpacity={0.86}
+                        onPress={() => toggleExerciseStopwatch(exercise.id)}
+                      >
+                        <Ionicons
+                          name={isExerciseStopwatchActive ? 'stopwatch' : 'stopwatch-outline'}
+                          size={15}
+                          color={isExerciseStopwatchActive ? '#7DD3FC' : palette.textSecondary}
+                        />
+                        <Text
+                          style={[
+                            styles.exerciseStopwatchText,
+                            isExerciseStopwatchActive && styles.exerciseStopwatchTextActive,
+                          ]}
+                        >
+                          {formatElapsedTime(exerciseStopwatchSeconds)}
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.exerciseActionButton, exerciseIndex === 0 && styles.exerciseActionButtonDisabled]}
+                        activeOpacity={0.86}
+                        onPress={() => moveExercise(exerciseIndex, 'up')}
+                        disabled={exerciseIndex === 0}
+                      >
+                        <Ionicons name="arrow-up" size={16} color={palette.textSecondary} />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.exerciseActionButton,
+                          exerciseIndex === activeExercises.length - 1 && styles.exerciseActionButtonDisabled,
+                        ]}
+                        activeOpacity={0.86}
+                        onPress={() => moveExercise(exerciseIndex, 'down')}
+                        disabled={exerciseIndex === activeExercises.length - 1}
+                      >
+                        <Ionicons name="arrow-down" size={16} color={palette.textSecondary} />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.exerciseActionButton, styles.exerciseActionButtonDanger]}
+                        activeOpacity={0.86}
+                        onPress={() => removeExercise(exerciseIndex)}
+                      >
+                        <Ionicons name="trash-outline" size={16} color="#FCA5A5" />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.exerciseStatsButton}
+                        activeOpacity={0.86}
+                        onPress={() => openExerciseStatsModal(exercise.exercise)}
+                      >
+                        <Ionicons name="stats-chart-outline" size={18} color={palette.textSecondary} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
-                  <TouchableOpacity
-                    style={styles.exerciseStatsButton}
-                    activeOpacity={0.86}
-                    onPress={() => openExerciseStatsModal(exercise.exercise)}
-                  >
-                    <Ionicons name="stats-chart-outline" size={18} color={palette.textSecondary} />
+                  <View style={[styles.tableRow, styles.tableHeaderRow]}>
+                    <Text style={[styles.headerLabel, styles.cellSet]}>Set</Text>
+                    <Text style={[styles.headerLabel, styles.cellKg]}>kg</Text>
+                    <Text style={[styles.headerLabel, styles.cellReps]}>Reps</Text>
+                    <Text style={[styles.headerLabel, styles.cellRir]}>RIR</Text>
+                    <View style={styles.cellCheck}>
+                      <Ionicons name="checkmark" size={15} color={palette.textMuted} />
+                    </View>
+                  </View>
+
+                  {exercise.sets.map((setItem) => {
+                    return (
+                      <View key={setItem.id} style={styles.setRowWrapper}>
+                        <View style={[styles.tableRow, setItem.completed && styles.completedRow]}>
+                          <View style={styles.cellSet}>
+                            <Text style={styles.setNumberText}>{setItem.set_number ?? '-'}</Text>
+                          </View>
+
+                          <TextInput
+                            value={setItem.weightInput}
+                            onChangeText={(value) => updateSetInput(exercise.id, setItem.id, 'weightInput', value)}
+                            style={[styles.numericInput, styles.kgInput, setItem.completed && styles.numericInputCompleted]}
+                            keyboardType="decimal-pad"
+                            placeholder="0"
+                            placeholderTextColor={palette.textMuted}
+                          />
+
+                          <TextInput
+                            value={setItem.repsInput}
+                            onChangeText={(value) => updateSetInput(exercise.id, setItem.id, 'repsInput', value)}
+                            style={[styles.numericInput, styles.cellReps, setItem.completed && styles.numericInputCompleted]}
+                            keyboardType="numeric"
+                            placeholder="0"
+                            placeholderTextColor={palette.textMuted}
+                          />
+
+                          <TextInput
+                            value={setItem.rirInput}
+                            onChangeText={(value) => updateSetInput(exercise.id, setItem.id, 'rirInput', value)}
+                            style={[styles.numericInput, styles.cellRir, setItem.completed && styles.numericInputCompleted]}
+                            keyboardType="decimal-pad"
+                            placeholder="0"
+                            placeholderTextColor={palette.textMuted}
+                          />
+
+                          <View style={styles.cellCheck}>
+                            <TouchableOpacity
+                              style={[styles.checkButton, setItem.completed && styles.checkButtonCompleted]}
+                              activeOpacity={0.85}
+                              onPress={() => handleSetCompletionToggle(exercise.id, setItem.id)}
+                            >
+                              <Ionicons
+                                name={setItem.completed ? 'checkmark-circle' : 'ellipse-outline'}
+                                size={22}
+                                color={setItem.completed ? palette.accent : palette.textMuted}
+                              />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })}
+
+                  <TouchableOpacity style={styles.addSetButton} activeOpacity={0.88} onPress={() => addSet(exercise.id)}>
+                    <Ionicons name="add" size={16} color={palette.textSecondary} />
+                    <Text style={styles.addSetText}>Add Set</Text>
                   </TouchableOpacity>
                 </View>
-
-                <View style={[styles.tableRow, styles.tableHeaderRow]}>
-                  <Text style={[styles.headerLabel, styles.cellSet]}>Set</Text>
-                  <Text style={[styles.headerLabel, styles.cellKg]}>kg</Text>
-                  <Text style={[styles.headerLabel, styles.cellReps]}>Reps</Text>
-                  <Text style={[styles.headerLabel, styles.cellRir]}>RIR</Text>
-                  <View style={styles.cellCheck}>
-                    <Ionicons name="checkmark" size={15} color={palette.textMuted} />
-                  </View>
-                </View>
-
-                {exercise.sets.map((setItem) => {
-                  return (
-                    <View key={setItem.id} style={styles.setRowWrapper}>
-                      <View style={[styles.tableRow, setItem.completed && styles.completedRow]}>
-                        <View style={styles.cellSet}>
-                          <Text style={styles.setNumberText}>{setItem.set_number ?? '-'}</Text>
-                        </View>
-
-                        <TextInput
-                          value={setItem.weightInput}
-                          onChangeText={(value) => updateSetInput(exercise.id, setItem.id, 'weightInput', value)}
-                          style={[styles.numericInput, styles.kgInput, setItem.completed && styles.numericInputCompleted]}
-                          keyboardType="decimal-pad"
-                          placeholder="0"
-                          placeholderTextColor={palette.textMuted}
-                        />
-
-                        <TextInput
-                          value={setItem.repsInput}
-                          onChangeText={(value) => updateSetInput(exercise.id, setItem.id, 'repsInput', value)}
-                          style={[styles.numericInput, styles.cellReps, setItem.completed && styles.numericInputCompleted]}
-                          keyboardType="numeric"
-                          placeholder="0"
-                          placeholderTextColor={palette.textMuted}
-                        />
-
-                        <TextInput
-                          value={setItem.rirInput}
-                          onChangeText={(value) => updateSetInput(exercise.id, setItem.id, 'rirInput', value)}
-                          style={[styles.numericInput, styles.cellRir, setItem.completed && styles.numericInputCompleted]}
-                          keyboardType="decimal-pad"
-                          placeholder="0"
-                          placeholderTextColor={palette.textMuted}
-                        />
-
-                        <TouchableOpacity
-                          style={[styles.checkButton, setItem.completed && styles.checkButtonCompleted]}
-                          activeOpacity={0.85}
-                          onPress={() => handleSetCompletionToggle(exercise.id, setItem.id)}
-                        >
-                          <Ionicons
-                            name={setItem.completed ? 'checkmark-circle' : 'ellipse-outline'}
-                            size={22}
-                            color={setItem.completed ? palette.accent : palette.textMuted}
-                          />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  );
-                })}
-
-                <TouchableOpacity style={styles.addSetButton} activeOpacity={0.88} onPress={() => addSet(exercise.id)}>
-                  <Ionicons name="add" size={16} color={palette.textSecondary} />
-                  <Text style={styles.addSetText}>Add Set</Text>
-                </TouchableOpacity>
-              </View>
-            ))
+              );
+            })
           )}
         </ScrollView>
 
@@ -911,7 +1023,10 @@ export default function ActiveWorkout() {
                     key={exercise.id}
                     style={styles.modalExerciseRow}
                     activeOpacity={0.88}
-                    onPress={() => addExercise(exercise)}
+                    onPress={() => {
+                      addExercise(exercise);
+                      setExercisePickerVisible(false);
+                    }}
                   >
                     <View style={styles.modalExerciseTextWrap}>
                       <Text style={styles.modalExerciseName}>{exercise.name}</Text>
@@ -1152,83 +1267,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
-  restTimerInlineCard: {
-    marginHorizontal: 14,
-    marginTop: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-  },
-  restTimerInlineHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  restTimerInlineBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    columnGap: 5,
-  },
-  restTimerInlineBadgeText: {
-    color: palette.textMuted,
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  restTimerInlineValue: {
-    color: palette.textPrimary,
-    fontSize: 20,
-    fontWeight: '800',
-    fontVariant: ['tabular-nums'],
-  },
-  restTimerInlineValueActive: {
-    color: '#22C55E',
-  },
-  restTimerProgressTrack: {
-    marginTop: 8,
-    flexDirection: 'row',
-    height: 6,
-    borderRadius: 999,
-    backgroundColor: '#1E293B',
-    overflow: 'hidden',
-  },
-  restTimerProgressFill: {
-    height: '100%',
-    borderRadius: 999,
-    backgroundColor: '#22C55E',
-  },
-  restTimerInlineActionsRow: {
-    marginTop: 9,
-    flexDirection: 'row',
-    columnGap: 7,
-  },
-  restTimerPillButton: {
-    flex: 1,
-    minHeight: 32,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: palette.inputBorder,
-    backgroundColor: palette.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 10,
-  },
-  restTimerPillButtonDisabled: {
-    opacity: 0.45,
-  },
-  restTimerPillButtonText: {
-    color: palette.textPrimary,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  restTimerSkipButton: {
-    borderColor: '#7F1D1D',
-    backgroundColor: '#2A1118',
-  },
   scrollView: {
     flex: 1,
   },
@@ -1311,6 +1349,9 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#67E8F9',
   },
+  pointerEventsNone: {
+    pointerEvents: 'none',
+  },
   exerciseHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1323,18 +1364,59 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
+  exerciseHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 5,
+    flexShrink: 0,
+  },
+  exerciseStopwatchButton: {
+    minWidth: 70,
+    height: 32,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#0E2238',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    columnGap: 4,
+    paddingHorizontal: 8,
+  },
+  exerciseStopwatchButtonActive: {
+    borderColor: '#0EA5E9',
+    backgroundColor: '#0D2A45',
+  },
+  exerciseStopwatchText: {
+    color: '#93C5FD',
+    fontSize: 11,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  exerciseStopwatchTextActive: {
+    color: '#BAE6FD',
+  },
+  exerciseActionButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#1F2937',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exerciseActionButtonDisabled: {
+    opacity: 0.36,
+  },
+  exerciseActionButtonDanger: {
+    borderColor: '#7F1D1D',
+    backgroundColor: '#2A1118',
+  },
   exerciseTitle: {
     color: palette.textPrimary,
     fontSize: 20,
     fontWeight: '800',
-  },
-  exerciseRestHint: {
-    marginTop: 2,
-    color: '#93C5FD',
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
   },
   exerciseStatsButton: {
     width: 34,
@@ -1345,15 +1427,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#1F2937',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   tableRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 7,
-    paddingHorizontal: 6,
-    columnGap: 8,
+    paddingHorizontal: 4,
+    columnGap: 6,
     borderBottomWidth: 1,
     borderBottomColor: '#1F2937',
+    minWidth: 0,
+    overflow: 'hidden',
   },
   setRowWrapper: {
     marginBottom: 2,
@@ -1377,27 +1462,37 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   cellSet: {
-    width: 44,
+    width: 38,
+    minWidth: 38,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
     textAlign: 'center',
   },
   setNumberText: {
     color: palette.textPrimary,
     fontSize: 14,
     fontWeight: '700',
+    textAlign: 'center',
   },
   cellKg: {
-    width: 92,
+    flex: 1.2,
+    minWidth: 58,
   },
   kgInput: {
-    width: 92,
+    flex: 1.2,
+    minWidth: 58,
   },
   cellReps: {
-    width: 64,
+    flex: 1,
+    minWidth: 44,
   },
   cellRir: {
-    width: 64,
+    flex: 1,
+    minWidth: 44,
   },
   numericInput: {
+    flex: 1,
     height: 36,
     borderRadius: 10,
     borderWidth: 1,
@@ -1407,8 +1502,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 14,
     fontWeight: '700',
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
     fontVariant: ['tabular-nums'],
+    minWidth: 0,
+    flexShrink: 1,
   },
   numericInputCompleted: {
     borderColor: '#3B82F6',
@@ -1416,15 +1513,22 @@ const styles = StyleSheet.create({
   },
   cellCheck: {
     width: 36,
+    minWidth: 36,
+    flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkButton: {
     width: 34,
+    height: 34,
+    minWidth: 34,
+    flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 10,
-    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#1F2937',
   },
   checkButtonCompleted: {
     backgroundColor: '#17345C',

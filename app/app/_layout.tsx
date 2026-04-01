@@ -13,6 +13,7 @@ import { Colors } from '@/constants/theme';
 import { supabase } from '@/services/supabase';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import NeuralBackground from '@/components/ui/flow-field-background';
+import CustomCursor from '@/components/ui/CustomCursor';
 import type { Session } from '@supabase/supabase-js';
 
 const palette = Colors.dark;
@@ -58,6 +59,9 @@ const styles = StyleSheet.create({
   webFlowLayer: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 0,
+  },
+  pointerEventsNone: {
+    pointerEvents: 'none' as any,
   },
   webBlueAuraTop: {
     position: 'absolute',
@@ -182,6 +186,38 @@ export default function RootLayout() {
     };
   }, [isWeb, isDesktopWeb]);
 
+  useEffect(() => {
+    if (!isWeb || !isDesktopWeb || typeof document === 'undefined') {
+      return;
+    }
+
+    const html = document.documentElement;
+    const body = document.body;
+    const root = document.getElementById('root');
+
+    const previous = {
+      htmlCursor: html.style.cursor,
+      bodyCursor: body.style.cursor,
+      rootCursor: root?.style.cursor ?? '',
+    };
+
+    html.style.cursor = 'none';
+    body.style.cursor = 'none';
+
+    if (root) {
+      root.style.cursor = 'none';
+    }
+
+    return () => {
+      html.style.cursor = previous.htmlCursor;
+      body.style.cursor = previous.bodyCursor;
+
+      if (root) {
+        root.style.cursor = previous.rootCursor;
+      }
+    };
+  }, [isDesktopWeb, isWeb]);
+
   const redirectForSession = useCallback((session: Session | null) => {
     const inAuthGroup = segments[0] === '(auth)';
 
@@ -261,23 +297,22 @@ export default function RootLayout() {
   if (isWeb) {
     return (
       <View style={[styles.webRoot, isDesktopWeb && styles.webRootDesktop, webViewportFill]}>
-        <View pointerEvents="none" style={styles.webFlowLayer}>
+        <View style={[styles.webFlowLayer, styles.pointerEventsNone]}>
           <NeuralBackground color="#3B82F6" trailOpacity={0.12} speed={0.35} />
         </View>
+        <CustomCursor enabled={isDesktopWeb} />
 
         <LinearGradient
-          pointerEvents="none"
           colors={['rgba(59,130,246,0.50)', 'rgba(59,130,246,0.00)']}
           start={{ x: 0.4, y: 0.2 }}
           end={{ x: 0.85, y: 0.9 }}
-          style={styles.webBlueAuraTop}
+          style={[styles.webBlueAuraTop, styles.pointerEventsNone]}
         />
         <LinearGradient
-          pointerEvents="none"
           colors={['rgba(56,189,248,0.42)', 'rgba(56,189,248,0.00)']}
           start={{ x: 0.2, y: 0.15 }}
           end={{ x: 0.8, y: 0.85 }}
-          style={styles.webBlueAuraBottom}
+          style={[styles.webBlueAuraBottom, styles.pointerEventsNone]}
         />
 
         {isDesktopWeb ? <View style={[styles.deviceMockup, desktopShellWebShadow]}>{layout}</View> : layout}

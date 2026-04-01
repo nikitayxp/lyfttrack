@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, Vibration } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { activateKeepAwake, deactivateKeepAwake } from 'expo-keep-awake';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 
 const DEFAULT_REST_SECONDS = 90;
 
@@ -56,7 +56,7 @@ export function useWorkoutTimer() {
     keepAwakeState.activated = false;
     keepAwakeState.deactivated = false;
 
-    Promise.resolve(activateKeepAwake())
+    Promise.resolve(activateKeepAwakeAsync())
       .then(() => {
         keepAwakeState.activated = true;
       })

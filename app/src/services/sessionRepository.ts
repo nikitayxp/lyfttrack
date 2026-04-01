@@ -2,7 +2,6 @@ import { supabase } from '@/services/supabase';
 import type { TablesInsert } from '@/types/database';
 import { INPUT_LIMITS, sanitizeText, toSafeNumber } from '@/utils/inputValidation';
 import {
-  type WorkoutSetType,
   getAuthenticatedUserOrThrow,
   extractSupabaseErrorMeta,
   normalizeIsoTimestamp,
@@ -16,64 +15,14 @@ import {
   calculateWorkoutVolume,
   normalizeWriteText
 } from './workoutService';
-
-export type WorkoutSetDraft = {
-  exerciseId: string | null | undefined;
-  setNumber: number | null | undefined;
-  weight?: number | null;
-  reps?: number | null;
-  rir?: number | null;
-  setType?: WorkoutSetType | string | null;
-};
-
-export type WorkoutSetProgressDraft = WorkoutSetDraft & {
-  completed?: boolean | null;
-};
-
-export type CreateWorkoutWithSetsInput = {
-  name: string;
-  notes?: string | null;
-  templateId?: string | null;
-  startTime: string;
-  endTime: string;
-  setDrafts: WorkoutSetDraft[];
-};
-
-export type CreateWorkoutWithSetsResult = {
-  workoutId: string;
-  insertedSetCount: number;
-};
-
-export type FinishWorkoutInput = {
-  name: string;
-  notes?: string | null;
-  templateId?: string | null;
-  startTime: string;
-  setDrafts: WorkoutSetProgressDraft[];
-};
-
-export type FinishWorkoutResult = {
-  workoutId: string;
-  insertedSetCount: number;
-  completedSetCount: number;
-  totalVolume: number;
-  durationSeconds: number;
-  startTime: string;
-  endTime: string;
-  prCount: number;
-};
-
-export type WorkoutSaveValidationCode = 'no-completed-sets' | 'no-valid-set-rows';
-
-export class WorkoutSaveValidationError extends Error {
-  readonly code: WorkoutSaveValidationCode;
-
-  constructor(code: WorkoutSaveValidationCode, message: string) {
-    super(message);
-    this.name = 'WorkoutSaveValidationError';
-    this.code = code;
-  }
-}
+import {
+  type CreateWorkoutWithSetsInput,
+  type CreateWorkoutWithSetsResult,
+  type FinishWorkoutInput,
+  type FinishWorkoutResult,
+  type WorkoutSetDraft,
+  WorkoutSaveValidationError,
+} from './workoutSession.types';
 
 // ---------- Create Workout ----------
 

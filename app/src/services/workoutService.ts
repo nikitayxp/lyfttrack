@@ -2,12 +2,12 @@ import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/services/supabase';
 import type { Tables, TablesInsert } from '@/types/database';
 import { INPUT_LIMITS, sanitizeText, toSafeInteger, toSafeNumber } from '@/utils/inputValidation';
-import type { WorkoutSetDraft, WorkoutSetProgressDraft } from './sessionRepository';
+import type { WorkoutSetDraft, WorkoutSetProgressDraft, WorkoutSetType } from './workoutSession.types';
 
 export type ExerciseCatalogItem = Tables<'exercises'>;
 export type ExerciseLibraryMuscleFilter = 'all' | 'chest' | 'back' | 'legs' | 'shoulders' | 'arms';
 export type ExerciseLibraryEquipmentFilter = 'all' | 'barbell' | 'dumbbell' | 'machine' | 'cable';
-export * from './sessionRepository';
+export type { WorkoutSetType } from './workoutSession.types';
 export type ExerciseCatalogFilters = {
   muscle?: ExerciseLibraryMuscleFilter;
   equipment?: ExerciseLibraryEquipmentFilter;
@@ -16,7 +16,6 @@ export type RoutineRow = Tables<'routines'>;
 export type RoutineExerciseRow = Tables<'routine_exercises'>;
 export type WorkoutExerciseRow = Tables<'workout_exercises'>;
 export type ProfileRow = Tables<'profiles'>;
-export type WorkoutSetType = Exclude<Tables<'sets'>['set_type'], null>;
 
 export type CreateExerciseInput = {
   name: string;

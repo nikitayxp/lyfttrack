@@ -44,9 +44,15 @@ export function WorkoutSummary({
   onShareAndFinish,
 }: WorkoutSummaryProps) {
   const isWeb = Platform.OS === 'web';
+  const modalAnimationType: 'fade' | 'slide' = isWeb ? 'fade' : 'slide';
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onShareAndFinish}>
+    <Modal
+      visible={visible}
+      animationType={modalAnimationType}
+      presentationStyle="fullScreen"
+      onRequestClose={onShareAndFinish}
+    >
       <SafeAreaView style={[styles.screen, isWeb && styles.screenWeb]} edges={['top', 'left', 'right', 'bottom']}>
         <View style={[styles.screenFrame, isWeb && styles.screenFrameWeb]}>
           <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>

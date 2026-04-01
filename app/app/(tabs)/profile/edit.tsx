@@ -39,6 +39,7 @@ export default function EditProfileScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
   const [isSendingPasswordReset, setIsSendingPasswordReset] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const loadProfile = useCallback(async () => {
@@ -187,6 +188,31 @@ export default function EditProfileScreen() {
     }
   }, [currentEmail, isSendingPasswordReset, pendingEmailInput]);
 
+  const handleLogout = useCallback(() => {
+    Alert.alert(
+      'Terminar Sessão',
+      'Tens a certeza que queres sair? Terás de iniciar sessão novamente.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Terminar Sessão',
+          style: 'destructive',
+          onPress: async () => {
+            setIsLoggingOut(true);
+            try {
+              await supabase.auth.signOut();
+              router.replace('/' as any);
+            } catch (error) {
+              Alert.alert('Erro ao terminar sessão', toErrorMessage(error));
+            } finally {
+              setIsLoggingOut(false);
+            }
+          },
+        },
+      ]
+    );
+  }, []);
+
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -309,6 +335,24 @@ export default function EditProfileScreen() {
                   <>
                     <Ionicons name="key-outline" size={16} color="#FFFFFF" />
                     <Text style={styles.accountSecondaryButtonText}>Enviar recuperacao de palavra-passe</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.logoutCard}>
+              <TouchableOpacity
+                style={[styles.logoutButton, isLoggingOut && styles.logoutButtonDisabled]}
+                activeOpacity={0.85}
+                onPress={handleLogout}
+                disabled={isLoggingOut}
+              >
+                {isLoggingOut ? (
+                  <ActivityIndicator size="small" color="#FECACA" />
+                ) : (
+                  <>
+                    <Ionicons name="log-out-outline" size={18} color="#FECACA" />
+                    <Text style={styles.logoutButtonText}>Terminar Sessão</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -519,5 +563,29 @@ const styles = StyleSheet.create({
   },
   accountActionDisabled: {
     opacity: 0.75,
+  },
+  logoutCard: {
+    marginTop: 24,
+    marginBottom: 20,
+  },
+  logoutButton: {
+    minHeight: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#7F1D1D',
+    backgroundColor: '#1C0A0A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    columnGap: 10,
+  },
+  logoutButtonDisabled: {
+    opacity: 0.6,
+  },
+  logoutButtonText: {
+    color: '#FECACA',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.2,
   },
 });

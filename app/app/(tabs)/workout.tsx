@@ -73,6 +73,7 @@ function summarizeExercises(exerciseNames: string[]): string {
 
 export default function WorkoutScreen() {
   const isWeb = Platform.OS === 'web';
+  const modalAnimationType: 'fade' | 'slide' = isWeb ? 'fade' : 'slide';
   const [activeMode, setActiveMode] = useState<WorkoutMode>('start');
 
   const [templates, setTemplates] = useState<TemplateSummary[]>([]);
@@ -759,7 +760,7 @@ export default function WorkoutScreen() {
       <Modal
         visible={isCreateTemplateModalVisible}
         transparent
-        animationType="slide"
+        animationType={modalAnimationType}
         onRequestClose={() => setIsCreateTemplateModalVisible(false)}
       >
         <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
@@ -906,7 +907,7 @@ export default function WorkoutScreen() {
       <Modal
         visible={isCreateRoutineModalVisible}
         transparent
-        animationType="slide"
+        animationType={modalAnimationType}
         onRequestClose={() => setIsCreateRoutineModalVisible(false)}
       >
         <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
@@ -1026,7 +1027,7 @@ export default function WorkoutScreen() {
       <Modal
         visible={isCreateExerciseModalVisible}
         transparent
-        animationType="slide"
+        animationType={modalAnimationType}
         onRequestClose={() => setIsCreateExerciseModalVisible(false)}
       >
         <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
@@ -1410,6 +1411,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignSelf: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.74)',
   },
   modalDismissArea: {
     flex: 1,

@@ -15,12 +15,8 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  Vibration,
   View,
 } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
-import * as Haptics from 'expo-haptics';
-import { activateKeepAwake, deactivateKeepAwake } from 'expo-keep-awake';
 import { Colors } from '@/constants/theme';
 import {
   createExercise,
@@ -29,6 +25,7 @@ import {
   type ExerciseLibraryMuscleFilter,
   finishWorkout,
   type FinishWorkoutResult,
+  getAuthenticatedUserOrThrow,
   getErrorMessage,
   getExercisesCatalog,
   getRoutineById,
@@ -37,25 +34,30 @@ import {
 } from '@/services/workoutService';
 import { getTemplateById } from '@/services/templateService';
 import { getExerciseProgress, type ExerciseProgressPoint } from '@/services/statsService';
-import type { Tables } from '@/types/database';
+import { useWorkoutTimer } from '@/hooks/useWorkoutTimer';
+import {
+  useActiveWorkoutState,
+  createExerciseBlock,
+  normalizeSetTypeOption,
+  getCompletedExerciseNames,
+  normalizeExerciseRestSeconds,
+  type ActiveExercise,
+  type ExerciseRow,
+} from '@/hooks/useActiveWorkoutState';
+
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { WorkoutSummary } from '@/components/workout/WorkoutSummary';
 import {
   INPUT_LIMITS,
-  sanitizeDecimalText,
-  sanitizeIntegerText,
   sanitizeText,
   toSafeInteger,
   toSafeNumber,
 } from '@/utils/inputValidation';
 
-type ExerciseRow = Tables<'exercises'>;
-type SetRow = Tables<'sets'>;
-
 const palette = Colors.dark;
 const DEFAULT_REST_SECONDS = 90;
 const REST_STEP_SECONDS = 30;
-const INLINE_TEMPLATE_PRELOAD_KEY = '__inline_template_payload__';
 const LIVE_CHART_COLOR = '#3B82F6';
 const ROOT_SCREEN_BG = palette.bgPrimary;
 const MUSCLE_FILTER_CHIP_OPTIONS: readonly { key: ExerciseLibraryMuscleFilter; label: string }[] = [
@@ -73,59 +75,6 @@ const EQUIPMENT_FILTER_CHIP_OPTIONS: readonly { key: ExerciseLibraryEquipmentFil
   { key: 'machine', label: 'Machine' },
   { key: 'cable', label: 'Cable' },
 ];
-type SetTypeOption = Exclude<SetRow['set_type'], null>;
-type SetInputField = 'weightInput' | 'repsInput' | 'rirInput';
-
-type ActiveSet = Pick<SetRow, 'id' | 'set_number' | 'weight' | 'reps' | 'rir' | 'set_type'> & {
-  completed: boolean;
-  weightInput: string;
-  repsInput: string;
-  rirInput: string;
-};
-
-type ActiveExercise = {
-  id: string;
-  exercise: ExerciseRow;
-  defaultRestSeconds: number;
-  sets: ActiveSet[];
-};
-
-type ActiveExercisesUpdater = ActiveExercise[] | ((currentValue: ActiveExercise[]) => ActiveExercise[]);
-
-type TemplatePreloadExercise = {
-  exercise: ExerciseRow;
-  restSeconds: number;
-};
-
-function parseOptionalWeight(value: string): number | null {
-  return toSafeNumber(value, {
-    min: 0,
-    max: INPUT_LIMITS.weightMax,
-    decimals: 2,
-  });
-}
-
-function sanitizeDecimalInput(value: string): string {
-  return sanitizeDecimalText(value);
-}
-
-function sanitizeIntegerInput(value: string): string {
-  return sanitizeIntegerText(value);
-}
-
-function parseOptionalReps(value: string): number | null {
-  return toSafeInteger(value, {
-    min: 0,
-    max: INPUT_LIMITS.repsMax,
-  });
-}
-
-function parseOptionalRir(value: string): number | null {
-  return toSafeInteger(value, {
-    min: 0,
-    max: INPUT_LIMITS.rirMax,
-  });
-}
 
 function formatElapsedTime(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
@@ -147,97 +96,6 @@ function formatCountdown(seconds: number): string {
   const remainder = (safeSeconds % 60).toString().padStart(2, '0');
 
   return `${minutes}:${remainder}`;
-}
-
-function getRemainingSeconds(endAtMs: number): number {
-  return Math.max(0, Math.ceil((endAtMs - Date.now()) / 1000));
-}
-
-function startTimerFromNow(seconds: number): number {
-  const safeSeconds = Math.max(1, Math.trunc(seconds));
-  return Date.now() + safeSeconds * 1000;
-}
-
-function clampRestSeconds(value: number): number {
-  return Math.max(0, Math.trunc(value));
-}
-
-function ensurePositiveRestSeconds(value: number): number {
-  return Math.max(1, Math.trunc(value));
-}
-
-function normalizeExerciseRestSeconds(value: number | null | undefined): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return DEFAULT_REST_SECONDS;
-  }
-
-  const normalized = Math.trunc(value);
-  return Math.max(15, Math.min(900, normalized));
-}
-
-function createSet(
-  exerciseId: string,
-  setNumber: number,
-  initial?: {
-    weightInput?: string;
-    repsInput?: string;
-    rirInput?: string;
-    setType?: SetTypeOption;
-  }
-): ActiveSet {
-  const weightInput = initial?.weightInput ?? '';
-  const repsInput = initial?.repsInput ?? '';
-  const rirInput = initial?.rirInput ?? '';
-
-  return {
-    id: `${exerciseId}-set-${setNumber}-${Math.random().toString(36).slice(2, 8)}`,
-    set_number: setNumber,
-    set_type: initial?.setType ?? 'normal',
-    weight: parseOptionalWeight(weightInput),
-    reps: parseOptionalReps(repsInput),
-    rir: parseOptionalRir(rirInput),
-    completed: false,
-    weightInput,
-    repsInput,
-    rirInput,
-  };
-}
-
-function createExerciseBlock(exercise: ExerciseRow, defaultRestSeconds = DEFAULT_REST_SECONDS): ActiveExercise {
-  return {
-    id: `active-${exercise.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    exercise,
-    defaultRestSeconds: normalizeExerciseRestSeconds(defaultRestSeconds),
-    sets: [
-      createSet(exercise.id, 1, { setType: 'warmup' }),
-      createSet(exercise.id, 2, { setType: 'normal' }),
-    ],
-  };
-}
-
-function normalizeSetTypeOption(current: SetRow['set_type']): SetTypeOption {
-  if (!current) {
-    return 'normal';
-  }
-
-  const normalized = current.toLowerCase();
-
-  if (normalized === 'working') return 'normal';
-  if (normalized === 'dropset') return 'drop';
-  if (normalized === 'warmup' || normalized === 'normal' || normalized === 'drop' || normalized === 'failure') {
-    return normalized;
-  }
-
-  return 'normal';
-}
-
-function getCompletedExerciseNames(exercises: ActiveExercise[]): string[] {
-  const names = exercises
-    .filter((exercise) => exercise.sets.some((setItem) => setItem.completed))
-    .map((exercise) => exercise.exercise.name.trim())
-    .filter((name) => name.length > 0);
-
-  return [...new Set(names)];
 }
 
 function buildWorkoutSetDrafts(exercises: ActiveExercise[]): WorkoutSetProgressDraft[] {
@@ -267,63 +125,6 @@ function buildWorkoutSetDrafts(exercises: ActiveExercise[]): WorkoutSetProgressD
   );
 }
 
-function parseSerializedTemplateExercises(rawValue: string | string[] | undefined): TemplatePreloadExercise[] {
-  const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
-
-  if (!value) {
-    return [];
-  }
-
-  try {
-    const decoded = decodeURIComponent(value);
-    const parsed = JSON.parse(decoded);
-
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    const normalizedExercises: TemplatePreloadExercise[] = [];
-
-    for (const item of parsed) {
-      if (!item || typeof item !== 'object') {
-        continue;
-      }
-
-      // New payload format: { exercise, restSeconds }
-      if ('exercise' in item) {
-        const maybeExercise = (item as { exercise?: unknown }).exercise;
-
-        if (
-          maybeExercise &&
-          typeof maybeExercise === 'object' &&
-          typeof (maybeExercise as ExerciseRow).id === 'string' &&
-          typeof (maybeExercise as ExerciseRow).name === 'string'
-        ) {
-          const restSeconds = (item as { restSeconds?: number | null }).restSeconds;
-          normalizedExercises.push({
-            exercise: maybeExercise as ExerciseRow,
-            restSeconds: normalizeExerciseRestSeconds(restSeconds),
-          });
-        }
-
-        continue;
-      }
-
-      // Backward compatible payload format: ExerciseRow[]
-      if (typeof (item as ExerciseRow).id === 'string' && typeof (item as ExerciseRow).name === 'string') {
-        normalizedExercises.push({
-          exercise: item as ExerciseRow,
-          restSeconds: DEFAULT_REST_SECONDS,
-        });
-      }
-    }
-
-    return normalizedExercises;
-  } catch {
-    return [];
-  }
-}
-
 function buildCatalogCacheKey(filters: ExerciseCatalogFilters): string {
   const muscle = filters.muscle ?? 'all';
   const equipment = filters.equipment ?? 'all';
@@ -334,10 +135,10 @@ function buildCatalogCacheKey(filters: ExerciseCatalogFilters): string {
 export default function ActiveWorkout() {
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === 'web';
+  const modalAnimationType: 'fade' | 'slide' = isWeb ? 'fade' : 'slide';
   const searchParams = useLocalSearchParams<{
     routineId?: string | string[];
     templateId?: string | string[];
-    templateExercises?: string | string[];
   }>();
 
   const routeRoutineId = useMemo(() => {
@@ -360,24 +161,53 @@ export default function ActiveWorkout() {
     return rawTemplateId;
   }, [searchParams.templateId]);
 
-  const routeTemplateExercises = useMemo(
-    () => parseSerializedTemplateExercises(searchParams.templateExercises),
-    [searchParams.templateExercises]
-  );
-
-  const [workoutStartedAtMs] = useState(() => Date.now());
+  const {
+    workoutStartedAtMs,
+    elapsedSeconds,
+    restEndAtMs,
+    restRemainingSeconds,
+    restTotalSeconds,
+    startRestTimer,
+    finishRestTimer,
+    adjustRestTimer,
+    safeDeactivateKeepAwake,
+  } = useWorkoutTimer();
   const workoutStartedAt = useMemo(() => new Date(workoutStartedAtMs).toISOString(), [workoutStartedAtMs]);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [restEndAtMs, setRestEndAtMs] = useState<number | null>(null);
-  const [restRemainingSeconds, setRestRemainingSeconds] = useState(0);
-  const [restTotalSeconds, setRestTotalSeconds] = useState(DEFAULT_REST_SECONDS);
+
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    getAuthenticatedUserOrThrow()
+      .then((user) => setCurrentUserId(user.id))
+      .catch(() => setCurrentUserId(null));
+  }, []);
+
+  const {
+    activeExercises,
+    activeExercisesRef,
+    setActiveExercisesWithRef,
+    handleSetCompletionToggle,
+    updateSetInput,
+    addSet,
+    addExercise,
+    clearExercises,
+    getExerciseCompletionGlowValue,
+    recoveredDraft,
+    clearDraft,
+    acceptRecoveredDraft,
+    discardRecoveredDraft,
+  } = useActiveWorkoutState({
+    onSetCompleted: startRestTimer,
+    userId: currentUserId ?? undefined,
+    startTime: workoutStartedAt,
+    templateId: routeTemplateId ?? null,
+  });
+
   const [exercisePickerVisible, setExercisePickerVisible] = useState(false);
   const [selectedMuscleFilter, setSelectedMuscleFilter] = useState<ExerciseLibraryMuscleFilter>('all');
   const [selectedEquipmentFilter, setSelectedEquipmentFilter] = useState<ExerciseLibraryEquipmentFilter>('all');
   const [createExerciseVisible, setCreateExerciseVisible] = useState(false);
   const [catalogExercises, setCatalogExercises] = useState<ExerciseRow[]>([]);
-  const [activeExercises, setActiveExercises] = useState<ActiveExercise[]>([]);
-  const activeExercisesRef = useRef<ActiveExercise[]>([]);
   const [preloadedRoutineId, setPreloadedRoutineId] = useState<string | null>(null);
   const [preloadedTemplateId, setPreloadedTemplateId] = useState<string | null>(null);
   const [isPreloadingRoutine, setIsPreloadingRoutine] = useState(false);
@@ -399,115 +229,30 @@ export default function ActiveWorkout() {
   const [statsExerciseProgress, setStatsExerciseProgress] = useState<ExerciseProgressPoint[]>([]);
   const [isLoadingExerciseStats, setIsLoadingExerciseStats] = useState(false);
   const [exerciseStatsError, setExerciseStatsError] = useState<string | null>(null);
-  const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const restTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const hasTriggeredRestVibrationRef = useRef(false);
   const exerciseCatalogByFilterRef = useRef<Map<string, ExerciseRow[]>>(new Map());
-  const completionGlowByExerciseIdRef = useRef<Map<string, Animated.Value>>(new Map());
   const exerciseProgressCacheRef = useRef<Map<string, ExerciseProgressPoint[]>>(new Map());
   const requestedProgressExerciseIdsRef = useRef<Set<string>>(new Set());
   const statsRequestVersionRef = useRef(0);
-  const keepAwakeStateRef = useRef<{ activated: boolean; deactivated: boolean }>({
-    activated: false,
-    deactivated: false,
-  });
 
-  const setActiveExercisesWithRef = useCallback((nextValue: ActiveExercisesUpdater) => {
-    setActiveExercises((currentValue) => {
-      const resolvedValue =
-        typeof nextValue === 'function'
-          ? (nextValue as (currentValue: ActiveExercise[]) => ActiveExercise[])(currentValue)
-          : nextValue;
-
-      activeExercisesRef.current = resolvedValue;
-      return resolvedValue;
-    });
-  }, []);
-
-  useEffect(() => {
-    activeExercisesRef.current = activeExercises;
-  }, [activeExercises]);
+  const timerLabel = useMemo(() => formatElapsedTime(elapsedSeconds), [elapsedSeconds]);
+  const restTimerLabel = useMemo(() => formatCountdown(restRemainingSeconds), [restRemainingSeconds]);
+  const isRestTimerActive = restEndAtMs !== null;
+  const restTimerProgress = useMemo(() => {
+    if (!isRestTimerActive) return 0;
+    const total = Math.max(1, restTotalSeconds);
+    return Math.min(1, Math.max(0, restRemainingSeconds / total));
+  }, [isRestTimerActive, restRemainingSeconds, restTotalSeconds]);
+  const restTimerProgressRemaining = useMemo(() => Math.max(0, 1 - restTimerProgress), [restTimerProgress]);
+  const liveStatsChartData = useMemo(
+    () =>
+      statsExerciseProgress.slice(-12).map((point) => ({
+        value: Math.max(0, point.value),
+        label: point.label,
+      })),
+    [statsExerciseProgress]
+  );
 
   const liveChartWidth = useMemo(() => Math.max(250, Dimensions.get('window').width - 72), []);
-
-  const clearElapsedTimer = useCallback(() => {
-    if (!elapsedTimerRef.current) {
-      return;
-    }
-
-    clearInterval(elapsedTimerRef.current);
-    elapsedTimerRef.current = null;
-  }, []);
-
-  const clearRestTimer = useCallback(() => {
-    if (!restTimerRef.current) {
-      return;
-    }
-
-    clearInterval(restTimerRef.current);
-    restTimerRef.current = null;
-  }, []);
-
-  const activateKeepAwakeSafely = useCallback(() => {
-    if (Platform.OS === 'web') {
-      return;
-    }
-
-    const keepAwakeState = keepAwakeStateRef.current;
-    keepAwakeState.activated = false;
-    keepAwakeState.deactivated = false;
-
-    Promise.resolve(activateKeepAwake())
-      .then(() => {
-        keepAwakeState.activated = true;
-      })
-      .catch((error) => {
-        keepAwakeState.activated = false;
-        console.warn('Failed to activate keep awake:', error);
-      });
-  }, []);
-
-  const safeDeactivateKeepAwake = useCallback(() => {
-    if (Platform.OS === 'web') {
-      return;
-    }
-
-    const keepAwakeState = keepAwakeStateRef.current;
-
-    if (!keepAwakeState.activated || keepAwakeState.deactivated) {
-      return;
-    }
-
-    keepAwakeState.deactivated = true;
-
-    Promise.resolve(deactivateKeepAwake())
-      .then(() => {
-        keepAwakeState.activated = false;
-      })
-      .catch((error) => {
-        keepAwakeState.deactivated = false;
-        console.warn('Failed to deactivate keep awake:', error);
-      });
-  }, []);
-
-  useEffect(() => {
-    activateKeepAwakeSafely();
-  }, [activateKeepAwakeSafely]);
-
-  useEffect(() => {
-    const syncElapsedTimer = () => {
-      const elapsed = Math.max(0, Math.floor((Date.now() - workoutStartedAtMs) / 1000));
-      setElapsedSeconds(elapsed);
-    };
-
-    syncElapsedTimer();
-    clearElapsedTimer();
-    elapsedTimerRef.current = setInterval(syncElapsedTimer, 1000);
-
-    return () => {
-      clearElapsedTimer();
-    };
-  }, [clearElapsedTimer, workoutStartedAtMs]);
 
   const loadExercises = useCallback(async (filters: ExerciseCatalogFilters, forceRefresh = false) => {
     const cacheKey = buildCatalogCacheKey(filters);
@@ -606,22 +351,6 @@ export default function ActiveWorkout() {
   );
 
   useEffect(() => {
-    const preloadKey = routeTemplateId ?? INLINE_TEMPLATE_PRELOAD_KEY;
-
-    if (routeTemplateExercises.length > 0) {
-      if (preloadedTemplateId === preloadKey) {
-        return;
-      }
-
-      setActiveExercisesWithRef(
-        routeTemplateExercises.map((entry) => createExerciseBlock(entry.exercise, entry.restSeconds))
-      );
-      setPreloadedTemplateId(preloadKey);
-      setTemplatePreloadError(null);
-      setIsPreloadingTemplate(false);
-      return;
-    }
-
     if (routeTemplateId) {
       void preloadTemplate(routeTemplateId);
       return;
@@ -630,15 +359,7 @@ export default function ActiveWorkout() {
     if (routeRoutineId) {
       void preloadRoutine(routeRoutineId);
     }
-  }, [
-    preloadedTemplateId,
-    preloadRoutine,
-    preloadTemplate,
-    routeRoutineId,
-    setActiveExercisesWithRef,
-    routeTemplateExercises,
-    routeTemplateId,
-  ]);
+  }, [preloadRoutine, preloadTemplate, routeRoutineId, routeTemplateId]);
 
   const loadExerciseProgressForModal = useCallback(async (exercise: ExerciseRow, forceRefresh = false) => {
     const normalizedExerciseId = exercise.id.trim();
@@ -730,256 +451,6 @@ export default function ActiveWorkout() {
     );
   }, [activeExercises]);
 
-  const getExerciseCompletionGlowValue = useCallback((exerciseId: string): Animated.Value => {
-    const existingValue = completionGlowByExerciseIdRef.current.get(exerciseId);
-
-    if (existingValue) {
-      return existingValue;
-    }
-
-    const nextValue = new Animated.Value(0);
-    completionGlowByExerciseIdRef.current.set(exerciseId, nextValue);
-    return nextValue;
-  }, []);
-
-  const animateExerciseCompletionGlow = useCallback(
-    (exerciseId: string) => {
-      const glow = getExerciseCompletionGlowValue(exerciseId);
-
-      glow.stopAnimation();
-      glow.setValue(0.02);
-
-      Animated.sequence([
-        Animated.timing(glow, {
-          toValue: 0.6,
-          duration: 140,
-          useNativeDriver: true,
-        }),
-        Animated.timing(glow, {
-          toValue: 0,
-          duration: 360,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    },
-    [getExerciseCompletionGlowValue]
-  );
-
-  const startRestTimer = useCallback((seconds = DEFAULT_REST_SECONDS) => {
-    const safeSeconds = ensurePositiveRestSeconds(seconds);
-
-    hasTriggeredRestVibrationRef.current = false;
-    setRestTotalSeconds(safeSeconds);
-    setRestRemainingSeconds(safeSeconds);
-    setRestEndAtMs(startTimerFromNow(safeSeconds));
-  }, []);
-
-  const finishRestTimer = useCallback(() => {
-    hasTriggeredRestVibrationRef.current = false;
-    setRestEndAtMs(null);
-    setRestRemainingSeconds(0);
-    setRestTotalSeconds(DEFAULT_REST_SECONDS);
-  }, []);
-
-  const adjustRestTimer = useCallback((deltaSeconds: number) => {
-    setRestEndAtMs((currentEndAtMs) => {
-      const currentRemaining = currentEndAtMs ? getRemainingSeconds(currentEndAtMs) : 0;
-      const nextRemaining = clampRestSeconds(currentRemaining + deltaSeconds);
-
-      if (nextRemaining <= 0) {
-        hasTriggeredRestVibrationRef.current = false;
-        setRestRemainingSeconds(0);
-        setRestTotalSeconds(DEFAULT_REST_SECONDS);
-        return null;
-      }
-
-      setRestTotalSeconds((currentTotal) => {
-        const baseTotal = currentEndAtMs ? Math.max(currentTotal, currentRemaining) : nextRemaining;
-        const nextTotal = clampRestSeconds(baseTotal + deltaSeconds);
-
-        if (nextTotal <= 0) {
-          return nextRemaining;
-        }
-
-        return Math.max(nextRemaining, nextTotal);
-      });
-
-      hasTriggeredRestVibrationRef.current = false;
-      setRestRemainingSeconds(nextRemaining);
-      return startTimerFromNow(nextRemaining);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!restEndAtMs) {
-      clearRestTimer();
-      return;
-    }
-
-    const syncRestTimer = () => {
-      const remaining = getRemainingSeconds(restEndAtMs);
-      setRestRemainingSeconds(remaining);
-
-      if (remaining > 0) {
-        return;
-      }
-
-      setRestEndAtMs(null);
-
-      if (!hasTriggeredRestVibrationRef.current) {
-        hasTriggeredRestVibrationRef.current = true;
-        Vibration.vibrate();
-      }
-    };
-
-    syncRestTimer();
-    clearRestTimer();
-    restTimerRef.current = setInterval(syncRestTimer, 250);
-
-    return () => {
-      clearRestTimer();
-    };
-  }, [clearRestTimer, restEndAtMs]);
-
-  useEffect(() => {
-    return () => {
-      clearElapsedTimer();
-      clearRestTimer();
-      safeDeactivateKeepAwake();
-    };
-  }, [clearElapsedTimer, clearRestTimer, safeDeactivateKeepAwake]);
-
-  const timerLabel = useMemo(() => formatElapsedTime(elapsedSeconds), [elapsedSeconds]);
-  const restTimerLabel = useMemo(() => formatCountdown(restRemainingSeconds), [restRemainingSeconds]);
-  const isRestTimerActive = restEndAtMs !== null;
-  const restTimerProgress = useMemo(() => {
-    if (!isRestTimerActive) {
-      return 0;
-    }
-
-    const total = Math.max(1, restTotalSeconds);
-    return Math.min(1, Math.max(0, restRemainingSeconds / total));
-  }, [isRestTimerActive, restRemainingSeconds, restTotalSeconds]);
-  const restTimerProgressRemaining = useMemo(() => Math.max(0, 1 - restTimerProgress), [restTimerProgress]);
-  const liveStatsChartData = useMemo(
-    () =>
-      statsExerciseProgress.slice(-12).map((point) => ({
-        value: Math.max(0, point.value),
-        label: point.label,
-      })),
-    [statsExerciseProgress]
-  );
-
-  const toggleSetCompleted = useCallback((exerciseId: string, setId: string) => {
-    setActiveExercisesWithRef((currentValue) =>
-      currentValue.map((exercise) => {
-        if (exercise.id !== exerciseId) {
-          return exercise;
-        }
-
-        return {
-          ...exercise,
-          sets: exercise.sets.map((setItem) =>
-            setItem.id === setId ? { ...setItem, completed: !setItem.completed } : setItem
-          ),
-        };
-      })
-    );
-  }, [setActiveExercisesWithRef]);
-
-  const handleSetCompletionToggle = useCallback(
-    (exerciseId: string, setId: string) => {
-      const targetExercise = activeExercisesRef.current.find((exercise) => exercise.id === exerciseId);
-      const targetSet = targetExercise?.sets.find((setItem) => setItem.id === setId);
-
-      const willBeCompleted = targetSet ? !targetSet.completed : false;
-      const restSecondsForExercise = normalizeExerciseRestSeconds(targetExercise?.defaultRestSeconds);
-
-      toggleSetCompleted(exerciseId, setId);
-
-      if (willBeCompleted) {
-        startRestTimer(restSecondsForExercise);
-        animateExerciseCompletionGlow(exerciseId);
-
-        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {
-          Vibration.vibrate(10);
-        });
-      }
-    },
-    [animateExerciseCompletionGlow, startRestTimer, toggleSetCompleted]
-  );
-
-  function updateSetInput(exerciseId: string, setId: string, field: SetInputField, value: string) {
-    const sanitizedValue = field === 'weightInput' ? sanitizeDecimalInput(value) : sanitizeIntegerInput(value);
-
-    setActiveExercisesWithRef((currentValue) =>
-      currentValue.map((exercise) => {
-        if (exercise.id !== exerciseId) {
-          return exercise;
-        }
-
-        return {
-          ...exercise,
-          sets: exercise.sets.map((setItem) => {
-            if (setItem.id !== setId) {
-              return setItem;
-            }
-
-            if (field === 'weightInput') {
-              const normalizedWeight = parseOptionalWeight(sanitizedValue);
-
-              return {
-                ...setItem,
-                weightInput: normalizedWeight === null ? sanitizedValue : String(normalizedWeight),
-                weight: normalizedWeight,
-              };
-            }
-
-            if (field === 'repsInput') {
-              const normalizedReps = parseOptionalReps(sanitizedValue);
-
-              return {
-                ...setItem,
-                repsInput: normalizedReps === null ? sanitizedValue : String(normalizedReps),
-                reps: normalizedReps,
-              };
-            }
-
-            const normalizedRir = parseOptionalRir(sanitizedValue);
-
-            return {
-              ...setItem,
-              rirInput: normalizedRir === null ? sanitizedValue : String(normalizedRir),
-              rir: normalizedRir,
-            };
-          }),
-        };
-      })
-    );
-  }
-
-  function addSet(exerciseId: string) {
-    setActiveExercisesWithRef((currentValue) =>
-      currentValue.map((exercise) => {
-        if (exercise.id !== exerciseId) {
-          return exercise;
-        }
-
-        const nextSetNumber = (exercise.sets[exercise.sets.length - 1]?.set_number ?? exercise.sets.length) + 1;
-
-        return {
-          ...exercise,
-          sets: [...exercise.sets, createSet(exercise.exercise.id, nextSetNumber)],
-        };
-      })
-    );
-  }
-
-  function addExercise(exercise: ExerciseRow) {
-    setActiveExercisesWithRef((currentValue) => [...currentValue, createExerciseBlock(exercise)]);
-    setExercisePickerVisible(false);
-  }
-
   async function handleCreateExercise() {
     const normalizedName = sanitizeText(newExerciseName, {
       maxLength: INPUT_LIMITS.nameMax,
@@ -1067,6 +538,7 @@ export default function ActiveWorkout() {
       setSummaryExerciseNames(getCompletedExerciseNames(finishSnapshot));
       setIsSummaryVisible(true);
       finishRestTimer();
+      await clearDraft();
     } catch (error) {
       if (error instanceof WorkoutSaveValidationError) {
         Alert.alert('Workout not saved', error.message);
@@ -1081,26 +553,46 @@ export default function ActiveWorkout() {
 
   const handleShareAndFinish = useCallback(() => {
     safeDeactivateKeepAwake();
-    clearElapsedTimer();
-    clearRestTimer();
     finishRestTimer();
     setIsSummaryVisible(false);
     setFinishSummary(null);
     setSummaryExerciseNames([]);
 
     // Reset state defensively to avoid phantom in-memory workout state.
-    setElapsedSeconds(0);
-    setActiveExercisesWithRef([]);
+    clearExercises();
     setExercisePickerVisible(false);
     setCreateExerciseVisible(false);
-    completionGlowByExerciseIdRef.current.clear();
 
     router.replace('/(tabs)' as any);
-  }, [clearElapsedTimer, clearRestTimer, finishRestTimer, safeDeactivateKeepAwake, setActiveExercisesWithRef]);
+  }, [clearExercises, finishRestTimer, safeDeactivateKeepAwake]);
 
   const routePreloadLabel = routeTemplateId ? 'template' : 'routine';
   const isPreloadingRoute = routeTemplateId ? isPreloadingTemplate : isPreloadingRoutine;
   const routePreloadError = routeTemplateId ? templatePreloadError : routinePreloadError;
+
+  // Show recovery dialog as soon as a draft is detected
+  useEffect(() => {
+    if (!recoveredDraft) return;
+
+    const savedAt = new Date(recoveredDraft.draft.savedAt).toLocaleTimeString();
+    Alert.alert(
+      'Recover Workout?',
+      `An unsaved workout was found (saved at ${savedAt}). Do you want to continue where you left off?`,
+      [
+        {
+          text: 'Discard',
+          style: 'destructive',
+          onPress: () => { void discardRecoveredDraft(); },
+        },
+        {
+          text: 'Recover',
+          style: 'default',
+          onPress: () => { acceptRecoveredDraft(recoveredDraft); },
+        },
+      ],
+      { cancelable: false }
+    );
+  }, [recoveredDraft, acceptRecoveredDraft, discardRecoveredDraft]);
 
   return (
     <SafeAreaView style={[styles.safeArea, isWeb && styles.safeAreaWeb]} edges={['top', 'left', 'right']}>
@@ -1322,7 +814,7 @@ export default function ActiveWorkout() {
       <Modal
         visible={exercisePickerVisible}
         transparent
-        animationType="slide"
+        animationType={modalAnimationType}
         onRequestClose={() => setExercisePickerVisible(false)}
       >
         <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
@@ -1439,7 +931,7 @@ export default function ActiveWorkout() {
       <Modal
         visible={createExerciseVisible}
         transparent
-        animationType="slide"
+        animationType={modalAnimationType}
         onRequestClose={() => setCreateExerciseVisible(false)}
       >
         <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
@@ -1506,7 +998,7 @@ export default function ActiveWorkout() {
       <Modal
         visible={isExerciseStatsVisible}
         transparent
-        animationType="slide"
+        animationType={modalAnimationType}
         onRequestClose={closeExerciseStatsModal}
       >
         <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
@@ -1986,6 +1478,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignSelf: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.74)',
   },
   modalDismissArea: {
     flex: 1,

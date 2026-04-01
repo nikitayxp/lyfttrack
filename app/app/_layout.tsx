@@ -98,6 +98,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.34,
     shadowRadius: 28,
     elevation: 20,
+    transform: [{ translateY: 0 }],
   },
 });
 
@@ -168,6 +169,18 @@ export default function RootLayout() {
       }
     };
   }, [isWeb]);
+
+  useEffect(() => {
+    if (!isWeb || typeof document === 'undefined') {
+      return;
+    }
+
+    document.body.classList.toggle('desktop-mockup-active', isDesktopWeb);
+
+    return () => {
+      document.body.classList.remove('desktop-mockup-active');
+    };
+  }, [isWeb, isDesktopWeb]);
 
   const redirectForSession = useCallback((session: Session | null) => {
     const inAuthGroup = segments[0] === '(auth)';

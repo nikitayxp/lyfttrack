@@ -24,7 +24,7 @@ const copyData = {
       {
         icon: CloudOff,
         title: 'Guarda Offline',
-        desc: 'Ficaste sem internet no cabo da cave? O LyftTrack regista tudo localmente e sincroniza quando a net voltar.',
+        desc: 'Sem rede no piso -1 do ginasio? O LyftTrack guarda o treino offline e sincroniza automaticamente quando o sinal voltar.',
       },
     ]
   },

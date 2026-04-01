@@ -57,6 +57,7 @@ export function PlateCalculatorModal({
   defaultBarWeight = 20,
 }: PlateCalculatorModalProps) {
   const isWeb = Platform.OS === 'web';
+  const modalAnimationType: 'fade' | 'slide' = isWeb ? 'fade' : 'slide';
   const [totalWeightInput, setTotalWeightInput] = useState('');
   const [barWeightInput, setBarWeightInput] = useState(formatPlateWeight(defaultBarWeight));
 
@@ -84,7 +85,7 @@ export function PlateCalculatorModal({
   }, [barWeightInput, totalWeightInput]);
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType={modalAnimationType} onRequestClose={onClose}>
       <View style={[styles.backdrop, isWeb && styles.backdropWeb]}>
         <Pressable style={styles.dismissArea} onPress={onClose} />
 
@@ -183,6 +184,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignSelf: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.74)',
   },
   dismissArea: {
     flex: 1,

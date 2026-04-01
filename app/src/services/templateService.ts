@@ -29,10 +29,6 @@ type RawTemplateExerciseDetailRow = Pick<TemplateExerciseRow, 'id' | 'order_inde
   exercises?: ExerciseRow | ExerciseRow[] | null;
 };
 
-type TemplateExercisePreloadPayloadItem = {
-  exercise: ExerciseRow;
-  restSeconds: number;
-};
 
 export type TemplateExerciseSaveInput = {
   exerciseId: string;
@@ -314,20 +310,10 @@ export async function startWorkoutFromTemplate(templateId: string): Promise<Temp
     throw new Error('This template has no exercises.');
   }
 
-  const serializedExercises = encodeURIComponent(
-    JSON.stringify(
-      template.exercises.map<TemplateExercisePreloadPayloadItem>((entry) => ({
-        exercise: entry.exercise,
-        restSeconds: normalizeTemplateRestSeconds(entry.rest_seconds),
-      }))
-    )
-  );
-
   router.push({
     pathname: '/workout/active',
     params: {
       templateId: template.id,
-      templateExercises: serializedExercises,
     },
   } as any);
 

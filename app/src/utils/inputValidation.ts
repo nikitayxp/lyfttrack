@@ -26,7 +26,8 @@ function stripHtmlTags(value: string): string {
 }
 
 export function sanitizeDecimalText(value: string): string {
-  const digitsAndDot = value.replace(/[^0-9.]/g, '');
+  const normalized = value.replace(/,/g, '.');
+  const digitsAndDot = normalized.replace(/[^0-9.]/g, '');
   const [head, ...tail] = digitsAndDot.split('.');
 
   if (tail.length === 0) {

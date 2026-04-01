@@ -33,6 +33,7 @@ type ExerciseRow = Tables<'exercises'>;
 
 export default function RoutinesScreen() {
   const isWeb = Platform.OS === 'web';
+  const modalAnimationType: 'fade' | 'slide' = isWeb ? 'fade' : 'slide';
   const [routines, setRoutines] = useState<RoutineSummary[]>([]);
   const [isLoadingRoutines, setIsLoadingRoutines] = useState(true);
   const [routinesError, setRoutinesError] = useState<string | null>(null);
@@ -223,7 +224,7 @@ export default function RoutinesScreen() {
       <Modal
         visible={isCreateModalVisible}
         transparent
-        animationType="slide"
+        animationType={modalAnimationType}
         onRequestClose={() => setIsCreateModalVisible(false)}
       >
         <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
@@ -474,6 +475,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignSelf: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.74)',
   },
   modalDismissArea: {
     flex: 1,

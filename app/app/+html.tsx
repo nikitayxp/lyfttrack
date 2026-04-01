@@ -10,6 +10,28 @@ const BASE_WEB_BG_STYLE = `
     margin: 0;
     overflow-x: hidden;
   }
+
+  /* Constrain only RN Web modal portals inside the desktop phone mockup. */
+  body.desktop-mockup-active > div:has([aria-modal="true"]),
+  body.desktop-mockup-active > div:has([role="dialog"]) {
+    position: absolute !important;
+    width: 393px !important;
+    height: 852px !important;
+    max-height: 95vh !important;
+    left: 50% !important;
+    top: 50% !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: translate(-50%, -50%) !important;
+    border-radius: 40px !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+  }
+
+  body.desktop-mockup-active > div:has([aria-modal="true"]) > *,
+  body.desktop-mockup-active > div:has([role="dialog"]) > * {
+    pointer-events: auto !important;
+  }
 `;
 
 export default function Root({ children }: PropsWithChildren) {
@@ -18,6 +40,7 @@ export default function Root({ children }: PropsWithChildren) {
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+        <title>LyftTrack - App</title>
         <meta
           name="viewport"
           content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"

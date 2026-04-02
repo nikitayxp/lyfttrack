@@ -10,7 +10,7 @@ Milestone v1.0 Correcao Core: Peso e Graficos delivers a corrective path: first 
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
-- [ ] **Phase 1: Body Weight Reliability** - Fix onboarding/profile submission flow and validation consistency.
+- [x] **Phase 1: Body Weight Reliability** - Fix onboarding/profile submission flow and validation consistency. (completed 2026-04-02)
 - [ ] **Phase 2: Chart Fidelity and Responsiveness** - Correct formatting, width, and clipping behavior in stats and active workout charts.
 - [ ] **Phase 3: Verification and Knowledge Capture** - Validate static quality gates and record conventions for future maintenance.
 
@@ -27,8 +27,8 @@ Milestone v1.0 Correcao Core: Peso e Graficos delivers a corrective path: first 
 **Plans**: 2 plans
 
 Plans:
-- [ ] 01-01: Align weight validation/contracts across UI and measurement service.
-- [ ] 01-02: Harden onboarding and profile save flows with optimistic behavior.
+- [x] 01-01: Align weight validation/contracts across UI and measurement service.
+- [x] 01-02: Harden onboarding and profile save flows with optimistic behavior.
 
 ### Phase 2: Chart Fidelity and Responsiveness
 **Goal**: Make chart rendering stable and readable on mobile and desktop-web shell widths.
@@ -60,6 +60,6 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Body Weight Reliability | 0/2 | Not started | - |
+| 1. Body Weight Reliability | 2/2 | Complete   | 2026-04-02 |
 | 2. Chart Fidelity and Responsiveness | 0/2 | Not started | - |
 | 3. Verification and Knowledge Capture | 0/1 | Not started | - |

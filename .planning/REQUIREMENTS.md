@@ -7,9 +7,9 @@
 
 ### Body Weight Logging
 
-- [ ] **CORE-01**: User can submit body weight during onboarding and the value is persisted.
-- [ ] **CORE-02**: User can log body weight from profile and sees optimistic UI feedback before persistence confirmation.
-- [ ] **CORE-03**: Weight validation rules are consistent between UI submission handlers and service writes, with explicit errors.
+- [x] **CORE-01**: User can submit body weight during onboarding and the value is persisted.
+- [x] **CORE-02**: User can log body weight from profile and sees optimistic UI feedback before persistence confirmation.
+- [x] **CORE-03**: Weight validation rules are consistent between UI submission handlers and service writes, with explicit errors.
 
 ### Charts and Visualization
 
@@ -38,9 +38,9 @@ No deferred requirements captured yet.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CORE-01 | Phase 1 | Pending |
-| CORE-02 | Phase 1 | Pending |
-| CORE-03 | Phase 1 | Pending |
+| CORE-01 | Phase 1 | Complete |
+| CORE-02 | Phase 1 | Complete |
+| CORE-03 | Phase 1 | Complete |
 | CHART-01 | Phase 2 | Pending |
 | CHART-02 | Phase 2 | Pending |
 | CHART-03 | Phase 2 | Pending |

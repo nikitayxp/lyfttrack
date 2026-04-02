@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 Phase: 1 of 3 (Body Weight Reliability)
 Plan: Ready to discuss/plan
 Status: Ready to plan
-Last activity: 2026-04-02 - Roadmap created for milestone v1.0
+Last activity: 2026-04-02 - Completed quick task 260402-mbu: Fix body weight logging reliability and gifted chart fidelity in onboarding/profile/stats/active with validation
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -50,6 +50,12 @@ None yet.
 ### Blockers/Concerns
 
 - No existing completed milestone archive in this repository yet.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Status | Directory |
+|---|-------------|------|--------|--------|-----------|
+| 260402-mbu | Fix body weight logging reliability and gifted chart fidelity in onboarding/profile/stats/active with validation | 2026-04-02 | pending | Verified | [260402-mbu-fix-body-weight-logging-reliability-and-](./quick/260402-mbu-fix-body-weight-logging-reliability-and-/) |
 
 ## Session Continuity
 

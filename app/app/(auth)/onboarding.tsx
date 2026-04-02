@@ -5,8 +5,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
 import { Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
-import { addWeight } from '@/services/measurementService';
+import { addWeight, parseBodyWeightInput } from '@/services/measurementService';
 import { updateProfile } from '@/services/profileService';
+import { sanitizeDecimalText } from '@/utils/inputValidation';
 
 const palette = Colors.dark;
 
@@ -18,22 +19,46 @@ export default function OnboardingScreen() {
 
   async function handleComplete() {
     setFeedback(null);
-    const w = parseFloat(weight.replace(',', '.'));
+    const submittedWeightInput = weight;
     const safeName = name.trim();
 
-    if (!safeName || isNaN(w) || w <= 0) {
+    if (!safeName) {
       setFeedback({ message: 'Indica um nome e o teu peso atual em kg.', type: 'error' });
       return;
     }
 
-    setLoading(true);
+    let parsedWeight: number;
 
     try {
-      await updateProfile({ fullName: safeName, username: safeName.toLowerCase().replace(/\s+/g, '_') });
-      await addWeight(w);
+      parsedWeight = parseBodyWeightInput(weight);
+    } catch (e: any) {
+      setFeedback({ message: e?.message || 'Indica um peso valido em kg.', type: 'error' });
+      return;
+    }
+
+    const normalizedWeightLabel = Number.isInteger(parsedWeight)
+      ? `${parsedWeight}`
+      : parsedWeight.toFixed(2).replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1');
+    setWeight(normalizedWeightLabel);
+    setFeedback({ message: 'A guardar o teu peso inicial...', type: 'success' });
+
+    setLoading(true);
+    let profileUpdated = false;
+
+    try {
+      await updateProfile({ fullName: safeName });
+      profileUpdated = true;
+
+      await addWeight(parsedWeight);
       router.replace('/(tabs)/workout' as any);
     } catch (e: any) {
-      setFeedback({ message: e.message || 'Ocorreu um erro a criar o teu perfil inicial.', type: 'error' });
+      setWeight(submittedWeightInput);
+
+      const fallbackMessage = profileUpdated
+        ? 'O nome foi guardado, mas o peso nao foi registado. Tenta novamente.'
+        : 'Ocorreu um erro a criar o teu perfil inicial.';
+
+      setFeedback({ message: e?.message || fallbackMessage, type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -86,10 +111,10 @@ export default function OnboardingScreen() {
             <View style={styles.inputLine}>
               <TextInput
                 value={weight}
-                onChangeText={setWeight}
+                onChangeText={(value) => setWeight(sanitizeDecimalText(value).slice(0, 8))}
                 placeholder="Ex: 75.5"
                 placeholderTextColor={palette.textMuted}
-                keyboardType="numeric"
+                keyboardType="decimal-pad"
                 style={styles.inputField}
               />
             </View>

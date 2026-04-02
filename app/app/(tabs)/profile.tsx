@@ -33,16 +33,17 @@ import {
   type WorkoutCommentWithProfile,
 } from '@/services/interactionService';
 import { getProfile, type ProfileRow } from '@/services/profileService';
-import { addWeight, getWeightHistory, type BodyMeasurementEntry } from '@/services/measurementService';
+import { addWeight, getWeightHistory, parseBodyWeightInput, type BodyMeasurementEntry } from '@/services/measurementService';
 import { getAllTimePRs, getCurrentWorkoutStreak, type AllTimePR } from '@/services/statsService';
 import { supabase } from '@/services/supabase';
 import { getErrorMessage, getUserWorkouts, type WorkoutFeedItem } from '@/services/workoutService';
-import { toSafeNumber } from '@/utils/inputValidation';
+import { sanitizeDecimalText } from '@/utils/inputValidation';
 
 const palette = Colors.dark;
 const SCREEN_BG = palette.bgPrimary;
 const CARD_BG = palette.surface;
 const HISTORY_PAGE_SIZE = 20;
+const MAX_WEIGHT_HISTORY_ITEMS = 30;
 
 type FeedLikeInteractionState = {
   hasLiked: boolean;
@@ -112,6 +113,29 @@ function getWeightTrend(
     trend: 'down',
     deltaText: `-${formatWeightKg(Math.abs(delta))} kg face ao registo anterior`,
   };
+}
+
+function mergeWeightEntryIntoHistory(
+  currentHistory: BodyMeasurementEntry[],
+  entry: BodyMeasurementEntry
+): BodyMeasurementEntry[] {
+  const byId = new Map<string, BodyMeasurementEntry>();
+
+  byId.set(entry.id, entry);
+
+  for (const existingEntry of currentHistory) {
+    if (!byId.has(existingEntry.id)) {
+      byId.set(existingEntry.id, existingEntry);
+    }
+  }
+
+  return [...byId.values()]
+    .sort((a, b) => {
+      const aTimestamp = new Date(a.recorded_at ?? a.created_at).getTime();
+      const bTimestamp = new Date(b.recorded_at ?? b.created_at).getTime();
+      return bTimestamp - aTimestamp;
+    })
+    .slice(0, MAX_WEIGHT_HISTORY_ITEMS);
 }
 
 type SkeletonCardProps = {
@@ -670,31 +694,54 @@ export default function ProfileScreen() {
       return;
     }
 
-    const parsedValue = toSafeNumber(weightInput, {
-      min: 0,
-      max: 500,
-      decimals: 2,
-    });
+    const submittedWeightInput = weightInput;
+    let parsedValue: number;
 
-    if (parsedValue === null || parsedValue <= 0) {
-      Alert.alert('Validacao', 'Introduz um peso valido em kg.');
+    try {
+      parsedValue = parseBodyWeightInput(submittedWeightInput);
+    } catch (error: any) {
+      Alert.alert('Validacao', error?.message || 'Introduz um peso valido em kg.');
       return;
     }
 
+    const optimisticTimestamp = new Date().toISOString();
+    const optimisticEntry: BodyMeasurementEntry = {
+      id: `optimistic-${optimisticTimestamp}`,
+      user_id: authUserId ?? profile?.id ?? latestWeightEntry?.user_id ?? 'pending-user',
+      weight: parsedValue,
+      created_at: optimisticTimestamp,
+      recorded_at: optimisticTimestamp,
+    };
+
     setIsSavingWeight(true);
+    setWeightHistory((currentHistory) => mergeWeightEntryIntoHistory(currentHistory, optimisticEntry));
+    setIsWeightModalVisible(false);
+    setWeightInput('');
 
     try {
-      await addWeight(parsedValue);
-      const nextHistory = await getWeightHistory();
-      setWeightHistory(nextHistory);
-      setIsWeightModalVisible(false);
-      setWeightInput('');
+      const savedEntry = await addWeight(parsedValue);
+      setWeightHistory((currentHistory) => {
+        const withoutOptimistic = currentHistory.filter((entry) => entry.id !== optimisticEntry.id);
+        return mergeWeightEntryIntoHistory(withoutOptimistic, savedEntry);
+      });
+
+      void (async () => {
+        try {
+          const nextHistory = await getWeightHistory();
+          setWeightHistory(nextHistory);
+        } catch (refreshError) {
+          console.warn('Weight history refresh after save failed:', refreshError);
+        }
+      })();
     } catch (error) {
+      setWeightHistory((currentHistory) => currentHistory.filter((entry) => entry.id !== optimisticEntry.id));
+      setWeightInput(submittedWeightInput);
+      setIsWeightModalVisible(true);
       Alert.alert('Nao foi possivel guardar o peso', getErrorMessage(error));
     } finally {
       setIsSavingWeight(false);
     }
-  }, [isSavingWeight, weightInput]);
+  }, [authUserId, isSavingWeight, latestWeightEntry?.user_id, profile?.id, weightInput]);
 
   const handleShareTrophyCard = useCallback(
     async (pr: AllTimePR) => {
@@ -1039,7 +1086,7 @@ export default function ProfileScreen() {
 
             <TextInput
               value={weightInput}
-              onChangeText={setWeightInput}
+              onChangeText={(value) => setWeightInput(sanitizeDecimalText(value).slice(0, 8))}
               keyboardType="decimal-pad"
               placeholder="Ex: 79.4"
               placeholderTextColor={palette.textMuted}

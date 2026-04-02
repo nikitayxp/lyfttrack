@@ -1,7 +1,7 @@
 import { supabase } from '@/services/supabase';
 import { getAuthenticatedUserOrThrow } from '@/services/workoutService';
 import type { Tables, TablesInsert } from '@/types/database';
-import { toSafeNumber } from '@/utils/inputValidation';
+import { BODY_WEIGHT_MAX_KG, BODY_WEIGHT_MIN_KG, toSafeNumber } from '@/utils/inputValidation';
 
 type BodyMeasurementRowWithMeasured = Pick<
   Tables<'body_measurements'>,
@@ -24,11 +24,11 @@ export type BodyMeasurementEntry = {
 };
 
 const MAX_HISTORY_ENTRIES = 30;
+export { BODY_WEIGHT_MAX_KG };
 
-function normalizeWeightInput(value: number): number {
+export function parseBodyWeightInput(value: unknown): number {
   const normalized = toSafeNumber(value, {
-    min: 0,
-    max: 500,
+    min: BODY_WEIGHT_MIN_KG,
     decimals: 2,
   });
 
@@ -40,8 +40,8 @@ function normalizeWeightInput(value: number): number {
     throw new Error('O peso tem de ser superior a 0 kg.');
   }
 
-  if (normalized > 500) {
-    throw new Error('O peso tem de ser realista (<= 500 kg).');
+  if (normalized > BODY_WEIGHT_MAX_KG) {
+    throw new Error(`O peso tem de ser realista (<= ${BODY_WEIGHT_MAX_KG} kg).`);
   }
 
   return normalized;
@@ -74,7 +74,7 @@ function toMeasurementEntry(row: BodyMeasurementRow): BodyMeasurementEntry {
 
 export async function addWeight(value: number): Promise<BodyMeasurementEntry> {
   const user = await getAuthenticatedUserOrThrow();
-  const normalizedWeight = normalizeWeightInput(value);
+  const normalizedWeight = parseBodyWeightInput(value);
 
   const baseRow: Pick<TablesInsert<'body_measurements'>, 'user_id' | 'weight'> = {
     user_id: user.id,

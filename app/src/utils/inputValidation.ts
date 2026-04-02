@@ -9,6 +9,9 @@ export const INPUT_LIMITS = {
   commentMax: 1000,
 } as const;
 
+export const BODY_WEIGHT_MIN_KG = 0;
+export const BODY_WEIGHT_MAX_KG = 500;
+
 type NumericOptions = {
   min?: number;
   max?: number;

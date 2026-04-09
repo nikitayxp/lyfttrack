@@ -26,8 +26,8 @@ import {
   EXERCISE_MUSCLE_TRANSLATION_KEY,
   type ExerciseEquipmentKey,
   type ExerciseMuscleKey,
+  getExerciseMuscleTranslationKey,
   getEquipmentTranslationKey,
-  getMuscleTranslationKey,
 } from '@/constants/exerciseCatalog';
 import { usePreferences } from '@/context/PreferencesContext';
 import {
@@ -75,12 +75,7 @@ const ROOT_SCREEN_BG = palette.bgPrimary;
 const LIVE_CHART_DEFAULT_WINDOW = 12;
 const MUSCLE_FILTER_CHIP_KEYS: readonly ExerciseLibraryMuscleFilter[] = [
   'all',
-  'chest',
-  'back',
-  'legs',
-  'shoulders',
-  'arms',
-  'core',
+  ...EXERCISE_MUSCLE_OPTIONS,
 ];
 const EQUIPMENT_FILTER_CHIP_KEYS: readonly ExerciseLibraryEquipmentFilter[] = [
   'all',
@@ -751,7 +746,15 @@ export default function ActiveWorkout() {
   const routePreloadError = routeTemplateId ? templatePreloadError : routinePreloadError;
 
   const getExerciseMuscleLabel = (exercise: ExerciseRow): string => {
-    const muscleKey = getMuscleTranslationKey(exercise.muscle_group);
+    const muscleKey = getExerciseMuscleTranslationKey({
+      muscleGroup: exercise.muscle_group,
+      muscleEn: exercise.muscle_en,
+      musclePt: exercise.muscle_pt,
+      name: exercise.name,
+      nameEn: exercise.name_en,
+      namePt: exercise.name_pt,
+    });
+
     return muscleKey ? t(muscleKey) : getLocalizedExerciseMuscle(exercise, language) ?? t('exercise.general');
   };
 

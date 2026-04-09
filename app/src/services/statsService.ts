@@ -1,5 +1,6 @@
 import { supabase } from '@/services/supabase';
 import { getAuthenticatedUserOrThrow } from '@/services/workoutService';
+import { EXERCISE_MUSCLE_LABELS, resolveExerciseMuscleKey } from '@/constants/exerciseCatalog';
 import type { Tables } from '@/types/database';
 
 export type ProgressMetric = 'duration' | 'volume' | 'reps';
@@ -40,7 +41,10 @@ export type WeeklyVolumeByMuscle = {
 
 type WorkoutRef = Pick<Tables<'workouts'>, 'start_time' | 'end_time' | 'user_id'>;
 type ExerciseRef = Pick<Tables<'exercises'>, 'id' | 'name'>;
-type WeeklyExerciseRef = Pick<Tables<'exercises'>, 'muscle_group'>;
+type WeeklyExerciseRef = Pick<
+  Tables<'exercises'>,
+  'name' | 'name_en' | 'name_pt' | 'muscle_group' | 'muscle_en' | 'muscle_pt'
+>;
 
 type RawSetWithWorkout = Pick<Tables<'sets'>, 'weight' | 'reps' | 'exercise_id'> & {
   workouts: WorkoutRef | WorkoutRef[] | null;
@@ -103,35 +107,25 @@ function formatProgressLabel(dateIso: string): string {
   });
 }
 
-function normalizeMuscleLabel(value: string | null | undefined): string {
-  if (!value) {
+function normalizeMuscleLabel(exercise: WeeklyExerciseRef | null | undefined): string {
+  if (!exercise) {
     return 'Other';
   }
 
-  const normalized = value.trim().toLowerCase();
+  const normalizedKey = resolveExerciseMuscleKey({
+    muscleGroup: exercise.muscle_group,
+    muscleEn: exercise.muscle_en,
+    musclePt: exercise.muscle_pt,
+    name: exercise.name,
+    nameEn: exercise.name_en,
+    namePt: exercise.name_pt,
+  });
 
-  if (!normalized) {
+  if (!normalizedKey) {
     return 'Other';
   }
 
-  if (normalized.includes('chest') || normalized.includes('pec')) return 'Chest';
-  if (normalized.includes('back') || normalized.includes('lat') || normalized.includes('trap')) return 'Back';
-  if (
-    normalized.includes('leg') ||
-    normalized.includes('quad') ||
-    normalized.includes('ham') ||
-    normalized.includes('glute') ||
-    normalized.includes('calf')
-  ) {
-    return 'Legs';
-  }
-  if (normalized.includes('shoulder') || normalized.includes('delt')) return 'Shoulders';
-  if (normalized.includes('arm') || normalized.includes('bicep') || normalized.includes('tricep') || normalized.includes('forearm')) {
-    return 'Arms';
-  }
-  if (normalized.includes('core') || normalized.includes('ab')) return 'Core';
-
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  return EXERCISE_MUSCLE_LABELS[normalizedKey].en;
 }
 
 function getWeekStartKey(dateValue: Date): string {
@@ -399,7 +393,7 @@ export async function getWeeklyVolumeByMuscle(): Promise<WeeklyVolumeByMuscle[]>
 
   const { data, error } = await supabase
     .from('sets')
-    .select('id, workouts!inner(start_time, end_time, user_id), exercises(muscle_group)')
+    .select('id, workouts!inner(start_time, end_time, user_id), exercises(name, name_en, name_pt, muscle_group, muscle_en, muscle_pt)')
     .eq('workouts.user_id', user.id)
     .gte('workouts.start_time', sinceIso)
     .not('workouts.end_time', 'is', null);
@@ -420,7 +414,7 @@ export async function getWeeklyVolumeByMuscle(): Promise<WeeklyVolumeByMuscle[]>
     }
 
     const exercise = resolveEmbeddedObject(row.exercises);
-    const muscle = normalizeMuscleLabel(exercise?.muscle_group);
+    const muscle = normalizeMuscleLabel(exercise);
     setsByMuscle.set(muscle, (setsByMuscle.get(muscle) ?? 0) + 1);
   }
 

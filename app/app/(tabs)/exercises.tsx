@@ -24,8 +24,8 @@ import {
   EXERCISE_MUSCLE_TRANSLATION_KEY,
   type ExerciseEquipmentKey,
   type ExerciseMuscleKey,
+  getExerciseMuscleTranslationKey,
   getEquipmentTranslationKey,
-  getMuscleTranslationKey,
 } from '@/constants/exerciseCatalog';
 import { usePreferences } from '@/context/PreferencesContext';
 import type { Tables } from '@/types/database';
@@ -124,7 +124,14 @@ export default function ExercisesScreen() {
 
     const getDisplayName = (exercise: ExerciseRow) => getLocalizedExerciseName(exercise, language);
     const getDisplayMuscle = (exercise: ExerciseRow) => {
-      const translatedKey = getMuscleTranslationKey(exercise.muscle_group);
+      const translatedKey = getExerciseMuscleTranslationKey({
+        muscleGroup: exercise.muscle_group,
+        muscleEn: exercise.muscle_en,
+        musclePt: exercise.muscle_pt,
+        name: exercise.name,
+        nameEn: exercise.name_en,
+        namePt: exercise.name_pt,
+      });
 
       if (translatedKey) {
         return t(translatedKey);
@@ -169,7 +176,15 @@ export default function ExercisesScreen() {
   };
 
   const getExerciseMuscleLabel = (exercise: ExerciseRow) => {
-    const muscleKey = getMuscleTranslationKey(exercise.muscle_group);
+    const muscleKey = getExerciseMuscleTranslationKey({
+      muscleGroup: exercise.muscle_group,
+      muscleEn: exercise.muscle_en,
+      musclePt: exercise.muscle_pt,
+      name: exercise.name,
+      nameEn: exercise.name_en,
+      namePt: exercise.name_pt,
+    });
+
     return muscleKey ? t(muscleKey) : getLocalizedExerciseMuscle(exercise, language) ?? t('exercise.general');
   };
 

@@ -52,8 +52,15 @@ function muscleColor(muscle: string): string {
 
   if (normalized.includes('chest')) return '#3B82F6';
   if (normalized.includes('back')) return '#06B6D4';
-  if (normalized.includes('leg')) return '#22C55E';
   if (normalized.includes('should')) return '#F59E0B';
+  if (normalized.includes('bicep')) return '#A855F7';
+  if (normalized.includes('tricep')) return '#C084FC';
+  if (normalized.includes('forearm')) return '#8B5CF6';
+  if (normalized.includes('quadricep')) return '#22C55E';
+  if (normalized.includes('hamstring')) return '#16A34A';
+  if (normalized.includes('glute')) return '#14B8A6';
+  if (normalized.includes('calf')) return '#10B981';
+  if (normalized.includes('leg')) return '#22C55E';
   if (normalized.includes('arm')) return '#A855F7';
   if (normalized.includes('core')) return '#F97316';
 

@@ -4,13 +4,15 @@ import {
   EXERCISE_MUSCLE_LABELS,
   normalizeEquipmentKey,
   normalizeMuscleKey,
+  resolveExerciseMuscleKey,
+  type ExerciseMuscleKey,
 } from '@/constants/exerciseCatalog';
 import type { Tables, TablesInsert } from '@/types/database';
 import { INPUT_LIMITS, sanitizeText, toSafeInteger, toSafeNumber } from '@/utils/inputValidation';
 import type { WorkoutSetDraft, WorkoutSetProgressDraft, WorkoutSetType } from './workoutSession.types';
 
 export type ExerciseCatalogItem = Tables<'exercises'>;
-export type ExerciseLibraryMuscleFilter = 'all' | 'chest' | 'back' | 'legs' | 'shoulders' | 'arms' | 'core';
+export type ExerciseLibraryMuscleFilter = 'all' | ExerciseMuscleKey;
 export type ExerciseLibraryEquipmentFilter = 'all' | 'barbell' | 'dumbbell' | 'machine' | 'cable' | 'bodyweight' | 'kettlebell';
 export type { WorkoutSetType } from './workoutSession.types';
 export type ExerciseCatalogFilters = {
@@ -604,12 +606,17 @@ export async function getAuthenticatedUserOrThrow(): Promise<User> {
 // ---------- Exercises CRUD ----------
 
 const MUSCLE_FILTER_KEYWORDS: Record<Exclude<ExerciseLibraryMuscleFilter, 'all'>, readonly string[]> = {
-  chest: ['chest', 'peito', 'peitoral'],
-  back: ['back', 'costa', 'dorsal', 'lat'],
-  legs: ['leg', 'perna', 'quad', 'hamstring', 'glute'],
-  shoulders: ['shoulder', 'ombro', 'deltoid'],
-  arms: ['arm', 'braco', 'bicep', 'tricep'],
-  core: ['core', 'abs', 'abdominal'],
+  chest: ['chest', 'peito', 'peitoral', 'supino', 'bench_press', 'fly'],
+  back: ['back', 'costa', 'dorsal', 'lat', 'puxada', 'pulldown', 'remada', 'row'],
+  shoulders: ['shoulder', 'ombro', 'deltoid', 'delt', 'desenvolvimento', 'lateral_raise'],
+  biceps: ['bicep', 'biceps', 'curl', 'rosca'],
+  triceps: ['tricep', 'triceps', 'testa', 'pushdown', 'pulley', 'bench_dip'],
+  forearms: ['forearm', 'antebraco', 'wrist_curl', 'reverse_curl'],
+  quadriceps: ['quadriceps', 'quadricep', 'quad', 'squat', 'agachamento', 'leg_press', 'leg_extension'],
+  hamstrings: ['hamstring', 'posterior', 'romeno', 'stiff', 'leg_curl', 'mesa_flexora'],
+  glutes: ['glute', 'gluteo', 'hip_thrust', 'glute_bridge', 'ponte_de_gluteo'],
+  calves: ['calf', 'gemeo', 'panturrilha', 'calf_raise', 'elevacao_de_gemeos'],
+  core: ['core', 'abs', 'abdominal', 'prancha', 'plank', 'crunch'],
 };
 
 const EQUIPMENT_FILTER_KEYWORDS: Record<Exclude<ExerciseLibraryEquipmentFilter, 'all'>, readonly string[]> = {
@@ -639,21 +646,194 @@ function matchesKeywords(normalizedValue: string, keywords: readonly string[]): 
   return keywords.some((keyword) => normalizedValue.includes(keyword));
 }
 
+const EXERCISE_NAME_CANONICAL_ALIASES: Record<string, string> = {
+  bench_press: 'barbell_bench_press',
+  incline_bench_press: 'incline_barbell_bench_press',
+  decline_bench_press: 'decline_barbell_bench_press',
+  supino_reto_com_barra: 'barbell_bench_press',
+  supino_inclinado_com_barra: 'incline_barbell_bench_press',
+  supino_declinado_com_barra: 'decline_barbell_bench_press',
+  triceps_pulley: 'triceps_pushdown',
+  rosca_direta: 'barbell_curl',
+};
+
+function canonicalizeExerciseNameToken(token: string): string {
+  const directAlias = EXERCISE_NAME_CANONICAL_ALIASES[token];
+
+  if (directAlias) {
+    return directAlias;
+  }
+
+  const withoutLeadingEquipment = token.replace(/^(barbell|dumbbell|machine|cable|kettlebell)_/, '');
+  const withoutTrailingEquipment = withoutLeadingEquipment
+    .replace(/_com_(barra|halteres)$/g, '')
+    .replace(/_na_(maquina|polia)$/g, '');
+
+  return EXERCISE_NAME_CANONICAL_ALIASES[withoutTrailingEquipment] ?? withoutTrailingEquipment;
+}
+
+function getExerciseNameTokens(exercise: ExerciseCatalogItem): string[] {
+  const tokens: string[] = [];
+
+  for (const value of [exercise.name_en, exercise.name, exercise.name_pt]) {
+    const normalized = normalizeFilterLookup(value);
+
+    if (!normalized || tokens.includes(normalized)) {
+      continue;
+    }
+
+    tokens.push(normalized);
+  }
+
+  return tokens;
+}
+
+function buildPreferredNameTokenMap(rows: ExerciseCatalogItem[]): Map<string, string> {
+  const map = new Map<string, string>();
+
+  for (const row of rows) {
+    const englishToken = canonicalizeExerciseNameToken(
+      normalizeFilterLookup(row.name_en) || normalizeFilterLookup(row.name)
+    );
+
+    if (!englishToken) {
+      continue;
+    }
+
+    for (const token of getExerciseNameTokens(row)) {
+      const existingPreferred = map.get(token);
+
+      if (!existingPreferred || existingPreferred.length < englishToken.length) {
+        map.set(token, englishToken);
+      }
+    }
+  }
+
+  return map;
+}
+
+function resolveCatalogMuscleKey(exercise: ExerciseCatalogItem): ExerciseMuscleKey | null {
+  return resolveExerciseMuscleKey({
+    muscleGroup: exercise.muscle_group,
+    muscleEn: exercise.muscle_en,
+    musclePt: exercise.muscle_pt,
+    name: exercise.name,
+    nameEn: exercise.name_en,
+    namePt: exercise.name_pt,
+  });
+}
+
+function getCatalogDedupeKey(exercise: ExerciseCatalogItem, preferredTokenMap: Map<string, string>): string {
+  const tokens = getExerciseNameTokens(exercise).map(canonicalizeExerciseNameToken);
+
+  let canonicalNameToken = '';
+
+  for (const token of tokens) {
+    const preferred = preferredTokenMap.get(token);
+
+    if (preferred) {
+      canonicalNameToken = preferred;
+      break;
+    }
+  }
+
+  if (!canonicalNameToken) {
+    canonicalNameToken = tokens[0] ?? normalizeFilterLookup(exercise.id);
+  }
+
+  const fallbackMuscleKey = normalizeFilterLookup(exercise.muscle_group);
+  const fallbackEquipmentKey = normalizeFilterLookup(exercise.equipment);
+  const muscleKey = resolveCatalogMuscleKey(exercise) ?? (fallbackMuscleKey || 'general');
+  const equipmentKey = normalizeEquipmentKey(exercise.equipment) ?? (fallbackEquipmentKey || 'unknown');
+
+  return `${canonicalNameToken}::${muscleKey}::${equipmentKey}`;
+}
+
+function getCatalogQualityScore(exercise: ExerciseCatalogItem): number {
+  let score = 0;
+
+  if (!exercise.is_custom) {
+    score += 80;
+  }
+
+  if (normalizeFilterLookup(exercise.name_en)) {
+    score += 20;
+  }
+
+  if (normalizeFilterLookup(exercise.name_pt)) {
+    score += 20;
+  }
+
+  if (normalizeFilterLookup(exercise.muscle_en)) {
+    score += 8;
+  }
+
+  if (normalizeFilterLookup(exercise.muscle_pt)) {
+    score += 8;
+  }
+
+  if (resolveCatalogMuscleKey(exercise)) {
+    score += 6;
+  }
+
+  if (normalizeEquipmentKey(exercise.equipment)) {
+    score += 4;
+  }
+
+  return score;
+}
+
+function isCatalogCandidatePreferred(candidate: ExerciseCatalogItem, current: ExerciseCatalogItem): boolean {
+  const candidateScore = getCatalogQualityScore(candidate);
+  const currentScore = getCatalogQualityScore(current);
+
+  if (candidateScore !== currentScore) {
+    return candidateScore > currentScore;
+  }
+
+  return candidate.id.localeCompare(current.id) < 0;
+}
+
+function dedupeBuiltinCatalogRows(rows: ExerciseCatalogItem[]): ExerciseCatalogItem[] {
+  const preferredTokenMap = buildPreferredNameTokenMap(rows);
+  const bestByKey = new Map<string, ExerciseCatalogItem>();
+
+  for (const row of rows) {
+    const dedupeKey = getCatalogDedupeKey(row, preferredTokenMap);
+    const current = bestByKey.get(dedupeKey);
+
+    if (!current || isCatalogCandidatePreferred(row, current)) {
+      bestByKey.set(dedupeKey, row);
+    }
+  }
+
+  return [...bestByKey.values()];
+}
+
 function matchesMuscleFilter(exercise: ExerciseCatalogItem, filter: ExerciseLibraryMuscleFilter): boolean {
   if (filter === 'all') {
     return true;
   }
 
+  const inferredMuscleKey = resolveCatalogMuscleKey(exercise);
+
+  if (inferredMuscleKey) {
+    return inferredMuscleKey === filter;
+  }
+
   const keywords = MUSCLE_FILTER_KEYWORDS[filter];
-  const candidates = [exercise.muscle_group, exercise.muscle_en, exercise.muscle_pt];
+  const candidates = [
+    exercise.muscle_group,
+    exercise.muscle_en,
+    exercise.muscle_pt,
+    exercise.name,
+    exercise.name_en,
+    exercise.name_pt,
+  ];
 
   for (const candidate of candidates) {
     if (!candidate) {
       continue;
-    }
-
-    if (normalizeMuscleKey(candidate) === filter) {
-      return true;
     }
 
     const normalizedCandidate = normalizeFilterLookup(candidate);
@@ -698,9 +878,15 @@ export async function getExercisesCatalog(filters: ExerciseCatalogFilters = {}):
 
   const rows = data ?? [];
 
-  return rows.filter(
+  const filteredRows = rows.filter(
     (exercise) => matchesMuscleFilter(exercise, muscleFilter) && matchesEquipmentFilter(exercise, equipmentFilter)
   );
+
+  const customRows = filteredRows.filter((exercise) => exercise.is_custom);
+  const builtInRows = filteredRows.filter((exercise) => !exercise.is_custom);
+  const dedupedBuiltIns = dedupeBuiltinCatalogRows(builtInRows);
+
+  return [...dedupedBuiltIns, ...customRows].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export async function createExercise(input: CreateExerciseInput): Promise<ExerciseCatalogItem> {

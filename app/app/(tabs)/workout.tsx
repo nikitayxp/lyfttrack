@@ -24,8 +24,8 @@ import {
   EXERCISE_MUSCLE_TRANSLATION_KEY,
   type ExerciseEquipmentKey,
   type ExerciseMuscleKey,
+  getExerciseMuscleTranslationKey,
   getEquipmentTranslationKey,
-  getMuscleTranslationKey,
 } from '@/constants/exerciseCatalog';
 import { usePreferences } from '@/context/PreferencesContext';
 import {
@@ -123,7 +123,14 @@ export default function WorkoutScreen() {
   }, [language]);
 
   const getDisplayMuscle = useCallback((exercise: ExerciseRow) => {
-    const translatedKey = getMuscleTranslationKey(exercise.muscle_group);
+    const translatedKey = getExerciseMuscleTranslationKey({
+      muscleGroup: exercise.muscle_group,
+      muscleEn: exercise.muscle_en,
+      musclePt: exercise.muscle_pt,
+      name: exercise.name,
+      nameEn: exercise.name_en,
+      namePt: exercise.name_pt,
+    });
 
     if (translatedKey) {
       return t(translatedKey);

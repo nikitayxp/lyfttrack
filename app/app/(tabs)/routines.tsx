@@ -17,7 +17,7 @@ import {
 import Animated, { FadeInDown, FadeInUp, LinearTransition } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/theme';
-import { getEquipmentTranslationKey, getMuscleTranslationKey } from '@/constants/exerciseCatalog';
+import { getEquipmentTranslationKey, getExerciseMuscleTranslationKey } from '@/constants/exerciseCatalog';
 import {
   createRoutine,
   getErrorMessage,
@@ -107,7 +107,15 @@ export default function RoutinesScreen() {
   }, [selectedExerciseIds]);
 
   const getExerciseMuscleLabel = useCallback((exercise: ExerciseRow) => {
-    const muscleKey = getMuscleTranslationKey(exercise.muscle_group);
+    const muscleKey = getExerciseMuscleTranslationKey({
+      muscleGroup: exercise.muscle_group,
+      muscleEn: exercise.muscle_en,
+      musclePt: exercise.muscle_pt,
+      name: exercise.name,
+      nameEn: exercise.name_en,
+      namePt: exercise.name_pt,
+    });
+
     return muscleKey ? t(muscleKey) : t('exercise.general');
   }, [t]);
 

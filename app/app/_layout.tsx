@@ -113,7 +113,9 @@ export default function RootLayout() {
   const isWeb = Platform.OS === 'web';
   const isDesktopWeb = isWeb && width > DESKTOP_WEB_MOCKUP_MIN_WIDTH;
   const segments = useSegments();
+  const currentAuthSegment = String(segments[1] ?? '');
   const isTabsRoute = segments[0] === '(tabs)';
+  const isResetPasswordRoute = segments[0] === '(auth)' && currentAuthSegment === 'reset-password';
   const safeAreaStyle = isWeb ? styles.safeAreaWeb : styles.safeArea;
 
   useEffect(() => {
@@ -193,7 +195,7 @@ export default function RootLayout() {
     const inAuthGroup = segments[0] === '(auth)';
 
     if (session) {
-      if (inAuthGroup) {
+      if (inAuthGroup && !isResetPasswordRoute) {
         router.replace('/(tabs)' as any);
       }
 
@@ -203,7 +205,7 @@ export default function RootLayout() {
     if (!inAuthGroup) {
       router.replace('/(auth)' as any);
     }
-  }, [segments]);
+  }, [isResetPasswordRoute, segments]);
 
   useEffect(() => {
     let isMounted = true;

@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
@@ -36,6 +37,7 @@ function sanitizeUsername(value: string): string {
 }
 
 export default function SignUpScreen() {
+  const { t } = useTranslation();
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -53,32 +55,32 @@ export default function SignUpScreen() {
     const normalizedUsername = sanitizeUsername(username).slice(0, USERNAME_MAX_LENGTH);
 
     if (!normalizedDisplayName || !normalizedUsername || !normalizedEmail || !password.trim() || !confirmPassword.trim()) {
-      setFeedback({ message: 'Preenche todos os campos para criares a conta.', type: 'error' });
+      setFeedback({ message: t('auth.signUp.fillAll'), type: 'error' });
       return;
     }
 
     if (normalizedDisplayName.length < 2) {
-      setFeedback({ message: 'O nome de exibicao deve ter pelo menos 2 caracteres.', type: 'error' });
+      setFeedback({ message: t('auth.signUp.displayNameTooShort'), type: 'error' });
       return;
     }
 
     if (normalizedUsername.length < 3) {
-      setFeedback({ message: 'O username deve ter pelo menos 3 caracteres validos.', type: 'error' });
+      setFeedback({ message: t('auth.signUp.usernameTooShort'), type: 'error' });
       return;
     }
 
     if (password.length < 6) {
-      setFeedback({ message: 'A palavra-passe deve ter pelo menos 6 caracteres.', type: 'error' });
+      setFeedback({ message: t('auth.signUp.passwordTooShort'), type: 'error' });
       return;
     }
 
     if (password !== confirmPassword) {
-      setFeedback({ message: 'A confirmação não corresponde à palavra-passe.', type: 'error' });
+      setFeedback({ message: t('auth.signUp.passwordMismatch'), type: 'error' });
       return;
     }
 
     if (!termsAccepted) {
-      setFeedback({ message: 'Tens de aceitar os Termos de Serviço para continuar.', type: 'error' });
+      setFeedback({ message: t('auth.signUp.termsRequired'), type: 'error' });
       return;
     }
 
@@ -117,7 +119,7 @@ export default function SignUpScreen() {
   }
 
   function handleGooglePress() {
-    setFeedback({ message: 'Login via Google em desenvolvimento.', type: 'info' });
+    setFeedback({ message: t('auth.signUp.googleSoon'), type: 'info' });
   }
 
   return (
@@ -135,8 +137,8 @@ export default function SignUpScreen() {
               <Text style={styles.logoLyft}>Lyft</Text>
               <Text style={styles.logoTrack}>Track</Text>
             </View>
-            <Text style={styles.title}>CRIAR CONTA</Text>
-            <Text style={styles.subtitle}>Comeca forte e acompanha toda a tua evolucao.</Text>
+            <Text style={styles.title}>{t('auth.signUp.title')}</Text>
+            <Text style={styles.subtitle}>{t('auth.signUp.subtitle')}</Text>
           </View>
 
           <View style={styles.formCard}>
@@ -154,12 +156,12 @@ export default function SignUpScreen() {
               </View>
             ) : null}
 
-            <Text style={styles.label}>Nome de exibicao</Text>
+            <Text style={styles.label}>{t('auth.signUp.displayNameLabel')}</Text>
             <View style={styles.inputLine}>
               <TextInput
                 value={displayName}
                 onChangeText={(value) => setDisplayName(value.slice(0, DISPLAY_NAME_MAX_LENGTH))}
-                placeholder="Como queres aparecer no app"
+                placeholder={t('auth.signUp.displayNamePlaceholder')}
                 placeholderTextColor={palette.textMuted}
                 autoCapitalize="words"
                 autoCorrect={false}
@@ -168,12 +170,12 @@ export default function SignUpScreen() {
               />
             </View>
 
-            <Text style={styles.label}>Username</Text>
+            <Text style={styles.label}>{t('auth.signUp.usernameLabel')}</Text>
             <View style={styles.inputLine}>
               <TextInput
                 value={username}
                 onChangeText={(value) => setUsername(sanitizeUsername(value).slice(0, USERNAME_MAX_LENGTH))}
-                placeholder="username"
+                placeholder={t('auth.signUp.usernamePlaceholder')}
                 placeholderTextColor={palette.textMuted}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -182,12 +184,12 @@ export default function SignUpScreen() {
               />
             </View>
 
-            <Text style={styles.label}>Email</Text>
+            <Text style={styles.label}>{t('auth.signUp.emailLabel')}</Text>
             <View style={styles.inputLine}>
               <TextInput
                 value={email}
                 onChangeText={setEmail}
-                placeholder="teu@email.com"
+                placeholder={t('auth.signUp.emailPlaceholder')}
                 placeholderTextColor={palette.textMuted}
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -196,12 +198,12 @@ export default function SignUpScreen() {
               />
             </View>
 
-            <Text style={styles.label}>Palavra-passe</Text>
+            <Text style={styles.label}>{t('auth.signUp.passwordLabel')}</Text>
             <View style={styles.inputLine}>
               <TextInput
                 value={password}
                 onChangeText={setPassword}
-                placeholder="********"
+                placeholder={t('auth.signUp.passwordPlaceholder')}
                 placeholderTextColor={palette.textMuted}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
@@ -216,12 +218,12 @@ export default function SignUpScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.label}>Confirmar palavra-passe</Text>
+            <Text style={styles.label}>{t('auth.signUp.confirmPasswordLabel')}</Text>
             <View style={styles.inputLine}>
               <TextInput
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
-                placeholder="********"
+                placeholder={t('auth.signUp.passwordPlaceholder')}
                 placeholderTextColor={palette.textMuted}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
@@ -244,10 +246,10 @@ export default function SignUpScreen() {
                 )}
               </View>
               <Text style={styles.termsText}>
-                Concordo com os{' '}
-                <Text style={styles.termsLink}>Termos de Serviço</Text>
-                {' '}e a{' '}
-                <Text style={styles.termsLink}>Política de Privacidade</Text>
+                {t('auth.signUp.termsPrefix')}
+                <Text style={styles.termsLink}>{t('auth.signUp.termsOfService')}</Text>
+                {t('auth.signUp.termsConjunction')}
+                <Text style={styles.termsLink}>{t('auth.signUp.privacyPolicy')}</Text>
               </Text>
             </TouchableOpacity>
 
@@ -259,19 +261,19 @@ export default function SignUpScreen() {
               {loading ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <Text style={styles.primaryButtonText}>CRIAR CONTA</Text>
+                <Text style={styles.primaryButtonText}>{t('auth.signUp.createAccountAction')}</Text>
               )}
             </TouchableOpacity>
 
             <View style={styles.dividerRow}>
               <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>Ou continuar com</Text>
+              <Text style={styles.dividerText}>{t('auth.signUp.dividerText')}</Text>
               <View style={styles.dividerLine} />
             </View>
 
             <TouchableOpacity style={styles.googleButton} onPress={handleGooglePress} disabled={loading}>
               <AntDesign name="google" size={16} color="#FFFFFF" />
-              <Text style={styles.googleButtonText}>Continuar com Google</Text>
+              <Text style={styles.googleButtonText}>{t('auth.signUp.continueWithGoogle')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -279,7 +281,7 @@ export default function SignUpScreen() {
               onPress={() => router.push('/(auth)/sign-in' as any)}
               disabled={loading}
             >
-              <Text style={styles.switchActionText}>Ja tens conta? Iniciar sessao</Text>
+              <Text style={styles.switchActionText}>{t('auth.signUp.signInPrompt')}</Text>
             </TouchableOpacity>
           </View>
         </View>

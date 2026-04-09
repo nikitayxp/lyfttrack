@@ -16,17 +16,17 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { getProfile, updateProfile } from '@/services/profileService';
-import { supabase } from '@/services/supabase';
+import { getPasswordResetRedirectTo, supabase } from '@/services/supabase';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 
 const palette = Colors.dark;
 
-function toErrorMessage(error: unknown): string {
+function toErrorMessage(error: unknown, fallbackMessage: string): string {
   if (error instanceof Error) {
     return error.message;
   }
 
-  return 'Erro desconhecido.';
+  return fallbackMessage;
 }
 
 export default function EditProfileScreen() {
@@ -36,7 +36,10 @@ export default function EditProfileScreen() {
   const [bioInput, setBioInput] = useState('');
   const [currentEmail, setCurrentEmail] = useState('');
   const [pendingEmailInput, setPendingEmailInput] = useState('');
-  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<{
+    type: 'error' | 'success' | 'info';
+    message: string;
+  } | null>(null);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -68,11 +71,11 @@ export default function EditProfileScreen() {
       setCurrentEmail(email);
       setPendingEmailInput(email);
     } catch (error) {
-      setErrorMessage(toErrorMessage(error));
+      setErrorMessage(toErrorMessage(error, t('common.unknownError')));
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void loadProfile();
@@ -83,7 +86,7 @@ export default function EditProfileScreen() {
       return;
     }
 
-    setSaveSuccessMessage(null);
+    setActionFeedback(null);
 
     const normalizedUsername = sanitizeText(usernameInput, {
       maxLength: INPUT_LIMITS.nameMax,
@@ -113,11 +116,24 @@ export default function EditProfileScreen() {
       });
 
       const successMessage = t('profileEdit.alerts.updatedDescription');
-      setSaveSuccessMessage(successMessage);
-      Alert.alert(t('profileEdit.alerts.updatedTitle'), successMessage);
+      setActionFeedback({
+        type: 'success',
+        message: successMessage,
+      });
+
+      if (Platform.OS !== 'web') {
+        Alert.alert(t('profileEdit.alerts.updatedTitle'), successMessage);
+      }
     } catch (error) {
-      setSaveSuccessMessage(null);
-      Alert.alert(t('profileEdit.alerts.updateProfileError'), toErrorMessage(error));
+      const message = toErrorMessage(error, t('common.unknownError'));
+      setActionFeedback({
+        type: 'error',
+        message,
+      });
+
+      if (Platform.OS !== 'web') {
+        Alert.alert(t('profileEdit.alerts.updateProfileError'), message);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -140,6 +156,7 @@ export default function EditProfileScreen() {
       return;
     }
 
+    setActionFeedback(null);
     setIsUpdatingEmail(true);
 
     try {
@@ -151,9 +168,26 @@ export default function EditProfileScreen() {
         throw error;
       }
 
-      Alert.alert(t('profileEdit.alerts.emailUpdateRequestedTitle'), t('profileEdit.alerts.emailUpdateRequestedDescription'));
+      const successMessage = t('profileEdit.alerts.emailUpdateRequestedDescription');
+
+      setActionFeedback({
+        type: 'success',
+        message: successMessage,
+      });
+
+      if (Platform.OS !== 'web') {
+        Alert.alert(t('profileEdit.alerts.emailUpdateRequestedTitle'), successMessage);
+      }
     } catch (error) {
-      Alert.alert(t('profileEdit.alerts.updateEmailError'), toErrorMessage(error));
+      const message = toErrorMessage(error, t('common.unknownError'));
+      setActionFeedback({
+        type: 'error',
+        message,
+      });
+
+      if (Platform.OS !== 'web') {
+        Alert.alert(t('profileEdit.alerts.updateEmailError'), message);
+      }
     } finally {
       setIsUpdatingEmail(false);
     }
@@ -171,53 +205,130 @@ export default function EditProfileScreen() {
       return;
     }
 
+    setActionFeedback(null);
     setIsSendingPasswordReset(true);
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(targetEmail);
+      const { error } = await supabase.auth.resetPasswordForEmail(targetEmail, {
+        redirectTo: getPasswordResetRedirectTo(),
+      });
 
       if (error) {
         throw error;
       }
 
-      Alert.alert(t('profileEdit.alerts.passwordResetSentTitle'), t('profileEdit.alerts.passwordResetSentDescription', { email: targetEmail }));
+      const successMessage = t('profileEdit.alerts.passwordResetSentDescription', { email: targetEmail });
+
+      setActionFeedback({
+        type: 'success',
+        message: successMessage,
+      });
+
+      if (Platform.OS !== 'web') {
+        Alert.alert(t('profileEdit.alerts.passwordResetSentTitle'), successMessage);
+      }
     } catch (error) {
-      Alert.alert(t('profileEdit.alerts.passwordResetError'), toErrorMessage(error));
+      const message = toErrorMessage(error, t('common.unknownError'));
+      setActionFeedback({
+        type: 'error',
+        message,
+      });
+
+      if (Platform.OS !== 'web') {
+        Alert.alert(t('profileEdit.alerts.passwordResetError'), message);
+      }
     } finally {
       setIsSendingPasswordReset(false);
     }
   }, [currentEmail, isSendingPasswordReset, pendingEmailInput, t]);
 
-  const handleLogout = useCallback(() => {
-    Alert.alert(
-      t('profileEdit.alerts.logoutConfirmTitle'),
-      t('profileEdit.alerts.logoutConfirmDescription'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
+  const confirmLogout = useCallback(async (): Promise<boolean> => {
+    const confirmDescription = t('profileEdit.alerts.logoutConfirmDescription');
+
+    if (Platform.OS === 'web') {
+      const confirmFn = (globalThis as { confirm?: (message?: string) => boolean }).confirm;
+      return confirmFn ? confirmFn(confirmDescription) : true;
+    }
+
+    return await new Promise((resolve) => {
+      Alert.alert(t('profileEdit.alerts.logoutConfirmTitle'), confirmDescription, [
+        {
+          text: t('common.cancel'),
+          style: 'cancel',
+          onPress: () => resolve(false),
+        },
         {
           text: t('profileEdit.logoutAction'),
           style: 'destructive',
-          onPress: async () => {
-            setIsLoggingOut(true);
-            try {
-              await supabase.auth.signOut();
-              router.replace('/' as any);
-            } catch (error) {
-              Alert.alert(t('profileEdit.alerts.logoutError'), toErrorMessage(error));
-            } finally {
-              setIsLoggingOut(false);
-            }
-          },
+          onPress: () => resolve(true),
         },
-      ]
-    );
+      ]);
+    });
   }, [t]);
+
+  const handleLogout = useCallback(async () => {
+    if (isLoggingOut) {
+      return;
+    }
+
+    const shouldSignOut = await confirmLogout();
+
+    if (!shouldSignOut) {
+      return;
+    }
+
+    setActionFeedback({
+      type: 'info',
+      message: t('profileEdit.alerts.logoutInProgress'),
+    });
+
+    setIsLoggingOut(true);
+
+    try {
+      const { error } = await supabase.auth.signOut();
+
+      if (error) {
+        throw error;
+      }
+
+      router.replace('/(auth)' as any);
+    } catch (error) {
+      const message = toErrorMessage(error, t('common.unknownError'));
+
+      setActionFeedback({
+        type: 'error',
+        message,
+      });
+
+      if (Platform.OS !== 'web') {
+        Alert.alert(t('profileEdit.alerts.logoutError'), message);
+      }
+    } finally {
+      setIsLoggingOut(false);
+    }
+  }, [confirmLogout, isLoggingOut, t]);
+
+  const feedbackStyles = actionFeedback?.type === 'success'
+    ? [styles.feedbackBanner, styles.feedbackBannerSuccess]
+    : actionFeedback?.type === 'error'
+      ? [styles.feedbackBanner, styles.feedbackBannerError]
+      : [styles.feedbackBanner, styles.feedbackBannerInfo];
+
+  const feedbackTextStyle = actionFeedback?.type === 'success'
+    ? styles.feedbackBannerTextSuccess
+    : actionFeedback?.type === 'error'
+      ? styles.feedbackBannerTextError
+      : styles.feedbackBannerTextInfo;
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.backButton} activeOpacity={0.88} onPress={() => router.back()}>
+          <TouchableOpacity
+            style={styles.backButton}
+            activeOpacity={0.88}
+            onPress={() => router.replace('/(tabs)/profile' as any)}
+          >
             <Ionicons name="chevron-back" size={18} color={palette.textPrimary} />
             <Text style={styles.backButtonText}>{t('profileEdit.back')}</Text>
           </TouchableOpacity>
@@ -225,6 +336,12 @@ export default function EditProfileScreen() {
 
         <Text style={styles.title}>{t('profileEdit.title')}</Text>
         <Text style={styles.subtitle}>{t('profileEdit.subtitle')}</Text>
+
+        {actionFeedback ? (
+          <View style={feedbackStyles}>
+            <Text style={[styles.feedbackBannerText, feedbackTextStyle]}>{actionFeedback.message}</Text>
+          </View>
+        ) : null}
 
         {isLoading ? (
           <View style={styles.statusCard}>
@@ -242,11 +359,6 @@ export default function EditProfileScreen() {
         ) : (
           <>
             <View style={styles.formCard}>
-                            {saveSuccessMessage ? (
-                              <View style={styles.successBanner}>
-                                <Text style={styles.successBannerText}>{saveSuccessMessage}</Text>
-                              </View>
-                            ) : null}
               <Text style={styles.inputLabel}>{t('profileEdit.usernameLabel')}</Text>
               <TextInput
                 value={usernameInput}
@@ -349,7 +461,7 @@ export default function EditProfileScreen() {
               <TouchableOpacity
                 style={[styles.logoutButton, isLoggingOut && styles.logoutButtonDisabled]}
                 activeOpacity={0.85}
-                onPress={handleLogout}
+                onPress={() => void handleLogout()}
                 disabled={isLoggingOut}
               >
                 {isLoggingOut ? (
@@ -470,20 +582,40 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
-  successBanner: {
+  feedbackBanner: {
     borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#10B98155',
-    backgroundColor: '#10B98120',
     paddingHorizontal: 10,
     paddingVertical: 8,
     marginBottom: 10,
   },
-  successBannerText: {
-    color: '#6EE7B7',
+  feedbackBannerSuccess: {
+    borderWidth: 1,
+    borderColor: '#10B98155',
+    backgroundColor: '#10B98120',
+  },
+  feedbackBannerError: {
+    borderWidth: 1,
+    borderColor: '#EF444455',
+    backgroundColor: '#EF444420',
+  },
+  feedbackBannerInfo: {
+    borderWidth: 1,
+    borderColor: '#3B82F655',
+    backgroundColor: '#3B82F620',
+  },
+  feedbackBannerText: {
     fontSize: 13,
     fontWeight: '700',
     lineHeight: 18,
+  },
+  feedbackBannerTextSuccess: {
+    color: '#6EE7B7',
+  },
+  feedbackBannerTextError: {
+    color: '#FCA5A5',
+  },
+  feedbackBannerTextInfo: {
+    color: '#BFDBFE',
   },
   inputLabel: {
     color: palette.textSecondary,

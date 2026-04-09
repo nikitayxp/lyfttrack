@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/Colors';
 
@@ -43,6 +44,7 @@ export function WorkoutSummary({
   exerciseNames,
   onShareAndFinish,
 }: WorkoutSummaryProps) {
+  const { t } = useTranslation();
   const isWeb = Platform.OS === 'web';
   const modalAnimationType: 'fade' | 'slide' = isWeb ? 'fade' : 'slide';
 
@@ -60,32 +62,32 @@ export function WorkoutSummary({
               <View style={styles.heroIconWrap}>
                 <Ionicons name="checkmark-circle" size={18} color={palette.accent} />
               </View>
-              <Text style={styles.heroTitle}>TREINO CONCLUIDO</Text>
-              <Text style={styles.heroSubtitle}>Sessao guardada. Mantem o ritmo e continua consistente.</Text>
+              <Text style={styles.heroTitle}>{t('workout.summaryTitle')}</Text>
+              <Text style={styles.heroSubtitle}>{t('workout.summarySubtitle')}</Text>
             </View>
 
             <View style={styles.metricRow}>
               <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Tempo</Text>
+                <Text style={styles.metricLabel}>{t('workout.summaryDurationLabel')}</Text>
                 <Text style={styles.metricValue}>{formatDuration(durationSeconds)}</Text>
               </View>
 
               <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Series</Text>
+                <Text style={styles.metricLabel}>{t('workout.summarySetsLabel')}</Text>
                 <Text style={styles.metricValue}>{completedSetCount}</Text>
               </View>
 
               <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Recordes</Text>
+                <Text style={styles.metricLabel}>{t('workout.summaryPrsLabel')}</Text>
                 <Text style={styles.metricValue}>{prCount}</Text>
               </View>
             </View>
 
             <View style={styles.exercisesCard}>
-              <Text style={styles.exercisesTitle}>Exercicios</Text>
+              <Text style={styles.exercisesTitle}>{t('workout.summaryExercisesTitle')}</Text>
 
               {exerciseNames.length === 0 ? (
-                <Text style={styles.emptyText}>Sem exercicios concluidos nesta sessao.</Text>
+                <Text style={styles.emptyText}>{t('workout.summaryNoExercises')}</Text>
               ) : (
                 exerciseNames.map((exerciseName, index) => (
                   <View key={`${exerciseName}-${index}`} style={styles.exerciseRow}>
@@ -100,7 +102,7 @@ export function WorkoutSummary({
           <View style={styles.ctaWrap}>
             <TouchableOpacity style={styles.ctaButton} activeOpacity={0.9} onPress={onShareAndFinish}>
               <Ionicons name="share-social-outline" size={16} color="#FFFFFF" />
-              <Text style={styles.ctaText}>Partilhar e terminar</Text>
+              <Text style={styles.ctaText}>{t('workout.summaryShareAction')}</Text>
             </TouchableOpacity>
           </View>
         </View>

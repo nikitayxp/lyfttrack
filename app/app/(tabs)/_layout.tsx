@@ -4,11 +4,13 @@ import { useMemo } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { Colors } from '@/constants/Colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 const palette = Colors.dark;
 const WEB_MOBILE_TAB_BAR_HEIGHT = 74;
 
 export default function TabLayout() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === 'web';
   const nativeBottomInset = Math.max(insets.bottom, 10);
@@ -46,14 +48,14 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Feed',
+          title: t('tabs.feed'),
           tabBarIcon: ({ color }) => <Ionicons name="newspaper-outline" size={23} color={color} />,
         }}
       />
       <Tabs.Screen
         name="workout"
         options={{
-          title: 'Treinar',
+          title: t('tabs.workout'),
           tabBarLabelStyle: styles.workoutLabel,
           tabBarIcon: ({ focused }) => (
             <View style={[styles.workoutIconContainer, focused && styles.workoutIconContainerFocused]}>
@@ -65,7 +67,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Perfil',
+          title: t('tabs.profile'),
           tabBarIcon: ({ color }) => <Ionicons name="person-circle-outline" size={24} color={color} />,
         }}
       />
@@ -97,28 +99,28 @@ export default function TabLayout() {
         name="profile/edit"
         options={{
           href: null,
-          title: 'Editar perfil',
+          title: t('tabs.editProfile'),
         }}
       />
       <Tabs.Screen
         name="profile/settings"
         options={{
           href: null,
-          title: 'Definicoes',
+          title: t('tabs.settings'),
         }}
       />
       <Tabs.Screen
         name="public-profile/[id]"
         options={{
           href: null,
-          title: 'Perfil',
+          title: t('tabs.publicProfile'),
         }}
       />
       <Tabs.Screen
         name="profile/[id]"
         options={{
           href: null,
-          title: 'Perfil',
+          title: t('tabs.publicProfile'),
         }}
       />
     </Tabs>

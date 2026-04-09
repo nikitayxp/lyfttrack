@@ -20,6 +20,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/theme';
 import { EmptyState } from '@/components/common/EmptyState';
 import { FeedCommentsModal } from '@/components/feed/FeedCommentsModal';
@@ -80,14 +81,16 @@ function formatWeightKg(value: number | string | null | undefined): string {
   return Number.isInteger(parsed) ? `${parsed}` : parsed.toFixed(1);
 }
 
-function formatDateShort(value: string): string {
+function formatDateShort(value: string, locale: string): string {
   const timestamp = new Date(value).getTime();
 
   if (!Number.isFinite(timestamp)) {
     return '--';
   }
 
-  return new Date(timestamp).toLocaleDateString('pt-PT', {
+  const resolvedLocale = locale.startsWith('en') ? 'en-US' : 'pt-PT';
+
+  return new Date(timestamp).toLocaleDateString(resolvedLocale, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -99,9 +102,9 @@ type WeightTrend = 'up' | 'down' | 'flat' | null;
 function getWeightTrend(
   latest: BodyMeasurementEntry | null,
   previous: BodyMeasurementEntry | null
-): { trend: WeightTrend; deltaText: string } {
+): { trend: WeightTrend; deltaKg: number | null } {
   if (!latest || !previous) {
-    return { trend: null, deltaText: 'Adiciona mais um registo para veres a tendencia' };
+    return { trend: null, deltaKg: null };
   }
 
   const delta = Number((latest.weight - previous.weight).toFixed(1));
@@ -109,20 +112,20 @@ function getWeightTrend(
   if (!Number.isFinite(delta) || delta === 0) {
     return {
       trend: 'flat',
-      deltaText: 'Estavel face ao registo anterior',
+      deltaKg: 0,
     };
   }
 
   if (delta > 0) {
     return {
       trend: 'up',
-      deltaText: `+${formatWeightKg(Math.abs(delta))} kg face ao registo anterior`,
+      deltaKg: Math.abs(delta),
     };
   }
 
   return {
     trend: 'down',
-    deltaText: `-${formatWeightKg(Math.abs(delta))} kg face ao registo anterior`,
+    deltaKg: Math.abs(delta),
   };
 }
 
@@ -197,7 +200,9 @@ function SkeletonCard({ compact = false, lines = 3 }: SkeletonCardProps) {
 }
 
 export default function ProfileScreen() {
+  const { t, i18n } = useTranslation();
   const isWeb = Platform.OS === 'web';
+  const migrationPath = 'supabase/migrations/20260407_fix_body_measurements_rls.sql';
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [email, setEmail] = useState('');
@@ -238,25 +243,43 @@ export default function ProfileScreen() {
     const profileName = profile?.full_name?.trim() || profile?.username?.trim() || '';
     const emailName = email.split('@')[0] ?? '';
 
-    return profileName || emailName || 'Atleta';
-  }, [email, profile?.full_name, profile?.username]);
+    return profileName || emailName || t('profile.athleteFallback');
+  }, [email, profile?.full_name, profile?.username, t]);
 
   const usernameHandle = useMemo(() => {
     if (profile?.username?.trim()) {
       return `@${profile.username}`;
     }
 
-    return '@atleta';
-  }, [profile?.username]);
+    return t('profile.athleteHandleFallback');
+  }, [profile?.username, t]);
 
   const initials = useMemo(() => initialsFromName(displayName), [displayName]);
 
   const latestWeightEntry = weightHistory[0] ?? null;
   const previousWeightEntry = weightHistory[1] ?? null;
+  const uiLanguage = i18n.resolvedLanguage ?? i18n.language ?? 'pt';
   const weightTrend = useMemo(
     () => getWeightTrend(latestWeightEntry, previousWeightEntry),
     [latestWeightEntry, previousWeightEntry]
   );
+  const weightTrendText = useMemo(() => {
+    if (weightTrend.trend === null || weightTrend.deltaKg === null) {
+      return t('profile.trendNeedAnotherEntry');
+    }
+
+    if (weightTrend.trend === 'flat') {
+      return t('profile.trendStable');
+    }
+
+    const delta = formatWeightKg(weightTrend.deltaKg);
+
+    if (weightTrend.trend === 'up') {
+      return t('profile.trendUp', { delta });
+    }
+
+    return t('profile.trendDown', { delta });
+  }, [t, weightTrend.deltaKg, weightTrend.trend]);
 
   const loadUserHistoryPage = useCallback(async (userId: string, pageToLoad: number, mode: 'reset' | 'append') => {
     if (mode === 'reset') {
@@ -383,7 +406,7 @@ export default function ProfileScreen() {
       setProfile(profileData);
 
       if (!resolvedUserId) {
-        throw new Error('ID do utilizador autenticado nao encontrado.');
+        throw new Error(t('profile.unknownUserId'));
       }
 
       await Promise.all([loadUserHistoryPage(resolvedUserId, 0, 'reset'), loadPerformanceData()]);
@@ -392,7 +415,7 @@ export default function ProfileScreen() {
     } finally {
       setIsBootstrapping(false);
     }
-  }, [loadPerformanceData, loadUserHistoryPage]);
+  }, [loadPerformanceData, loadUserHistoryPage, t]);
 
   useEffect(() => {
     void bootstrap();
@@ -603,7 +626,7 @@ export default function ProfileScreen() {
       });
 
       setCommentInputValue(trimmedComment);
-      Alert.alert('Nao foi possivel adicionar o comentario', getErrorMessage(error));
+      Alert.alert(t('profile.commentAddError'), getErrorMessage(error));
     } finally {
       setIsSendingComment(false);
     }
@@ -614,6 +637,7 @@ export default function ProfileScreen() {
     isSendingComment,
     loadCommentsForWorkout,
     selectedWorkoutForComments,
+    t,
   ]);
 
   const handleToggleLike = useCallback(async (workout: WorkoutFeedItem) => {
@@ -684,9 +708,9 @@ export default function ProfileScreen() {
         return nextState;
       });
 
-      Alert.alert('Nao foi possivel atualizar o gosto', getErrorMessage(error));
+      Alert.alert(t('profile.likeUpdateError'), getErrorMessage(error));
     }
-  }, []);
+  }, [t]);
 
   const openWeightModal = useCallback(() => {
     const initialValue = latestWeightEntry ? formatWeightKg(latestWeightEntry.weight) : '';
@@ -730,7 +754,7 @@ export default function ProfileScreen() {
         message: error?.message ?? 'unknown',
       });
 
-      Alert.alert('Validacao', error?.message || 'Introduz um peso valido em kg.');
+      Alert.alert(t('profile.validationTitle'), error?.message || t('profile.invalidWeight'));
       return;
     }
 
@@ -768,7 +792,7 @@ export default function ProfileScreen() {
         return mergeWeightEntryIntoHistory(withoutOptimistic, savedEntry);
       });
 
-      Alert.alert('Peso guardado', 'O registo de peso corporal foi guardado com sucesso.');
+      Alert.alert(t('profile.weightSavedTitle'), t('profile.weightSavedDescription'));
 
       void (async () => {
         try {
@@ -809,9 +833,9 @@ export default function ProfileScreen() {
       setWeightInput(submittedWeightInput);
 
       Alert.alert(
-        isRlsFailure ? 'Permissao da base de dados em falta' : 'Nao foi possivel guardar o peso',
+        isRlsFailure ? t('profile.rlsMissingTitle') : t('profile.weightSaveError'),
         isRlsFailure
-          ? `${message}\n\nAplica a migracao supabase/migrations/20260407_fix_body_measurements_rls.sql e volta a tentar.`
+          ? t('profile.rlsMissingDescription', { message, migrationPath })
           : message
       );
     } finally {
@@ -821,7 +845,7 @@ export default function ProfileScreen() {
 
       setIsSavingWeight(false);
     }
-  }, [authUserId, isSavingWeight, latestWeightEntry?.user_id, profile?.id, weightInput]);
+  }, [authUserId, isSavingWeight, latestWeightEntry?.user_id, migrationPath, profile?.id, t, weightInput]);
 
   const handleShareTrophyCard = useCallback(
     async (pr: AllTimePR) => {
@@ -835,20 +859,20 @@ export default function ProfileScreen() {
         const isSharingAvailable = await Sharing.isAvailableAsync();
 
         if (!isSharingAvailable) {
-          Alert.alert('Partilha indisponivel', 'Este dispositivo nao consegue abrir o menu nativo de partilha nesta plataforma.');
+          Alert.alert(t('profile.shareUnavailableTitle'), t('profile.shareUnavailableDescription'));
           return;
         }
 
         const shotRef = trophyCardRefsByExerciseId.current[pr.exerciseId];
 
         if (!shotRef || typeof shotRef.capture !== 'function') {
-          throw new Error('Nao foi possivel capturar este cartao de PR agora.');
+          throw new Error(t('profile.capturePrCardError'));
         }
 
         const captureUri = await shotRef.capture();
 
         if (!captureUri) {
-          throw new Error('Nao foi possivel capturar este cartao de PR agora.');
+          throw new Error(t('profile.capturePrCardError'));
         }
 
         await Sharing.shareAsync(captureUri, {
@@ -857,12 +881,12 @@ export default function ProfileScreen() {
           UTI: 'public.png',
         });
       } catch (error) {
-        Alert.alert('Nao foi possivel partilhar o cartao de PR', getErrorMessage(error));
+        Alert.alert(t('profile.sharePrCardError'), getErrorMessage(error));
       } finally {
         setSharingExerciseId(null);
       }
     },
-    [sharingExerciseId, trophyCardRefsByExerciseId]
+    [sharingExerciseId, t, trophyCardRefsByExerciseId]
   );
 
   const headerComponent = useMemo(() => {
@@ -870,10 +894,10 @@ export default function ProfileScreen() {
       <View style={styles.headerWrap}>
         {profileError ? (
           <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Nao foi possivel carregar o perfil</Text>
+            <Text style={styles.errorTitle}>{t('profile.loadProfileErrorTitle')}</Text>
             <Text style={styles.errorText}>{profileError}</Text>
             <TouchableOpacity style={styles.retryButton} activeOpacity={0.88} onPress={() => void bootstrap()}>
-              <Text style={styles.retryButtonText}>Tentar novamente</Text>
+              <Text style={styles.retryButtonText}>{t('profile.retryAction')}</Text>
             </TouchableOpacity>
           </View>
         ) : null}
@@ -907,7 +931,7 @@ export default function ProfileScreen() {
               <View style={styles.quickActionIconWrap}>
                 <Ionicons name="stats-chart-outline" size={18} color={palette.accent} />
               </View>
-              <Text style={styles.quickActionTileText}>Estatisticas</Text>
+              <Text style={styles.quickActionTileText}>{t('profile.quickActions.stats')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -918,7 +942,7 @@ export default function ProfileScreen() {
               <View style={styles.quickActionIconWrap}>
                 <Ionicons name="people-outline" size={18} color={palette.accent} />
               </View>
-              <Text style={styles.quickActionTileText}>Amigos</Text>
+              <Text style={styles.quickActionTileText}>{t('profile.quickActions.friends')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -929,7 +953,7 @@ export default function ProfileScreen() {
               <View style={styles.quickActionIconWrap}>
                 <Ionicons name="create-outline" size={18} color={palette.accent} />
               </View>
-              <Text style={styles.quickActionTileText}>Editar Perfil</Text>
+              <Text style={styles.quickActionTileText}>{t('profile.quickActions.editProfile')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -939,8 +963,8 @@ export default function ProfileScreen() {
         <View style={styles.bodyProgressCard}>
           <View style={styles.bodyProgressHeaderRow}>
             <View style={styles.bodyProgressHeaderTextWrap}>
-              <Text style={styles.bodyProgressTitle}>Progresso corporal</Text>
-              <Text style={styles.bodyProgressSubtitle}>Acompanha o teu peso e tendencia semanal.</Text>
+              <Text style={styles.bodyProgressTitle}>{t('profile.bodyProgressTitle')}</Text>
+              <Text style={styles.bodyProgressSubtitle}>{t('profile.bodyProgressSubtitle')}</Text>
             </View>
 
             <TouchableOpacity style={styles.weightAddButton} activeOpacity={0.88} onPress={openWeightModal}>
@@ -952,7 +976,7 @@ export default function ProfileScreen() {
             <Text style={styles.bodyWeightValue}>
               {latestWeightEntry ? `${formatWeightKg(latestWeightEntry.weight)} kg` : '--'}
             </Text>
-            {latestWeightEntry ? <Text style={styles.bodyWeightMeta}>{formatDateShort(latestWeightEntry.recorded_at)}</Text> : null}
+            {latestWeightEntry ? <Text style={styles.bodyWeightMeta}>{formatDateShort(latestWeightEntry.recorded_at, uiLanguage)}</Text> : null}
           </View>
 
           <View style={styles.bodyTrendBadge}>
@@ -973,15 +997,15 @@ export default function ProfileScreen() {
                     : palette.textMuted
               }
             />
-            <Text style={styles.bodyTrendText}>{weightTrend.deltaText}</Text>
+            <Text style={styles.bodyTrendText}>{weightTrendText}</Text>
           </View>
         </View>
 
         <View style={styles.hallWrap}>
           <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionTitle}>Sala de Trofeus</Text>
+            <Text style={styles.sectionTitle}>{t('profile.trophiesTitle')}</Text>
             <View style={styles.sectionPill}>
-              <Text style={styles.sectionPillText}>Recordes pessoais</Text>
+              <Text style={styles.sectionPillText}>{t('profile.trophiesPill')}</Text>
             </View>
           </View>
 
@@ -989,13 +1013,13 @@ export default function ProfileScreen() {
             <SkeletonCard compact lines={3} />
           ) : performanceError ? (
             <View style={styles.historyErrorCard}>
-              <Text style={styles.historyErrorTitle}>Nao foi possivel carregar o resumo de performance</Text>
+              <Text style={styles.historyErrorTitle}>{t('profile.performanceSummaryErrorTitle')}</Text>
               <Text style={styles.historyErrorText}>{performanceError}</Text>
             </View>
           ) : allTimePrs.length === 0 ? (
             <View style={styles.statusCardCompact}>
-              <Text style={styles.statusTitle}>Sem trofeus ainda</Text>
-              <Text style={styles.statusText}>Conclui mais treinos para desbloquear os teus cartoes de recorde.</Text>
+              <Text style={styles.statusTitle}>{t('profile.noTrophiesTitle')}</Text>
+              <Text style={styles.statusText}>{t('profile.noTrophiesDescription')}</Text>
             </View>
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={isWeb} contentContainerStyle={styles.trophyCarouselContent}>
@@ -1016,7 +1040,7 @@ export default function ProfileScreen() {
                         {pr.exerciseName}
                       </Text>
                       <Text style={styles.trophyValue}>{`${formatWeightKg(pr.maxWeight)} kg`}</Text>
-                      <Text style={styles.trophyDate}>{formatDateShort(pr.achievedAt)}</Text>
+                      <Text style={styles.trophyDate}>{formatDateShort(pr.achievedAt, uiLanguage)}</Text>
                     </View>
                   </ViewShot>
 
@@ -1039,15 +1063,15 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.sectionTitleRow}>
-          <Text style={styles.sectionTitle}>Meus Treinos</Text>
+          <Text style={styles.sectionTitle}>{t('profile.workoutsTitle')}</Text>
           <View style={styles.sectionPill}>
-            <Text style={styles.sectionPillText}>Histórico</Text>
+            <Text style={styles.sectionPillText}>{t('profile.historyPill')}</Text>
           </View>
         </View>
 
         {historyError ? (
           <View style={styles.historyErrorCard}>
-            <Text style={styles.historyErrorTitle}>Nao foi possivel carregar o historico de treinos</Text>
+            <Text style={styles.historyErrorTitle}>{t('profile.historyErrorTitle')}</Text>
             <Text style={styles.historyErrorText}>{historyError}</Text>
           </View>
         ) : null}
@@ -1061,6 +1085,7 @@ export default function ProfileScreen() {
     handleOpenFriends,
     handleOpenSettings,
     handleOpenStats,
+    handleShareTrophyCard,
     historyError,
     initials,
     isWeb,
@@ -1071,8 +1096,10 @@ export default function ProfileScreen() {
     profile?.avatar_url,
     profileError,
     sharingExerciseId,
+    t,
+    uiLanguage,
+    weightTrendText,
     usernameHandle,
-    handleShareTrophyCard,
     weightTrend,
   ]);
 
@@ -1085,7 +1112,7 @@ export default function ProfileScreen() {
       return (
         <EmptyState
           icon="alert-circle-outline"
-          title="Historico indisponivel"
+          title={t('profile.historyUnavailableTitle')}
           description={historyError}
           containerStyle={styles.statusCard}
           descriptionStyle={styles.statusText}
@@ -1096,15 +1123,15 @@ export default function ProfileScreen() {
     return (
       <EmptyState
         icon="barbell-outline"
-        title="Sem treinos registados"
-        description="Inicia um treino livre para desbloquear historico, recordes e consistencia semanal."
-        actionLabel="Iniciar treino livre"
+        title={t('profile.noWorkoutsTitle')}
+        description={t('profile.noWorkoutsDescription')}
+        actionLabel={t('profile.startWorkoutAction')}
         onActionPress={handleStartFreeWorkout}
         containerStyle={styles.statusCard}
         descriptionStyle={styles.statusText}
       />
     );
-  }, [handleStartFreeWorkout, historyError, isBootstrapping]);
+  }, [handleStartFreeWorkout, historyError, isBootstrapping, t]);
 
   const selectedWorkoutComments = selectedWorkoutForComments
     ? commentsByWorkoutId[selectedWorkoutForComments.id] ?? []
@@ -1161,8 +1188,8 @@ export default function ProfileScreen() {
           <Pressable style={styles.quickLogDismissArea} onPress={closeWeightModal} />
 
           <View style={[styles.quickLogCard, isWeb && styles.quickLogCardWeb]}>
-            <Text style={styles.quickLogTitle}>Registar peso</Text>
-            <Text style={styles.quickLogSubtitle}>Regista o teu peso corporal de hoje em kg.</Text>
+            <Text style={styles.quickLogTitle}>{t('profile.logWeightTitle')}</Text>
+            <Text style={styles.quickLogSubtitle}>{t('profile.logWeightSubtitle')}</Text>
 
             <TextInput
               value={weightInput}
@@ -1182,7 +1209,7 @@ export default function ProfileScreen() {
                 onPress={closeWeightModal}
                 disabled={isSavingWeight}
               >
-                <Text style={styles.quickLogCancelText}>Cancelar</Text>
+                <Text style={styles.quickLogCancelText}>{t('profile.logWeightCancel')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1194,7 +1221,7 @@ export default function ProfileScreen() {
                 {isSavingWeight ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.quickLogSaveText}>Guardar</Text>
+                  <Text style={styles.quickLogSaveText}>{t('profile.logWeightSave')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1205,7 +1232,7 @@ export default function ProfileScreen() {
 
       <FeedCommentsModal
         visible={selectedWorkoutForComments !== null}
-        workoutName={selectedWorkoutForComments?.name ?? 'Treino'}
+        workoutName={selectedWorkoutForComments?.name ?? t('profile.workoutFallback')}
         comments={selectedWorkoutComments}
         isLoading={isCommentsLoading}
         isSending={isSendingComment}

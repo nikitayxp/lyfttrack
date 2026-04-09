@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
@@ -16,6 +17,7 @@ function createWeightUiTraceId(scope: 'onboarding'): string {
 }
 
 export default function OnboardingScreen() {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [weight, setWeight] = useState('');
   const [loading, setLoading] = useState(false);
@@ -34,7 +36,7 @@ export default function OnboardingScreen() {
     });
 
     if (!safeName) {
-      setFeedback({ message: 'Indica um nome e o teu peso atual em kg.', type: 'error' });
+      setFeedback({ message: t('auth.onboarding.missingNameWeight'), type: 'error' });
       return;
     }
 
@@ -53,7 +55,7 @@ export default function OnboardingScreen() {
         message: e?.message ?? 'unknown',
       });
 
-      setFeedback({ message: e?.message || 'Indica um peso valido em kg.', type: 'error' });
+      setFeedback({ message: e?.message || t('auth.onboarding.invalidWeight'), type: 'error' });
       return;
     }
 
@@ -61,7 +63,7 @@ export default function OnboardingScreen() {
       ? `${parsedWeight}`
       : parsedWeight.toFixed(2).replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1');
     setWeight(normalizedWeightLabel);
-    setFeedback({ message: 'A guardar o teu peso inicial...', type: 'success' });
+    setFeedback({ message: t('auth.onboarding.savingWeight'), type: 'success' });
 
     setLoading(true);
     let profileUpdated = false;
@@ -102,12 +104,12 @@ export default function OnboardingScreen() {
       });
 
       const fallbackMessage = profileUpdated
-        ? 'O nome foi guardado, mas o peso nao foi registado. Tenta novamente.'
-        : 'Ocorreu um erro a criar o teu perfil inicial.';
+        ? t('auth.onboarding.saveErrorWeightOnly')
+        : t('auth.onboarding.saveErrorProfile');
 
       setFeedback({
         message: isRlsFailure
-          ? `${message}\nAplica a migracao supabase/migrations/20260407_fix_body_measurements_rls.sql e tenta novamente.`
+          ? `${message}\n${t('auth.onboarding.migrationHint')}`
           : e?.message || fallbackMessage,
         type: 'error',
       });
@@ -135,8 +137,8 @@ export default function OnboardingScreen() {
         >
         <View style={styles.container}>
           <View style={styles.header}>
-            <Text style={styles.title}>BEM-VINDO</Text>
-            <Text style={styles.subtitle}>Vamos calibrar o teu perfil para o gráfico de progresso corporal iniciar perfeitamente.</Text>
+            <Text style={styles.title}>{t('auth.onboarding.title')}</Text>
+            <Text style={styles.subtitle}>{t('auth.onboarding.subtitle')}</Text>
           </View>
 
           <View style={styles.formCard}>
@@ -151,24 +153,24 @@ export default function OnboardingScreen() {
               </View>
             ) : null}
 
-            <Text style={styles.label}>O teu Nome ou Nickname</Text>
+            <Text style={styles.label}>{t('auth.onboarding.nameLabel')}</Text>
             <View style={styles.inputLine}>
               <TextInput
                 value={name}
                 onChangeText={setName}
-                placeholder="Ex: João M."
+                placeholder={t('auth.onboarding.namePlaceholder')}
                 placeholderTextColor={palette.textMuted}
                 autoCorrect={false}
                 style={styles.inputField}
               />
             </View>
 
-            <Text style={styles.label}>Peso Corporal Atual (KG)</Text>
+            <Text style={styles.label}>{t('auth.onboarding.weightLabel')}</Text>
             <View style={styles.inputLine}>
               <TextInput
                 value={weight}
                 onChangeText={(value) => setWeight(sanitizeDecimalText(value).slice(0, 8))}
-                placeholder="Ex: 75.5"
+                placeholder={t('auth.onboarding.weightPlaceholder')}
                 placeholderTextColor={palette.textMuted}
                 keyboardType="decimal-pad"
                 style={styles.inputField}
@@ -179,12 +181,12 @@ export default function OnboardingScreen() {
               {loading ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <Text style={styles.primaryButtonText}>CONCLUIR SETUP</Text>
+                <Text style={styles.primaryButtonText}>{t('auth.onboarding.completeSetup')}</Text>
               )}
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.skipAction} onPress={handleSkip} disabled={loading}>
-               <Text style={styles.skipActionText}>Ignorar por agora</Text>
+               <Text style={styles.skipActionText}>{t('auth.onboarding.skipAction')}</Text>
             </TouchableOpacity>
           </View>
         </View>

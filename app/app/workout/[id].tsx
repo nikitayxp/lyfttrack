@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
 import {
@@ -67,18 +68,18 @@ function formatNumericValue(value: number | null, mode: 'decimal' | 'integer'): 
   return value.toFixed(1);
 }
 
-function formatSetType(setType: WorkoutSetType): string {
-  if (setType === 'warmup') return 'Aquecimento';
-  if (setType === 'drop') return 'Dropset';
-  if (setType === 'failure') return 'Falha';
-  return 'Trabalho';
+function formatSetType(setType: WorkoutSetType, t: (key: string) => unknown): string {
+  if (setType === 'warmup') return String(t('workoutDetails.setTypeWarmup'));
+  if (setType === 'drop') return String(t('workoutDetails.setTypeDrop'));
+  if (setType === 'failure') return String(t('workoutDetails.setTypeFailure'));
+  return String(t('workoutDetails.setTypeWork'));
 }
 
-function profileDisplayName(details: WorkoutDetails): string {
+function profileDisplayName(details: WorkoutDetails, fallbackLabel: string): string {
   const fullName = details.profile?.full_name?.trim();
   const username = details.profile?.username?.trim();
 
-  return fullName || username || 'Atleta';
+  return fullName || username || fallbackLabel;
 }
 
 function initialsFromName(value: string): string {
@@ -92,6 +93,7 @@ function initialsFromName(value: string): string {
 }
 
 export default function WorkoutDetailsScreen() {
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
 
   const workoutId = useMemo(() => resolveRouteWorkoutId(params.id), [params.id]);
@@ -102,7 +104,7 @@ export default function WorkoutDetailsScreen() {
 
   const loadDetails = useCallback(async () => {
     if (!workoutId) {
-      setLoadError('ID do treino em falta na rota.');
+      setLoadError(t('workoutDetails.missingRouteId'));
       setDetails(null);
       setIsLoading(false);
       return;
@@ -120,7 +122,7 @@ export default function WorkoutDetailsScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [workoutId]);
+  }, [t, workoutId]);
 
   useEffect(() => {
     void loadDetails();
@@ -128,11 +130,11 @@ export default function WorkoutDetailsScreen() {
 
   const topDisplayName = useMemo(() => {
     if (!details) {
-      return 'Atleta';
+      return t('profile.athleteFallback');
     }
 
-    return profileDisplayName(details);
-  }, [details]);
+    return profileDisplayName(details, t('profile.athleteFallback'));
+  }, [details, t]);
 
   const topInitials = useMemo(() => initialsFromName(topDisplayName), [topDisplayName]);
 
@@ -145,7 +147,7 @@ export default function WorkoutDetailsScreen() {
           <Ionicons name="arrow-back" size={21} color={palette.textPrimary} />
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>Detalhes do treino</Text>
+        <Text style={styles.headerTitle}>{t('workoutDetails.headerTitle')}</Text>
 
         <View style={styles.headerSpacer} />
       </View>
@@ -153,20 +155,20 @@ export default function WorkoutDetailsScreen() {
       {isLoading ? (
         <View style={styles.statusWrap}>
           <ActivityIndicator size="small" color={palette.accent} />
-          <Text style={styles.statusText}>A carregar detalhes do treino...</Text>
+          <Text style={styles.statusText}>{t('workoutDetails.loadingDetails')}</Text>
         </View>
       ) : loadError ? (
         <View style={styles.statusWrap}>
-          <Text style={styles.statusTitle}>Nao foi possivel carregar o treino</Text>
+          <Text style={styles.statusTitle}>{t('workoutDetails.loadErrorTitle')}</Text>
           <Text style={styles.statusText}>{loadError}</Text>
           <TouchableOpacity style={styles.retryButton} activeOpacity={0.88} onPress={() => void loadDetails()}>
-            <Text style={styles.retryButtonText}>Tentar novamente</Text>
+            <Text style={styles.retryButtonText}>{t('workoutDetails.retryAction')}</Text>
           </TouchableOpacity>
         </View>
       ) : !details ? (
         <View style={styles.statusWrap}>
-          <Text style={styles.statusTitle}>Treino indisponivel</Text>
-          <Text style={styles.statusText}>Este treino nao existe ou nao esta acessivel.</Text>
+          <Text style={styles.statusTitle}>{t('workoutDetails.unavailableTitle')}</Text>
+          <Text style={styles.statusText}>{t('workoutDetails.unavailableDescription')}</Text>
         </View>
       ) : (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -191,22 +193,22 @@ export default function WorkoutDetailsScreen() {
 
             <View style={styles.statsGrid}>
               <View style={styles.statCard}>
-                <Text style={styles.statLabel}>Tempo</Text>
+                <Text style={styles.statLabel}>{t('workoutDetails.durationLabel')}</Text>
                 <Text style={styles.statValue}>{formatDurationFromSeconds(details.durationSeconds)}</Text>
               </View>
 
               <View style={styles.statCard}>
-                <Text style={styles.statLabel}>Series</Text>
+                <Text style={styles.statLabel}>{t('workoutDetails.setsLabel')}</Text>
                 <Text style={styles.statValue}>{details.totalSets}</Text>
               </View>
 
               <View style={styles.statCard}>
-                <Text style={styles.statLabel}>Recordes</Text>
+                <Text style={styles.statLabel}>{t('workoutDetails.recordsLabel')}</Text>
                 <Text style={styles.statValue}>{details.prCount}</Text>
               </View>
 
               <View style={styles.statCard}>
-                <Text style={styles.statLabel}>PR 1RM</Text>
+                <Text style={styles.statLabel}>{t('workoutDetails.pr1rmLabel')}</Text>
                 <Text style={styles.statValue}>
                   {details.bestEstimated1RM !== null ? `${formatNumericValue(details.bestEstimated1RM, 'decimal')} kg` : '--'}
                 </Text>
@@ -216,30 +218,32 @@ export default function WorkoutDetailsScreen() {
             {details.heaviestWeight !== null ? (
               <View style={styles.topSetPill}>
                 <Ionicons name="trophy-outline" size={13} color="#F59E0B" />
-                <Text style={styles.topSetPillText}>Melhor set: {formatNumericValue(details.heaviestWeight, 'decimal')} kg</Text>
+                <Text style={styles.topSetPillText}>
+                  {t('workoutDetails.bestSetLabel', { weight: formatNumericValue(details.heaviestWeight, 'decimal') })}
+                </Text>
               </View>
             ) : null}
           </View>
 
           {details.exercises.length === 0 ? (
             <View style={styles.emptyCard}>
-              <Text style={styles.emptyTitle}>Sem sets registados</Text>
-              <Text style={styles.emptyText}>Este treino nao contem sets registados.</Text>
+              <Text style={styles.emptyTitle}>{t('workoutDetails.noSetsTitle')}</Text>
+              <Text style={styles.emptyText}>{t('workoutDetails.noSetsDescription')}</Text>
             </View>
           ) : (
             details.exercises.map((exercise) => (
               <View key={`${exercise.id ?? exercise.exercise_id}-${exercise.order}`} style={styles.exerciseCard}>
                 <Text style={styles.exerciseName}>{exercise.exercise_name}</Text>
                 <Text style={styles.exerciseMeta}>
-                  {(exercise.muscle_group ?? 'Geral') + ' - ' + (exercise.equipment ?? 'Peso corporal')}
+                  {(exercise.muscle_group ?? t('exercise.general')) + ' - ' + (exercise.equipment ?? t('exercise.bodyweight'))}
                 </Text>
 
                 <View style={[styles.tableRow, styles.tableHeaderRow]}>
-                  <Text style={[styles.headerCell, styles.cellSet]}>Serie</Text>
+                  <Text style={[styles.headerCell, styles.cellSet]}>{t('workoutDetails.tableSet')}</Text>
                   <Text style={[styles.headerCell, styles.cellKg]}>kg</Text>
-                  <Text style={[styles.headerCell, styles.cellReps]}>Reps</Text>
-                  <Text style={[styles.headerCell, styles.cellRir]}>RIR</Text>
-                  <Text style={[styles.headerCell, styles.cellType]}>Tipo</Text>
+                  <Text style={[styles.headerCell, styles.cellReps]}>{t('workoutDetails.tableReps')}</Text>
+                  <Text style={[styles.headerCell, styles.cellRir]}>{t('workoutDetails.tableRir')}</Text>
+                  <Text style={[styles.headerCell, styles.cellType]}>{t('workoutDetails.tableType')}</Text>
                 </View>
 
                 {exercise.sets.map((setItem) => (
@@ -248,7 +252,7 @@ export default function WorkoutDetailsScreen() {
                     <Text style={[styles.valueCell, styles.cellKg]}>{formatNumericValue(setItem.weight, 'decimal')}</Text>
                     <Text style={[styles.valueCell, styles.cellReps]}>{formatNumericValue(setItem.reps, 'integer')}</Text>
                     <Text style={[styles.valueCell, styles.cellRir]}>{formatNumericValue(setItem.rir, 'decimal')}</Text>
-                    <Text style={[styles.valueCell, styles.cellType]}>{formatSetType(setItem.set_type)}</Text>
+                    <Text style={[styles.valueCell, styles.cellType]}>{formatSetType(setItem.set_type, t)}</Text>
                   </View>
                 ))}
               </View>

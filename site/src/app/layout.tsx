@@ -16,25 +16,25 @@ const bebasNeue = Bebas_Neue({
 });
 
 export const metadata: Metadata = {
-  title: "LyftTrack - Website",
+  title: "LyftTrack",
   description:
     "Official LyftTrack website experience with app showcase, bilingual blog and interactive training previews.",
   keywords: ["fitness", "workout tracker", "gym app", "LyftTrack", "blog", "training"],
   applicationName: "LyftTrack",
   icons: {
-    icon: "/icon.png",
-    shortcut: "/icon.png",
-    apple: "/icon.png",
+    icon: "/logo.jpg",
+    shortcut: "/logo.jpg",
+    apple: "/logo.jpg",
   },
   openGraph: {
-    title: "LyftTrack - Website",
+    title: "LyftTrack",
     description:
       "Official LyftTrack website experience with app showcase, bilingual blog and interactive training previews.",
     siteName: "LyftTrack",
   },
   twitter: {
     card: "summary",
-    title: "LyftTrack - Website",
+    title: "LyftTrack",
     description:
       "Official LyftTrack website experience with app showcase, bilingual blog and interactive training previews.",
   },

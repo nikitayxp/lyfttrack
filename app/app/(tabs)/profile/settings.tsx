@@ -14,20 +14,25 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/theme';
 import { usePreferences } from '@/context/PreferencesContext';
+import type { AppLanguage } from '@/i18n/resources';
 import { supabase } from '@/services/supabase';
 
 const palette = Colors.dark;
 
-const LANGUAGE_OPTIONS: readonly { key: 'pt'; labelKey: 'language.portuguese' }[] = [
+const LANGUAGE_OPTIONS: readonly {
+  key: AppLanguage;
+  labelKey: 'language.english' | 'language.portuguese';
+}[] = [
+  { key: 'en', labelKey: 'language.english' },
   { key: 'pt', labelKey: 'language.portuguese' },
 ];
 
-function toErrorMessage(error: unknown): string {
+function toErrorMessage(error: unknown, fallbackMessage: string): string {
   if (error instanceof Error) {
     return error.message;
   }
 
-  return 'Erro desconhecido.';
+  return fallbackMessage;
 }
 
 export default function ProfileSettingsScreen() {
@@ -60,7 +65,7 @@ export default function ProfileSettingsScreen() {
     });
   }, [t]);
 
-  const handleLanguageChange = useCallback(async (nextLanguage: 'pt') => {
+  const handleLanguageChange = useCallback(async (nextLanguage: AppLanguage) => {
     if (isUpdatingLanguage || nextLanguage === language) {
       return;
     }
@@ -70,7 +75,7 @@ export default function ProfileSettingsScreen() {
     try {
       await setLanguage(nextLanguage);
     } catch (error) {
-      Alert.alert(t('settings.title'), toErrorMessage(error));
+      Alert.alert(t('settings.title'), toErrorMessage(error, t('common.unknownError')));
     } finally {
       setIsUpdatingLanguage(false);
     }
@@ -98,7 +103,7 @@ export default function ProfileSettingsScreen() {
 
       router.replace('/(auth)' as any);
     } catch (error) {
-      Alert.alert(t('settings.signOutError'), toErrorMessage(error));
+      Alert.alert(t('settings.signOutError'), toErrorMessage(error, t('common.unknownError')));
     } finally {
       setIsSigningOut(false);
     }
@@ -107,7 +112,11 @@ export default function ProfileSettingsScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
-        <TouchableOpacity style={styles.backButton} activeOpacity={0.88} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={styles.backButton}
+          activeOpacity={0.88}
+          onPress={() => router.replace('/(tabs)/profile' as any)}
+        >
           <Ionicons name="chevron-back" size={18} color={palette.textPrimary} />
           <Text style={styles.backButtonText}>{t('settings.back')}</Text>
         </TouchableOpacity>

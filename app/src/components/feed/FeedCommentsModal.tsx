@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/Colors';
 import type { WorkoutCommentWithProfile } from '@/services/interactionService';
@@ -36,12 +37,12 @@ type FeedCommentsModalProps = {
   onRetry: () => void;
 };
 
-function displayNameOf(comment: WorkoutCommentWithProfile): string {
-  return comment.profile?.full_name?.trim() || comment.profile?.username || 'Atleta';
+function displayNameOf(comment: WorkoutCommentWithProfile, fallbackLabel: string): string {
+  return comment.profile?.full_name?.trim() || comment.profile?.username || fallbackLabel;
 }
 
-function initialsOf(comment: WorkoutCommentWithProfile): string {
-  return displayNameOf(comment)
+function initialsOf(comment: WorkoutCommentWithProfile, fallbackLabel: string): string {
+  return displayNameOf(comment, fallbackLabel)
     .split(' ')
     .filter(Boolean)
     .slice(0, 2)
@@ -63,15 +64,17 @@ export function FeedCommentsModal({
   onSend,
   onRetry,
 }: FeedCommentsModalProps) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === 'web';
+  const athleteFallback = t('publicProfile.athleteFallback');
 
   const listEmptyState = useMemo(() => {
     if (isLoading) {
       return (
         <View style={styles.statusWrap}>
           <ActivityIndicator size="small" color={palette.accent} />
-          <Text style={styles.statusText}>A carregar comentarios...</Text>
+          <Text style={styles.statusText}>{t('feed.comments.loading')}</Text>
         </View>
       );
     }
@@ -79,10 +82,10 @@ export function FeedCommentsModal({
     if (errorMessage) {
       return (
         <View style={styles.statusWrap}>
-          <Text style={styles.errorTitle}>Nao foi possivel carregar comentarios</Text>
+          <Text style={styles.errorTitle}>{t('feed.comments.loadErrorTitle')}</Text>
           <Text style={styles.errorText}>{errorMessage}</Text>
           <TouchableOpacity style={styles.retryButton} activeOpacity={0.88} onPress={onRetry}>
-            <Text style={styles.retryButtonText}>Tentar novamente</Text>
+            <Text style={styles.retryButtonText}>{t('feed.comments.retry')}</Text>
           </TouchableOpacity>
         </View>
       );
@@ -90,10 +93,10 @@ export function FeedCommentsModal({
 
     return (
       <View style={styles.statusWrap}>
-        <Text style={styles.statusText}>Ainda sem comentarios. Sê o primeiro.</Text>
+        <Text style={styles.statusText}>{t('feed.comments.empty')}</Text>
       </View>
     );
-  }, [errorMessage, isLoading, onRetry]);
+  }, [errorMessage, isLoading, onRetry, t]);
 
   if (!visible && isWeb) {
     return null;
@@ -117,7 +120,7 @@ export function FeedCommentsModal({
               <Ionicons name="close" size={22} color={palette.textPrimary} />
             </TouchableOpacity>
             <View style={styles.headerTextWrap}>
-              <Text style={styles.headerTitle}>Comentarios</Text>
+              <Text style={styles.headerTitle}>{t('feed.comments.title')}</Text>
               <Text style={styles.headerSubtitle} numberOfLines={1}>
                 {workoutName}
               </Text>
@@ -135,13 +138,13 @@ export function FeedCommentsModal({
                     <Image source={{ uri: item.profile.avatar_url }} style={styles.avatar} />
                   ) : (
                     <View style={styles.avatarFallback}>
-                      <Text style={styles.avatarFallbackText}>{initialsOf(item)}</Text>
+                      <Text style={styles.avatarFallbackText}>{initialsOf(item, athleteFallback)}</Text>
                     </View>
                   )}
 
                   <View style={styles.commentTextWrap}>
                     <View style={styles.commentHeaderRow}>
-                      <Text style={styles.commentAuthor}>{displayNameOf(item)}</Text>
+                      <Text style={styles.commentAuthor}>{displayNameOf(item, athleteFallback)}</Text>
                       <Text style={styles.commentTime}>{formatRelativeTime(item.created_at)}</Text>
                     </View>
                     <Text style={styles.commentBody}>{item.content}</Text>
@@ -159,7 +162,7 @@ export function FeedCommentsModal({
                 value={inputValue}
                 onChangeText={onChangeInput}
                 style={styles.input}
-                placeholder="Escreve um comentario..."
+                placeholder={t('feed.comments.inputPlaceholder')}
                 placeholderTextColor={palette.textMuted}
                 multiline
                 maxLength={1000}

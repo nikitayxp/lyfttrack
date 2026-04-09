@@ -20,6 +20,37 @@ type SupabaseStorage = {
   removeItem: (key: string) => Promise<void> | void;
 };
 
+const PASSWORD_RESET_REDIRECT_FALLBACK = 'lyfttrack://reset-password';
+
+function normalizeUrlValue(value: string | undefined): string | null {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
+}
+
+function isLocalhostUrl(value: string): boolean {
+  return /(^|[/:])(localhost|127\.0\.0\.1)([:/]|$)/i.test(value);
+}
+
+function removeTrailingSlashes(value: string): string {
+  return value.replace(/\/+$/, '');
+}
+
+export function getPasswordResetRedirectTo(): string {
+  const explicitRedirect = normalizeUrlValue(process.env.EXPO_PUBLIC_PASSWORD_RESET_REDIRECT);
+
+  if (explicitRedirect && !isLocalhostUrl(explicitRedirect)) {
+    return explicitRedirect;
+  }
+
+  const siteUrl = normalizeUrlValue(process.env.EXPO_PUBLIC_SITE_URL);
+
+  if (siteUrl && !isLocalhostUrl(siteUrl)) {
+    return `${removeTrailingSlashes(siteUrl)}/reset-password`;
+  }
+
+  return PASSWORD_RESET_REDIRECT_FALLBACK;
+}
+
 function createAuthStorage(): SupabaseStorage | undefined {
   if (Platform.OS === 'web') {
     if (typeof window === 'undefined' || !window.localStorage) {

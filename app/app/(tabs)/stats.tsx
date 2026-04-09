@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { BarChart, LineChart } from 'react-native-gifted-charts';
 import { useTranslation } from 'react-i18next';
@@ -390,6 +392,17 @@ export default function StatsScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      <View style={styles.headerRow}>
+        <TouchableOpacity
+          style={styles.backButton}
+          activeOpacity={0.88}
+          onPress={() => router.replace('/(tabs)/profile' as any)}
+        >
+          <Ionicons name="arrow-back" size={18} color="#FFFFFF" />
+          <Text style={styles.backButtonText}>{t('common.back')}</Text>
+        </TouchableOpacity>
+      </View>
+
       <Text style={styles.title}>{t('stats.title')}</Text>
       <Text style={styles.subtitle}>{t('stats.subtitle')}</Text>
 
@@ -602,6 +615,28 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingBottom: 34,
     rowGap: 12,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  backButton: {
+    minHeight: 34,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#253041',
+    backgroundColor: '#0D1624',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    columnGap: 6,
+    paddingHorizontal: 10,
+  },
+  backButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
   title: {
     color: '#FFFFFF',

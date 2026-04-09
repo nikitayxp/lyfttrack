@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { Radius, Spacing, Typography } from '@/constants/Styles';
 import { supabase } from '@/services/supabase';
@@ -27,6 +28,7 @@ function readRouteValue(value: string | string[] | undefined): string {
 }
 
 export default function VerifyScreen() {
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{ email?: string | string[] }>();
   const initialEmail = useMemo(() => readRouteValue(params.email), [params.email]);
 
@@ -39,7 +41,7 @@ export default function VerifyScreen() {
     const normalizedCode = code.trim();
 
     if (!normalizedEmail || !normalizedCode) {
-      Alert.alert('Dados em falta', 'Preenche o email e o codigo de verificacao.');
+      Alert.alert(t('auth.verify.missingDataTitle'), t('auth.verify.missingDataDescription'));
       return;
     }
 
@@ -53,11 +55,11 @@ export default function VerifyScreen() {
       });
 
       if (error) {
-        Alert.alert('Codigo invalido', 'O codigo e invalido ou expirou.');
+        Alert.alert(t('auth.verify.invalidCodeTitle'), t('auth.verify.invalidCodeDescription'));
         return;
       }
 
-      Alert.alert('Conta verificada', 'Conta confirmada com sucesso.');
+      Alert.alert(t('auth.verify.verifiedTitle'), t('auth.verify.verifiedDescription'));
       router.replace('/(tabs)/workout' as any);
     } finally {
       setLoading(false);
@@ -69,16 +71,16 @@ export default function VerifyScreen() {
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.kicker}>LYFTTRACK</Text>
-          <Text style={styles.title}>VALIDAR CONTA</Text>
-          <Text style={styles.subtitle}>Confirma o email para desbloquear a app.</Text>
+          <Text style={styles.title}>{t('auth.verify.title')}</Text>
+          <Text style={styles.subtitle}>{t('auth.verify.subtitle')}</Text>
         </View>
 
         <View style={styles.formCard}>
-          <Text style={styles.label}>Email</Text>
+          <Text style={styles.label}>{t('auth.verify.emailLabel')}</Text>
           <TextInput
             value={email}
             onChangeText={setEmail}
-            placeholder="teu@email.com"
+            placeholder={t('auth.verify.emailPlaceholder')}
             placeholderTextColor={palette.textMuted}
             keyboardType="email-address"
             autoCapitalize="none"
@@ -86,11 +88,11 @@ export default function VerifyScreen() {
             style={styles.input}
           />
 
-          <Text style={styles.label}>Codigo de verificacao</Text>
+          <Text style={styles.label}>{t('auth.verify.codeLabel')}</Text>
           <TextInput
             value={code}
             onChangeText={setCode}
-            placeholder="123456"
+            placeholder={t('auth.verify.codePlaceholder')}
             placeholderTextColor={palette.textMuted}
             keyboardType="number-pad"
             autoCapitalize="none"
@@ -102,7 +104,7 @@ export default function VerifyScreen() {
             {loading ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.primaryButtonText}>CONFIRMAR</Text>
+              <Text style={styles.primaryButtonText}>{t('auth.verify.confirmAction')}</Text>
             )}
           </TouchableOpacity>
 
@@ -111,7 +113,7 @@ export default function VerifyScreen() {
             onPress={() => router.push('/(auth)/sign-up' as any)}
             disabled={loading}
           >
-            <Text style={styles.switchActionText}>Voltar ao registo</Text>
+            <Text style={styles.switchActionText}>{t('auth.verify.backToRegisterAction')}</Text>
           </TouchableOpacity>
         </View>
       </View>

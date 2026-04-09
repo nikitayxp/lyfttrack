@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { ActivityIndicator, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import type { WorkoutFeedItem } from '@/services/workoutService';
 import { formatRelativeTime } from '@/utils/dateUtils';
@@ -43,11 +44,11 @@ function formatRecords(value: number | null | undefined): string {
   return `${value}`;
 }
 
-function profileDisplayName(workout: WorkoutFeedItem): string {
+function profileDisplayName(workout: WorkoutFeedItem, fallbackLabel: string): string {
   const fullName = workout.profile?.full_name?.trim();
   const username = workout.profile?.username?.trim();
 
-  return fullName || username || 'Atleta';
+  return fullName || username || fallbackLabel;
 }
 
 function initialsFromName(value: string): string {
@@ -70,7 +71,8 @@ export function WorkoutFeedCard({
   onOpenComments,
   disableInteractions = false,
 }: WorkoutFeedCardProps) {
-  const displayName = profileDisplayName(workout);
+  const { t } = useTranslation();
+  const displayName = profileDisplayName(workout, t('publicProfile.athleteFallback'));
 
   const resolvedLikeCount = likeCount ?? workout.likes_count;
   const resolvedCommentsCount = commentsCount ?? workout.comments_count;
@@ -113,17 +115,17 @@ export function WorkoutFeedCard({
         <View style={styles.metricsRow}>
           <View style={styles.metricBlock}>
             <Text style={styles.metricValue}>{workout.totalSets}</Text>
-            <Text style={styles.metricLabel}>Series</Text>
+            <Text style={styles.metricLabel}>{t('feed.metrics.sets')}</Text>
           </View>
           <View style={styles.metricDivider} />
           <View style={styles.metricBlock}>
             <Text style={styles.metricValue}>{formatRecords(workout.prCount)}</Text>
-            <Text style={styles.metricLabel}>Recordes</Text>
+            <Text style={styles.metricLabel}>{t('feed.metrics.records')}</Text>
           </View>
           <View style={styles.metricDivider} />
           <View style={styles.metricBlock}>
             <Text style={styles.metricValue}>{workout.exerciseNames.length}</Text>
-            <Text style={styles.metricLabel}>Exercicios</Text>
+            <Text style={styles.metricLabel}>{t('feed.metrics.exercises')}</Text>
           </View>
         </View>
 

@@ -71,35 +71,68 @@ export const EXERCISE_EQUIPMENT_LABELS: Record<ExerciseEquipmentKey, { en: strin
 const muscleAliasMap: Record<string, ExerciseMuscleKey> = {
   chest: 'chest',
   peito: 'chest',
+  peito_superior: 'chest',
+  upper_chest: 'chest',
+  peitoral: 'chest',
   back: 'back',
   costas: 'back',
+  dorsal: 'back',
+  lats: 'back',
   legs: 'legs',
   pernas: 'legs',
+  quadriceps: 'legs',
+  quads: 'legs',
+  hamstrings: 'legs',
+  glutes: 'legs',
   shoulders: 'shoulders',
+  shoulder: 'shoulders',
   ombros: 'shoulders',
+  ombro: 'shoulders',
+  deltoid: 'shoulders',
+  deltoids: 'shoulders',
   arms: 'arms',
+  arm: 'arms',
   bracos: 'arms',
+  bicep: 'arms',
+  biceps: 'arms',
+  tricep: 'arms',
+  triceps: 'arms',
   core: 'core',
+  abs: 'core',
+  abdominal: 'core',
+  abdominais: 'core',
 };
 
 const equipmentAliasMap: Record<string, ExerciseEquipmentKey> = {
   barbell: 'barbell',
   barra: 'barbell',
+  olympic_barbell: 'barbell',
   dumbbell: 'dumbbell',
+  dumbell: 'dumbbell',
   halteres: 'dumbbell',
+  halter: 'dumbbell',
   machine: 'machine',
   maquina: 'machine',
+  smith_machine: 'machine',
   cable: 'cable',
   polia: 'cable',
   bodyweight: 'bodyweight',
   body_weight: 'bodyweight',
   peso_corporal: 'bodyweight',
   'peso corporal': 'bodyweight',
+  sem_equipamento: 'bodyweight',
+  calistenia: 'bodyweight',
   kettlebell: 'kettlebell',
 };
 
 function normalizeLookupKey(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, '_');
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
 }
 
 export function normalizeMuscleKey(value: string | null | undefined): ExerciseMuscleKey | null {

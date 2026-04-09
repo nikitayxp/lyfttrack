@@ -10,8 +10,8 @@ import { INPUT_LIMITS, sanitizeText, toSafeInteger, toSafeNumber } from '@/utils
 import type { WorkoutSetDraft, WorkoutSetProgressDraft, WorkoutSetType } from './workoutSession.types';
 
 export type ExerciseCatalogItem = Tables<'exercises'>;
-export type ExerciseLibraryMuscleFilter = 'all' | 'chest' | 'back' | 'legs' | 'shoulders' | 'arms';
-export type ExerciseLibraryEquipmentFilter = 'all' | 'barbell' | 'dumbbell' | 'machine' | 'cable';
+export type ExerciseLibraryMuscleFilter = 'all' | 'chest' | 'back' | 'legs' | 'shoulders' | 'arms' | 'core';
+export type ExerciseLibraryEquipmentFilter = 'all' | 'barbell' | 'dumbbell' | 'machine' | 'cable' | 'bodyweight' | 'kettlebell';
 export type { WorkoutSetType } from './workoutSession.types';
 export type ExerciseCatalogFilters = {
   muscle?: ExerciseLibraryMuscleFilter;
@@ -603,53 +603,104 @@ export async function getAuthenticatedUserOrThrow(): Promise<User> {
 
 // ---------- Exercises CRUD ----------
 
-function getMuscleKeyword(filter: ExerciseLibraryMuscleFilter): string | null {
-  if (filter === 'all') {
-    return null;
+const MUSCLE_FILTER_KEYWORDS: Record<Exclude<ExerciseLibraryMuscleFilter, 'all'>, readonly string[]> = {
+  chest: ['chest', 'peito', 'peitoral'],
+  back: ['back', 'costa', 'dorsal', 'lat'],
+  legs: ['leg', 'perna', 'quad', 'hamstring', 'glute'],
+  shoulders: ['shoulder', 'ombro', 'deltoid'],
+  arms: ['arm', 'braco', 'bicep', 'tricep'],
+  core: ['core', 'abs', 'abdominal'],
+};
+
+const EQUIPMENT_FILTER_KEYWORDS: Record<Exclude<ExerciseLibraryEquipmentFilter, 'all'>, readonly string[]> = {
+  barbell: ['barbell', 'barra'],
+  dumbbell: ['dumbbell', 'dumbell', 'halter'],
+  machine: ['machine', 'maquina', 'smith'],
+  cable: ['cable', 'polia'],
+  bodyweight: ['bodyweight', 'body_weight', 'peso_corporal', 'calistenia', 'sem_equipamento'],
+  kettlebell: ['kettlebell'],
+};
+
+function normalizeFilterLookup(value: string | null | undefined): string {
+  if (!value) {
+    return '';
   }
 
-  if (filter === 'legs') {
-    return 'leg';
-  }
-
-  if (filter === 'shoulders') {
-    return 'shoulder';
-  }
-
-  return filter;
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
 }
 
-function getEquipmentKeyword(filter: ExerciseLibraryEquipmentFilter): string | null {
+function matchesKeywords(normalizedValue: string, keywords: readonly string[]): boolean {
+  return keywords.some((keyword) => normalizedValue.includes(keyword));
+}
+
+function matchesMuscleFilter(exercise: ExerciseCatalogItem, filter: ExerciseLibraryMuscleFilter): boolean {
   if (filter === 'all') {
-    return null;
+    return true;
   }
 
-  return filter;
+  const keywords = MUSCLE_FILTER_KEYWORDS[filter];
+  const candidates = [exercise.muscle_group, exercise.muscle_en, exercise.muscle_pt];
+
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+
+    if (normalizeMuscleKey(candidate) === filter) {
+      return true;
+    }
+
+    const normalizedCandidate = normalizeFilterLookup(candidate);
+
+    if (normalizedCandidate && matchesKeywords(normalizedCandidate, keywords)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function matchesEquipmentFilter(exercise: ExerciseCatalogItem, filter: ExerciseLibraryEquipmentFilter): boolean {
+  if (filter === 'all') {
+    return true;
+  }
+
+  const candidate = exercise.equipment;
+
+  if (normalizeEquipmentKey(candidate) === filter) {
+    return true;
+  }
+
+  const normalizedCandidate = normalizeFilterLookup(candidate);
+
+  if (!normalizedCandidate) {
+    return false;
+  }
+
+  return matchesKeywords(normalizedCandidate, EQUIPMENT_FILTER_KEYWORDS[filter]);
 }
 
 export async function getExercisesCatalog(filters: ExerciseCatalogFilters = {}): Promise<ExerciseCatalogItem[]> {
   const muscleFilter = filters.muscle ?? 'all';
   const equipmentFilter = filters.equipment ?? 'all';
-  let query = supabase.from('exercises').select('*');
 
-  const muscleKeyword = getMuscleKeyword(muscleFilter);
-  const equipmentKeyword = getEquipmentKeyword(equipmentFilter);
-
-  if (muscleKeyword) {
-    query = query.ilike('muscle_group', `%${muscleKeyword}%`);
-  }
-
-  if (equipmentKeyword) {
-    query = query.ilike('equipment', `%${equipmentKeyword}%`);
-  }
-
-  const { data, error } = await query.order('name', { ascending: true });
+  const { data, error } = await supabase.from('exercises').select('*').order('name', { ascending: true });
 
   if (error) {
     throw new Error(`Unable to load exercises: ${error.message}`);
   }
 
-  return data ?? [];
+  const rows = data ?? [];
+
+  return rows.filter(
+    (exercise) => matchesMuscleFilter(exercise, muscleFilter) && matchesEquipmentFilter(exercise, equipmentFilter)
+  );
 }
 
 export async function createExercise(input: CreateExerciseInput): Promise<ExerciseCatalogItem> {

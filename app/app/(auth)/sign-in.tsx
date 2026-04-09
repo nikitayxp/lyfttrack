@@ -12,14 +12,16 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
-import { supabase } from '@/services/supabase';
+import { getPasswordResetRedirectTo, supabase } from '@/services/supabase';
 
 const palette = Colors.dark;
 
 export default function SignInScreen() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -31,7 +33,7 @@ export default function SignInScreen() {
     const normalizedEmail = email.trim().toLowerCase();
 
     if (!normalizedEmail || !password.trim()) {
-      setFeedback({ message: 'Introduz email e palavra-passe para continuar.', type: 'error' });
+      setFeedback({ message: t('auth.signIn.missingCredentials'), type: 'error' });
       return;
     }
 
@@ -59,28 +61,30 @@ export default function SignInScreen() {
     const normalizedEmail = email.trim().toLowerCase();
 
     if (!normalizedEmail) {
-      setFeedback({ message: 'Indica primeiro o teu email.', type: 'error' });
+      setFeedback({ message: t('auth.signIn.missingEmail'), type: 'error' });
       return;
     }
 
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail);
+      const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+        redirectTo: getPasswordResetRedirectTo(),
+      });
 
       if (error) {
         setFeedback({ message: error.message, type: 'error' });
         return;
       }
 
-      setFeedback({ message: 'Email de recuperação enviado! Verifica a tua caixa.', type: 'success' });
+      setFeedback({ message: t('auth.signIn.resetSent'), type: 'success' });
     } finally {
       setLoading(false);
     }
   }
 
   function handleGooglePress() {
-    setFeedback({ message: 'Login via Google em desenvolvimento.', type: 'info' });
+    setFeedback({ message: t('auth.signIn.googleSoon'), type: 'info' });
   }
 
   return (
@@ -98,8 +102,8 @@ export default function SignInScreen() {
               <Text style={styles.logoLyft}>Lyft</Text>
               <Text style={styles.logoTrack}>Track</Text>
             </View>
-            <Text style={styles.title}>ENTRA. TREINA. EVOLUI.</Text>
-            <Text style={styles.subtitle}>Foco total. Sem distracoes.</Text>
+            <Text style={styles.title}>{t('auth.signIn.title')}</Text>
+            <Text style={styles.subtitle}>{t('auth.signIn.subtitle')}</Text>
           </View>
 
           <View style={styles.formCard}>
@@ -117,12 +121,12 @@ export default function SignInScreen() {
               </View>
             ) : null}
 
-            <Text style={styles.label}>Email</Text>
+            <Text style={styles.label}>{t('auth.signIn.emailLabel')}</Text>
             <View style={styles.inputLine}>
               <TextInput
                 value={email}
                 onChangeText={setEmail}
-                placeholder="teu@email.com"
+                placeholder={t('auth.signIn.emailPlaceholder')}
                 placeholderTextColor={palette.textMuted}
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -131,12 +135,12 @@ export default function SignInScreen() {
               />
             </View>
 
-            <Text style={styles.label}>Palavra-passe</Text>
+            <Text style={styles.label}>{t('auth.signIn.passwordLabel')}</Text>
             <View style={styles.inputLine}>
               <TextInput
                 value={password}
                 onChangeText={setPassword}
-                placeholder="********"
+                placeholder={t('auth.signIn.passwordPlaceholder')}
                 placeholderTextColor={palette.textMuted}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
@@ -155,23 +159,23 @@ export default function SignInScreen() {
               {loading ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <Text style={styles.primaryButtonText}>INICIAR SESSAO</Text>
+                <Text style={styles.primaryButtonText}>{t('auth.signIn.signInAction')}</Text>
               )}
             </TouchableOpacity>
 
             <View style={styles.dividerRow}>
               <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>Ou continuar com</Text>
+              <Text style={styles.dividerText}>{t('auth.signIn.dividerText')}</Text>
               <View style={styles.dividerLine} />
             </View>
 
             <TouchableOpacity style={styles.googleButton} onPress={handleGooglePress} disabled={loading}>
               <AntDesign name="google" size={16} color="#FFFFFF" />
-              <Text style={styles.googleButtonText}>Continuar com Google</Text>
+              <Text style={styles.googleButtonText}>{t('auth.signIn.continueWithGoogle')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.secondaryAction} onPress={() => void handleForgotPassword()} disabled={loading}>
-              <Text style={styles.secondaryActionText}>Esqueci-me da palavra-passe</Text>
+              <Text style={styles.secondaryActionText}>{t('auth.signIn.forgotPassword')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -179,7 +183,7 @@ export default function SignInScreen() {
               onPress={() => router.push('/(auth)/sign-up' as any)}
               disabled={loading}
             >
-              <Text style={styles.switchActionText}>Nao tens conta? Criar conta</Text>
+              <Text style={styles.switchActionText}>{t('auth.signIn.createAccountPrompt')}</Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -226,7 +226,11 @@ export default function SocialScreen() {
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void refreshAll()} tintColor={palette.accent} />}
     >
       <View style={styles.headerRow}>
-        <TouchableOpacity style={styles.backButton} activeOpacity={0.86} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={styles.backButton}
+          activeOpacity={0.86}
+          onPress={() => router.replace('/(tabs)/profile' as any)}
+        >
           <Ionicons name="arrow-back" size={18} color={palette.textPrimary} />
           <Text style={styles.backButtonText}>{t('common.back')}</Text>
         </TouchableOpacity>

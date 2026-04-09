@@ -80,6 +80,7 @@ const MUSCLE_FILTER_CHIP_KEYS: readonly ExerciseLibraryMuscleFilter[] = [
   'legs',
   'shoulders',
   'arms',
+  'core',
 ];
 const EQUIPMENT_FILTER_CHIP_KEYS: readonly ExerciseLibraryEquipmentFilter[] = [
   'all',
@@ -87,6 +88,8 @@ const EQUIPMENT_FILTER_CHIP_KEYS: readonly ExerciseLibraryEquipmentFilter[] = [
   'dumbbell',
   'machine',
   'cable',
+  'bodyweight',
+  'kettlebell',
 ];
 
 function formatElapsedTime(seconds: number): string {
@@ -1101,120 +1104,126 @@ export default function ActiveWorkout() {
         <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
           <Pressable style={styles.modalDismissArea} onPress={() => setExercisePickerVisible(false)} />
 
-          <View style={[styles.modalSheet, isWeb && styles.modalSheetWeb]}>
-            <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>{t('workout.selectExercise')}</Text>
-              <TouchableOpacity
-                style={styles.modalCustomButton}
-                activeOpacity={0.88}
-                onPress={() => {
-                  setExercisePickerVisible(false);
-                  setCreateExerciseVisible(true);
-                }}
+          <View style={[styles.modalSheet, styles.pickerModalSheet, isWeb && styles.modalSheetWeb]}>
+            <SafeAreaView edges={['bottom']} style={styles.modalSheetSafeArea}>
+              <View style={styles.modalHeaderRow}>
+                <Text style={styles.modalTitle}>{t('workout.selectExercise')}</Text>
+                <TouchableOpacity
+                  style={styles.modalCustomButton}
+                  activeOpacity={0.88}
+                  onPress={() => {
+                    setExercisePickerVisible(false);
+                    setCreateExerciseVisible(true);
+                  }}
+                >
+                  <Text style={styles.modalCustomButtonText}>{t('workout.customLabel')}</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.modalHandle} />
+
+              <Text style={styles.filterChipsSectionLabel}>{t('workout.muscleGroup')}</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.filterChipsScroll}
+                contentContainerStyle={styles.filterChipsContent}
               >
-                <Text style={styles.modalCustomButtonText}>{t('workout.customLabel')}</Text>
-              </TouchableOpacity>
-            </View>
+                {MUSCLE_FILTER_CHIP_KEYS.map((filterKey) => {
+                  const isSelected = filterKey === selectedMuscleFilter;
 
-            <View style={styles.modalHandle} />
-
-            <Text style={styles.filterChipsSectionLabel}>{t('workout.muscleGroup')}</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.filterChipsScroll}
-              contentContainerStyle={styles.filterChipsContent}
-            >
-              {MUSCLE_FILTER_CHIP_KEYS.map((filterKey) => {
-                const isSelected = filterKey === selectedMuscleFilter;
-
-                return (
-                  <TouchableOpacity
-                    key={filterKey}
-                    style={[styles.filterChip, isSelected && styles.filterChipSelected]}
-                    activeOpacity={0.88}
-                    onPress={() => setSelectedMuscleFilter(filterKey)}
-                  >
-                    <Text style={[styles.filterChipText, isSelected && styles.filterChipTextSelected]}>
-                      {getMuscleFilterLabel(filterKey)}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            <Text style={styles.filterChipsSectionLabel}>{t('workout.equipment')}</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.filterChipsScroll}
-              contentContainerStyle={styles.filterChipsContent}
-            >
-              {EQUIPMENT_FILTER_CHIP_KEYS.map((filterKey) => {
-                const isSelected = filterKey === selectedEquipmentFilter;
-
-                return (
-                  <TouchableOpacity
-                    key={filterKey}
-                    style={[styles.filterChip, isSelected && styles.filterChipSelected]}
-                    activeOpacity={0.88}
-                    onPress={() => setSelectedEquipmentFilter(filterKey)}
-                  >
-                    <Text style={[styles.filterChipText, isSelected && styles.filterChipTextSelected]}>
-                      {getEquipmentFilterLabel(filterKey)}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
-              {isLoadingExercises ? (
-                <View style={styles.modalStatusContainer}>
-                  <ActivityIndicator size="small" color={palette.accent} />
-                  <Text style={styles.modalStatusText}>{t('workout.loadingExerciseCatalog')}</Text>
-                </View>
-              ) : exerciseLoadError ? (
-                <View style={styles.modalStatusContainer}>
-                  <Text style={styles.modalStatusTitle}>{t('workout.unableToLoadExercises')}</Text>
-                  <Text style={styles.modalStatusText}>{exerciseLoadError}</Text>
-                  <TouchableOpacity
-                    style={styles.modalRetryButton}
-                    onPress={() =>
-                      void loadExercises({ muscle: selectedMuscleFilter, equipment: selectedEquipmentFilter }, true)
-                    }
-                    activeOpacity={0.88}
-                  >
-                    <Text style={styles.modalRetryButtonText}>{t('common.retry')}</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : catalogExercises.length === 0 ? (
-                <View style={styles.modalStatusContainer}>
-                  <Text style={styles.modalStatusTitle}>{t('workout.noExercisesAvailable')}</Text>
-                  <Text style={styles.modalStatusText}>{t('workout.createExercisesHint')}</Text>
-                </View>
-              ) : (
-                catalogExercises.map((exercise) => (
-                  <TouchableOpacity
-                    key={exercise.id}
-                    style={styles.modalExerciseRow}
-                    activeOpacity={0.88}
-                    onPress={() => {
-                      addExercise(exercise);
-                      setExercisePickerVisible(false);
-                    }}
-                  >
-                    <View style={styles.modalExerciseTextWrap}>
-                      <Text style={styles.modalExerciseName}>{getLocalizedExerciseName(exercise, language)}</Text>
-                      <Text style={styles.modalExerciseMeta}>
-                        {getExerciseMuscleLabel(exercise)} - {getExerciseEquipmentLabel(exercise)}
+                  return (
+                    <TouchableOpacity
+                      key={filterKey}
+                      style={[styles.filterChip, isSelected && styles.filterChipSelected]}
+                      activeOpacity={0.88}
+                      onPress={() => setSelectedMuscleFilter(filterKey)}
+                    >
+                      <Text style={[styles.filterChipText, isSelected && styles.filterChipTextSelected]}>
+                        {getMuscleFilterLabel(filterKey)}
                       </Text>
-                    </View>
-                    <Ionicons name="add-circle-outline" size={22} color={palette.accent} />
-                  </TouchableOpacity>
-                ))
-              )}
-            </ScrollView>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              <Text style={styles.filterChipsSectionLabel}>{t('workout.equipment')}</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.filterChipsScroll}
+                contentContainerStyle={styles.filterChipsContent}
+              >
+                {EQUIPMENT_FILTER_CHIP_KEYS.map((filterKey) => {
+                  const isSelected = filterKey === selectedEquipmentFilter;
+
+                  return (
+                    <TouchableOpacity
+                      key={filterKey}
+                      style={[styles.filterChip, isSelected && styles.filterChipSelected]}
+                      activeOpacity={0.88}
+                      onPress={() => setSelectedEquipmentFilter(filterKey)}
+                    >
+                      <Text style={[styles.filterChipText, isSelected && styles.filterChipTextSelected]}>
+                        {getEquipmentFilterLabel(filterKey)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              <ScrollView
+                style={styles.modalList}
+                contentContainerStyle={styles.modalListContent}
+                showsVerticalScrollIndicator={false}
+              >
+                {isLoadingExercises ? (
+                  <View style={styles.modalStatusContainer}>
+                    <ActivityIndicator size="small" color={palette.accent} />
+                    <Text style={styles.modalStatusText}>{t('workout.loadingExerciseCatalog')}</Text>
+                  </View>
+                ) : exerciseLoadError ? (
+                  <View style={styles.modalStatusContainer}>
+                    <Text style={styles.modalStatusTitle}>{t('workout.unableToLoadExercises')}</Text>
+                    <Text style={styles.modalStatusText}>{exerciseLoadError}</Text>
+                    <TouchableOpacity
+                      style={styles.modalRetryButton}
+                      onPress={() =>
+                        void loadExercises({ muscle: selectedMuscleFilter, equipment: selectedEquipmentFilter }, true)
+                      }
+                      activeOpacity={0.88}
+                    >
+                      <Text style={styles.modalRetryButtonText}>{t('common.retry')}</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : catalogExercises.length === 0 ? (
+                  <View style={styles.modalStatusContainer}>
+                    <Text style={styles.modalStatusTitle}>{t('workout.noExercisesAvailable')}</Text>
+                    <Text style={styles.modalStatusText}>{t('workout.createExercisesHint')}</Text>
+                  </View>
+                ) : (
+                  catalogExercises.map((exercise) => (
+                    <TouchableOpacity
+                      key={exercise.id}
+                      style={styles.modalExerciseRow}
+                      activeOpacity={0.88}
+                      onPress={() => {
+                        addExercise(exercise);
+                        setExercisePickerVisible(false);
+                      }}
+                    >
+                      <View style={styles.modalExerciseTextWrap}>
+                        <Text style={styles.modalExerciseName}>{getLocalizedExerciseName(exercise, language)}</Text>
+                        <Text style={styles.modalExerciseMeta}>
+                          {getExerciseMuscleLabel(exercise)} - {getExerciseEquipmentLabel(exercise)}
+                        </Text>
+                      </View>
+                      <Ionicons name="add-circle-outline" size={22} color={palette.accent} />
+                    </TouchableOpacity>
+                  ))
+                )}
+              </ScrollView>
+            </SafeAreaView>
           </View>
         </View>
       </Modal>
@@ -1852,6 +1861,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 20,
   },
+  pickerModalSheet: {
+    minHeight: '62%',
+    maxHeight: '88%',
+  },
+  modalSheetSafeArea: {
+    flex: 1,
+    minHeight: 0,
+  },
   modalSheetWeb: {
     width: 393,
     maxWidth: '100%',
@@ -2047,7 +2064,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   modalList: {
-    flexGrow: 0,
+    flex: 1,
+    minHeight: 180,
+    marginTop: 2,
+  },
+  modalListContent: {
+    paddingBottom: 6,
   },
   filterChipsSectionLabel: {
     color: '#94A3B8',
@@ -2058,12 +2080,15 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   filterChipsScroll: {
-    maxHeight: 44,
+    minHeight: 40,
+    maxHeight: 52,
     marginBottom: 10,
   },
   filterChipsContent: {
     columnGap: 8,
     paddingRight: 4,
+    paddingVertical: 2,
+    alignItems: 'center',
   },
   filterChip: {
     minHeight: 34,

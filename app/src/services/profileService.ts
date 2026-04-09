@@ -23,6 +23,14 @@ export type UploadAvatarInput = {
   base64Data?: string | null;
 };
 
+type AuthUserMetadata = {
+  username?: unknown;
+  full_name?: unknown;
+  display_name?: unknown;
+  bio?: unknown;
+  [key: string]: unknown;
+};
+
 export function withAvatarCacheBuster(url: string | null | undefined, versionToken: number): string | null {
   if (!url) {
     return null;
@@ -81,15 +89,59 @@ function buildBaseUsername(user: User): string {
 }
 
 function buildCreateProfileRow(user: User, username: string): TablesInsert<'profiles'> {
-  const metadata = (user.user_metadata ?? {}) as { full_name?: string };
+  const metadata = (user.user_metadata ?? {}) as { full_name?: string; display_name?: string };
+  const fullNameFromMetadata = metadata.full_name ?? metadata.display_name ?? null;
 
   return {
     id: user.id,
     username,
-    full_name: normalizeOptionalText(metadata.full_name, INPUT_LIMITS.nameMax),
+    full_name: normalizeOptionalText(fullNameFromMetadata, INPUT_LIMITS.nameMax),
     avatar_url: null,
     bio: null,
   };
+}
+
+function normalizeMetadataString(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function hasMetadataMismatch(currentValue: unknown, nextValue: string | null): boolean {
+  return normalizeMetadataString(currentValue) !== nextValue;
+}
+
+async function syncAuthMetadataFromProfile(user: User, profile: ProfileRow): Promise<void> {
+  const currentMetadata = (user.user_metadata ?? {}) as AuthUserMetadata;
+  const normalizedFullName = normalizeOptionalText(profile.full_name, INPUT_LIMITS.nameMax);
+  const normalizedBio = normalizeOptionalText(profile.bio, INPUT_LIMITS.bioMax);
+
+  const needsSync =
+    hasMetadataMismatch(currentMetadata.username, profile.username) ||
+    hasMetadataMismatch(currentMetadata.full_name, normalizedFullName) ||
+    hasMetadataMismatch(currentMetadata.display_name, normalizedFullName) ||
+    hasMetadataMismatch(currentMetadata.bio, normalizedBio);
+
+  if (!needsSync) {
+    return;
+  }
+
+  const { error } = await supabase.auth.updateUser({
+    data: {
+      ...currentMetadata,
+      username: profile.username,
+      full_name: normalizedFullName,
+      display_name: normalizedFullName,
+      bio: normalizedBio,
+    },
+  });
+
+  if (error) {
+    throw new Error(`Unable to sync auth metadata: ${error.message}`);
+  }
 }
 
 function inferExtension(fileUri: string, fileName?: string): string {
@@ -158,6 +210,12 @@ async function createProfileForExistingUser(user: User): Promise<ProfileRow> {
       .single();
 
     if (!error && data) {
+      try {
+        await syncAuthMetadataFromProfile(user, data);
+      } catch (syncError) {
+        console.warn('[profileService] Metadata sync skipped after profile bootstrap', syncError);
+      }
+
       return data;
     }
 
@@ -185,6 +243,12 @@ export async function getProfile(): Promise<ProfileRow> {
   }
 
   if (data) {
+    try {
+      await syncAuthMetadataFromProfile(user, data);
+    } catch (syncError) {
+      console.warn('[profileService] Metadata sync skipped during profile load', syncError);
+    }
+
     return data;
   }
 
@@ -252,6 +316,12 @@ export async function updateProfile(input: UpdateProfileInput): Promise<ProfileR
 
   if (error || !data) {
     throw new Error(`Unable to update profile: ${error?.message ?? 'Unknown error'}`);
+  }
+
+  try {
+    await syncAuthMetadataFromProfile(user, data);
+  } catch (syncError) {
+    console.warn('[profileService] Metadata sync skipped after profile update', syncError);
   }
 
   return data;

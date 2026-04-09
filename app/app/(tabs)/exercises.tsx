@@ -15,25 +15,31 @@ import {
   View,
 } from 'react-native';
 import Animated, { FadeInDown, FadeInUp, LinearTransition } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/theme';
+import {
+  EXERCISE_EQUIPMENT_OPTIONS,
+  EXERCISE_EQUIPMENT_TRANSLATION_KEY,
+  EXERCISE_MUSCLE_OPTIONS,
+  EXERCISE_MUSCLE_TRANSLATION_KEY,
+  type ExerciseEquipmentKey,
+  type ExerciseMuscleKey,
+  getEquipmentTranslationKey,
+  getMuscleTranslationKey,
+} from '@/constants/exerciseCatalog';
+import { usePreferences } from '@/context/PreferencesContext';
 import type { Tables } from '@/types/database';
 import { createExercise, getErrorMessage, getExercisesCatalog } from '@/services/workoutService';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
+import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 
 type ExerciseRow = Tables<'exercises'>;
 const palette = Colors.dark;
 const cardLayoutTransition = LinearTransition.springify().damping(16).stiffness(180);
 
-const MUSCLE_GROUPS = [
-  { id: 'Peito', label: 'Peito', color: '#EF4444' },
-  { id: 'Costas', label: 'Costas', color: '#3B82F6' },
-  { id: 'Pernas', label: 'Pernas', color: '#10B981' },
-  { id: 'Braços', label: 'Braços', color: '#F59E0B' },
-  { id: 'Ombros', label: 'Ombros', color: '#8B5CF6' },
-  { id: 'Core', label: 'Core', color: '#EC4899' },
-];
-
 export default function ExercisesScreen() {
+  const { t } = useTranslation();
+  const { language } = usePreferences();
   const isWeb = Platform.OS === 'web';
   const [exercises, setExercises] = useState<ExerciseRow[]>([]);
   const [query, setQuery] = useState('');
@@ -42,8 +48,8 @@ export default function ExercisesScreen() {
   const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
   const [isCreatingExercise, setIsCreatingExercise] = useState(false);
   const [exerciseNameInput, setExerciseNameInput] = useState('');
-  const [muscleGroupInput, setMuscleGroupInput] = useState('');
-  const [equipmentInput, setEquipmentInput] = useState('');
+  const [selectedMuscleKey, setSelectedMuscleKey] = useState<ExerciseMuscleKey | null>(null);
+  const [selectedEquipmentKey, setSelectedEquipmentKey] = useState<ExerciseEquipmentKey | null>(null);
   const [animationEpoch, setAnimationEpoch] = useState(0);
 
   useFocusEffect(
@@ -75,17 +81,19 @@ export default function ExercisesScreen() {
       maxLength: INPUT_LIMITS.nameMax,
       allowEmpty: false,
     });
-    const normalizedMuscleGroup = sanitizeText(muscleGroupInput, {
-      maxLength: INPUT_LIMITS.nameMax,
-      allowEmpty: true,
-    });
-    const normalizedEquipment = sanitizeText(equipmentInput, {
-      maxLength: INPUT_LIMITS.nameMax,
-      allowEmpty: true,
-    });
 
     if (!normalizedName) {
-      Alert.alert('Validation', 'Exercise name is required.');
+      Alert.alert(t('validation.title'), t('validation.exerciseNameRequired'));
+      return;
+    }
+
+    if (!selectedMuscleKey) {
+      Alert.alert(t('validation.title'), t('validation.selectMuscleGroup'));
+      return;
+    }
+
+    if (!selectedEquipmentKey) {
+      Alert.alert(t('validation.title'), t('validation.selectEquipment'));
       return;
     }
 
@@ -94,17 +102,18 @@ export default function ExercisesScreen() {
     try {
       await createExercise({
         name: normalizedName,
-        muscleGroup: normalizedMuscleGroup,
-        equipment: normalizedEquipment,
+        muscleGroup: selectedMuscleKey,
+        equipment: selectedEquipmentKey,
       });
 
       setExerciseNameInput('');
-      setMuscleGroupInput('');
-      setEquipmentInput('');
+      setSelectedMuscleKey(null);
+      setSelectedEquipmentKey(null);
       setIsCreateModalVisible(false);
       await loadExercises();
+      Alert.alert(t('exercise.success.createdTitle'), t('exercise.success.createdDescription'));
     } catch (error) {
-      Alert.alert('Unable to create exercise', getErrorMessage(error));
+      Alert.alert(t('exercise.errors.create'), getErrorMessage(error));
     } finally {
       setIsCreatingExercise(false);
     }
@@ -113,16 +122,27 @@ export default function ExercisesScreen() {
   const groupedExercises = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
+    const getDisplayName = (exercise: ExerciseRow) => getLocalizedExerciseName(exercise, language);
+    const getDisplayMuscle = (exercise: ExerciseRow) => {
+      const translatedKey = getMuscleTranslationKey(exercise.muscle_group);
+
+      if (translatedKey) {
+        return t(translatedKey);
+      }
+
+      return getLocalizedExerciseMuscle(exercise, language) ?? t('exercise.general');
+    };
+
     const filtered = normalizedQuery
       ? exercises.filter((exercise) => {
-          const byName = exercise.name.toLowerCase().includes(normalizedQuery);
-          const byMuscle = (exercise.muscle_group ?? '').toLowerCase().includes(normalizedQuery);
+          const byName = getDisplayName(exercise).toLowerCase().includes(normalizedQuery);
+          const byMuscle = getDisplayMuscle(exercise).toLowerCase().includes(normalizedQuery);
           return byName || byMuscle;
         })
       : exercises;
 
     const groups = filtered.reduce<Record<string, ExerciseRow[]>>((acc, exercise) => {
-      const groupKey = exercise.muscle_group ?? 'Other';
+      const groupKey = getDisplayMuscle(exercise);
       if (!acc[groupKey]) {
         acc[groupKey] = [];
       }
@@ -131,7 +151,7 @@ export default function ExercisesScreen() {
     }, {});
 
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
-  }, [query, exercises]);
+  }, [language, query, exercises, t]);
 
   const ModalWrapper = isWeb ? View : Modal;
   const modalProps = isWeb 
@@ -142,6 +162,16 @@ export default function ExercisesScreen() {
         animationType: 'slide' as const,
         onRequestClose: () => setIsCreateModalVisible(false),
       };
+
+  const getExerciseEquipmentLabel = (exercise: ExerciseRow) => {
+    const equipmentKey = getEquipmentTranslationKey(exercise.equipment);
+    return equipmentKey ? t(equipmentKey) : exercise.equipment ?? t('exercise.equipment.bodyweight');
+  };
+
+  const getExerciseMuscleLabel = (exercise: ExerciseRow) => {
+    const muscleKey = getMuscleTranslationKey(exercise.muscle_group);
+    return muscleKey ? t(muscleKey) : getLocalizedExerciseMuscle(exercise, language) ?? t('exercise.general');
+  };
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -156,7 +186,7 @@ export default function ExercisesScreen() {
             <TextInput
               value={query}
               onChangeText={setQuery}
-              placeholder="Search exercises"
+              placeholder={t('exercise.searchPlaceholder')}
               placeholderTextColor={palette.textMuted}
               style={styles.searchInput}
               autoCorrect={false}
@@ -165,7 +195,8 @@ export default function ExercisesScreen() {
           </View>
 
           <TouchableOpacity style={styles.customButton} onPress={() => setIsCreateModalVisible(true)} activeOpacity={0.88}>
-            <Text style={styles.customButtonText}>+ Custom</Text>
+            <Ionicons name="add-circle-outline" size={16} color={palette.accent} />
+            <Text style={styles.customButtonText}>{t('exercise.createTrigger')}</Text>
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -173,20 +204,20 @@ export default function ExercisesScreen() {
       {isLoading ? (
         <View style={styles.statusContainer}>
           <ActivityIndicator size="small" color={palette.accent} />
-          <Text style={styles.statusText}>Loading exercises...</Text>
+          <Text style={styles.statusText}>{t('exercise.loadingCatalog')}</Text>
         </View>
       ) : errorMessage ? (
         <View style={styles.statusContainer}>
-          <Text style={styles.statusTitle}>Unable to load exercises</Text>
+          <Text style={styles.statusTitle}>{t('exercise.errors.loadCatalog')}</Text>
           <Text style={styles.statusText}>{errorMessage}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={() => void loadExercises()} activeOpacity={0.88}>
-            <Text style={styles.retryButtonText}>Retry</Text>
+            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
       ) : groupedExercises.length === 0 ? (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyTitle}>No exercises found</Text>
-          <Text style={styles.emptySubtitle}>Try another keyword.</Text>
+          <Text style={styles.emptyTitle}>{t('exercise.emptySearchTitle')}</Text>
+          <Text style={styles.emptySubtitle}>{t('exercise.emptySearchSubtitle')}</Text>
         </View>
       ) : (
         groupedExercises.map(([muscle, groupedItems], groupIndex) => (
@@ -205,10 +236,10 @@ export default function ExercisesScreen() {
                 >
                   <View style={styles.exerciseRow}>
                     <View style={styles.exerciseTextWrap}>
-                      <Text style={styles.exerciseName}>{exercise.name}</Text>
-                      <Text style={styles.exerciseMeta}>{exercise.equipment ?? 'Bodyweight'}</Text>
+                      <Text style={styles.exerciseName}>{getLocalizedExerciseName(exercise, language)}</Text>
+                      <Text style={styles.exerciseMeta}>{getExerciseEquipmentLabel(exercise)}</Text>
                     </View>
-                    <Text style={styles.exerciseMuscle}>{exercise.muscle_group ?? 'General'}</Text>
+                    <Text style={styles.exerciseMuscle}>{getExerciseMuscleLabel(exercise)}</Text>
                   </View>
                 </Animated.View>
               ))}
@@ -224,46 +255,53 @@ export default function ExercisesScreen() {
 
           <View style={[styles.modalSheet, isWeb && styles.modalSheetWeb]}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Create Exercise</Text>
+            <Text style={styles.modalTitle}>{t('workout.createExercise')}</Text>
 
             <TextInput
               value={exerciseNameInput}
               onChangeText={(value) => setExerciseNameInput(value.substring(0, INPUT_LIMITS.nameMax))}
-              placeholder="Name"
+              placeholder={t('workout.name')}
               placeholderTextColor={palette.textMuted}
               style={styles.modalInput}
               autoCapitalize="words"
               maxLength={INPUT_LIMITS.nameMax}
             />
-            <Text style={styles.modalSectionTitle}>Grupo Muscular</Text>
+            <Text style={styles.modalSectionTitle}>{t('workout.muscleGroup')}</Text>
             <View style={styles.muscleGrid}>
-              {MUSCLE_GROUPS.map((mg) => {
-                const isSelected = muscleGroupInput === mg.id;
+              {EXERCISE_MUSCLE_OPTIONS.map((muscleKey) => {
+                const isSelected = selectedMuscleKey === muscleKey;
                 return (
                   <TouchableOpacity
-                    key={mg.id}
-                    style={[
-                      styles.muscleChip, 
-                      isSelected && { borderColor: mg.color, backgroundColor: `${mg.color}15` }
-                    ]}
-                    onPress={() => setMuscleGroupInput(mg.id)}
+                    key={muscleKey}
+                    style={[styles.muscleChip, isSelected && styles.muscleChipSelected]}
+                    onPress={() => setSelectedMuscleKey(muscleKey)}
                     activeOpacity={0.8}
                   >
-                    <View style={[styles.muscleColorDot, { backgroundColor: mg.color }]} />
-                    <Text style={[styles.muscleChipText, isSelected && { color: mg.color, fontWeight: '700' }]}>{mg.label}</Text>
+                    <Text style={[styles.muscleChipText, isSelected && styles.muscleChipTextSelected]}>
+                      {t(EXERCISE_MUSCLE_TRANSLATION_KEY[muscleKey])}
+                    </Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
-            <TextInput
-              value={equipmentInput}
-              onChangeText={(value) => setEquipmentInput(value.substring(0, INPUT_LIMITS.nameMax))}
-              placeholder="Equipment"
-              placeholderTextColor={palette.textMuted}
-              style={styles.modalInput}
-              autoCapitalize="words"
-              maxLength={INPUT_LIMITS.nameMax}
-            />
+            <Text style={styles.modalSectionTitle}>{t('workout.equipment')}</Text>
+            <View style={styles.muscleGrid}>
+              {EXERCISE_EQUIPMENT_OPTIONS.map((equipmentKey) => {
+                const isSelected = selectedEquipmentKey === equipmentKey;
+                return (
+                  <TouchableOpacity
+                    key={equipmentKey}
+                    style={[styles.muscleChip, isSelected && styles.muscleChipSelected]}
+                    onPress={() => setSelectedEquipmentKey(equipmentKey)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.muscleChipText, isSelected && styles.muscleChipTextSelected]}>
+                      {t(EXERCISE_EQUIPMENT_TRANSLATION_KEY[equipmentKey])}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
             <View style={styles.modalButtonRow}>
               <TouchableOpacity
@@ -271,7 +309,7 @@ export default function ExercisesScreen() {
                 onPress={() => setIsCreateModalVisible(false)}
                 activeOpacity={0.88}
               >
-                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+                <Text style={styles.modalCancelButtonText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -283,7 +321,7 @@ export default function ExercisesScreen() {
                 {isCreatingExercise ? (
                   <ActivityIndicator size="small" color={palette.textPrimary} />
                 ) : (
-                  <Text style={styles.modalCreateButtonText}>Create</Text>
+                  <Text style={styles.modalCreateButtonText}>{t('common.create')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -325,16 +363,18 @@ const styles = StyleSheet.create({
   customButton: {
     minHeight: 48,
     borderRadius: 16,
-    backgroundColor: palette.accent,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#0D1624',
     paddingHorizontal: 14,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    columnGap: 4,
+    columnGap: 6,
   },
   customButtonText: {
-    color: palette.textPrimary,
-    fontSize: 14,
+    color: '#DCE8FF',
+    fontSize: 13,
     fontWeight: '700',
   },
   searchInput: {
@@ -516,6 +556,10 @@ const styles = StyleSheet.create({
     borderColor: palette.inputBorder,
     backgroundColor: palette.inputBackground,
   },
+  muscleChipSelected: {
+    borderColor: palette.accent,
+    backgroundColor: `${palette.accent}1F`,
+  },
   muscleColorDot: {
     width: 8,
     height: 8,
@@ -526,6 +570,10 @@ const styles = StyleSheet.create({
     color: palette.textSecondary,
     fontSize: 14,
     fontWeight: '600',
+  },
+  muscleChipTextSelected: {
+    color: palette.accent,
+    fontWeight: '700',
   },
   modalInput: {
     backgroundColor: palette.inputBackground,

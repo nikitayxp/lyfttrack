@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { getProfile, updateProfile } from '@/services/profileService';
 import { supabase } from '@/services/supabase';
@@ -29,11 +30,13 @@ function toErrorMessage(error: unknown): string {
 }
 
 export default function EditProfileScreen() {
+  const { t } = useTranslation();
   const [usernameInput, setUsernameInput] = useState('');
   const [fullNameInput, setFullNameInput] = useState('');
   const [bioInput, setBioInput] = useState('');
   const [currentEmail, setCurrentEmail] = useState('');
   const [pendingEmailInput, setPendingEmailInput] = useState('');
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -80,6 +83,8 @@ export default function EditProfileScreen() {
       return;
     }
 
+    setSaveSuccessMessage(null);
+
     const normalizedUsername = sanitizeText(usernameInput, {
       maxLength: INPUT_LIMITS.nameMax,
       allowEmpty: false,
@@ -94,7 +99,7 @@ export default function EditProfileScreen() {
     });
 
     if (!normalizedUsername) {
-      Alert.alert('Validacao', 'O nome de utilizador e obrigatorio.');
+      Alert.alert(t('validation.title'), t('validation.usernameRequired'));
       return;
     }
 
@@ -107,18 +112,16 @@ export default function EditProfileScreen() {
         bio: normalizedBio,
       });
 
-      Alert.alert('Perfil atualizado', 'As alteracoes foram guardadas com sucesso.', [
-        {
-          text: 'OK',
-          onPress: () => router.back(),
-        },
-      ]);
+      const successMessage = t('profileEdit.alerts.updatedDescription');
+      setSaveSuccessMessage(successMessage);
+      Alert.alert(t('profileEdit.alerts.updatedTitle'), successMessage);
     } catch (error) {
-      Alert.alert('Nao foi possivel atualizar o perfil', toErrorMessage(error));
+      setSaveSuccessMessage(null);
+      Alert.alert(t('profileEdit.alerts.updateProfileError'), toErrorMessage(error));
     } finally {
       setIsSaving(false);
     }
-  }, [bioInput, fullNameInput, isSaving, usernameInput]);
+  }, [bioInput, fullNameInput, isSaving, t, usernameInput]);
 
   const handleUpdateEmail = useCallback(async () => {
     if (isUpdatingEmail) {
@@ -128,12 +131,12 @@ export default function EditProfileScreen() {
     const normalizedEmail = pendingEmailInput.trim().toLowerCase();
 
     if (!normalizedEmail) {
-      Alert.alert('Validacao', 'O email e obrigatorio.');
+      Alert.alert(t('validation.title'), t('validation.emailRequired'));
       return;
     }
 
     if (normalizedEmail === currentEmail.trim().toLowerCase()) {
-      Alert.alert('Sem alteracoes', 'Usa um email diferente para pedir atualizacao.');
+      Alert.alert(t('profileEdit.alerts.noEmailChangeTitle'), t('profileEdit.alerts.noEmailChangeDescription'));
       return;
     }
 
@@ -148,16 +151,13 @@ export default function EditProfileScreen() {
         throw error;
       }
 
-      Alert.alert(
-        'Atualizacao de email pedida',
-        'Confirma o novo email na tua caixa de entrada antes de ficar ativo.'
-      );
+      Alert.alert(t('profileEdit.alerts.emailUpdateRequestedTitle'), t('profileEdit.alerts.emailUpdateRequestedDescription'));
     } catch (error) {
-      Alert.alert('Nao foi possivel atualizar o email', toErrorMessage(error));
+      Alert.alert(t('profileEdit.alerts.updateEmailError'), toErrorMessage(error));
     } finally {
       setIsUpdatingEmail(false);
     }
-  }, [currentEmail, isUpdatingEmail, pendingEmailInput]);
+  }, [currentEmail, isUpdatingEmail, pendingEmailInput, t]);
 
   const handlePasswordReset = useCallback(async () => {
     if (isSendingPasswordReset) {
@@ -167,7 +167,7 @@ export default function EditProfileScreen() {
     const targetEmail = currentEmail.trim() || pendingEmailInput.trim();
 
     if (!targetEmail) {
-      Alert.alert('Email em falta', 'Define primeiro um email para receber instrucoes de recuperacao.');
+      Alert.alert(t('profileEdit.alerts.passwordResetMissingEmailTitle'), t('profileEdit.alerts.passwordResetMissingEmailDescription'));
       return;
     }
 
@@ -180,22 +180,22 @@ export default function EditProfileScreen() {
         throw error;
       }
 
-      Alert.alert('Email enviado', `As instrucoes de recuperacao foram enviadas para ${targetEmail}.`);
+      Alert.alert(t('profileEdit.alerts.passwordResetSentTitle'), t('profileEdit.alerts.passwordResetSentDescription', { email: targetEmail }));
     } catch (error) {
-      Alert.alert('Nao foi possivel enviar o email de recuperacao', toErrorMessage(error));
+      Alert.alert(t('profileEdit.alerts.passwordResetError'), toErrorMessage(error));
     } finally {
       setIsSendingPasswordReset(false);
     }
-  }, [currentEmail, isSendingPasswordReset, pendingEmailInput]);
+  }, [currentEmail, isSendingPasswordReset, pendingEmailInput, t]);
 
   const handleLogout = useCallback(() => {
     Alert.alert(
-      'Terminar Sessão',
-      'Tens a certeza que queres sair? Terás de iniciar sessão novamente.',
+      t('profileEdit.alerts.logoutConfirmTitle'),
+      t('profileEdit.alerts.logoutConfirmDescription'),
       [
-        { text: 'Cancelar', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Terminar Sessão',
+          text: t('profileEdit.logoutAction'),
           style: 'destructive',
           onPress: async () => {
             setIsLoggingOut(true);
@@ -203,7 +203,7 @@ export default function EditProfileScreen() {
               await supabase.auth.signOut();
               router.replace('/' as any);
             } catch (error) {
-              Alert.alert('Erro ao terminar sessão', toErrorMessage(error));
+              Alert.alert(t('profileEdit.alerts.logoutError'), toErrorMessage(error));
             } finally {
               setIsLoggingOut(false);
             }
@@ -211,7 +211,7 @@ export default function EditProfileScreen() {
         },
       ]
     );
-  }, []);
+  }, [t]);
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -219,30 +219,35 @@ export default function EditProfileScreen() {
         <View style={styles.headerRow}>
           <TouchableOpacity style={styles.backButton} activeOpacity={0.88} onPress={() => router.back()}>
             <Ionicons name="chevron-back" size={18} color={palette.textPrimary} />
-            <Text style={styles.backButtonText}>Voltar</Text>
+            <Text style={styles.backButtonText}>{t('profileEdit.back')}</Text>
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.title}>Editar Perfil</Text>
-        <Text style={styles.subtitle}>Atualiza os teus dados publicos e preferencias da conta.</Text>
+        <Text style={styles.title}>{t('profileEdit.title')}</Text>
+        <Text style={styles.subtitle}>{t('profileEdit.subtitle')}</Text>
 
         {isLoading ? (
           <View style={styles.statusCard}>
             <ActivityIndicator size="small" color={palette.accent} />
-            <Text style={styles.statusText}>A carregar perfil...</Text>
+            <Text style={styles.statusText}>{t('profileEdit.loadingProfile')}</Text>
           </View>
         ) : errorMessage ? (
           <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Nao foi possivel carregar o perfil</Text>
+            <Text style={styles.errorTitle}>{t('profileEdit.loadProfileErrorTitle')}</Text>
             <Text style={styles.errorText}>{errorMessage}</Text>
             <TouchableOpacity style={styles.retryButton} activeOpacity={0.88} onPress={() => void loadProfile()}>
-              <Text style={styles.retryButtonText}>Tentar novamente</Text>
+              <Text style={styles.retryButtonText}>{t('profileEdit.retry')}</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <>
             <View style={styles.formCard}>
-              <Text style={styles.inputLabel}>Nome de utilizador</Text>
+                            {saveSuccessMessage ? (
+                              <View style={styles.successBanner}>
+                                <Text style={styles.successBannerText}>{saveSuccessMessage}</Text>
+                              </View>
+                            ) : null}
+              <Text style={styles.inputLabel}>{t('profileEdit.usernameLabel')}</Text>
               <TextInput
                 value={usernameInput}
                 onChangeText={(value) => setUsernameInput(value.substring(0, INPUT_LIMITS.nameMax))}
@@ -254,23 +259,23 @@ export default function EditProfileScreen() {
                 maxLength={INPUT_LIMITS.nameMax}
               />
 
-              <Text style={styles.inputLabel}>Nome completo</Text>
+              <Text style={styles.inputLabel}>{t('profileEdit.fullNameLabel')}</Text>
               <TextInput
                 value={fullNameInput}
                 onChangeText={(value) => setFullNameInput(value.substring(0, INPUT_LIMITS.nameMax))}
                 style={styles.input}
-                placeholder="O teu nome completo"
+                placeholder={t('profileEdit.placeholders.fullName')}
                 placeholderTextColor={palette.textMuted}
                 autoCapitalize="words"
                 maxLength={INPUT_LIMITS.nameMax}
               />
 
-              <Text style={styles.inputLabel}>Biografia</Text>
+              <Text style={styles.inputLabel}>{t('profileEdit.bioLabel')}</Text>
               <TextInput
                 value={bioInput}
                 onChangeText={(value) => setBioInput(value.substring(0, INPUT_LIMITS.bioMax))}
                 style={[styles.input, styles.bioInput]}
-                placeholder="Partilha o teu foco de treino"
+                placeholder={t('profileEdit.placeholders.bio')}
                 placeholderTextColor={palette.textMuted}
                 multiline
                 textAlignVertical="top"
@@ -286,21 +291,21 @@ export default function EditProfileScreen() {
                 {isSaving ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.saveButtonText}>Guardar alteracoes</Text>
+                  <Text style={styles.saveButtonText}>{t('profileEdit.saveChanges')}</Text>
                 )}
               </TouchableOpacity>
             </View>
 
             <View style={styles.accountCard}>
-              <Text style={styles.accountTitle}>Seguranca da conta</Text>
-              <Text style={styles.accountHint}>Email atual: {currentEmail || 'Indisponivel'}</Text>
+              <Text style={styles.accountTitle}>{t('profileEdit.accountSecurity')}</Text>
+              <Text style={styles.accountHint}>{`${t('profileEdit.currentEmail')}: ${currentEmail || t('profileEdit.unavailable')}`}</Text>
 
-              <Text style={styles.inputLabel}>Novo email</Text>
+              <Text style={styles.inputLabel}>{t('profileEdit.newEmailLabel')}</Text>
               <TextInput
                 value={pendingEmailInput}
                 onChangeText={setPendingEmailInput}
                 style={styles.input}
-                placeholder="you@example.com"
+                placeholder={t('profileEdit.placeholders.email')}
                 placeholderTextColor={palette.textMuted}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -318,7 +323,7 @@ export default function EditProfileScreen() {
                 ) : (
                   <>
                     <Ionicons name="mail-outline" size={16} color="#FFFFFF" />
-                    <Text style={styles.accountPrimaryButtonText}>Atualizar email</Text>
+                    <Text style={styles.accountPrimaryButtonText}>{t('profileEdit.updateEmail')}</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -334,7 +339,7 @@ export default function EditProfileScreen() {
                 ) : (
                   <>
                     <Ionicons name="key-outline" size={16} color="#FFFFFF" />
-                    <Text style={styles.accountSecondaryButtonText}>Enviar recuperacao de palavra-passe</Text>
+                    <Text style={styles.accountSecondaryButtonText}>{t('profileEdit.sendPasswordReset')}</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -352,7 +357,7 @@ export default function EditProfileScreen() {
                 ) : (
                   <>
                     <Ionicons name="log-out-outline" size={18} color="#FECACA" />
-                    <Text style={styles.logoutButtonText}>Terminar Sessão</Text>
+                    <Text style={styles.logoutButtonText}>{t('profileEdit.logoutAction')}</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -464,6 +469,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#111111',
     paddingHorizontal: 12,
     paddingVertical: 12,
+  },
+  successBanner: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#10B98155',
+    backgroundColor: '#10B98120',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 10,
+  },
+  successBannerText: {
+    color: '#6EE7B7',
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 18,
   },
   inputLabel: {
     color: palette.textSecondary,

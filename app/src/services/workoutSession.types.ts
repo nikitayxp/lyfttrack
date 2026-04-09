@@ -19,6 +19,7 @@ export type CreateWorkoutWithSetsInput = {
   name: string;
   notes?: string | null;
   templateId?: string | null;
+  exerciseRestSecondsByExerciseId?: Record<string, number | null | undefined>;
   startTime: string;
   endTime: string;
   setDrafts: WorkoutSetDraft[];
@@ -33,6 +34,7 @@ export type FinishWorkoutInput = {
   name: string;
   notes?: string | null;
   templateId?: string | null;
+  exerciseRestSecondsByExerciseId?: Record<string, number | null | undefined>;
   startTime: string;
   setDrafts: WorkoutSetProgressDraft[];
 };

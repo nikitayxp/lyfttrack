@@ -17,34 +17,45 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/theme';
+import {
+  EXERCISE_EQUIPMENT_OPTIONS,
+  EXERCISE_EQUIPMENT_TRANSLATION_KEY,
+  EXERCISE_MUSCLE_OPTIONS,
+  EXERCISE_MUSCLE_TRANSLATION_KEY,
+  type ExerciseEquipmentKey,
+  type ExerciseMuscleKey,
+  getEquipmentTranslationKey,
+  getMuscleTranslationKey,
+} from '@/constants/exerciseCatalog';
+import { usePreferences } from '@/context/PreferencesContext';
 import {
   createExercise,
   type ExerciseCatalogFilters,
   type ExerciseLibraryEquipmentFilter,
   type ExerciseLibraryMuscleFilter,
-  getAuthenticatedUserOrThrow,
   getErrorMessage,
   getExercisesCatalog,
+  getLastExerciseRestTimes,
   getRoutineById,
 } from '@/services/workoutService';
 import { finishWorkout } from '@/services/sessionRepository';
 import { getTemplateById } from '@/services/templateService';
 import { getExerciseProgress, type ExerciseProgressPoint } from '@/services/statsService';
-import { useWorkoutTimer } from '@/hooks/useWorkoutTimer';
 import {
   WorkoutSaveValidationError,
   type FinishWorkoutResult,
   type WorkoutSetProgressDraft,
 } from '@/services/workoutSession.types';
 import {
-  useActiveWorkoutState,
   createExerciseBlock,
   normalizeSetTypeOption,
   getCompletedExerciseNames,
   type ActiveExercise,
   type ExerciseRow,
 } from '@/hooks/useActiveWorkoutState';
+import { useWorkoutContext } from '@/context/WorkoutContext';
 
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -55,31 +66,28 @@ import {
   toSafeInteger,
   toSafeNumber,
 } from '@/utils/inputValidation';
+import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 
 const palette = Colors.dark;
-const DEFAULT_REST_SECONDS = 90;
 const DESKTOP_WEB_MIN_WIDTH = 768;
 const LIVE_CHART_COLOR = '#3B82F6';
 const ROOT_SCREEN_BG = palette.bgPrimary;
-const MUSCLE_FILTER_CHIP_OPTIONS: readonly { key: ExerciseLibraryMuscleFilter; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'chest', label: 'Chest' },
-  { key: 'back', label: 'Back' },
-  { key: 'legs', label: 'Legs' },
-  { key: 'shoulders', label: 'Shoulders' },
-  { key: 'arms', label: 'Arms' },
+const LIVE_CHART_DEFAULT_WINDOW = 12;
+const MUSCLE_FILTER_CHIP_KEYS: readonly ExerciseLibraryMuscleFilter[] = [
+  'all',
+  'chest',
+  'back',
+  'legs',
+  'shoulders',
+  'arms',
 ];
-const EQUIPMENT_FILTER_CHIP_OPTIONS: readonly { key: ExerciseLibraryEquipmentFilter; label: string }[] = [
-  { key: 'all', label: 'All Equipment' },
-  { key: 'barbell', label: 'Barbell' },
-  { key: 'dumbbell', label: 'Dumbbell' },
-  { key: 'machine', label: 'Machine' },
-  { key: 'cable', label: 'Cable' },
+const EQUIPMENT_FILTER_CHIP_KEYS: readonly ExerciseLibraryEquipmentFilter[] = [
+  'all',
+  'barbell',
+  'dumbbell',
+  'machine',
+  'cable',
 ];
-
-type ExerciseStopwatchEntry = {
-  startedAtMs: number;
-};
 
 function formatElapsedTime(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
@@ -127,7 +135,39 @@ function buildCatalogCacheKey(filters: ExerciseCatalogFilters): string {
   return `${muscle}::${equipment}`;
 }
 
+function formatCompactAxisNumber(value: number | string): string {
+  const parsedValue =
+    typeof value === 'number'
+      ? value
+      : Number(String(value).replace(/[^0-9+-.]/g, ''));
+  const safeValue = Number.isFinite(parsedValue) ? Math.max(0, parsedValue) : 0;
+
+  if (safeValue >= 1_000_000) {
+    const scaled = safeValue / 1_000_000;
+    const rounded = scaled >= 100 ? scaled.toFixed(0) : scaled.toFixed(1);
+    return `${rounded.replace(/\.0$/, '')}m`;
+  }
+
+  if (safeValue >= 1_000) {
+    const scaled = safeValue / 1_000;
+    const rounded = scaled >= 100 ? scaled.toFixed(0) : scaled.toFixed(1);
+    return `${rounded.replace(/\.0$/, '')}k`;
+  }
+
+  if (safeValue >= 100) {
+    return `${Math.round(safeValue)}`;
+  }
+
+  return Number.isInteger(safeValue) ? `${safeValue}` : safeValue.toFixed(1);
+}
+
+function formatVolumeAxisLabel(value: number | string): string {
+  return `${formatCompactAxisNumber(value)} kg`;
+}
+
 export default function ActiveWorkout() {
+  const { t } = useTranslation();
+  const { language } = usePreferences();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
@@ -162,18 +202,9 @@ export default function ActiveWorkout() {
     workoutStartedAtMs,
     elapsedSeconds,
     safeDeactivateKeepAwake,
-  } = useWorkoutTimer();
-  const workoutStartedAt = useMemo(() => new Date(workoutStartedAtMs).toISOString(), [workoutStartedAtMs]);
-
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-
-  useEffect(() => {
-    getAuthenticatedUserOrThrow()
-      .then((user) => setCurrentUserId(user.id))
-      .catch(() => setCurrentUserId(null));
-  }, []);
-
-  const {
+    ensureWorkoutStarted,
+    activeTemplateId,
+    setActiveTemplateId,
     activeExercises,
     activeExercisesRef,
     setActiveExercisesWithRef,
@@ -187,11 +218,13 @@ export default function ActiveWorkout() {
     clearDraft,
     acceptRecoveredDraft,
     discardRecoveredDraft,
-  } = useActiveWorkoutState({
-    userId: currentUserId ?? undefined,
-    startTime: workoutStartedAt,
-    templateId: routeTemplateId ?? null,
-  });
+    isExerciseStopwatchRunning,
+    getExerciseStopwatchSeconds,
+    getExerciseRestSecondsByExerciseId,
+    toggleExerciseStopwatch,
+    removeExercise,
+    moveExercise,
+  } = useWorkoutContext();
 
   const [exercisePickerVisible, setExercisePickerVisible] = useState(false);
   const [selectedMuscleFilter, setSelectedMuscleFilter] = useState<ExerciseLibraryMuscleFilter>('all');
@@ -207,102 +240,93 @@ export default function ActiveWorkout() {
   const [isLoadingExercises, setIsLoadingExercises] = useState(true);
   const [exerciseLoadError, setExerciseLoadError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFinishModalVisible, setIsFinishModalVisible] = useState(false);
+  const [hasManualWorkoutTitle, setHasManualWorkoutTitle] = useState(false);
+  const [workoutTitleInput, setWorkoutTitleInput] = useState(() => t('workout.defaultActiveWorkoutName'));
   const [isCreatingExercise, setIsCreatingExercise] = useState(false);
   const [newExerciseName, setNewExerciseName] = useState('');
-  const [newExerciseMuscleGroup, setNewExerciseMuscleGroup] = useState('');
-  const [newExerciseEquipment, setNewExerciseEquipment] = useState('');
+  const [newExerciseMuscleGroup, setNewExerciseMuscleGroup] = useState<ExerciseMuscleKey | null>(null);
+  const [newExerciseEquipment, setNewExerciseEquipment] = useState<ExerciseEquipmentKey | null>(null);
   const [finishSummary, setFinishSummary] = useState<FinishWorkoutResult | null>(null);
   const [summaryExerciseNames, setSummaryExerciseNames] = useState<string[]>([]);
   const [isSummaryVisible, setIsSummaryVisible] = useState(false);
   const [isExerciseStatsVisible, setIsExerciseStatsVisible] = useState(false);
   const [statsExercise, setStatsExercise] = useState<ExerciseRow | null>(null);
   const [statsExerciseProgress, setStatsExerciseProgress] = useState<ExerciseProgressPoint[]>([]);
+  const [showAllLivePoints, setShowAllLivePoints] = useState(false);
+  const [selectedLivePointIndex, setSelectedLivePointIndex] = useState<number | null>(null);
   const [isLoadingExerciseStats, setIsLoadingExerciseStats] = useState(false);
   const [exerciseStatsError, setExerciseStatsError] = useState<string | null>(null);
   const exerciseCatalogByFilterRef = useRef<Map<string, ExerciseRow[]>>(new Map());
   const exerciseProgressCacheRef = useRef<Map<string, ExerciseProgressPoint[]>>(new Map());
   const requestedProgressExerciseIdsRef = useRef<Set<string>>(new Set());
   const statsRequestVersionRef = useRef(0);
-  const [exerciseStopwatchById, setExerciseStopwatchById] = useState<Record<string, ExerciseStopwatchEntry>>({});
-  const [stopwatchNowMs, setStopwatchNowMs] = useState(() => Date.now());
 
   const timerLabel = useMemo(() => formatElapsedTime(elapsedSeconds), [elapsedSeconds]);
-  const liveStatsChartData = useMemo(
+  const visibleLivePoints = useMemo(
     () =>
-      statsExerciseProgress.slice(-12).map((point) => ({
-        value: Math.max(0, point.value),
-        label: point.label,
-      })),
-    [statsExerciseProgress]
+      showAllLivePoints
+        ? statsExerciseProgress
+        : statsExerciseProgress.slice(-LIVE_CHART_DEFAULT_WINDOW),
+    [showAllLivePoints, statsExerciseProgress]
   );
 
-  const liveChartWidth = useMemo(() => Math.max(250, windowWidth - 72), [windowWidth]);
+  const liveStatsChartData = useMemo(
+    () =>
+      visibleLivePoints.map((point, index) => ({
+        value: Math.max(0, Number(point.value.toFixed(1))),
+        label: point.label,
+        dataPointColor: index === selectedLivePointIndex ? '#FFFFFF' : LIVE_CHART_COLOR,
+        dataPointRadius: index === selectedLivePointIndex ? 5.5 : 4,
+        onPress: () => setSelectedLivePointIndex(index),
+      })),
+    [selectedLivePointIndex, visibleLivePoints]
+  );
+
+  const liveChartWidth = useMemo(() => {
+    const availableWidth = Math.max(260, windowWidth - 40);
+    if (!isDesktopWeb) {
+      return availableWidth;
+    }
+
+    return Math.min(availableWidth, 332);
+  }, [isDesktopWeb, windowWidth]);
+  const liveChartMaxValue = useMemo(() => {
+    if (liveStatsChartData.length === 0) {
+      return 20;
+    }
+
+    const highestValue = liveStatsChartData.reduce((currentMax, point) => Math.max(currentMax, point.value), 0);
+
+    if (highestValue <= 0) {
+      return 20;
+    }
+
+    return Math.max(20, Math.ceil(highestValue * 1.25));
+  }, [liveStatsChartData]);
 
   useEffect(() => {
-    if (Object.keys(exerciseStopwatchById).length === 0) {
+    if (liveStatsChartData.length === 0) {
+      setSelectedLivePointIndex(null);
       return;
     }
 
-    const intervalId = setInterval(() => {
-      setStopwatchNowMs(Date.now());
-    }, 250);
-
-    return () => {
-      clearInterval(intervalId);
-    };
-  }, [exerciseStopwatchById]);
-
-  useEffect(() => {
-    setExerciseStopwatchById((currentValue) => {
-      const activeExerciseIds = new Set(activeExercises.map((exercise) => exercise.id));
-      let hasChanges = false;
-      const nextValue: Record<string, ExerciseStopwatchEntry> = {};
-
-      for (const [exerciseId, entry] of Object.entries(currentValue)) {
-        if (!activeExerciseIds.has(exerciseId)) {
-          hasChanges = true;
-          continue;
-        }
-
-        nextValue[exerciseId] = entry;
+    setSelectedLivePointIndex((currentValue) => {
+      if (currentValue === null || currentValue >= liveStatsChartData.length) {
+        return liveStatsChartData.length - 1;
       }
 
-      return hasChanges ? nextValue : currentValue;
+      return currentValue;
     });
-  }, [activeExercises]);
+  }, [liveStatsChartData.length]);
 
-  const isExerciseStopwatchRunning = useCallback(
-    (exerciseId: string) => Boolean(exerciseStopwatchById[exerciseId]),
-    [exerciseStopwatchById]
-  );
+  const selectedLivePoint = useMemo(() => {
+    if (selectedLivePointIndex === null) {
+      return null;
+    }
 
-  const getExerciseStopwatchSeconds = useCallback(
-    (exerciseId: string) => {
-      const entry = exerciseStopwatchById[exerciseId];
-
-      if (!entry) {
-        return 0;
-      }
-
-      return Math.max(0, Math.floor((stopwatchNowMs - entry.startedAtMs) / 1000));
-    },
-    [exerciseStopwatchById, stopwatchNowMs]
-  );
-
-  const toggleExerciseStopwatch = useCallback((exerciseId: string) => {
-    setExerciseStopwatchById((currentValue) => {
-      if (currentValue[exerciseId]) {
-        const nextValue = { ...currentValue };
-        delete nextValue[exerciseId];
-        return nextValue;
-      }
-
-      return {
-        ...currentValue,
-        [exerciseId]: { startedAtMs: Date.now() },
-      };
-    });
-  }, []);
+    return visibleLivePoints[selectedLivePointIndex] ?? null;
+  }, [selectedLivePointIndex, visibleLivePoints]);
 
   const loadExercises = useCallback(async (filters: ExerciseCatalogFilters, forceRefresh = false) => {
     const cacheKey = buildCatalogCacheKey(filters);
@@ -332,6 +356,19 @@ export default function ActiveWorkout() {
     }
   }, []);
 
+  const applySuggestedWorkoutTitle = useCallback((value: string | null | undefined) => {
+    if (hasManualWorkoutTitle) {
+      return;
+    }
+
+    const normalizedValue = sanitizeText(value, {
+      maxLength: INPUT_LIMITS.nameMax,
+      allowEmpty: true,
+    });
+
+    setWorkoutTitleInput(normalizedValue ?? t('workout.defaultActiveWorkoutName'));
+  }, [hasManualWorkoutTitle, t]);
+
   useEffect(() => {
     if (!exercisePickerVisible) {
       return;
@@ -354,19 +391,21 @@ export default function ActiveWorkout() {
 
       setIsPreloadingRoutine(true);
       setRoutinePreloadError(null);
+      setActiveTemplateId(null);
 
       try {
         const routine = await getRoutineById(normalizedRoutineId);
 
         setActiveExercisesWithRef(routine.exercises.map((entry) => createExerciseBlock(entry.exercise)));
         setPreloadedRoutineId(routine.id);
+        applySuggestedWorkoutTitle(routine.name);
       } catch (error) {
         setRoutinePreloadError(getErrorMessage(error));
       } finally {
         setIsPreloadingRoutine(false);
       }
     },
-    [preloadedRoutineId, setActiveExercisesWithRef]
+    [applySuggestedWorkoutTitle, preloadedRoutineId, setActiveExercisesWithRef, setActiveTemplateId]
   );
 
   const preloadTemplate = useCallback(
@@ -383,21 +422,34 @@ export default function ActiveWorkout() {
 
       setIsPreloadingTemplate(true);
       setTemplatePreloadError(null);
+      setActiveTemplateId(normalizedTemplateId);
 
       try {
         const template = await getTemplateById(normalizedTemplateId);
+        let restSeedByExerciseId: Record<string, number> = {};
+
+        try {
+          restSeedByExerciseId = await getLastExerciseRestTimes(
+            template.exercises.map((entry) => entry.exercise.id)
+          );
+        } catch (error) {
+          console.warn('Unable to load rest history for template preload:', error);
+        }
 
         setActiveExercisesWithRef(
-          template.exercises.map((entry) => createExerciseBlock(entry.exercise, entry.rest_seconds ?? DEFAULT_REST_SECONDS))
+          template.exercises.map((entry) =>
+            createExerciseBlock(entry.exercise, restSeedByExerciseId[entry.exercise.id] ?? 0)
+          )
         );
         setPreloadedTemplateId(template.id);
+        applySuggestedWorkoutTitle(template.name);
       } catch (error) {
         setTemplatePreloadError(getErrorMessage(error));
       } finally {
         setIsPreloadingTemplate(false);
       }
     },
-    [preloadedTemplateId, setActiveExercisesWithRef]
+    [applySuggestedWorkoutTitle, preloadedTemplateId, setActiveExercisesWithRef, setActiveTemplateId]
   );
 
   useEffect(() => {
@@ -470,6 +522,8 @@ export default function ActiveWorkout() {
 
   const closeExerciseStatsModal = useCallback(() => {
     setIsExerciseStatsVisible(false);
+    setShowAllLivePoints(false);
+    setSelectedLivePointIndex(null);
     setExerciseStatsError(null);
     setIsLoadingExerciseStats(false);
   }, []);
@@ -501,66 +555,24 @@ export default function ActiveWorkout() {
     );
   }, [activeExercises]);
 
-  const removeExercise = useCallback(
-    (exerciseIndex: number) => {
-      const exerciseId = activeExercisesRef.current[exerciseIndex]?.id;
-
-      setActiveExercisesWithRef((currentValue) => currentValue.filter((_, index) => index !== exerciseIndex));
-
-      if (exerciseId) {
-        setExerciseStopwatchById((currentValue) => {
-          if (!currentValue[exerciseId]) {
-            return currentValue;
-          }
-
-          const nextValue = { ...currentValue };
-          delete nextValue[exerciseId];
-          return nextValue;
-        });
-      }
-    },
-    [activeExercisesRef, setActiveExercisesWithRef]
-  );
-
-  const moveExercise = useCallback(
-    (exerciseIndex: number, direction: 'up' | 'down') => {
-      setActiveExercisesWithRef((currentValue) => {
-        const targetIndex = direction === 'up' ? exerciseIndex - 1 : exerciseIndex + 1;
-
-        if (exerciseIndex < 0 || exerciseIndex >= currentValue.length) {
-          return currentValue;
-        }
-
-        if (targetIndex < 0 || targetIndex >= currentValue.length) {
-          return currentValue;
-        }
-
-        const nextValue = [...currentValue];
-        const currentExercise = nextValue[exerciseIndex];
-        nextValue[exerciseIndex] = nextValue[targetIndex];
-        nextValue[targetIndex] = currentExercise;
-        return nextValue;
-      });
-    },
-    [setActiveExercisesWithRef]
-  );
-
   async function handleCreateExercise() {
     const normalizedName = sanitizeText(newExerciseName, {
       maxLength: INPUT_LIMITS.nameMax,
       allowEmpty: false,
     });
-    const normalizedMuscleGroup = sanitizeText(newExerciseMuscleGroup, {
-      maxLength: INPUT_LIMITS.nameMax,
-      allowEmpty: true,
-    });
-    const normalizedEquipment = sanitizeText(newExerciseEquipment, {
-      maxLength: INPUT_LIMITS.nameMax,
-      allowEmpty: true,
-    });
 
     if (!normalizedName) {
-      Alert.alert('Validation', 'Exercise name is required.');
+      Alert.alert(t('validation.title'), t('validation.exerciseNameRequired'));
+      return;
+    }
+
+    if (!newExerciseMuscleGroup) {
+      Alert.alert(t('validation.title'), t('validation.selectMuscleGroup'));
+      return;
+    }
+
+    if (!newExerciseEquipment) {
+      Alert.alert(t('validation.title'), t('validation.selectEquipment'));
       return;
     }
 
@@ -569,13 +581,13 @@ export default function ActiveWorkout() {
     try {
       const createdExercise = await createExercise({
         name: normalizedName,
-        muscleGroup: normalizedMuscleGroup,
-        equipment: normalizedEquipment,
+        muscleGroup: newExerciseMuscleGroup,
+        equipment: newExerciseEquipment,
       });
 
       setNewExerciseName('');
-      setNewExerciseMuscleGroup('');
-      setNewExerciseEquipment('');
+      setNewExerciseMuscleGroup(null);
+      setNewExerciseEquipment(null);
       setCreateExerciseVisible(false);
 
       exerciseCatalogByFilterRef.current.clear();
@@ -583,17 +595,35 @@ export default function ActiveWorkout() {
       addExercise(createdExercise);
       setExercisePickerVisible(false);
     } catch (error) {
-      Alert.alert('Unable to create exercise', getErrorMessage(error));
+      Alert.alert(t('exercise.errors.create'), getErrorMessage(error));
     } finally {
       setIsCreatingExercise(false);
     }
   }
+
+  const openFinishModal = useCallback(() => {
+    if (isSubmitting) {
+      return;
+    }
+
+    if (!workoutTitleInput.trim()) {
+      setWorkoutTitleInput(t('workout.defaultActiveWorkoutName'));
+    }
+
+    setIsFinishModalVisible(true);
+  }, [isSubmitting, t, workoutTitleInput]);
 
   async function handleFinishWorkout() {
     if (isSubmitting) {
       return;
     }
 
+    const normalizedWorkoutName = sanitizeText(workoutTitleInput, {
+      maxLength: INPUT_LIMITS.nameMax,
+      allowEmpty: true,
+    }) ?? t('workout.defaultActiveWorkoutName');
+
+    setIsFinishModalVisible(false);
     setIsSubmitting(true);
 
     try {
@@ -612,20 +642,24 @@ export default function ActiveWorkout() {
       const completedSetCount = setDrafts.filter((draft) => draft.completed === true).length;
 
       if (completedSetCount === 0) {
-        Alert.alert('No completed sets', 'Mark at least one set as completed before finishing the workout.');
+        Alert.alert(t('workout.noCompletedSetsTitle'), t('workout.noCompletedSetsDescription'));
         return;
       }
 
+      const startedAtMs = workoutStartedAtMs ?? ensureWorkoutStarted();
+      const startTime = new Date(startedAtMs).toISOString();
+
       const result = await finishWorkout({
-        name: 'Active Workout',
+        name: normalizedWorkoutName,
         notes: null,
-        templateId: routeTemplateId ?? null,
-        startTime: workoutStartedAt,
+        templateId: activeTemplateId ?? routeTemplateId ?? null,
+        exerciseRestSecondsByExerciseId: getExerciseRestSecondsByExerciseId(),
+        startTime,
         setDrafts,
       });
 
       if (result.insertedSetCount <= 0) {
-        Alert.alert('Workout not saved', 'No completed sets were saved. Please try again.');
+        Alert.alert(t('workout.notSavedTitle'), t('workout.notSavedDescription'));
         return;
       }
 
@@ -635,22 +669,71 @@ export default function ActiveWorkout() {
       await clearDraft();
     } catch (error) {
       if (error instanceof WorkoutSaveValidationError) {
-        Alert.alert('Workout not saved', error.message);
+        Alert.alert(t('workout.notSavedTitle'), error.message);
         return;
       }
 
-      Alert.alert('Unable to finish workout', getErrorMessage(error));
+      Alert.alert(t('workout.unableToFinish'), getErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
   }
+
+  const confirmCancelWorkout = useCallback(async (): Promise<boolean> => {
+    const title = t('workout.cancelConfirmTitle');
+    const message = t('workout.cancelConfirmDescription');
+
+    if (Platform.OS === 'web') {
+      const confirmFn = (globalThis as { confirm?: (value?: string) => boolean }).confirm;
+      return confirmFn ? confirmFn(`${title}\n\n${message}`) : true;
+    }
+
+    return await new Promise((resolve) => {
+      Alert.alert(title, message, [
+        {
+          text: t('workout.cancelKeepAction'),
+          style: 'cancel',
+          onPress: () => resolve(false),
+        },
+        {
+          text: t('workout.cancelDiscardAction'),
+          style: 'destructive',
+          onPress: () => resolve(true),
+        },
+      ], { cancelable: false });
+    });
+  }, [t]);
+
+  const handleCancelWorkout = useCallback(async () => {
+    if (isSubmitting) {
+      return;
+    }
+
+    const shouldCancel = await confirmCancelWorkout();
+
+    if (!shouldCancel) {
+      return;
+    }
+
+    clearExercises();
+    safeDeactivateKeepAwake();
+    setExercisePickerVisible(false);
+    setCreateExerciseVisible(false);
+
+    try {
+      await clearDraft();
+    } catch (error) {
+      console.warn('Unable to clear workout draft during cancel:', error);
+    }
+
+    router.replace('/(tabs)' as any);
+  }, [clearDraft, clearExercises, confirmCancelWorkout, isSubmitting, safeDeactivateKeepAwake]);
 
   const handleShareAndFinish = useCallback(() => {
     safeDeactivateKeepAwake();
     setIsSummaryVisible(false);
     setFinishSummary(null);
     setSummaryExerciseNames([]);
-    setExerciseStopwatchById({});
 
     // Reset state defensively to avoid phantom in-memory workout state.
     clearExercises();
@@ -664,29 +747,55 @@ export default function ActiveWorkout() {
   const isPreloadingRoute = routeTemplateId ? isPreloadingTemplate : isPreloadingRoutine;
   const routePreloadError = routeTemplateId ? templatePreloadError : routinePreloadError;
 
+  const getExerciseMuscleLabel = (exercise: ExerciseRow): string => {
+    const muscleKey = getMuscleTranslationKey(exercise.muscle_group);
+    return muscleKey ? t(muscleKey) : getLocalizedExerciseMuscle(exercise, language) ?? t('exercise.general');
+  };
+
+  const getExerciseEquipmentLabel = (exercise: ExerciseRow): string => {
+    const equipmentKey = getEquipmentTranslationKey(exercise.equipment);
+    return equipmentKey ? t(equipmentKey) : exercise.equipment ?? t('exercise.equipment.bodyweight');
+  };
+
+  const getMuscleFilterLabel = (filterKey: ExerciseLibraryMuscleFilter): string => {
+    if (filterKey === 'all') {
+      return language === 'pt' ? 'Todos' : 'All';
+    }
+
+    return t(EXERCISE_MUSCLE_TRANSLATION_KEY[filterKey]);
+  };
+
+  const getEquipmentFilterLabel = (filterKey: ExerciseLibraryEquipmentFilter): string => {
+    if (filterKey === 'all') {
+      return language === 'pt' ? 'Todo equipamento' : 'All equipment';
+    }
+
+    return t(EXERCISE_EQUIPMENT_TRANSLATION_KEY[filterKey]);
+  };
+
   // Show recovery dialog as soon as a draft is detected
   useEffect(() => {
     if (!recoveredDraft) return;
 
     const savedAt = new Date(recoveredDraft.draft.savedAt).toLocaleTimeString();
     Alert.alert(
-      'Recover Workout?',
-      `An unsaved workout was found (saved at ${savedAt}). Do you want to continue where you left off?`,
+      t('workout.recoverTitle'),
+      t('workout.recoverDescription', { savedAt }),
       [
         {
-          text: 'Discard',
+          text: t('workout.recoverDiscard'),
           style: 'destructive',
           onPress: () => { void discardRecoveredDraft(); },
         },
         {
-          text: 'Recover',
+          text: t('workout.recoverAction'),
           style: 'default',
           onPress: () => { acceptRecoveredDraft(recoveredDraft); },
         },
       ],
       { cancelable: false }
     );
-  }, [recoveredDraft, acceptRecoveredDraft, discardRecoveredDraft]);
+  }, [recoveredDraft, acceptRecoveredDraft, discardRecoveredDraft, t]);
 
   return (
     <SafeAreaView style={[styles.safeArea, isWeb && styles.safeAreaWeb]} edges={['top', 'left', 'right']}>
@@ -694,7 +803,7 @@ export default function ActiveWorkout() {
 
       <View style={[styles.container, isWeb && styles.containerWeb]}>
         <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.iconButton} onPress={() => router.back()} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.iconButton} onPress={() => void handleCancelWorkout()} activeOpacity={0.85}>
             <Ionicons name="close" size={26} color={palette.textPrimary} />
           </TouchableOpacity>
 
@@ -703,13 +812,13 @@ export default function ActiveWorkout() {
           <TouchableOpacity
             style={[styles.finishButton, isSubmitting && styles.finishButtonDisabled]}
             activeOpacity={0.85}
-            onPress={handleFinishWorkout}
+            onPress={openFinishModal}
             disabled={isSubmitting}
           >
             {isSubmitting ? (
               <ActivityIndicator size="small" color={palette.textPrimary} />
             ) : (
-              <Text style={styles.finishButtonText}>Finish</Text>
+              <Text style={styles.finishButtonText}>{t('workout.finish')}</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -772,7 +881,7 @@ export default function ActiveWorkout() {
 
                   <View style={styles.exerciseHeaderRow}>
                     <View style={styles.exerciseHeaderTextWrap}>
-                      <Text style={styles.exerciseTitle}>{exercise.exercise.name}</Text>
+                      <Text style={styles.exerciseTitle}>{getLocalizedExerciseName(exercise.exercise, language)}</Text>
                     </View>
 
                     <View style={styles.exerciseHeaderActions}>
@@ -913,15 +1022,75 @@ export default function ActiveWorkout() {
 
         <View style={[styles.bottomActionArea, { bottom: insets.bottom + 12 }]}> 
           <TouchableOpacity
-            style={styles.addExerciseButton}
+            style={styles.addExerciseTrigger}
             activeOpacity={0.9}
             onPress={() => setExercisePickerVisible(true)}
           >
-            <Ionicons name="add" size={22} color={palette.textPrimary} />
-            <Text style={styles.addExerciseText}>Add Exercise</Text>
+            <View style={styles.addExerciseTriggerIconWrap}>
+              <Ionicons name="search-outline" size={16} color={palette.accent} />
+            </View>
+            <View style={styles.addExerciseTriggerTextWrap}>
+              <Text style={styles.addExerciseTriggerLabel}>{t('workout.addExercise')}</Text>
+              <Text style={styles.addExerciseTriggerHint}>{t('workout.addExerciseHint')}</Text>
+            </View>
+            <Ionicons name="chevron-up" size={18} color={palette.textMuted} />
           </TouchableOpacity>
         </View>
       </View>
+
+      <Modal
+        visible={isFinishModalVisible}
+        transparent
+        animationType={modalAnimationType}
+        onRequestClose={() => setIsFinishModalVisible(false)}
+      >
+        <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
+          <Pressable style={styles.modalDismissArea} onPress={() => setIsFinishModalVisible(false)} />
+
+          <View style={[styles.modalSheet, isWeb && styles.modalSheetWeb]}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>{t('workout.finishModalTitle')}</Text>
+            <Text style={styles.finishModalSubtitle}>{t('workout.finishModalSubtitle')}</Text>
+
+            <Text style={styles.modalOptionLabel}>{t('workout.finishWorkoutTitleLabel')}</Text>
+            <TextInput
+              value={workoutTitleInput}
+              onChangeText={(value) => {
+                setHasManualWorkoutTitle(true);
+                setWorkoutTitleInput(value.substring(0, INPUT_LIMITS.nameMax));
+              }}
+              style={styles.modalInput}
+              placeholder={t('workout.finishWorkoutTitlePlaceholder')}
+              placeholderTextColor={palette.textMuted}
+              autoCapitalize="words"
+              maxLength={INPUT_LIMITS.nameMax}
+            />
+
+            <View style={styles.modalButtonRow}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setIsFinishModalVisible(false)}
+                activeOpacity={0.88}
+              >
+                <Text style={styles.modalCancelButtonText}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalCreateButton, isSubmitting && styles.modalCreateButtonDisabled]}
+                onPress={() => void handleFinishWorkout()}
+                activeOpacity={0.88}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator size="small" color={palette.textPrimary} />
+                ) : (
+                  <Text style={styles.modalCreateButtonText}>{t('workout.finish')}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={exercisePickerVisible}
@@ -934,59 +1103,66 @@ export default function ActiveWorkout() {
 
           <View style={[styles.modalSheet, isWeb && styles.modalSheetWeb]}>
             <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>Select Exercise</Text>
+              <Text style={styles.modalTitle}>{t('workout.selectExercise')}</Text>
               <TouchableOpacity
                 style={styles.modalCustomButton}
                 activeOpacity={0.88}
-                onPress={() => setCreateExerciseVisible(true)}
+                onPress={() => {
+                  setExercisePickerVisible(false);
+                  setCreateExerciseVisible(true);
+                }}
               >
-                <Text style={styles.modalCustomButtonText}>+ Custom</Text>
+                <Text style={styles.modalCustomButtonText}>{t('workout.customLabel')}</Text>
               </TouchableOpacity>
             </View>
 
             <View style={styles.modalHandle} />
 
-            <Text style={styles.filterChipsSectionLabel}>Muscle</Text>
+            <Text style={styles.filterChipsSectionLabel}>{t('workout.muscleGroup')}</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               style={styles.filterChipsScroll}
               contentContainerStyle={styles.filterChipsContent}
             >
-              {MUSCLE_FILTER_CHIP_OPTIONS.map((option) => {
-                const isSelected = option.key === selectedMuscleFilter;
+              {MUSCLE_FILTER_CHIP_KEYS.map((filterKey) => {
+                const isSelected = filterKey === selectedMuscleFilter;
 
                 return (
                   <TouchableOpacity
-                    key={option.key}
+                    key={filterKey}
                     style={[styles.filterChip, isSelected && styles.filterChipSelected]}
                     activeOpacity={0.88}
-                    onPress={() => setSelectedMuscleFilter(option.key)}
+                    onPress={() => setSelectedMuscleFilter(filterKey)}
                   >
-                    <Text style={[styles.filterChipText, isSelected && styles.filterChipTextSelected]}>{option.label}</Text>
+                    <Text style={[styles.filterChipText, isSelected && styles.filterChipTextSelected]}>
+                      {getMuscleFilterLabel(filterKey)}
+                    </Text>
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
 
-            <Text style={styles.filterChipsSectionLabel}>Equipment</Text>
+            <Text style={styles.filterChipsSectionLabel}>{t('workout.equipment')}</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               style={styles.filterChipsScroll}
               contentContainerStyle={styles.filterChipsContent}
             >
-              {EQUIPMENT_FILTER_CHIP_OPTIONS.map((option) => {
-                const isSelected = option.key === selectedEquipmentFilter;
+              {EQUIPMENT_FILTER_CHIP_KEYS.map((filterKey) => {
+                const isSelected = filterKey === selectedEquipmentFilter;
 
                 return (
                   <TouchableOpacity
-                    key={option.key}
+                    key={filterKey}
                     style={[styles.filterChip, isSelected && styles.filterChipSelected]}
                     activeOpacity={0.88}
-                    onPress={() => setSelectedEquipmentFilter(option.key)}
+                    onPress={() => setSelectedEquipmentFilter(filterKey)}
                   >
-                    <Text style={[styles.filterChipText, isSelected && styles.filterChipTextSelected]}>{option.label}</Text>
+                    <Text style={[styles.filterChipText, isSelected && styles.filterChipTextSelected]}>
+                      {getEquipmentFilterLabel(filterKey)}
+                    </Text>
                   </TouchableOpacity>
                 );
               })}
@@ -996,11 +1172,11 @@ export default function ActiveWorkout() {
               {isLoadingExercises ? (
                 <View style={styles.modalStatusContainer}>
                   <ActivityIndicator size="small" color={palette.accent} />
-                  <Text style={styles.modalStatusText}>Loading exercise catalog...</Text>
+                  <Text style={styles.modalStatusText}>{t('workout.loadingExerciseCatalog')}</Text>
                 </View>
               ) : exerciseLoadError ? (
                 <View style={styles.modalStatusContainer}>
-                  <Text style={styles.modalStatusTitle}>Unable to load exercises</Text>
+                  <Text style={styles.modalStatusTitle}>{t('workout.unableToLoadExercises')}</Text>
                   <Text style={styles.modalStatusText}>{exerciseLoadError}</Text>
                   <TouchableOpacity
                     style={styles.modalRetryButton}
@@ -1009,13 +1185,13 @@ export default function ActiveWorkout() {
                     }
                     activeOpacity={0.88}
                   >
-                    <Text style={styles.modalRetryButtonText}>Retry</Text>
+                    <Text style={styles.modalRetryButtonText}>{t('common.retry')}</Text>
                   </TouchableOpacity>
                 </View>
               ) : catalogExercises.length === 0 ? (
                 <View style={styles.modalStatusContainer}>
-                  <Text style={styles.modalStatusTitle}>No exercises available</Text>
-                  <Text style={styles.modalStatusText}>Create exercises to start building workouts.</Text>
+                  <Text style={styles.modalStatusTitle}>{t('workout.noExercisesAvailable')}</Text>
+                  <Text style={styles.modalStatusText}>{t('workout.createExercisesHint')}</Text>
                 </View>
               ) : (
                 catalogExercises.map((exercise) => (
@@ -1029,9 +1205,9 @@ export default function ActiveWorkout() {
                     }}
                   >
                     <View style={styles.modalExerciseTextWrap}>
-                      <Text style={styles.modalExerciseName}>{exercise.name}</Text>
+                      <Text style={styles.modalExerciseName}>{getLocalizedExerciseName(exercise, language)}</Text>
                       <Text style={styles.modalExerciseMeta}>
-                        {exercise.muscle_group ?? 'General'} - {exercise.equipment ?? 'Bodyweight'}
+                        {getExerciseMuscleLabel(exercise)} - {getExerciseEquipmentLabel(exercise)}
                       </Text>
                     </View>
                     <Ionicons name="add-circle-outline" size={22} color={palette.accent} />
@@ -1054,35 +1230,57 @@ export default function ActiveWorkout() {
 
           <View style={[styles.modalSheet, isWeb && styles.modalSheetWeb]}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Create Exercise</Text>
+            <Text style={styles.modalTitle}>{t('workout.createExercise')}</Text>
 
             <TextInput
               value={newExerciseName}
               onChangeText={(value) => setNewExerciseName(value.substring(0, INPUT_LIMITS.nameMax))}
               style={styles.modalInput}
-              placeholder="Name"
+              placeholder={t('workout.name')}
               placeholderTextColor={palette.textMuted}
               autoCapitalize="words"
               maxLength={INPUT_LIMITS.nameMax}
             />
-            <TextInput
-              value={newExerciseMuscleGroup}
-              onChangeText={(value) => setNewExerciseMuscleGroup(value.substring(0, INPUT_LIMITS.nameMax))}
-              style={styles.modalInput}
-              placeholder="Muscle Group"
-              placeholderTextColor={palette.textMuted}
-              autoCapitalize="words"
-              maxLength={INPUT_LIMITS.nameMax}
-            />
-            <TextInput
-              value={newExerciseEquipment}
-              onChangeText={(value) => setNewExerciseEquipment(value.substring(0, INPUT_LIMITS.nameMax))}
-              style={styles.modalInput}
-              placeholder="Equipment"
-              placeholderTextColor={palette.textMuted}
-              autoCapitalize="words"
-              maxLength={INPUT_LIMITS.nameMax}
-            />
+
+            <Text style={styles.modalOptionLabel}>{t('workout.muscleGroup')}</Text>
+            <View style={styles.modalOptionGrid}>
+              {EXERCISE_MUSCLE_OPTIONS.map((muscleKey) => {
+                const isSelected = newExerciseMuscleGroup === muscleKey;
+
+                return (
+                  <TouchableOpacity
+                    key={muscleKey}
+                    style={[styles.modalOptionChip, isSelected && styles.modalOptionChipSelected]}
+                    activeOpacity={0.88}
+                    onPress={() => setNewExerciseMuscleGroup(muscleKey)}
+                  >
+                    <Text style={[styles.modalOptionChipText, isSelected && styles.modalOptionChipTextSelected]}>
+                      {t(EXERCISE_MUSCLE_TRANSLATION_KEY[muscleKey])}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={styles.modalOptionLabel}>{t('workout.equipment')}</Text>
+            <View style={styles.modalOptionGrid}>
+              {EXERCISE_EQUIPMENT_OPTIONS.map((equipmentKey) => {
+                const isSelected = newExerciseEquipment === equipmentKey;
+
+                return (
+                  <TouchableOpacity
+                    key={equipmentKey}
+                    style={[styles.modalOptionChip, isSelected && styles.modalOptionChipSelected]}
+                    activeOpacity={0.88}
+                    onPress={() => setNewExerciseEquipment(equipmentKey)}
+                  >
+                    <Text style={[styles.modalOptionChipText, isSelected && styles.modalOptionChipTextSelected]}>
+                      {t(EXERCISE_EQUIPMENT_TRANSLATION_KEY[equipmentKey])}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
             <View style={styles.modalButtonRow}>
               <TouchableOpacity
@@ -1090,7 +1288,7 @@ export default function ActiveWorkout() {
                 onPress={() => setCreateExerciseVisible(false)}
                 activeOpacity={0.88}
               >
-                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+                <Text style={styles.modalCancelButtonText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1102,7 +1300,7 @@ export default function ActiveWorkout() {
                 {isCreatingExercise ? (
                   <ActivityIndicator size="small" color={palette.textPrimary} />
                 ) : (
-                  <Text style={styles.modalCreateButtonText}>Create</Text>
+                  <Text style={styles.modalCreateButtonText}>{t('common.create')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1124,7 +1322,9 @@ export default function ActiveWorkout() {
 
             <View style={styles.liveStatsHeaderRow}>
               <View style={styles.liveStatsHeaderTextWrap}>
-                <Text style={styles.liveStatsTitle}>{statsExercise ? statsExercise.name : 'Live Stats'}</Text>
+                <Text style={styles.liveStatsTitle}>
+                  {statsExercise ? getLocalizedExerciseName(statsExercise, language) : 'Live Stats'}
+                </Text>
                 <Text style={styles.liveStatsSubtitle}>Recent volume trend while you train.</Text>
               </View>
 
@@ -1160,9 +1360,25 @@ export default function ActiveWorkout() {
               </View>
             ) : (
               <View style={styles.liveChartCard}>
+                {statsExerciseProgress.length > LIVE_CHART_DEFAULT_WINDOW ? (
+                  <TouchableOpacity
+                    style={styles.liveStatsWindowToggle}
+                    activeOpacity={0.88}
+                    onPress={() => setShowAllLivePoints((currentValue) => !currentValue)}
+                  >
+                    <Text style={styles.liveStatsWindowToggleText}>
+                      {showAllLivePoints
+                        ? `Show last ${LIVE_CHART_DEFAULT_WINDOW}`
+                        : `Show all sessions (${statsExerciseProgress.length})`}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+
                 <LineChart
                   data={liveStatsChartData}
                   width={liveChartWidth}
+                  height={252}
+                  maxValue={liveChartMaxValue}
                   color={LIVE_CHART_COLOR}
                   thickness={3}
                   hideDataPoints={false}
@@ -1175,15 +1391,31 @@ export default function ActiveWorkout() {
                   endOpacity={0.02}
                   yAxisColor="#253041"
                   xAxisColor="#253041"
+                  yAxisLabelWidth={74}
+                  xAxisLabelsHeight={40}
+                  labelsExtraHeight={12}
+                  overflowTop={24}
+                  overflowBottom={16}
                   yAxisTextStyle={styles.liveStatsAxisText}
                   xAxisLabelTextStyle={styles.liveStatsAxisText}
+                  formatYLabel={(label) => formatVolumeAxisLabel(label)}
                   rulesColor="#1F2937"
                   noOfSections={4}
-                  initialSpacing={14}
-                  endSpacing={14}
-                  adjustToWidth
+                  initialSpacing={10}
+                  endSpacing={0}
+                  onBackgroundPress={() => setSelectedLivePointIndex(null)}
+                  adjustToWidth={true}
                 />
-                <Text style={styles.liveStatsFootnote}>{`Showing last ${liveStatsChartData.length} sessions`}</Text>
+
+                {selectedLivePoint ? (
+                  <View style={styles.liveStatsSelectedPointCard}>
+                    <Text style={styles.liveStatsSelectedPointLabel}>{selectedLivePoint.label}</Text>
+                    <Text style={styles.liveStatsSelectedPointValue}>{formatVolumeAxisLabel(selectedLivePoint.value)}</Text>
+                    <Text style={styles.liveStatsSelectedPointMeta}>Tap points to inspect session evolution.</Text>
+                  </View>
+                ) : null}
+
+                <Text style={styles.liveStatsFootnote}>{`Showing ${liveStatsChartData.length} of ${statsExerciseProgress.length} sessions`}</Text>
               </View>
             )}
           </View>
@@ -1555,19 +1787,41 @@ const styles = StyleSheet.create({
     left: 16,
     right: 16,
   },
-  addExerciseButton: {
+  addExerciseTrigger: {
     minHeight: 62,
     borderRadius: 16,
-    backgroundColor: palette.accent,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#0D1624',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    columnGap: 10,
+  },
+  addExerciseTriggerIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#1E3A5F',
+    backgroundColor: '#0A1A2D',
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
-    columnGap: 8,
   },
-  addExerciseText: {
+  addExerciseTriggerTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  addExerciseTriggerLabel: {
     color: palette.textPrimary,
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '800',
+    marginBottom: 2,
+  },
+  addExerciseTriggerHint: {
+    color: palette.textMuted,
+    fontSize: 12,
+    fontWeight: '500',
   },
   modalBackdrop: {
     flex: 1,
@@ -1697,13 +1951,58 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#1F2937',
     backgroundColor: '#0D1624',
+    minHeight: 318,
     paddingTop: 12,
     paddingBottom: 8,
     paddingHorizontal: 8,
   },
+  liveStatsWindowToggle: {
+    alignSelf: 'flex-end',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#122744',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginBottom: 8,
+  },
+  liveStatsWindowToggleText: {
+    color: '#DCE8FF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
   liveStatsAxisText: {
     color: '#8FA2BA',
     fontSize: 11,
+  },
+  liveStatsSelectedPointCard: {
+    marginTop: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#233247',
+    backgroundColor: '#0B1320',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  liveStatsSelectedPointLabel: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.35,
+  },
+  liveStatsSelectedPointValue: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '900',
+    marginBottom: 2,
+    fontVariant: ['tabular-nums'],
+  },
+  liveStatsSelectedPointMeta: {
+    color: '#8FA2BA',
+    fontSize: 11,
+    lineHeight: 16,
   },
   liveStatsFootnote: {
     color: '#94A3B8',
@@ -1862,6 +2161,44 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
   },
+  modalOptionLabel: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.35,
+    marginBottom: 6,
+    marginLeft: 2,
+  },
+  modalOptionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    columnGap: 8,
+    rowGap: 8,
+    marginBottom: 12,
+  },
+  modalOptionChip: {
+    minHeight: 34,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#1F2937',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  modalOptionChipSelected: {
+    borderColor: '#3B82F6',
+    backgroundColor: '#122744',
+  },
+  modalOptionChipText: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  modalOptionChipTextSelected: {
+    color: '#EAF1FF',
+  },
   modalButtonRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1898,5 +2235,11 @@ const styles = StyleSheet.create({
     color: palette.textPrimary,
     fontSize: 15,
     fontWeight: '800',
+  },
+  finishModalSubtitle: {
+    color: palette.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 8,
   },
 });

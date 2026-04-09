@@ -32,6 +32,14 @@ const BASE_WEB_BG_STYLE = `
   body.desktop-mockup-active > div:has([role="dialog"]) > * {
     pointer-events: auto !important;
   }
+
+  body.desktop-mockup-active input:not([type="hidden"]),
+  body.desktop-mockup-active textarea,
+  body.desktop-mockup-active [contenteditable=""],
+  body.desktop-mockup-active [contenteditable="true"],
+  body.desktop-mockup-active [role="textbox"] {
+    cursor: text !important;
+  }
 `;
 
 export default function Root({ children }: PropsWithChildren) {

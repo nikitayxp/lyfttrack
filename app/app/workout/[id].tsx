@@ -68,17 +68,17 @@ function formatNumericValue(value: number | null, mode: 'decimal' | 'integer'): 
 }
 
 function formatSetType(setType: WorkoutSetType): string {
-  if (setType === 'warmup') return 'Warmup';
+  if (setType === 'warmup') return 'Aquecimento';
   if (setType === 'drop') return 'Dropset';
-  if (setType === 'failure') return 'Failure';
-  return 'Working';
+  if (setType === 'failure') return 'Falha';
+  return 'Trabalho';
 }
 
 function profileDisplayName(details: WorkoutDetails): string {
   const fullName = details.profile?.full_name?.trim();
   const username = details.profile?.username?.trim();
 
-  return fullName || username || 'Athlete';
+  return fullName || username || 'Atleta';
 }
 
 function initialsFromName(value: string): string {
@@ -102,7 +102,7 @@ export default function WorkoutDetailsScreen() {
 
   const loadDetails = useCallback(async () => {
     if (!workoutId) {
-      setLoadError('Workout id missing from route.');
+      setLoadError('ID do treino em falta na rota.');
       setDetails(null);
       setIsLoading(false);
       return;
@@ -128,7 +128,7 @@ export default function WorkoutDetailsScreen() {
 
   const topDisplayName = useMemo(() => {
     if (!details) {
-      return 'Athlete';
+      return 'Atleta';
     }
 
     return profileDisplayName(details);
@@ -145,7 +145,7 @@ export default function WorkoutDetailsScreen() {
           <Ionicons name="arrow-back" size={21} color={palette.textPrimary} />
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>Workout Details</Text>
+        <Text style={styles.headerTitle}>Detalhes do treino</Text>
 
         <View style={styles.headerSpacer} />
       </View>
@@ -153,20 +153,20 @@ export default function WorkoutDetailsScreen() {
       {isLoading ? (
         <View style={styles.statusWrap}>
           <ActivityIndicator size="small" color={palette.accent} />
-          <Text style={styles.statusText}>Loading workout details...</Text>
+          <Text style={styles.statusText}>A carregar detalhes do treino...</Text>
         </View>
       ) : loadError ? (
         <View style={styles.statusWrap}>
-          <Text style={styles.statusTitle}>Unable to load workout</Text>
+          <Text style={styles.statusTitle}>Nao foi possivel carregar o treino</Text>
           <Text style={styles.statusText}>{loadError}</Text>
           <TouchableOpacity style={styles.retryButton} activeOpacity={0.88} onPress={() => void loadDetails()}>
-            <Text style={styles.retryButtonText}>Retry</Text>
+            <Text style={styles.retryButtonText}>Tentar novamente</Text>
           </TouchableOpacity>
         </View>
       ) : !details ? (
         <View style={styles.statusWrap}>
-          <Text style={styles.statusTitle}>Workout unavailable</Text>
-          <Text style={styles.statusText}>This workout does not exist or is not accessible.</Text>
+          <Text style={styles.statusTitle}>Treino indisponivel</Text>
+          <Text style={styles.statusText}>Este treino nao existe ou nao esta acessivel.</Text>
         </View>
       ) : (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -216,30 +216,30 @@ export default function WorkoutDetailsScreen() {
             {details.heaviestWeight !== null ? (
               <View style={styles.topSetPill}>
                 <Ionicons name="trophy-outline" size={13} color="#F59E0B" />
-                <Text style={styles.topSetPillText}>Top Set: {formatNumericValue(details.heaviestWeight, 'decimal')} kg</Text>
+                <Text style={styles.topSetPillText}>Melhor set: {formatNumericValue(details.heaviestWeight, 'decimal')} kg</Text>
               </View>
             ) : null}
           </View>
 
           {details.exercises.length === 0 ? (
             <View style={styles.emptyCard}>
-              <Text style={styles.emptyTitle}>No sets logged</Text>
-              <Text style={styles.emptyText}>This workout does not contain recorded sets.</Text>
+              <Text style={styles.emptyTitle}>Sem sets registados</Text>
+              <Text style={styles.emptyText}>Este treino nao contem sets registados.</Text>
             </View>
           ) : (
             details.exercises.map((exercise) => (
               <View key={`${exercise.id ?? exercise.exercise_id}-${exercise.order}`} style={styles.exerciseCard}>
                 <Text style={styles.exerciseName}>{exercise.exercise_name}</Text>
                 <Text style={styles.exerciseMeta}>
-                  {(exercise.muscle_group ?? 'General') + ' - ' + (exercise.equipment ?? 'Bodyweight')}
+                  {(exercise.muscle_group ?? 'Geral') + ' - ' + (exercise.equipment ?? 'Peso corporal')}
                 </Text>
 
                 <View style={[styles.tableRow, styles.tableHeaderRow]}>
-                  <Text style={[styles.headerCell, styles.cellSet]}>Set</Text>
+                  <Text style={[styles.headerCell, styles.cellSet]}>Serie</Text>
                   <Text style={[styles.headerCell, styles.cellKg]}>kg</Text>
                   <Text style={[styles.headerCell, styles.cellReps]}>Reps</Text>
                   <Text style={[styles.headerCell, styles.cellRir]}>RIR</Text>
-                  <Text style={[styles.headerCell, styles.cellType]}>Type</Text>
+                  <Text style={[styles.headerCell, styles.cellType]}>Tipo</Text>
                 </View>
 
                 {exercise.sets.map((setItem) => (

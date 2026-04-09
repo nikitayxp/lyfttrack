@@ -1,6 +1,6 @@
 import { Redirect } from 'expo-router';
 
-// Este ficheiro serve apenas para empurrar o utilizador para a página de Login mal abre a app!
+// Canonical root target: auth state is enforced in app/_layout.tsx.
 export default function Index() {
-  return <Redirect href="/(auth)" />;
+  return <Redirect href="/(tabs)" />;
 }

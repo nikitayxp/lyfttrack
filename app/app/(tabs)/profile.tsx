@@ -34,7 +34,7 @@ import {
 } from '@/services/interactionService';
 import { getProfile, type ProfileRow } from '@/services/profileService';
 import { addWeight, getWeightHistory, parseBodyWeightInput, type BodyMeasurementEntry } from '@/services/measurementService';
-import { getAllTimePRs, getCurrentWorkoutStreak, type AllTimePR } from '@/services/statsService';
+import { getAllTimePRs, type AllTimePR } from '@/services/statsService';
 import { supabase } from '@/services/supabase';
 import { getErrorMessage, getUserWorkouts, type WorkoutFeedItem } from '@/services/workoutService';
 import { sanitizeDecimalText } from '@/utils/inputValidation';
@@ -44,6 +44,10 @@ const SCREEN_BG = palette.bgPrimary;
 const CARD_BG = palette.surface;
 const HISTORY_PAGE_SIZE = 20;
 const MAX_WEIGHT_HISTORY_ITEMS = 30;
+
+function createWeightUiTraceId(scope: 'profile'): string {
+  return `${scope}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 type FeedLikeInteractionState = {
   hasLiked: boolean;
@@ -61,12 +65,19 @@ function initialsFromName(value: string): string {
     .toUpperCase();
 }
 
-function formatWeightKg(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) {
+function formatWeightKg(value: number | string | null | undefined): string {
+  const parsed =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string'
+        ? Number(value.replace(',', '.').trim())
+        : Number.NaN;
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
     return '--';
   }
 
-  return Number.isInteger(value) ? `${value}` : value.toFixed(1);
+  return Number.isInteger(parsed) ? `${parsed}` : parsed.toFixed(1);
 }
 
 function formatDateShort(value: string): string {
@@ -194,7 +205,6 @@ export default function ProfileScreen() {
   const [workouts, setWorkouts] = useState<WorkoutFeedItem[]>([]);
   const [weightHistory, setWeightHistory] = useState<BodyMeasurementEntry[]>([]);
   const [allTimePrs, setAllTimePrs] = useState<AllTimePR[]>([]);
-  const [currentWorkoutStreak, setCurrentWorkoutStreak] = useState(0);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [performanceError, setPerformanceError] = useState<string | null>(null);
@@ -334,18 +344,22 @@ export default function ProfileScreen() {
     setPerformanceError(null);
 
     try {
-      const [weightEntries, personalRecords, weeklyStreak] = await Promise.all([
+      const [weightEntries, personalRecords] = await Promise.all([
         getWeightHistory(),
         getAllTimePRs(),
-        getCurrentWorkoutStreak(),
       ]);
 
-      setWeightHistory(weightEntries);
+      setWeightHistory((currentHistory) => {
+        if (weightEntries.length === 0 && currentHistory.length > 0) {
+          console.warn('Weight history refresh returned empty. Preserving local history.');
+          return currentHistory;
+        }
+
+        return weightEntries;
+      });
       setAllTimePrs(personalRecords);
-      setCurrentWorkoutStreak(weeklyStreak);
     } catch (error) {
       setPerformanceError(getErrorMessage(error));
-      setCurrentWorkoutStreak(0);
     } finally {
       setIsLoadingPerformance(false);
     }
@@ -694,12 +708,28 @@ export default function ProfileScreen() {
       return;
     }
 
+    const traceId = createWeightUiTraceId('profile');
     const submittedWeightInput = weightInput;
     let parsedValue: number;
 
+    console.info('[weight-save-trace] profile_submit_start', {
+      traceId,
+      submittedWeightInput,
+    });
+
     try {
       parsedValue = parseBodyWeightInput(submittedWeightInput);
+
+      console.info('[weight-save-trace] profile_validation_ok', {
+        traceId,
+        parsedValue,
+      });
     } catch (error: any) {
+      console.warn('[weight-save-trace] profile_validation_failed', {
+        traceId,
+        message: error?.message ?? 'unknown',
+      });
+
       Alert.alert('Validacao', error?.message || 'Introduz um peso valido em kg.');
       return;
     }
@@ -719,26 +749,76 @@ export default function ProfileScreen() {
     setWeightInput('');
 
     try {
+      console.info('[weight-save-trace] profile_save_request', {
+        traceId,
+        parsedValue,
+        optimisticEntryId: optimisticEntry.id,
+      });
+
       const savedEntry = await addWeight(parsedValue);
+
+      console.info('[weight-save-trace] profile_save_success', {
+        traceId,
+        savedEntryId: savedEntry.id,
+        savedWeight: savedEntry.weight,
+      });
+
       setWeightHistory((currentHistory) => {
         const withoutOptimistic = currentHistory.filter((entry) => entry.id !== optimisticEntry.id);
         return mergeWeightEntryIntoHistory(withoutOptimistic, savedEntry);
       });
 
+      Alert.alert('Peso guardado', 'O registo de peso corporal foi guardado com sucesso.');
+
       void (async () => {
         try {
           const nextHistory = await getWeightHistory();
-          setWeightHistory(nextHistory);
+          console.info('[weight-save-trace] profile_refresh_after_save_ok', {
+            traceId,
+            count: nextHistory.length,
+          });
+
+          setWeightHistory((currentHistory) => {
+            if (nextHistory.length === 0 && currentHistory.length > 0) {
+              console.warn('[weight-save-trace] profile_refresh_after_save_empty_preserved', {
+                traceId,
+                currentCount: currentHistory.length,
+              });
+              return currentHistory;
+            }
+
+            return nextHistory;
+          });
         } catch (refreshError) {
-          console.warn('Weight history refresh after save failed:', refreshError);
+          console.warn('[weight-save-trace] profile_refresh_after_save_failed', {
+            traceId,
+            message: getErrorMessage(refreshError),
+          });
         }
       })();
     } catch (error) {
+      const message = getErrorMessage(error);
+      const isRlsFailure = message.includes('42501') || message.toLowerCase().includes('row-level security');
+
+      console.error('[weight-save-trace] profile_save_failed', {
+        traceId,
+        message,
+      });
+
       setWeightHistory((currentHistory) => currentHistory.filter((entry) => entry.id !== optimisticEntry.id));
       setWeightInput(submittedWeightInput);
-      setIsWeightModalVisible(true);
-      Alert.alert('Nao foi possivel guardar o peso', getErrorMessage(error));
+
+      Alert.alert(
+        isRlsFailure ? 'Permissao da base de dados em falta' : 'Nao foi possivel guardar o peso',
+        isRlsFailure
+          ? `${message}\n\nAplica a migracao supabase/migrations/20260407_fix_body_measurements_rls.sql e volta a tentar.`
+          : message
+      );
     } finally {
+      console.info('[weight-save-trace] profile_submit_end', {
+        traceId,
+      });
+
       setIsSavingWeight(false);
     }
   }, [authUserId, isSavingWeight, latestWeightEntry?.user_id, profile?.id, weightInput]);
@@ -983,9 +1063,9 @@ export default function ProfileScreen() {
     handleOpenStats,
     historyError,
     initials,
+    isWeb,
     isLoadingPerformance,
     latestWeightEntry,
-    currentWorkoutStreak,
     openWeightModal,
     performanceError,
     profile?.avatar_url,

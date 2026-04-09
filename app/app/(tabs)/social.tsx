@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import {
   acceptRequest,
@@ -29,14 +30,6 @@ import {
 const palette = Colors.dark;
 const SCREEN_BG = '#000000';
 const CARD_BG = '#111111';
-
-function toErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return 'Erro desconhecido.';
-}
 
 function displayNameOf(profile: {
   username: string;
@@ -60,13 +53,6 @@ function initialsOf(profile: {
     .toUpperCase();
 }
 
-function relationLabel(relation: SocialSearchResult['relation']): string {
-  if (relation === 'friends') return 'Amigos';
-  if (relation === 'request_sent') return 'Pendente';
-  if (relation === 'request_received') return 'Pediu-te';
-  return 'Adicionar';
-}
-
 function openPublicProfile(userId: string) {
   const normalizedUserId = userId.trim();
 
@@ -81,6 +67,7 @@ function openPublicProfile(userId: string) {
 }
 
 export default function SocialScreen() {
+  const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SocialSearchResult[]>([]);
   const [pendingRequests, setPendingRequests] = useState<PendingFriendRequest[]>([]);
@@ -98,6 +85,21 @@ export default function SocialScreen() {
 
   const hasSearchQuery = useMemo(() => query.trim().length >= 2, [query]);
 
+  const toErrorMessage = useCallback((error: unknown): string => {
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    return t('common.unknownError');
+  }, [t]);
+
+  const relationLabel = useCallback((relation: SocialSearchResult['relation']): string => {
+    if (relation === 'friends') return t('social.relations.friends');
+    if (relation === 'request_sent') return t('social.relations.pending');
+    if (relation === 'request_received') return t('social.relations.requestedYou');
+    return t('social.relations.add');
+  }, [t]);
+
   const loadSocialState = useCallback(async () => {
     setSocialError(null);
 
@@ -108,7 +110,7 @@ export default function SocialScreen() {
     } catch (error) {
       setSocialError(toErrorMessage(error));
     }
-  }, []);
+  }, [toErrorMessage]);
 
   useEffect(() => {
     const run = async () => {
@@ -140,7 +142,7 @@ export default function SocialScreen() {
     } finally {
       setIsSearching(false);
     }
-  }, []);
+  }, [toErrorMessage]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -149,6 +151,10 @@ export default function SocialScreen() {
 
     return () => clearTimeout(timer);
   }, [query, runSearch]);
+
+  const handleViewAllAthletes = useCallback(() => {
+    router.push('/athletes' as any);
+  }, []);
 
   const refreshAll = useCallback(async () => {
     setIsRefreshing(true);
@@ -169,13 +175,14 @@ export default function SocialScreen() {
       try {
         await sendFriendRequest(userId);
         await Promise.all([loadSocialState(), runSearch(query)]);
+        Alert.alert(t('social.success.requestSentTitle'), t('social.success.requestSentDescription'));
       } catch (error) {
-        Alert.alert('Nao foi possivel enviar o pedido', toErrorMessage(error));
+        Alert.alert(t('social.errors.sendRequest'), toErrorMessage(error));
       } finally {
         setSendingUserId(null);
       }
     },
-    [loadSocialState, query, runSearch]
+    [loadSocialState, query, runSearch, t, toErrorMessage]
   );
 
   const handleAccept = useCallback(
@@ -185,13 +192,14 @@ export default function SocialScreen() {
       try {
         await acceptRequest(requestId);
         await Promise.all([loadSocialState(), runSearch(query)]);
+        Alert.alert(t('social.success.requestAcceptedTitle'), t('social.success.requestAcceptedDescription'));
       } catch (error) {
-        Alert.alert('Nao foi possivel aceitar o pedido', toErrorMessage(error));
+        Alert.alert(t('social.errors.acceptRequest'), toErrorMessage(error));
       } finally {
         setProcessingRequestId(null);
       }
     },
-    [loadSocialState, query, runSearch]
+    [loadSocialState, query, runSearch, t, toErrorMessage]
   );
 
   const handleReject = useCallback(
@@ -201,13 +209,14 @@ export default function SocialScreen() {
       try {
         await rejectRequest(requestId);
         await Promise.all([loadSocialState(), runSearch(query)]);
+        Alert.alert(t('social.success.requestRejectedTitle'), t('social.success.requestRejectedDescription'));
       } catch (error) {
-        Alert.alert('Nao foi possivel rejeitar o pedido', toErrorMessage(error));
+        Alert.alert(t('social.errors.rejectRequest'), toErrorMessage(error));
       } finally {
         setProcessingRequestId(null);
       }
     },
-    [loadSocialState, query, runSearch]
+    [loadSocialState, query, runSearch, t, toErrorMessage]
   );
 
   return (
@@ -216,18 +225,30 @@ export default function SocialScreen() {
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void refreshAll()} tintColor={palette.accent} />}
     >
-      <Text style={styles.title}>REDE</Text>
-      <Text style={styles.subtitle}>Pesquisa atletas, gere pedidos e fortalece a tua equipa.</Text>
+      <View style={styles.headerRow}>
+        <TouchableOpacity style={styles.backButton} activeOpacity={0.86} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={18} color={palette.textPrimary} />
+          <Text style={styles.backButtonText}>{t('common.back')}</Text>
+        </TouchableOpacity>
+      </View>
+
+      <Text style={styles.title}>{t('social.title')}</Text>
+      <Text style={styles.subtitle}>{t('social.subtitle')}</Text>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Pesquisar atletas</Text>
+        <View style={styles.searchHeaderRow}>
+          <Text style={styles.cardTitle}>{t('social.search.title')}</Text>
+          <TouchableOpacity style={styles.viewAllButton} activeOpacity={0.88} onPress={handleViewAllAthletes}>
+            <Text style={styles.viewAllButtonText}>{t('social.search.viewAll')}</Text>
+          </TouchableOpacity>
+        </View>
         <View style={styles.searchRow}>
           <Ionicons name="search-outline" size={18} color={palette.textMuted} />
           <TextInput
             value={query}
             onChangeText={setQuery}
             style={styles.searchInput}
-            placeholder="Escreve pelo menos 2 caracteres"
+            placeholder={t('social.search.placeholder')}
             placeholderTextColor={palette.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
@@ -237,14 +258,14 @@ export default function SocialScreen() {
         {isSearching ? (
           <View style={styles.inlineStatus}>
             <ActivityIndicator size="small" color={palette.accent} />
-            <Text style={styles.inlineStatusText}>A pesquisar...</Text>
+            <Text style={styles.inlineStatusText}>{t('social.search.searching')}</Text>
           </View>
         ) : searchError ? (
           <Text style={styles.errorText}>{searchError}</Text>
         ) : !hasSearchQuery ? (
-          <Text style={styles.helperText}>Comeca a escrever para encontrares perfis.</Text>
+          <Text style={styles.helperText}>{t('social.search.startTyping')}</Text>
         ) : searchResults.length === 0 ? (
-          <Text style={styles.helperText}>Nao encontrámos utilizadores para esta pesquisa.</Text>
+          <Text style={styles.helperText}>{t('social.search.empty')}</Text>
         ) : (
           searchResults.map((result) => {
             const relation = result.relation;
@@ -292,24 +313,24 @@ export default function SocialScreen() {
 
       <View style={styles.card}>
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.cardTitle}>Pedidos pendentes</Text>
+          <Text style={styles.cardTitle}>{t('social.pending.title')}</Text>
           <Text style={styles.countText}>{pendingRequests.length}</Text>
         </View>
 
         {isLoadingSocial ? (
           <View style={styles.inlineStatus}>
             <ActivityIndicator size="small" color={palette.accent} />
-            <Text style={styles.inlineStatusText}>A carregar pedidos...</Text>
+            <Text style={styles.inlineStatusText}>{t('social.pending.loading')}</Text>
           </View>
         ) : socialError ? (
           <Text style={styles.errorText}>{socialError}</Text>
         ) : pendingRequests.length === 0 ? (
-          <Text style={styles.helperText}>Nao tens pedidos pendentes neste momento.</Text>
+          <Text style={styles.helperText}>{t('social.pending.empty')}</Text>
         ) : (
           pendingRequests.map((request) => {
             const isProcessing = processingRequestId === request.id;
             const profile = request.fromProfile;
-            const fallbackName = profile?.username ?? 'Utilizador desconhecido';
+            const fallbackName = profile?.username ?? t('social.unknownUser');
 
             return (
               <View key={request.id} style={styles.requestItem}>
@@ -335,7 +356,7 @@ export default function SocialScreen() {
 
                   <View style={styles.userMetaWrap}>
                     <Text style={styles.userName}>{profile ? displayNameOf(profile) : fallbackName}</Text>
-                    <Text style={styles.userHandle}>{profile ? `@${profile.username}` : 'Perfil indisponivel'}</Text>
+                    <Text style={styles.userHandle}>{profile ? `@${profile.username}` : t('social.profileUnavailable')}</Text>
                   </View>
                 </TouchableOpacity>
 
@@ -349,7 +370,7 @@ export default function SocialScreen() {
                     {isProcessing ? (
                       <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
-                      <Text style={styles.requestButtonText}>Aceitar</Text>
+                      <Text style={styles.requestButtonText}>{t('social.pending.accept')}</Text>
                     )}
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -358,7 +379,7 @@ export default function SocialScreen() {
                     onPress={() => void handleReject(request.id)}
                     disabled={isProcessing}
                   >
-                    <Text style={styles.requestButtonText}>Rejeitar</Text>
+                    <Text style={styles.requestButtonText}>{t('social.pending.reject')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -369,17 +390,17 @@ export default function SocialScreen() {
 
       <View style={styles.card}>
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.cardTitle}>Amigos</Text>
+          <Text style={styles.cardTitle}>{t('social.friends.title')}</Text>
           <Text style={styles.countText}>{friends.length}</Text>
         </View>
 
         {isLoadingSocial ? (
           <View style={styles.inlineStatus}>
             <ActivityIndicator size="small" color={palette.accent} />
-            <Text style={styles.inlineStatusText}>A carregar amigos...</Text>
+            <Text style={styles.inlineStatusText}>{t('social.friends.loading')}</Text>
           </View>
         ) : friends.length === 0 ? (
-          <Text style={styles.helperText}>Quando aceitares pedidos, os amigos aparecem aqui.</Text>
+          <Text style={styles.helperText}>{t('social.friends.empty')}</Text>
         ) : (
           friends.map((friend) => (
             <TouchableOpacity
@@ -421,6 +442,26 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     rowGap: 14,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 6,
+    minHeight: 34,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#223247',
+    backgroundColor: '#0B1422',
+  },
+  backButtonText: {
+    color: palette.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
   title: {
     color: palette.textPrimary,
     fontSize: 34,
@@ -447,7 +488,28 @@ const styles = StyleSheet.create({
     color: palette.textPrimary,
     fontSize: 16,
     fontWeight: '700',
+  },
+  searchHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 10,
+    columnGap: 10,
+  },
+  viewAllButton: {
+    minHeight: 32,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#0D1624',
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewAllButtonText: {
+    color: '#DCE8FF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -503,6 +565,7 @@ const styles = StyleSheet.create({
   searchItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: palette.border,
@@ -510,6 +573,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 10,
     marginBottom: 8,
+    width: '100%',
+    columnGap: 10,
   },
   requestItem: {
     borderRadius: 12,
@@ -535,9 +600,9 @@ const styles = StyleSheet.create({
   },
   userLinkArea: {
     flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 10,
   },
   avatar: {
     width: 38,
@@ -561,6 +626,7 @@ const styles = StyleSheet.create({
   },
   userMetaWrap: {
     flex: 1,
+    minWidth: 0,
     paddingRight: 10,
   },
   userName: {
@@ -575,13 +641,14 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   userActionButton: {
-    minHeight: 34,
-    minWidth: 78,
+    minHeight: 36,
+    minWidth: 102,
     borderRadius: 10,
     backgroundColor: palette.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
+    flexShrink: 0,
   },
   userActionButtonMuted: {
     backgroundColor: '#27272A',

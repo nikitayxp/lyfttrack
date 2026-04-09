@@ -3,7 +3,6 @@ import { AntDesign, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -168,7 +167,7 @@ export default function SignInScreen() {
 
             <TouchableOpacity style={styles.googleButton} onPress={handleGooglePress} disabled={loading}>
               <AntDesign name="google" size={16} color="#FFFFFF" />
-              <Text style={styles.googleButtonText}>Continue with Google</Text>
+              <Text style={styles.googleButtonText}>Continuar com Google</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.secondaryAction} onPress={() => void handleForgotPassword()} disabled={loading}>

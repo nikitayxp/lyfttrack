@@ -70,7 +70,7 @@ export function normalizeSetTypeOption(current: SetRow['set_type']): SetTypeOpti
 export function normalizeExerciseRestSeconds(value: number | null | undefined): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return DEFAULT_REST_SECONDS;
   const normalized = Math.trunc(value);
-  return Math.max(15, Math.min(900, normalized));
+  return Math.max(0, Math.min(900, normalized));
 }
 
 export function createSet(
@@ -144,7 +144,11 @@ function draftToActiveExercise(draft: DraftExercise): ActiveExercise {
   const exercise: ExerciseRow = {
     id: draft.exerciseId,
     name: draft.exerciseName,
+    name_en: null,
+    name_pt: null,
     muscle_group: draft.muscle_group,
+    muscle_en: null,
+    muscle_pt: null,
     equipment: draft.equipment,
     // required DB fields that aren't stored in the draft
     created_by: null,

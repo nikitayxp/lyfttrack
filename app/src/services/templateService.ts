@@ -61,13 +61,17 @@ function normalizeTemplateName(value: string): string {
   return normalized;
 }
 
+const TEMPLATE_REST_SECONDS_DEFAULT = 90;
+const TEMPLATE_REST_SECONDS_MIN = 15;
+const TEMPLATE_REST_SECONDS_MAX = 900;
+
 function normalizeTemplateRestSeconds(value: number | null | undefined): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return 90;
+    return TEMPLATE_REST_SECONDS_DEFAULT;
   }
 
   const normalized = Math.trunc(value);
-  return Math.max(15, Math.min(900, normalized));
+  return Math.max(TEMPLATE_REST_SECONDS_MIN, Math.min(TEMPLATE_REST_SECONDS_MAX, normalized));
 }
 
 function normalizeTemplateExerciseInputs(
@@ -90,7 +94,7 @@ function normalizeTemplateExerciseInputs(
     seen.add(normalized);
     result.push({
       exerciseId: normalized,
-      restSeconds: normalizeTemplateRestSeconds(typeof entry === 'string' ? 90 : entry.restSeconds),
+      restSeconds: normalizeTemplateRestSeconds(typeof entry === 'string' ? undefined : entry.restSeconds),
     });
   }
 

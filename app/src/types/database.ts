@@ -20,24 +20,36 @@ export type Database = {
           equipment: string | null
           id: string
           is_custom: boolean
+          muscle_en: string | null
           muscle_group: string | null
+          muscle_pt: string | null
           name: string
+          name_en: string | null
+          name_pt: string | null
         }
         Insert: {
           created_by?: string | null
           equipment?: string | null
           id?: string
           is_custom?: boolean
+          muscle_en?: string | null
           muscle_group?: string | null
+          muscle_pt?: string | null
           name: string
+          name_en?: string | null
+          name_pt?: string | null
         }
         Update: {
           created_by?: string | null
           equipment?: string | null
           id?: string
           is_custom?: boolean
+          muscle_en?: string | null
           muscle_group?: string | null
+          muscle_pt?: string | null
           name?: string
+          name_en?: string | null
+          name_pt?: string | null
         }
         Relationships: [
           {
@@ -565,7 +577,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      respond_to_friend_request: {
+        Args: {
+          p_action: string
+          p_request_id: string
+        }
+        Returns: {
+          created_at: string
+          from_user_id: string
+          id: string
+          responded_at: string | null
+          status: string
+          to_user_id: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

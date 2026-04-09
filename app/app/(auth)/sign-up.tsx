@@ -3,7 +3,6 @@ import { AntDesign, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -19,8 +18,26 @@ import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
 import { supabase } from '@/services/supabase';
 
 const palette = Colors.dark;
+const USERNAME_MAX_LENGTH = 24;
+const DISPLAY_NAME_MAX_LENGTH = 60;
+
+function normalizeDisplayName(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+function sanitizeUsername(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9._]/g, '')
+    .replace(/_+/g, '_')
+    .replace(/^[_\.]+|[_\.]+$/g, '');
+}
 
 export default function SignUpScreen() {
+  const [displayName, setDisplayName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -32,9 +49,21 @@ export default function SignUpScreen() {
   async function handleSignUp() {
     setFeedback(null);
     const normalizedEmail = email.trim().toLowerCase();
+    const normalizedDisplayName = normalizeDisplayName(displayName).slice(0, DISPLAY_NAME_MAX_LENGTH);
+    const normalizedUsername = sanitizeUsername(username).slice(0, USERNAME_MAX_LENGTH);
 
-    if (!normalizedEmail || !password.trim() || !confirmPassword.trim()) {
+    if (!normalizedDisplayName || !normalizedUsername || !normalizedEmail || !password.trim() || !confirmPassword.trim()) {
       setFeedback({ message: 'Preenche todos os campos para criares a conta.', type: 'error' });
+      return;
+    }
+
+    if (normalizedDisplayName.length < 2) {
+      setFeedback({ message: 'O nome de exibicao deve ter pelo menos 2 caracteres.', type: 'error' });
+      return;
+    }
+
+    if (normalizedUsername.length < 3) {
+      setFeedback({ message: 'O username deve ter pelo menos 3 caracteres validos.', type: 'error' });
       return;
     }
 
@@ -59,6 +88,13 @@ export default function SignUpScreen() {
       const { data, error } = await supabase.auth.signUp({
         email: normalizedEmail,
         password,
+        options: {
+          data: {
+            username: normalizedUsername,
+            full_name: normalizedDisplayName,
+            display_name: normalizedDisplayName,
+          },
+        },
       });
 
       if (error) {
@@ -117,6 +153,34 @@ export default function SignUpScreen() {
                 <Text style={styles.feedbackText}>{feedback.message}</Text>
               </View>
             ) : null}
+
+            <Text style={styles.label}>Nome de exibicao</Text>
+            <View style={styles.inputLine}>
+              <TextInput
+                value={displayName}
+                onChangeText={(value) => setDisplayName(value.slice(0, DISPLAY_NAME_MAX_LENGTH))}
+                placeholder="Como queres aparecer no app"
+                placeholderTextColor={palette.textMuted}
+                autoCapitalize="words"
+                autoCorrect={false}
+                style={styles.inputField}
+                maxLength={DISPLAY_NAME_MAX_LENGTH}
+              />
+            </View>
+
+            <Text style={styles.label}>Username</Text>
+            <View style={styles.inputLine}>
+              <TextInput
+                value={username}
+                onChangeText={(value) => setUsername(sanitizeUsername(value).slice(0, USERNAME_MAX_LENGTH))}
+                placeholder="username"
+                placeholderTextColor={palette.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={styles.inputField}
+                maxLength={USERNAME_MAX_LENGTH}
+              />
+            </View>
 
             <Text style={styles.label}>Email</Text>
             <View style={styles.inputLine}>
@@ -207,7 +271,7 @@ export default function SignUpScreen() {
 
             <TouchableOpacity style={styles.googleButton} onPress={handleGooglePress} disabled={loading}>
               <AntDesign name="google" size={16} color="#FFFFFF" />
-              <Text style={styles.googleButtonText}>Continue with Google</Text>
+              <Text style={styles.googleButtonText}>Continuar com Google</Text>
             </TouchableOpacity>
 
             <TouchableOpacity

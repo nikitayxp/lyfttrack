@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { EmptyState } from '@/components/common/EmptyState';
 import { FeedCommentsModal } from '@/components/feed/FeedCommentsModal';
@@ -46,9 +47,9 @@ function readRouteId(value: string | string[] | undefined): string | null {
   return value?.trim() || null;
 }
 
-function profileDisplayName(profile: PublicProfileView | null): string {
+function profileDisplayName(profile: PublicProfileView | null, fallbackLabel: string): string {
   if (!profile) {
-    return 'Atleta';
+    return fallbackLabel;
   }
 
   return profile.full_name?.trim() || profile.username;
@@ -65,6 +66,7 @@ function initialsFromName(value: string): string {
 }
 
 export default function PublicProfileScreen() {
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const profileId = useMemo(() => readRouteId(params.id), [params.id]);
 
@@ -92,7 +94,7 @@ export default function PublicProfileScreen() {
       }
 
       if (!profileId) {
-        setError('ID de perfil invalido.');
+        setError(t('publicProfile.invalidId'));
         setProfile(null);
         setWorkouts([]);
         setIsLoading(false);
@@ -111,7 +113,7 @@ export default function PublicProfileScreen() {
         if (!profileData) {
           setProfile(null);
           setWorkouts([]);
-          setError('Perfil nao encontrado.');
+          setError(t('publicProfile.notFound'));
           return;
         }
 
@@ -165,7 +167,7 @@ export default function PublicProfileScreen() {
         setIsRefreshing(false);
       }
     },
-    [profileId]
+    [profileId, t]
   );
 
   useEffect(() => {
@@ -317,7 +319,7 @@ export default function PublicProfileScreen() {
       });
 
       setCommentInputValue(trimmedComment);
-      Alert.alert('Nao foi possivel publicar o comentario', getErrorMessage(sendError));
+      Alert.alert(t('publicProfile.commentPublishError'), getErrorMessage(sendError));
     } finally {
       setIsSendingComment(false);
     }
@@ -328,6 +330,7 @@ export default function PublicProfileScreen() {
     isSendingComment,
     loadCommentsForWorkout,
     selectedWorkoutForComments,
+    t,
   ]);
 
   const handleToggleLike = useCallback(async (workout: WorkoutFeedItem) => {
@@ -398,11 +401,11 @@ export default function PublicProfileScreen() {
         return nextState;
       });
 
-      Alert.alert('Nao foi possivel atualizar o gosto', getErrorMessage(toggleError));
+      Alert.alert(t('publicProfile.likeUpdateError'), getErrorMessage(toggleError));
     }
-  }, []);
+  }, [t]);
 
-  const displayName = useMemo(() => profileDisplayName(profile), [profile]);
+  const displayName = useMemo(() => profileDisplayName(profile, t('publicProfile.athleteFallback')), [profile, t]);
 
   const selectedWorkoutComments = selectedWorkoutForComments
     ? commentsByWorkoutId[selectedWorkoutForComments.id] ?? []
@@ -419,20 +422,20 @@ export default function PublicProfileScreen() {
           <TouchableOpacity style={styles.backButton} activeOpacity={0.86} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={20} color={palette.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.title}>PERFIL</Text>
+          <Text style={styles.title}>{t('publicProfile.title')}</Text>
           <View style={styles.backButtonPlaceholder} />
         </View>
 
         {isLoading ? (
           <View style={styles.statusCard}>
             <ActivityIndicator size="small" color={palette.accent} />
-            <Text style={styles.statusText}>A carregar perfil...</Text>
+            <Text style={styles.statusText}>{t('publicProfile.loadingProfile')}</Text>
           </View>
         ) : error ? (
           <View style={styles.statusCard}>
             <Text style={styles.errorText}>{error}</Text>
             <TouchableOpacity style={styles.retryButton} activeOpacity={0.86} onPress={() => void loadData('initial')}>
-              <Text style={styles.retryButtonText}>Tentar novamente</Text>
+              <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -453,19 +456,19 @@ export default function PublicProfileScreen() {
 
               <View style={styles.metricChip}>
                 <Ionicons name="barbell-outline" size={14} color={palette.accent} />
-                <Text style={styles.metricChipText}>{`${workouts.length} treinos recentes`}</Text>
+                <Text style={styles.metricChipText}>{t('publicProfile.recentWorkouts', { count: workouts.length })}</Text>
               </View>
             </View>
 
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>TREINOS</Text>
+              <Text style={styles.sectionTitle}>{t('publicProfile.workoutsSectionTitle')}</Text>
             </View>
 
             {workouts.length === 0 ? (
               <EmptyState
                 icon="trophy-outline"
-                title="Sem treinos publicos"
-                description="Este atleta ainda nao partilhou sessoes recentes."
+                title={t('publicProfile.noPublicWorkoutsTitle')}
+                description={t('publicProfile.noPublicWorkoutsDescription')}
                 containerStyle={styles.statusCard}
                 descriptionStyle={styles.statusText}
               />
@@ -493,7 +496,7 @@ export default function PublicProfileScreen() {
 
       <FeedCommentsModal
         visible={selectedWorkoutForComments !== null}
-        workoutName={selectedWorkoutForComments?.name ?? 'Treino'}
+        workoutName={selectedWorkoutForComments?.name ?? t('publicProfile.workoutFallback')}
         comments={selectedWorkoutComments}
         isLoading={isCommentsLoading}
         isSending={isSendingComment}

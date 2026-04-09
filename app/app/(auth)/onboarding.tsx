@@ -11,6 +11,10 @@ import { sanitizeDecimalText } from '@/utils/inputValidation';
 
 const palette = Colors.dark;
 
+function createWeightUiTraceId(scope: 'onboarding'): string {
+  return `${scope}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export default function OnboardingScreen() {
   const [name, setName] = useState('');
   const [weight, setWeight] = useState('');
@@ -18,9 +22,16 @@ export default function OnboardingScreen() {
   const [feedback, setFeedback] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
 
   async function handleComplete() {
+    const traceId = createWeightUiTraceId('onboarding');
     setFeedback(null);
     const submittedWeightInput = weight;
     const safeName = name.trim();
+
+    console.info('[weight-save-trace] onboarding_submit_start', {
+      traceId,
+      submittedWeightInput,
+      hasName: Boolean(safeName),
+    });
 
     if (!safeName) {
       setFeedback({ message: 'Indica um nome e o teu peso atual em kg.', type: 'error' });
@@ -31,7 +42,17 @@ export default function OnboardingScreen() {
 
     try {
       parsedWeight = parseBodyWeightInput(weight);
+
+      console.info('[weight-save-trace] onboarding_validation_ok', {
+        traceId,
+        parsedWeight,
+      });
     } catch (e: any) {
+      console.warn('[weight-save-trace] onboarding_validation_failed', {
+        traceId,
+        message: e?.message ?? 'unknown',
+      });
+
       setFeedback({ message: e?.message || 'Indica um peso valido em kg.', type: 'error' });
       return;
     }
@@ -46,20 +67,55 @@ export default function OnboardingScreen() {
     let profileUpdated = false;
 
     try {
+      console.info('[weight-save-trace] onboarding_profile_update_start', {
+        traceId,
+      });
+
       await updateProfile({ fullName: safeName });
       profileUpdated = true;
 
+      console.info('[weight-save-trace] onboarding_profile_update_ok', {
+        traceId,
+      });
+
+      console.info('[weight-save-trace] onboarding_weight_save_start', {
+        traceId,
+        parsedWeight,
+      });
       await addWeight(parsedWeight);
+
+      console.info('[weight-save-trace] onboarding_weight_save_ok', {
+        traceId,
+      });
+
       router.replace('/(tabs)/workout' as any);
     } catch (e: any) {
       setWeight(submittedWeightInput);
+
+      const message = e?.message || '';
+      const isRlsFailure = message.includes('42501') || message.toLowerCase().includes('row-level security');
+
+      console.error('[weight-save-trace] onboarding_submit_failed', {
+        traceId,
+        profileUpdated,
+        message,
+      });
 
       const fallbackMessage = profileUpdated
         ? 'O nome foi guardado, mas o peso nao foi registado. Tenta novamente.'
         : 'Ocorreu um erro a criar o teu perfil inicial.';
 
-      setFeedback({ message: e?.message || fallbackMessage, type: 'error' });
+      setFeedback({
+        message: isRlsFailure
+          ? `${message}\nAplica a migracao supabase/migrations/20260407_fix_body_measurements_rls.sql e tenta novamente.`
+          : e?.message || fallbackMessage,
+        type: 'error',
+      });
     } finally {
+      console.info('[weight-save-trace] onboarding_submit_end', {
+        traceId,
+      });
+
       setLoading(false);
     }
   }

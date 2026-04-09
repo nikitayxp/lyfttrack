@@ -319,6 +319,57 @@ export async function getActiveUsers(query = '', limit: number | null = null): P
   });
 }
 
+export async function getAllAthletes(limit: number | null = null): Promise<SocialSearchResult[]> {
+  const user = await getAuthenticatedUserOrThrow();
+  const safeLimit = normalizeResultLimit(limit, 120);
+
+  const { data: profiles, error: profilesError } = await supabase
+    .from('profiles')
+    .select('id, username, full_name, avatar_url')
+    .neq('id', user.id)
+    .order('username', { ascending: true })
+    .limit(safeLimit);
+
+  if (profilesError) {
+    throw new Error(`Unable to load athletes: ${profilesError.message}`);
+  }
+
+  const candidates = profiles ?? [];
+
+  if (candidates.length === 0) {
+    return [];
+  }
+
+  const relationByUserId = await getRelationsByUserIds(
+    user.id,
+    candidates.map((candidate) => candidate.id)
+  );
+
+  const results = candidates.map((candidate) => ({
+    ...candidate,
+    relation: relationByUserId.get(candidate.id) ?? 'none',
+  }));
+
+  const recentActiveUserIds = await getActiveUserIdsByRecentWorkouts(user.id);
+
+  if (recentActiveUserIds.length === 0) {
+    return results;
+  }
+
+  const recentIndexByUserId = new Map(recentActiveUserIds.map((id, index) => [id, index]));
+
+  return results.sort((a, b) => {
+    const aIndex = recentIndexByUserId.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+    const bIndex = recentIndexByUserId.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+
+    if (aIndex !== bIndex) {
+      return aIndex - bIndex;
+    }
+
+    return a.username.localeCompare(b.username);
+  });
+}
+
 export async function sendFriendRequest(userId: string): Promise<FriendRequestRow> {
   const user = await getAuthenticatedUserOrThrow();
   const targetUserId = normalizeOptionalId(userId);
@@ -422,7 +473,10 @@ export async function getPendingRequests(): Promise<PendingFriendRequest[]> {
   }));
 }
 
-export async function acceptRequest(requestId: string): Promise<FriendRequestRow> {
+async function respondToPendingRequest(
+  requestId: string,
+  action: 'accepted' | 'rejected'
+): Promise<FriendRequestRow> {
   const user = await getAuthenticatedUserOrThrow();
   const normalizedRequestId = normalizeOptionalId(requestId);
 
@@ -430,87 +484,45 @@ export async function acceptRequest(requestId: string): Promise<FriendRequestRow
     throw new Error('Request id is required.');
   }
 
-  const { data: request, error: requestError } = await supabase
-    .from('friend_requests')
-    .select('*')
-    .eq('id', normalizedRequestId)
-    .eq('to_user_id', user.id)
-    .maybeSingle();
-
-  if (requestError) {
-    throw new Error(`Unable to load friend request: ${requestError.message}`);
-  }
-
-  if (!request) {
-    throw new Error('Friend request not found.');
-  }
-
-  if (request.status !== 'pending') {
-    throw new Error('This friend request is no longer pending.');
-  }
-
-  const pair = sortCanonicalPair(request.from_user_id, request.to_user_id);
-
-  const friendshipInsert: TablesInsert<'friends'> = {
-    user_low_id: pair.user_low_id,
-    user_high_id: pair.user_high_id,
-    created_by_request_id: request.id,
-  };
-
-  const { error: friendInsertError } = await supabase.from('friends').insert(friendshipInsert);
-
-  if (friendInsertError) {
-    const code = toErrorCode(friendInsertError);
-
-    if (code !== '23505') {
-      throw new Error(`Unable to create friendship: ${friendInsertError.message}`);
-    }
-  }
-
-  const { data: updatedRequest, error: updateError } = await supabase
-    .from('friend_requests')
-    .update({
-      status: 'accepted',
-      responded_at: new Date().toISOString(),
+  const { data: updatedRequest, error: rpcError } = await supabase
+    .rpc('respond_to_friend_request', {
+      p_request_id: normalizedRequestId,
+      p_action: action,
     })
-    .eq('id', request.id)
-    .eq('to_user_id', user.id)
-    .eq('status', 'pending')
-    .select('*')
     .single();
 
-  if (updateError || !updatedRequest) {
-    throw new Error(`Unable to accept friend request: ${updateError?.message ?? 'Unknown error'}`);
+  if (rpcError || !updatedRequest) {
+    const normalizedMessage = (rpcError?.message ?? '').toLowerCase();
+
+    if (normalizedMessage.includes('not found')) {
+      throw new Error('Friend request not found.');
+    }
+
+    if (normalizedMessage.includes('no longer pending')) {
+      throw new Error('This friend request is no longer pending.');
+    }
+
+    if (normalizedMessage.includes('authentication required')) {
+      throw new Error('Authenticated user not found. Please log in again.');
+    }
+
+    const operationLabel = action === 'accepted' ? 'accept' : 'reject';
+    throw new Error(`Unable to ${operationLabel} friend request: ${rpcError?.message ?? 'Unknown error'}`);
+  }
+
+  if (updatedRequest.to_user_id !== user.id) {
+    throw new Error('Friend request not found.');
   }
 
   return updatedRequest;
 }
 
+export async function acceptRequest(requestId: string): Promise<FriendRequestRow> {
+  return respondToPendingRequest(requestId, 'accepted');
+}
+
 export async function rejectRequest(requestId: string): Promise<FriendRequestRow> {
-  const user = await getAuthenticatedUserOrThrow();
-  const normalizedRequestId = normalizeOptionalId(requestId);
-
-  if (!normalizedRequestId) {
-    throw new Error('Request id is required.');
-  }
-
-  const { data: updatedRequest, error: updateError } = await supabase
-    .from('friend_requests')
-    .update({
-      status: 'rejected',
-      responded_at: new Date().toISOString(),
-    })
-    .eq('id', normalizedRequestId)
-    .eq('to_user_id', user.id)
-    .eq('status', 'pending')
-    .select('*')
-    .single();
-
-  if (updateError || !updatedRequest) {
-    throw new Error(`Unable to reject friend request: ${updateError?.message ?? 'Unknown error'}`);
-  }
-
-  return updatedRequest;
+  return respondToPendingRequest(requestId, 'rejected');
 }
 
 export async function getFriends(): Promise<FriendListItem[]> {

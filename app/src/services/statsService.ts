@@ -2,7 +2,7 @@ import { supabase } from '@/services/supabase';
 import { getAuthenticatedUserOrThrow } from '@/services/workoutService';
 import type { Tables } from '@/types/database';
 
-export type ProgressMetric = 'volume' | 'estimated1rm';
+export type ProgressMetric = 'duration' | 'volume' | 'reps';
 
 export type StatsExerciseOption = {
   id: string;
@@ -14,6 +14,8 @@ export type ExerciseProgressPoint = {
   label: string;
   value: number;
   volumeTotal: number;
+  repsTotal: number;
+  durationMinutes: number;
   estimated1RMMax: number;
 };
 
@@ -77,6 +79,21 @@ function estimate1RM(weight: number, reps: number): number {
   }
 
   return weight * (1 + reps / 30);
+}
+
+function getWorkoutDurationMinutes(startTimeIso: string | null | undefined, endTimeIso: string | null | undefined): number {
+  if (!startTimeIso || !endTimeIso) {
+    return 0;
+  }
+
+  const startMs = new Date(startTimeIso).getTime();
+  const endMs = new Date(endTimeIso).getTime();
+
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+    return 0;
+  }
+
+  return Math.max(0, Math.round((endMs - startMs) / (1000 * 60)));
 }
 
 function formatProgressLabel(dateIso: string): string {
@@ -196,7 +213,17 @@ export async function getExerciseProgress(
 ): Promise<ExerciseProgressPoint[]> {
   const rows = await getExerciseSetRowsForUser(exerciseId);
 
-  const byDay = new Map<string, { volumeTotal: number; estimated1RMMax: number; timestamp: number }>();
+  const byDay = new Map<
+    string,
+    {
+      volumeTotal: number;
+      repsTotal: number;
+      durationMinutes: number;
+      estimated1RMMax: number;
+      timestamp: number;
+      trackedWorkoutKeys: Set<string>;
+    }
+  >();
 
   for (const row of rows) {
     const workout = resolveEmbeddedObject(row.workouts);
@@ -214,12 +241,23 @@ export async function getExerciseProgress(
 
     const current = byDay.get(dateKey) ?? {
       volumeTotal: 0,
+      repsTotal: 0,
+      durationMinutes: 0,
       estimated1RMMax: 0,
       timestamp,
+      trackedWorkoutKeys: new Set<string>(),
     };
 
     current.volumeTotal += volume;
+    current.repsTotal += reps;
     current.estimated1RMMax = Math.max(current.estimated1RMMax, estimated1RM);
+
+    const workoutKey = `${workout.start_time}|${workout.end_time ?? ''}`;
+
+    if (!current.trackedWorkoutKeys.has(workoutKey)) {
+      current.trackedWorkoutKeys.add(workoutKey);
+      current.durationMinutes += getWorkoutDurationMinutes(workout.start_time, workout.end_time);
+    }
 
     byDay.set(dateKey, current);
   }
@@ -228,13 +266,23 @@ export async function getExerciseProgress(
     .sort((a, b) => a[1].timestamp - b[1].timestamp)
     .map(([date, aggregate]) => {
       const volumeTotal = Math.round(aggregate.volumeTotal);
+      const repsTotal = Math.round(aggregate.repsTotal);
+      const durationMinutes = Math.round(aggregate.durationMinutes);
       const estimated1RMMax = Number(aggregate.estimated1RMMax.toFixed(1));
+
+      const value = metric === 'duration'
+        ? durationMinutes
+        : metric === 'reps'
+          ? repsTotal
+          : volumeTotal;
 
       return {
         date,
         label: formatProgressLabel(date),
-        value: metric === 'estimated1rm' ? estimated1RMMax : volumeTotal,
+        value,
         volumeTotal,
+        repsTotal,
+        durationMinutes,
         estimated1RMMax,
       };
     });

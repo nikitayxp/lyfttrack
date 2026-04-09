@@ -1,5 +1,10 @@
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/services/supabase';
+import {
+  EXERCISE_MUSCLE_LABELS,
+  normalizeEquipmentKey,
+  normalizeMuscleKey,
+} from '@/constants/exerciseCatalog';
 import type { Tables, TablesInsert } from '@/types/database';
 import { INPUT_LIMITS, sanitizeText, toSafeInteger, toSafeNumber } from '@/utils/inputValidation';
 import type { WorkoutSetDraft, WorkoutSetProgressDraft, WorkoutSetType } from './workoutSession.types';
@@ -258,6 +263,8 @@ type RawWorkoutFeedSetRow = Pick<
 > & {
   exercises?: Pick<ExerciseCatalogItem, 'id' | 'name'> | Pick<ExerciseCatalogItem, 'id' | 'name'>[] | null;
 };
+
+type RawExerciseRestTimeRow = Pick<WorkoutExerciseRow, 'exercise_id' | 'rest_time'>;
 
 type SupabaseErrorMeta = {
   code: string | null;
@@ -648,13 +655,21 @@ export async function getExercisesCatalog(filters: ExerciseCatalogFilters = {}):
 export async function createExercise(input: CreateExerciseInput): Promise<ExerciseCatalogItem> {
   const user = await getAuthenticatedUserOrThrow();
   const normalizedName = normalizeRequiredName(input.name, 'Exercise name');
+  const normalizedMuscleKey = normalizeMuscleKey(input.muscleGroup);
+  const normalizedEquipmentKey = normalizeEquipmentKey(input.equipment);
+
+  const muscleLabels = normalizedMuscleKey ? EXERCISE_MUSCLE_LABELS[normalizedMuscleKey] : null;
 
   const insertRow: TablesInsert<'exercises'> = {
     name: normalizedName,
+    name_en: normalizedName,
+    name_pt: normalizedName,
     created_by: user.id,
     is_custom: true,
-    muscle_group: normalizeWriteText(input.muscleGroup, INPUT_LIMITS.nameMax),
-    equipment: normalizeWriteText(input.equipment, INPUT_LIMITS.nameMax),
+    muscle_group: normalizedMuscleKey ?? normalizeWriteText(input.muscleGroup, INPUT_LIMITS.nameMax),
+    muscle_en: muscleLabels?.en ?? null,
+    muscle_pt: muscleLabels?.pt ?? null,
+    equipment: normalizedEquipmentKey ?? normalizeWriteText(input.equipment, INPUT_LIMITS.nameMax),
   };
 
   const { data, error } = await supabase.from('exercises').insert(insertRow).select('*').single();
@@ -664,6 +679,46 @@ export async function createExercise(input: CreateExerciseInput): Promise<Exerci
   }
 
   return data;
+}
+
+export async function getLastExerciseRestTimes(exerciseIds: string[]): Promise<Record<string, number>> {
+  const user = await getAuthenticatedUserOrThrow();
+  const normalizedExerciseIds = normalizeExerciseIdList(exerciseIds);
+
+  if (normalizedExerciseIds.length === 0) {
+    return {};
+  }
+
+  const { data, error } = await supabase
+    .from('workout_exercises')
+    .select('exercise_id, rest_time, workouts!inner(user_id, start_time, end_time)')
+    .eq('workouts.user_id', user.id)
+    .not('workouts.end_time', 'is', null)
+    .in('exercise_id', normalizedExerciseIds)
+    .not('rest_time', 'is', null)
+    .order('start_time', { foreignTable: 'workouts', ascending: false });
+
+  if (error) {
+    if (isWorkoutExercisesTableMissing(error)) {
+      return {};
+    }
+
+    throw new Error(`Unable to load exercise rest history: ${error.message}`);
+  }
+
+  const latestByExerciseId: Record<string, number> = {};
+
+  for (const row of (data as RawExerciseRestTimeRow[] | null) ?? []) {
+    const exerciseId = normalizeOptionalId(row.exercise_id);
+
+    if (!exerciseId || latestByExerciseId[exerciseId] !== undefined) {
+      continue;
+    }
+
+    latestByExerciseId[exerciseId] = toSafeInteger(row.rest_time, { min: 0, max: 3600 }) ?? 0;
+  }
+
+  return latestByExerciseId;
 }
 
 // ---------- Routines ----------

@@ -43,38 +43,6 @@ function formatRecords(value: number | null | undefined): string {
   return `${value}`;
 }
 
-function formatSetWeight(value: number | null): string {
-  if (value === null || !Number.isFinite(value) || value <= 0) {
-    return '--';
-  }
-
-  return Number.isInteger(value) ? `${value}` : value.toFixed(1);
-}
-
-function formatSetReps(value: number | null): string {
-  if (value === null || !Number.isFinite(value) || value <= 0) {
-    return '--';
-  }
-
-  return `${Math.max(0, Math.trunc(value))}`;
-}
-
-function formatSetRir(value: number | null): string {
-  if (value === null || !Number.isFinite(value)) {
-    return '-';
-  }
-
-  return Number.isInteger(value) ? `${Math.trunc(value)}` : value.toFixed(1);
-}
-
-function formatSetNumber(value: number | null): string {
-  if (value === null || !Number.isFinite(value) || value <= 0) {
-    return '-';
-  }
-
-  return `${Math.max(1, Math.trunc(value))}`;
-}
-
 function profileDisplayName(workout: WorkoutFeedItem): string {
   const fullName = workout.profile?.full_name?.trim();
   const username = workout.profile?.username?.trim();

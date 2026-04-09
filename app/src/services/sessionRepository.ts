@@ -1,6 +1,6 @@
 import { supabase } from '@/services/supabase';
 import type { TablesInsert } from '@/types/database';
-import { INPUT_LIMITS, sanitizeText, toSafeNumber } from '@/utils/inputValidation';
+import { INPUT_LIMITS, sanitizeText, toSafeInteger, toSafeNumber } from '@/utils/inputValidation';
 import {
   getAuthenticatedUserOrThrow,
   extractSupabaseErrorMeta,
@@ -108,6 +108,7 @@ export async function finishWorkout(input: FinishWorkoutInput): Promise<FinishWo
       name: input.name,
       notes: input.notes,
       templateId: input.templateId ?? null,
+      exerciseRestSecondsByExerciseId: input.exerciseRestSecondsByExerciseId,
       startTime: input.startTime,
       endTime,
       setDrafts: completedSetDrafts,
@@ -252,11 +253,16 @@ export async function createWorkoutWithSets(
     input.setDrafts.map((draft) => draft.exerciseId ?? '')
   );
 
+  const restSecondsByExerciseId = input.exerciseRestSecondsByExerciseId ?? {};
+
   const workoutExerciseRows: TablesInsert<'workout_exercises'>[] = uniqueExerciseIds.map((exerciseId, index) => ({
     workout_id: createdWorkout.id,
     exercise_id: exerciseId,
     order: index + 1,
-    rest_time: null,
+    rest_time: toSafeInteger(restSecondsByExerciseId[exerciseId], {
+      min: 0,
+      max: 3600,
+    }) ?? 0,
   }));
 
   const workoutExerciseIdByExercise = new Map<string, string>();

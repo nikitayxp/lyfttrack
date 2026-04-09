@@ -13,7 +13,9 @@ import { Colors } from '@/constants/theme';
 import { supabase } from '@/services/supabase';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import NeuralBackground from '@/components/ui/flow-field-background';
-import CustomCursor from '@/components/ui/CustomCursor';
+import { MinimizedWorkoutBar } from '@/components/workout/MinimizedWorkoutBar';
+import { PreferencesProvider } from '@/context/PreferencesContext';
+import { WorkoutProvider } from '@/context/WorkoutContext';
 import type { Session } from '@supabase/supabase-js';
 
 const palette = Colors.dark;
@@ -111,6 +113,7 @@ export default function RootLayout() {
   const isWeb = Platform.OS === 'web';
   const isDesktopWeb = isWeb && width > DESKTOP_WEB_MOCKUP_MIN_WIDTH;
   const segments = useSegments();
+  const isTabsRoute = segments[0] === '(tabs)';
   const safeAreaStyle = isWeb ? styles.safeAreaWeb : styles.safeArea;
 
   useEffect(() => {
@@ -186,38 +189,6 @@ export default function RootLayout() {
     };
   }, [isWeb, isDesktopWeb]);
 
-  useEffect(() => {
-    if (!isWeb || !isDesktopWeb || typeof document === 'undefined') {
-      return;
-    }
-
-    const html = document.documentElement;
-    const body = document.body;
-    const root = document.getElementById('root');
-
-    const previous = {
-      htmlCursor: html.style.cursor,
-      bodyCursor: body.style.cursor,
-      rootCursor: root?.style.cursor ?? '',
-    };
-
-    html.style.cursor = 'none';
-    body.style.cursor = 'none';
-
-    if (root) {
-      root.style.cursor = 'none';
-    }
-
-    return () => {
-      html.style.cursor = previous.htmlCursor;
-      body.style.cursor = previous.bodyCursor;
-
-      if (root) {
-        root.style.cursor = previous.rootCursor;
-      }
-    };
-  }, [isDesktopWeb, isWeb]);
-
   const redirectForSession = useCallback((session: Session | null) => {
     const inAuthGroup = segments[0] === '(auth)';
 
@@ -262,36 +233,49 @@ export default function RootLayout() {
   }, [redirectForSession]);
 
   const layout = (
-    <SafeAreaProvider style={safeAreaStyle} initialMetrics={isWeb ? undefined : initialWindowMetrics}>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: {
-            backgroundColor: palette.bgPrimary,
-          },
-        }}
-      >
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="workout/active"
-          options={{
-            headerShown: false,
-            presentation: isWeb ? 'card' : 'fullScreenModal',
-            animation: 'slide_from_bottom',
-            statusBarStyle: 'light',
-          }}
-        />
-        <Stack.Screen
-          name="workout/[id]"
-          options={{
-            headerShown: false,
-            animation: 'slide_from_right',
-            statusBarStyle: 'light',
-          }}
-        />
-      </Stack>
-    </SafeAreaProvider>
+    <PreferencesProvider>
+      <WorkoutProvider>
+        <SafeAreaProvider style={safeAreaStyle} initialMetrics={isWeb ? undefined : initialWindowMetrics}>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: {
+                backgroundColor: palette.bgPrimary,
+              },
+            }}
+          >
+            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen
+              name="workout/active"
+              options={{
+                headerShown: false,
+                presentation: isWeb ? 'card' : 'fullScreenModal',
+                animation: 'slide_from_bottom',
+                statusBarStyle: 'light',
+              }}
+            />
+            <Stack.Screen
+              name="workout/[id]"
+              options={{
+                headerShown: false,
+                animation: 'slide_from_right',
+                statusBarStyle: 'light',
+              }}
+            />
+            <Stack.Screen
+              name="athletes"
+              options={{
+                headerShown: false,
+                animation: 'slide_from_right',
+                statusBarStyle: 'light',
+              }}
+            />
+          </Stack>
+          <MinimizedWorkoutBar visible={isTabsRoute} />
+        </SafeAreaProvider>
+      </WorkoutProvider>
+    </PreferencesProvider>
   );
 
   if (isWeb) {
@@ -300,7 +284,6 @@ export default function RootLayout() {
         <View style={[styles.webFlowLayer, styles.pointerEventsNone]}>
           <NeuralBackground color="#3B82F6" trailOpacity={0.12} speed={0.35} />
         </View>
-        <CustomCursor enabled={isDesktopWeb} />
 
         <LinearGradient
           colors={['rgba(59,130,246,0.50)', 'rgba(59,130,246,0.00)']}

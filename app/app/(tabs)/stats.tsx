@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { BarChart, LineChart } from 'react-native-gifted-charts';
+import { useTranslation } from 'react-i18next';
 import {
   getAllTimePRs,
   getExercisePersonalRecords,
@@ -18,6 +19,31 @@ import {
 const SCREEN_BG = '#050A12';
 const CARD_BG = '#111827';
 const CHART_NEON = '#3B82F6';
+const METRIC_FILTERS: readonly {
+  key: ProgressMetric;
+  labelKey: string;
+  unitKey: string;
+  descriptionKey: string;
+}[] = [
+  {
+    key: 'duration',
+    labelKey: 'stats.metricDurationLabel',
+    unitKey: 'stats.unitMin',
+    descriptionKey: 'stats.metricDurationDescription',
+  },
+  {
+    key: 'volume',
+    labelKey: 'stats.metricVolumeLabel',
+    unitKey: 'stats.unitKg',
+    descriptionKey: 'stats.metricVolumeDescription',
+  },
+  {
+    key: 'reps',
+    labelKey: 'stats.metricRepsLabel',
+    unitKey: 'stats.unitReps',
+    descriptionKey: 'stats.metricRepsDescription',
+  },
+];
 
 function muscleColor(muscle: string): string {
   const normalized = muscle.trim().toLowerCase();
@@ -40,6 +66,46 @@ function formatNumericValue(value: number): string {
   }
 
   return Number.isInteger(safeValue) ? `${safeValue}` : safeValue.toFixed(1);
+}
+
+function formatCompactAxisNumber(value: number | string): string {
+  const parsedValue =
+    typeof value === 'number'
+      ? value
+      : Number(String(value).replace(/[^0-9+-.]/g, ''));
+  const safeValue = Number.isFinite(parsedValue) ? Math.max(0, parsedValue) : 0;
+
+  if (safeValue >= 1_000_000) {
+    const scaled = safeValue / 1_000_000;
+    const rounded = scaled >= 100 ? scaled.toFixed(0) : scaled.toFixed(1);
+    return `${rounded.replace(/\.0$/, '')}m`;
+  }
+
+  if (safeValue >= 1_000) {
+    const scaled = safeValue / 1_000;
+    const rounded = scaled >= 100 ? scaled.toFixed(0) : scaled.toFixed(1);
+    return `${rounded.replace(/\.0$/, '')}k`;
+  }
+
+  if (safeValue >= 100) {
+    return `${Math.round(safeValue)}`;
+  }
+
+  return Number.isInteger(safeValue) ? `${safeValue}` : safeValue.toFixed(1);
+}
+
+function formatMetricAxisLabel(value: number | string, metric: ProgressMetric): string {
+  const compact = formatCompactAxisNumber(value);
+
+  if (metric === 'volume') {
+    return `${compact} kg`;
+  }
+
+  if (metric === 'duration') {
+    return `${compact}m`;
+  }
+
+  return compact;
 }
 
 type SkeletonPanelProps = {
@@ -90,6 +156,8 @@ function SkeletonPanel({ lines = 3, minHeight = 190 }: SkeletonPanelProps) {
 }
 
 export default function StatsScreen() {
+  const { t } = useTranslation();
+  const { width: windowWidth } = useWindowDimensions();
   const [exercises, setExercises] = useState<StatsExerciseOption[]>([]);
   const [selectedExerciseId, setSelectedExerciseId] = useState<string | null>(null);
   const [metric, setMetric] = useState<ProgressMetric>('volume');
@@ -104,9 +172,16 @@ export default function StatsScreen() {
   const [isLoadingWeeklyVolume, setIsLoadingWeeklyVolume] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [weeklyVolumeError, setWeeklyVolumeError] = useState<string | null>(null);
+  const [selectedProgressPointIndex, setSelectedProgressPointIndex] = useState<number | null>(null);
 
-  const chartWidth = useMemo(() => Math.max(280, Dimensions.get('window').width - 72), []);
-  const weeklyChartWidth = useMemo(() => Math.max(250, Dimensions.get('window').width - 106), []);
+  const chartWidth = useMemo(() => {
+    const availableWidth = Math.max(280, windowWidth - 40);
+    return Math.min(availableWidth, 360);
+  }, [windowWidth]);
+  const weeklyChartWidth = useMemo(() => {
+    const availableWidth = Math.max(250, windowWidth - 40);
+    return Math.min(availableWidth, 340);
+  }, [windowWidth]);
 
   const loadTrackedExercises = useCallback(async () => {
     setIsLoadingExercises(true);
@@ -124,14 +199,14 @@ export default function StatsScreen() {
         return options[0]?.id ?? null;
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
+      const message = error instanceof Error ? error.message : t('common.unknownError');
       setErrorMessage(message);
       setExercises([]);
       setSelectedExerciseId(null);
     } finally {
       setIsLoadingExercises(false);
     }
-  }, []);
+  }, [t]);
 
   const loadStats = useCallback(async () => {
     if (!selectedExerciseId) {
@@ -152,14 +227,14 @@ export default function StatsScreen() {
       setProgress(points);
       setRecords(personalRecords);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
+      const message = error instanceof Error ? error.message : t('common.unknownError');
       setErrorMessage(message);
       setProgress([]);
       setRecords(null);
     } finally {
       setIsLoadingStats(false);
     }
-  }, [metric, selectedExerciseId]);
+  }, [metric, selectedExerciseId, t]);
 
   const loadWeeklyVolume = useCallback(async () => {
     setIsLoadingWeeklyVolume(true);
@@ -171,14 +246,14 @@ export default function StatsScreen() {
       setWeeklyVolume(weeklyRows);
       setAllTimePrs(hallRows);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
+      const message = error instanceof Error ? error.message : t('common.unknownError');
       setWeeklyVolumeError(message);
       setWeeklyVolume([]);
       setAllTimePrs([]);
     } finally {
       setIsLoadingWeeklyVolume(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void loadTrackedExercises();
@@ -194,26 +269,78 @@ export default function StatsScreen() {
 
   const lineData = useMemo(
     () =>
-      progress.map((point) => ({
-        value: point.value,
+      progress.map((point, index) => ({
+        value: Math.max(0, point.value),
         label: point.label,
+        dataPointColor: index === selectedProgressPointIndex ? '#FFFFFF' : CHART_NEON,
+        dataPointRadius: index === selectedProgressPointIndex ? 5.5 : 4,
+        onPress: () => setSelectedProgressPointIndex(index),
       })),
-    [progress]
+    [progress, selectedProgressPointIndex]
   );
+
+  const selectedMetric = useMemo(
+    () => METRIC_FILTERS.find((option) => option.key === metric) ?? METRIC_FILTERS[1],
+    [metric]
+  );
+
+  useEffect(() => {
+    if (lineData.length === 0) {
+      setSelectedProgressPointIndex(null);
+      return;
+    }
+
+    setSelectedProgressPointIndex((currentValue) => {
+      if (currentValue === null || currentValue >= lineData.length) {
+        return lineData.length - 1;
+      }
+
+      return currentValue;
+    });
+  }, [lineData.length]);
+
+  const chartMaxValue = useMemo(() => {
+    if (lineData.length === 0) {
+      return 4;
+    }
+
+    const highestValue = lineData.reduce((currentMax, point) => Math.max(currentMax, point.value), 0);
+
+    if (highestValue <= 0) {
+      return 4;
+    }
+
+    const paddedValue = highestValue * 1.25;
+
+    if (metric === 'duration') {
+      return Math.max(8, Math.ceil(paddedValue));
+    }
+
+    if (metric === 'reps') {
+      return Math.max(10, Math.ceil(paddedValue));
+    }
+
+    return Math.max(20, Math.ceil(paddedValue));
+  }, [lineData, metric]);
 
   const weeklyBarData = useMemo(
     () =>
       weeklyVolume.map((item) => ({
         value: item.sets,
         label: item.muscle,
-        frontColor: muscleColor(item.muscle),
+        frontColor: CHART_NEON,
       })),
     [weeklyVolume]
   );
 
   const weeklyVolumeMaxValue = useMemo(() => {
     const maxValue = weeklyVolume.reduce((currentMax, entry) => Math.max(currentMax, entry.sets), 0);
-    return Math.max(4, maxValue);
+
+    if (maxValue <= 0) {
+      return 4;
+    }
+
+    return Math.max(4, Math.ceil(maxValue * 1.25));
   }, [weeklyVolume]);
 
   const selectedExerciseName = useMemo(() => {
@@ -224,16 +351,51 @@ export default function StatsScreen() {
     return exercises.find((exercise) => exercise.id === selectedExerciseId)?.name ?? null;
   }, [exercises, selectedExerciseId]);
 
-  const metricUnitLabel = metric === 'estimated1rm' ? 'kg (1RM)' : 'kg';
+  const selectedProgressPoint = useMemo(() => {
+    if (selectedProgressPointIndex === null) {
+      return null;
+    }
+
+    return progress[selectedProgressPointIndex] ?? null;
+  }, [progress, selectedProgressPointIndex]);
+
+  const selectedProgressValueText = useMemo(() => {
+    if (!selectedProgressPoint) {
+      return null;
+    }
+
+    const formattedValue =
+      metric === 'volume'
+        ? formatCompactAxisNumber(selectedProgressPoint.value)
+        : formatNumericValue(selectedProgressPoint.value);
+
+    if (metric === 'volume') {
+      return `${formattedValue} ${t('stats.unitKg')}`;
+    }
+
+    if (metric === 'duration') {
+      return `${formattedValue} ${t('stats.unitMin')}`;
+    }
+
+    return `${formattedValue} ${t('stats.unitReps')}`;
+  }, [metric, selectedProgressPoint, t]);
+
+  const selectedProgressMetaText = useMemo(() => {
+    if (!selectedProgressPoint) {
+      return null;
+    }
+
+    return `${formatCompactAxisNumber(selectedProgressPoint.volumeTotal)} ${t('stats.unitKg')} • ${formatNumericValue(selectedProgressPoint.repsTotal)} ${t('stats.unitReps')} • ${formatNumericValue(selectedProgressPoint.durationMinutes)} ${t('stats.unitMin')}`;
+  }, [selectedProgressPoint, t]);
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Progress Stats</Text>
-      <Text style={styles.subtitle}>Track volume trends, estimated strength and all-time PRs.</Text>
+      <Text style={styles.title}>{t('stats.title')}</Text>
+      <Text style={styles.subtitle}>{t('stats.subtitle')}</Text>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Weekly Muscle Volume</Text>
-        <Text style={styles.cardSubtitle}>Completed sets in the last 7 days by muscle group.</Text>
+        <Text style={styles.cardTitle}>{t('stats.weeklyVolumeTitle')}</Text>
+        <Text style={styles.cardSubtitle}>{t('stats.weeklyVolumeSubtitle')}</Text>
 
         {isLoadingWeeklyVolume ? (
           <SkeletonPanel lines={4} minHeight={190} />
@@ -243,7 +405,7 @@ export default function StatsScreen() {
           </View>
         ) : weeklyBarData.length === 0 ? (
           <View style={styles.chartStatusWrap}>
-            <Text style={styles.placeholderText}>No completed sets in the last 7 days yet.</Text>
+            <Text style={styles.placeholderText}>{t('stats.noWeeklySets')}</Text>
           </View>
         ) : (
           <View style={styles.weeklyVolumeWrap}>
@@ -251,11 +413,16 @@ export default function StatsScreen() {
               <BarChart
                 data={weeklyBarData}
                 width={weeklyChartWidth}
+                height={232}
                 horizontal
-                barWidth={14}
-                spacing={16}
-                initialSpacing={8}
-                endSpacing={8}
+                barWidth={18}
+                spacing={12}
+                initialSpacing={6}
+                endSpacing={0}
+                yAxisLabelWidth={52}
+                xAxisLabelsHeight={22}
+                labelsExtraHeight={8}
+                overflowTop={20}
                 roundedTop
                 roundedBottom
                 noOfSections={4}
@@ -267,8 +434,10 @@ export default function StatsScreen() {
                 yAxisThickness={1}
                 xAxisLabelTextStyle={styles.axisText}
                 yAxisTextStyle={styles.axisText}
+                formatYLabel={(label) => formatCompactAxisNumber(label)}
                 hideOrigin
                 isAnimated
+                adjustToWidth={true}
               />
             </View>
 
@@ -277,7 +446,7 @@ export default function StatsScreen() {
                 <View key={entry.muscle} style={styles.weeklyVolumeLegendRow}>
                   <View style={[styles.weeklyVolumeLegendDot, { backgroundColor: muscleColor(entry.muscle) }]} />
                   <Text style={styles.weeklyVolumeLegendMuscle}>{entry.muscle}</Text>
-                  <Text style={styles.weeklyVolumeLegendSets}>{`${entry.sets} sets`}</Text>
+                  <Text style={styles.weeklyVolumeLegendSets}>{`${entry.sets} ${t('stats.weeklySetsSuffix')}`}</Text>
                 </View>
               ))}
             </View>
@@ -286,12 +455,12 @@ export default function StatsScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Exercise Focus</Text>
+        <Text style={styles.cardTitle}>{t('stats.focusByExerciseTitle')}</Text>
 
         {isLoadingExercises ? (
           <SkeletonPanel lines={2} minHeight={60} />
         ) : exercises.length === 0 ? (
-          <Text style={styles.placeholderText}>Complete a few workouts to unlock stats insights.</Text>
+          <Text style={styles.placeholderText}>{t('stats.focusEmpty')}</Text>
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
             {exercises.map((exercise) => {
@@ -312,26 +481,27 @@ export default function StatsScreen() {
         )}
 
         <View style={styles.metricToggleRow}>
-          <TouchableOpacity
-            style={[styles.metricToggleButton, metric === 'volume' && styles.metricToggleButtonActive]}
-            activeOpacity={0.88}
-            onPress={() => setMetric('volume')}
-          >
-            <Text style={[styles.metricToggleText, metric === 'volume' && styles.metricToggleTextActive]}>Volume</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.metricToggleButton, metric === 'estimated1rm' && styles.metricToggleButtonActive]}
-            activeOpacity={0.88}
-            onPress={() => setMetric('estimated1rm')}
-          >
-            <Text style={[styles.metricToggleText, metric === 'estimated1rm' && styles.metricToggleTextActive]}>Estimated 1RM</Text>
-          </TouchableOpacity>
+          {METRIC_FILTERS.map((option) => {
+            const isActive = metric === option.key;
+
+            return (
+              <TouchableOpacity
+                key={option.key}
+                style={[styles.metricToggleButton, isActive && styles.metricToggleButtonActive]}
+                activeOpacity={0.88}
+                onPress={() => setMetric(option.key)}
+              >
+                <Text style={[styles.metricToggleText, isActive && styles.metricToggleTextActive]}>{t(option.labelKey)}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
+        <Text style={styles.metricHint}>{t(selectedMetric.descriptionKey)}</Text>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Evolution Chart</Text>
-        <Text style={styles.cardSubtitle}>{selectedExerciseName ?? 'Select an exercise'} • {metricUnitLabel}</Text>
+        <Text style={styles.cardTitle}>{t('stats.evolutionTitle')}</Text>
+        <Text style={styles.cardSubtitle}>{`${selectedExerciseName ?? t('stats.selectExercisePrompt')} • ${t(selectedMetric.unitKey)}`}</Text>
 
         {isLoadingStats ? (
           <SkeletonPanel lines={4} minHeight={190} />
@@ -341,13 +511,15 @@ export default function StatsScreen() {
           </View>
         ) : lineData.length === 0 ? (
           <View style={styles.chartStatusWrap}>
-            <Text style={styles.placeholderText}>No completed sets yet for this exercise.</Text>
+            <Text style={styles.placeholderText}>{t('stats.noCompletedSets')}</Text>
           </View>
         ) : (
           <View style={styles.chartWrap}>
             <LineChart
               data={lineData}
               width={chartWidth}
+              height={258}
+              maxValue={chartMaxValue}
               color={CHART_NEON}
               thickness={3}
               hideDataPoints={false}
@@ -360,45 +532,60 @@ export default function StatsScreen() {
               endOpacity={0.02}
               yAxisColor="#253041"
               xAxisColor="#253041"
+              yAxisLabelWidth={74}
+              xAxisLabelsHeight={40}
+              labelsExtraHeight={12}
+              overflowTop={24}
+              overflowBottom={16}
               yAxisTextStyle={styles.axisText}
               xAxisLabelTextStyle={styles.axisText}
+              formatYLabel={(label) => formatMetricAxisLabel(label, metric)}
               rulesColor="#1F2937"
               noOfSections={4}
-              initialSpacing={14}
-              endSpacing={14}
-              adjustToWidth
+              initialSpacing={10}
+              endSpacing={0}
+              onBackgroundPress={() => setSelectedProgressPointIndex(null)}
+              adjustToWidth={true}
             />
+
+            {selectedProgressPoint && selectedProgressValueText ? (
+              <View style={styles.selectedPointCard}>
+                <Text style={styles.selectedPointLabel}>{selectedProgressPoint.label}</Text>
+                <Text style={styles.selectedPointValue}>{selectedProgressValueText}</Text>
+                {selectedProgressMetaText ? <Text style={styles.selectedPointMeta}>{selectedProgressMetaText}</Text> : null}
+              </View>
+            ) : null}
           </View>
         )}
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>All-Time PRs</Text>
+        <Text style={styles.cardTitle}>{t('stats.allTimePrsTitle')}</Text>
 
         {records ? (
           <View style={styles.prGrid}>
             <View style={styles.prCard}>
-              <Text style={styles.prLabel}>Heaviest Set</Text>
-              <Text style={styles.prValue}>{formatNumericValue(records.heaviestWeight)} kg</Text>
+              <Text style={styles.prLabel}>{t('stats.prHeaviestSet')}</Text>
+              <Text style={styles.prValue}>{`${formatNumericValue(records.heaviestWeight)} ${t('stats.unitKg')}`}</Text>
             </View>
 
             <View style={styles.prCard}>
-              <Text style={styles.prLabel}>Best 1RM</Text>
-              <Text style={styles.prValue}>{formatNumericValue(records.bestEstimated1RM)} kg</Text>
+              <Text style={styles.prLabel}>{t('stats.prBest1rm')}</Text>
+              <Text style={styles.prValue}>{`${formatNumericValue(records.bestEstimated1RM)} ${t('stats.unitKg')}`}</Text>
             </View>
 
             <View style={styles.prCard}>
-              <Text style={styles.prLabel}>Best Day Volume</Text>
-              <Text style={styles.prValue}>{formatNumericValue(records.bestDayVolume)} kg</Text>
+              <Text style={styles.prLabel}>{t('stats.prBestDayVolume')}</Text>
+              <Text style={styles.prValue}>{`${formatNumericValue(records.bestDayVolume)} ${t('stats.unitKg')}`}</Text>
             </View>
 
             <View style={styles.prCard}>
-              <Text style={styles.prLabel}>Hall of Fame Entries</Text>
+              <Text style={styles.prLabel}>{t('stats.prHallOfFameEntries')}</Text>
               <Text style={styles.prValue}>{allTimePrs.length}</Text>
             </View>
           </View>
         ) : (
-          <Text style={styles.placeholderText}>Finish a workout to unlock your PR cards.</Text>
+          <Text style={styles.placeholderText}>{t('stats.unlockPrCards')}</Text>
         )}
       </View>
     </ScrollView>
@@ -493,11 +680,17 @@ const styles = StyleSheet.create({
   },
   metricToggleText: {
     color: '#CBD5E1',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
   },
   metricToggleTextActive: {
     color: '#E5EDFF',
+  },
+  metricHint: {
+    marginTop: 8,
+    color: '#8FA2BA',
+    fontSize: 12,
+    lineHeight: 18,
   },
   inlineStatus: {
     minHeight: 60,
@@ -531,9 +724,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#1F2937',
     backgroundColor: '#0D1624',
+    minHeight: 304,
     paddingTop: 12,
-    paddingBottom: 4,
-    paddingHorizontal: 6,
+    paddingBottom: 10,
+    paddingHorizontal: 8,
   },
   weeklyVolumeWrap: {
     borderRadius: 12,
@@ -545,6 +739,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   weeklyVolumeChartWrap: {
+    minHeight: 236,
     marginBottom: 8,
   },
   weeklyVolumeLegendWrap: {
@@ -591,6 +786,36 @@ const styles = StyleSheet.create({
   axisText: {
     color: '#8FA2BA',
     fontSize: 11,
+  },
+  selectedPointCard: {
+    marginTop: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#233247',
+    backgroundColor: '#0B1320',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  selectedPointLabel: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.35,
+  },
+  selectedPointValue: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '900',
+    marginBottom: 2,
+    fontVariant: ['tabular-nums'],
+  },
+  selectedPointMeta: {
+    color: '#8FA2BA',
+    fontSize: 11,
+    lineHeight: 16,
+    fontVariant: ['tabular-nums'],
   },
   placeholderText: {
     color: '#94A3B8',

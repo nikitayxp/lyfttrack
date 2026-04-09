@@ -15,12 +15,23 @@ import {
   View,
 } from 'react-native';
 import Animated, { FadeInDown, FadeInUp, LinearTransition } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/theme';
+import {
+  EXERCISE_EQUIPMENT_OPTIONS,
+  EXERCISE_EQUIPMENT_TRANSLATION_KEY,
+  EXERCISE_MUSCLE_OPTIONS,
+  EXERCISE_MUSCLE_TRANSLATION_KEY,
+  type ExerciseEquipmentKey,
+  type ExerciseMuscleKey,
+  getEquipmentTranslationKey,
+  getMuscleTranslationKey,
+} from '@/constants/exerciseCatalog';
+import { usePreferences } from '@/context/PreferencesContext';
 import {
   getTemplates,
   saveTemplate,
   startWorkoutFromTemplate,
-  type TemplateExerciseSaveInput,
   type TemplateSummary,
 } from '@/services/templateService';
 import {
@@ -34,37 +45,19 @@ import {
 import type { Tables } from '@/types/database';
 import { EmptyState } from '@/components/common/EmptyState';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
+import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 
 const palette = Colors.dark;
 const CARD_BG = '#111827';
 const cardLayoutTransition = LinearTransition.springify().damping(16).stiffness(180);
 
 type ExerciseRow = Tables<'exercises'>;
-type SelectedTemplateExercise = {
-  exerciseId: string;
-  restSecondsInput: string;
-};
 
 type WorkoutMode = 'start' | 'templates' | 'exercises';
 
-function sanitizeIntegerInput(value: string): string {
-  return value.replace(/[^0-9]/g, '');
-}
-
-function normalizeRestSecondsForSave(value: string): number {
-  const parsed = Number(value);
-
-  if (!Number.isFinite(parsed)) {
-    return 90;
-  }
-
-  const truncated = Math.trunc(parsed);
-  return Math.max(15, Math.min(900, truncated));
-}
-
-function summarizeExercises(exerciseNames: string[]): string {
+function summarizeExercises(exerciseNames: string[], emptyLabel: string): string {
   if (exerciseNames.length === 0) {
-    return 'No exercises.';
+    return emptyLabel;
   }
 
   const preview = exerciseNames.slice(0, 3).join(', ');
@@ -72,6 +65,8 @@ function summarizeExercises(exerciseNames: string[]): string {
 }
 
 export default function WorkoutScreen() {
+  const { t } = useTranslation();
+  const { language } = usePreferences();
   const isWeb = Platform.OS === 'web';
   const modalAnimationType: 'fade' | 'slide' = isWeb ? 'fade' : 'slide';
   const [activeMode, setActiveMode] = useState<WorkoutMode>('start');
@@ -84,7 +79,7 @@ export default function WorkoutScreen() {
   const [isCreateTemplateModalVisible, setIsCreateTemplateModalVisible] = useState(false);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [templateNameInput, setTemplateNameInput] = useState('');
-  const [selectedTemplateExercises, setSelectedTemplateExercises] = useState<SelectedTemplateExercise[]>([]);
+  const [selectedTemplateExercises, setSelectedTemplateExercises] = useState<string[]>([]);
 
   const [routines, setRoutines] = useState<RoutineSummary[]>([]);
   const [isLoadingRoutines, setIsLoadingRoutines] = useState(false);
@@ -105,8 +100,8 @@ export default function WorkoutScreen() {
   const [isCreateExerciseModalVisible, setIsCreateExerciseModalVisible] = useState(false);
   const [isCreatingExercise, setIsCreatingExercise] = useState(false);
   const [exerciseNameInput, setExerciseNameInput] = useState('');
-  const [muscleGroupInput, setMuscleGroupInput] = useState('');
-  const [equipmentInput, setEquipmentInput] = useState('');
+  const [selectedMuscleKey, setSelectedMuscleKey] = useState<ExerciseMuscleKey | null>(null);
+  const [selectedEquipmentKey, setSelectedEquipmentKey] = useState<ExerciseEquipmentKey | null>(null);
   const [animationEpoch, setAnimationEpoch] = useState(0);
 
   useFocusEffect(
@@ -116,26 +111,50 @@ export default function WorkoutScreen() {
   );
 
   const selectionOrder = useMemo(() => {
-    return new Map(selectedTemplateExercises.map((entry, index) => [entry.exerciseId, index + 1]));
+    return new Map(selectedTemplateExercises.map((exerciseId, index) => [exerciseId, index + 1]));
   }, [selectedTemplateExercises]);
 
   const routineSelectionOrder = useMemo(() => {
     return new Map(selectedRoutineExerciseIds.map((exerciseId, index) => [exerciseId, index + 1]));
   }, [selectedRoutineExerciseIds]);
 
+  const getDisplayExerciseName = useCallback((exercise: ExerciseRow) => {
+    return getLocalizedExerciseName(exercise, language);
+  }, [language]);
+
+  const getDisplayMuscle = useCallback((exercise: ExerciseRow) => {
+    const translatedKey = getMuscleTranslationKey(exercise.muscle_group);
+
+    if (translatedKey) {
+      return t(translatedKey);
+    }
+
+    return getLocalizedExerciseMuscle(exercise, language) ?? t('exercise.general');
+  }, [language, t]);
+
+  const getDisplayEquipment = useCallback((exercise: ExerciseRow) => {
+    const translatedKey = getEquipmentTranslationKey(exercise.equipment);
+
+    if (translatedKey) {
+      return t(translatedKey);
+    }
+
+    return exercise.equipment ?? t('exercise.bodyweight');
+  }, [t]);
+
   const groupedExercises = useMemo(() => {
     const normalizedQuery = exerciseQuery.trim().toLowerCase();
 
     const filtered = normalizedQuery
       ? catalogExercises.filter((exercise) => {
-          const byName = exercise.name.toLowerCase().includes(normalizedQuery);
-          const byMuscle = (exercise.muscle_group ?? '').toLowerCase().includes(normalizedQuery);
+          const byName = getDisplayExerciseName(exercise).toLowerCase().includes(normalizedQuery);
+          const byMuscle = getDisplayMuscle(exercise).toLowerCase().includes(normalizedQuery);
           return byName || byMuscle;
         })
       : catalogExercises;
 
     const groups = filtered.reduce<Record<string, ExerciseRow[]>>((acc, exercise) => {
-      const groupKey = exercise.muscle_group ?? 'Other';
+      const groupKey = getDisplayMuscle(exercise);
 
       if (!acc[groupKey]) {
         acc[groupKey] = [];
@@ -146,7 +165,7 @@ export default function WorkoutScreen() {
     }, {});
 
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
-  }, [catalogExercises, exerciseQuery]);
+  }, [catalogExercises, exerciseQuery, getDisplayExerciseName, getDisplayMuscle]);
 
   const shouldLoadCatalog = useMemo(() => {
     return (
@@ -242,7 +261,7 @@ export default function WorkoutScreen() {
     try {
       await startWorkoutFromTemplate(templateId);
     } catch (error) {
-      Alert.alert('Unable to start template', getErrorMessage(error));
+      Alert.alert(t('workout.unableToStartTemplate'), getErrorMessage(error));
     } finally {
       setStartingTemplateId(null);
     }
@@ -259,33 +278,12 @@ export default function WorkoutScreen() {
 
   function toggleExerciseSelection(exerciseId: string) {
     setSelectedTemplateExercises((currentValue) => {
-      if (currentValue.some((entry) => entry.exerciseId === exerciseId)) {
-        return currentValue.filter((entry) => entry.exerciseId !== exerciseId);
+      if (currentValue.includes(exerciseId)) {
+        return currentValue.filter((id) => id !== exerciseId);
       }
 
-      return [
-        ...currentValue,
-        {
-          exerciseId,
-          restSecondsInput: '90',
-        },
-      ];
+      return [...currentValue, exerciseId];
     });
-  }
-
-  function updateExerciseRestSeconds(exerciseId: string, value: string) {
-    const sanitizedValue = sanitizeIntegerInput(value);
-
-    setSelectedTemplateExercises((currentValue) =>
-      currentValue.map((entry) =>
-        entry.exerciseId === exerciseId
-          ? {
-              ...entry,
-              restSecondsInput: sanitizedValue,
-            }
-          : entry
-      )
-    );
   }
 
   function toggleRoutineExerciseSelection(exerciseId: string) {
@@ -311,8 +309,8 @@ export default function WorkoutScreen() {
 
   function resetExerciseForm() {
     setExerciseNameInput('');
-    setMuscleGroupInput('');
-    setEquipmentInput('');
+    setSelectedMuscleKey(null);
+    setSelectedEquipmentKey(null);
   }
 
   async function handleCreateRoutine() {
@@ -326,12 +324,12 @@ export default function WorkoutScreen() {
     });
 
     if (!normalizedName) {
-      Alert.alert('Validation', 'Routine name is required.');
+      Alert.alert(t('validation.title'), t('validation.routineNameRequired'));
       return;
     }
 
     if (selectedRoutineExerciseIds.length === 0) {
-      Alert.alert('Validation', 'Select at least one exercise for this routine.');
+      Alert.alert(t('validation.title'), t('validation.routineExerciseRequired'));
       return;
     }
 
@@ -343,8 +341,9 @@ export default function WorkoutScreen() {
       resetRoutineForm();
       setHasLoadedRoutines(false);
       await loadRoutines();
+      Alert.alert(t('routines.createRoutineSuccessTitle'), t('routines.createRoutineSuccessDescription'));
     } catch (error) {
-      Alert.alert('Unable to create routine', getErrorMessage(error));
+      Alert.alert(t('routines.createRoutineError'), getErrorMessage(error));
     } finally {
       setIsCreatingRoutine(false);
     }
@@ -355,17 +354,19 @@ export default function WorkoutScreen() {
       maxLength: INPUT_LIMITS.nameMax,
       allowEmpty: false,
     });
-    const normalizedMuscleGroup = sanitizeText(muscleGroupInput, {
-      maxLength: INPUT_LIMITS.nameMax,
-      allowEmpty: true,
-    });
-    const normalizedEquipment = sanitizeText(equipmentInput, {
-      maxLength: INPUT_LIMITS.nameMax,
-      allowEmpty: true,
-    });
 
     if (!normalizedName) {
-      Alert.alert('Validation', 'Exercise name is required.');
+      Alert.alert(t('validation.title'), t('validation.exerciseNameRequired'));
+      return;
+    }
+
+    if (!selectedMuscleKey) {
+      Alert.alert(t('validation.title'), t('validation.selectMuscleGroup'));
+      return;
+    }
+
+    if (!selectedEquipmentKey) {
+      Alert.alert(t('validation.title'), t('validation.selectEquipment'));
       return;
     }
 
@@ -374,16 +375,17 @@ export default function WorkoutScreen() {
     try {
       await createExercise({
         name: normalizedName,
-        muscleGroup: normalizedMuscleGroup,
-        equipment: normalizedEquipment,
+        muscleGroup: selectedMuscleKey,
+        equipment: selectedEquipmentKey,
       });
 
       setIsCreateExerciseModalVisible(false);
       resetExerciseForm();
       setHasLoadedCatalog(false);
       await loadCatalogExercises();
+      Alert.alert(t('exercise.success.createdTitle'), t('exercise.success.createdDescription'));
     } catch (error) {
-      Alert.alert('Unable to create exercise', getErrorMessage(error));
+      Alert.alert(t('exercise.errors.create'), getErrorMessage(error));
     } finally {
       setIsCreatingExercise(false);
     }
@@ -396,44 +398,40 @@ export default function WorkoutScreen() {
     });
 
     if (!normalizedName) {
-      Alert.alert('Validation', 'Template name is required.');
+      Alert.alert(t('validation.title'), t('validation.templateNameRequired'));
       return;
     }
 
     if (selectedTemplateExercises.length === 0) {
-      Alert.alert('Validation', 'Select at least one exercise to create a template.');
+      Alert.alert(t('validation.title'), t('validation.templateExerciseRequired'));
       return;
     }
 
     setIsSavingTemplate(true);
 
     try {
-      const payload: TemplateExerciseSaveInput[] = selectedTemplateExercises.map((entry) => ({
-        exerciseId: entry.exerciseId,
-        restSeconds: normalizeRestSecondsForSave(entry.restSecondsInput),
-      }));
-
-      await saveTemplate(normalizedName, payload);
+      await saveTemplate(normalizedName, selectedTemplateExercises);
       setIsCreateTemplateModalVisible(false);
       resetTemplateForm();
       await loadTemplates();
+      Alert.alert(t('workout.templateSavedTitle'), t('workout.templateSavedDescription'));
     } catch (error) {
-      Alert.alert('Unable to create template', getErrorMessage(error));
+      Alert.alert(t('workout.unableToCreateTemplate'), getErrorMessage(error));
     } finally {
       setIsSavingTemplate(false);
     }
   }
 
   const modeLabelMap: Record<WorkoutMode, string> = {
-    start: 'Iniciar Treino',
-    templates: 'Meus Templates',
-    exercises: 'Exercicios',
+    start: t('workout.startModeLabel'),
+    templates: t('workout.templatesModeLabel'),
+    exercises: t('workout.exercisesModeLabel'),
   };
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Workout</Text>
-      <Text style={styles.subtitle}>Consolide routines, templates and exercise catalog in one flow.</Text>
+      <Text style={styles.title}>{t('workout.title')}</Text>
+      <Text style={styles.subtitle}>{t('workout.subtitle')}</Text>
 
       <View style={styles.modeSwitchRow}>
         {(Object.keys(modeLabelMap) as WorkoutMode[]).map((mode) => {
@@ -456,43 +454,43 @@ export default function WorkoutScreen() {
         <>
           <TouchableOpacity style={styles.primaryButton} activeOpacity={0.9} onPress={handleStartEmptyWorkout}>
             <Ionicons name="play" size={22} color="#FFFFFF" />
-            <Text style={styles.primaryButtonText}>Start Empty Workout</Text>
+            <Text style={styles.primaryButtonText}>{t('workout.startEmptyWorkout')}</Text>
           </TouchableOpacity>
 
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Quick Start Templates</Text>
+            <Text style={styles.sectionTitle}>{t('workout.quickStartTemplates')}</Text>
             <TouchableOpacity
               style={styles.createTemplateButton}
               activeOpacity={0.88}
               onPress={() => setActiveMode('templates')}
             >
               <Ionicons name="layers-outline" size={16} color="#FFFFFF" />
-              <Text style={styles.createTemplateButtonText}>Open Library</Text>
+              <Text style={styles.createTemplateButtonText}>{t('workout.openLibrary')}</Text>
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.sectionCaption}>Launch saved templates instantly.</Text>
+          <Text style={styles.sectionCaption}>{t('workout.templatesCaption')}</Text>
 
           <View style={styles.quickStartSection}>
             {isLoadingTemplates ? (
               <View style={styles.statusContainer}>
                 <ActivityIndicator size="small" color={palette.accent} />
-                <Text style={styles.statusText}>Loading templates...</Text>
+                <Text style={styles.statusText}>{t('workout.loadingTemplates')}</Text>
               </View>
             ) : templatesError ? (
               <View style={styles.statusContainer}>
-                <Text style={styles.statusTitle}>Unable to load templates</Text>
+                <Text style={styles.statusTitle}>{t('workout.unableToLoadTemplates')}</Text>
                 <Text style={styles.statusText}>{templatesError}</Text>
                 <TouchableOpacity style={styles.retryButton} onPress={() => void loadTemplates()} activeOpacity={0.88}>
-                  <Text style={styles.retryButtonText}>Retry</Text>
+                  <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
                 </TouchableOpacity>
               </View>
             ) : templates.length === 0 ? (
               <EmptyState
                 icon="layers-outline"
-                title="Sem templates ainda"
-                description="Crie seu primeiro template para iniciar treinos em um toque."
-                actionLabel="Criar Primeiro Template"
+                title={t('workout.noTemplatesTitle')}
+                description={t('workout.noTemplatesDescription')}
+                actionLabel={t('workout.createTemplate')}
                 onActionPress={openCreateTemplateFlow}
                 containerStyle={styles.statusContainer}
                 descriptionStyle={styles.statusText}
@@ -512,8 +510,8 @@ export default function WorkoutScreen() {
                   >
                     <View style={styles.quickStartCardTextWrap}>
                       <Text style={styles.quickStartTitle}>{template.name}</Text>
-                      <Text style={styles.quickStartMeta}>{template.exerciseCount} exercises</Text>
-                      <Text style={styles.quickStartSummary}>{summarizeExercises(template.exerciseNames)}</Text>
+                      <Text style={styles.quickStartMeta}>{`${template.exerciseCount} ${t('workout.templateExercises').toLowerCase()}`}</Text>
+                      <Text style={styles.quickStartSummary}>{summarizeExercises(template.exerciseNames, t('workout.noExercisesSummary'))}</Text>
                     </View>
 
                     {startingTemplateId === template.id ? (
@@ -532,39 +530,39 @@ export default function WorkoutScreen() {
       {activeMode === 'templates' ? (
         <>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Templates</Text>
+            <Text style={styles.sectionTitle}>{t('workout.templates')}</Text>
             <TouchableOpacity
               style={styles.createTemplateButton}
               activeOpacity={0.88}
               onPress={() => setIsCreateTemplateModalVisible(true)}
             >
               <Ionicons name="add" size={16} color="#FFFFFF" />
-              <Text style={styles.createTemplateButtonText}>Create Template</Text>
+              <Text style={styles.createTemplateButtonText}>{t('workout.createTemplate')}</Text>
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.sectionCaption}>Save per-exercise rest and launch in one tap.</Text>
+          <Text style={styles.sectionCaption}>{t('workout.templatesCaption')}</Text>
 
           <View style={styles.quickStartSection}>
             {isLoadingTemplates ? (
               <View style={styles.statusContainer}>
                 <ActivityIndicator size="small" color={palette.accent} />
-                <Text style={styles.statusText}>Loading templates...</Text>
+                <Text style={styles.statusText}>{t('workout.loadingTemplates')}</Text>
               </View>
             ) : templatesError ? (
               <View style={styles.statusContainer}>
-                <Text style={styles.statusTitle}>Unable to load templates</Text>
+                <Text style={styles.statusTitle}>{t('workout.unableToLoadTemplates')}</Text>
                 <Text style={styles.statusText}>{templatesError}</Text>
                 <TouchableOpacity style={styles.retryButton} onPress={() => void loadTemplates()} activeOpacity={0.88}>
-                  <Text style={styles.retryButtonText}>Retry</Text>
+                  <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
                 </TouchableOpacity>
               </View>
             ) : templates.length === 0 ? (
               <EmptyState
                 icon="layers-outline"
-                title="Sem templates ainda"
-                description="Crie seu primeiro template para iniciar treinos em um toque."
-                actionLabel="Criar Primeiro Template"
+                title={t('workout.noTemplatesTitle')}
+                description={t('workout.noTemplatesDescription')}
+                actionLabel={t('workout.createTemplate')}
                 onActionPress={openCreateTemplateFlow}
                 containerStyle={styles.statusContainer}
                 descriptionStyle={styles.statusText}
@@ -584,8 +582,8 @@ export default function WorkoutScreen() {
                   >
                     <View style={styles.quickStartCardTextWrap}>
                       <Text style={styles.quickStartTitle}>{template.name}</Text>
-                      <Text style={styles.quickStartMeta}>{template.exerciseCount} exercises</Text>
-                      <Text style={styles.quickStartSummary}>{summarizeExercises(template.exerciseNames)}</Text>
+                      <Text style={styles.quickStartMeta}>{`${template.exerciseCount} ${t('workout.templateExercises').toLowerCase()}`}</Text>
+                      <Text style={styles.quickStartSummary}>{summarizeExercises(template.exerciseNames, t('workout.noExercisesSummary'))}</Text>
                     </View>
 
                     {startingTemplateId === template.id ? (
@@ -600,28 +598,28 @@ export default function WorkoutScreen() {
           </View>
 
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Routines</Text>
+            <Text style={styles.sectionTitle}>{t('workout.createRoutine')}</Text>
             <TouchableOpacity
               style={styles.createTemplateButton}
               activeOpacity={0.88}
               onPress={() => setIsCreateRoutineModalVisible(true)}
             >
               <Ionicons name="add" size={16} color="#FFFFFF" />
-              <Text style={styles.createTemplateButtonText}>New Routine</Text>
+              <Text style={styles.createTemplateButtonText}>{t('workout.newRoutine')}</Text>
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.sectionCaption}>Legacy routine flow is grouped here for migration continuity.</Text>
+          <Text style={styles.sectionCaption}>{t('workout.routinesCaption')}</Text>
 
           <View style={styles.quickStartSection}>
             {isLoadingRoutines ? (
               <View style={styles.statusContainer}>
                 <ActivityIndicator size="small" color={palette.accent} />
-                <Text style={styles.statusText}>Loading routines...</Text>
+                <Text style={styles.statusText}>{t('workout.loadingRoutines')}</Text>
               </View>
             ) : routinesError ? (
               <View style={styles.statusContainer}>
-                <Text style={styles.statusTitle}>Unable to load routines</Text>
+                <Text style={styles.statusTitle}>{t('workout.unableToLoadRoutines')}</Text>
                 <Text style={styles.statusText}>{routinesError}</Text>
                 <TouchableOpacity
                   style={styles.retryButton}
@@ -631,13 +629,13 @@ export default function WorkoutScreen() {
                   }}
                   activeOpacity={0.88}
                 >
-                  <Text style={styles.retryButtonText}>Retry</Text>
+                  <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
                 </TouchableOpacity>
               </View>
             ) : routines.length === 0 ? (
               <View style={styles.statusContainer}>
-                <Text style={styles.statusTitle}>No routines yet</Text>
-                <Text style={styles.statusText}>Create your first routine to speed up workout starts.</Text>
+                <Text style={styles.statusTitle}>{t('workout.noRoutinesTitle')}</Text>
+                <Text style={styles.statusText}>{t('workout.noRoutinesDescription')}</Text>
               </View>
             ) : (
               routines.map((routine, index) => (
@@ -651,8 +649,8 @@ export default function WorkoutScreen() {
                       <Text style={styles.routineName}>{routine.name}</Text>
                       <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
                     </View>
-                    <Text style={styles.routineMeta}>{routine.exerciseCount} exercises</Text>
-                    <Text style={styles.routineNotes}>{routine.notes ?? 'No notes available.'}</Text>
+                    <Text style={styles.routineMeta}>{`${routine.exerciseCount} ${t('workout.templateExercises').toLowerCase()}`}</Text>
+                    <Text style={styles.routineNotes}>{routine.notes ?? t('workout.noRoutineNotes')}</Text>
 
                     <TouchableOpacity
                       style={styles.startRoutineButton}
@@ -660,7 +658,7 @@ export default function WorkoutScreen() {
                       onPress={() => handleStartRoutine(routine.id)}
                     >
                       <Ionicons name="play" size={15} color="#FFFFFF" />
-                      <Text style={styles.startRoutineButtonText}>Start Routine</Text>
+                      <Text style={styles.startRoutineButtonText}>{t('workout.startRoutine')}</Text>
                     </TouchableOpacity>
                   </View>
                 </Animated.View>
@@ -673,18 +671,25 @@ export default function WorkoutScreen() {
       {activeMode === 'exercises' ? (
         <>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Exercise Library</Text>
-            <TouchableOpacity
-              style={styles.createTemplateButton}
-              onPress={() => setIsCreateExerciseModalVisible(true)}
-              activeOpacity={0.88}
-            >
-              <Ionicons name="add" size={16} color="#FFFFFF" />
-              <Text style={styles.createTemplateButtonText}>Custom</Text>
-            </TouchableOpacity>
+            <Text style={styles.sectionTitle}>{t('workout.exerciseLibrary')}</Text>
           </View>
 
-          <Text style={styles.sectionCaption}>Search by exercise name or muscle group.</Text>
+          <Text style={styles.sectionCaption}>{t('workout.exerciseLibraryCaption')}</Text>
+
+          <TouchableOpacity
+            style={styles.exercisePickerTrigger}
+            activeOpacity={0.88}
+            onPress={() => setIsCreateExerciseModalVisible(true)}
+          >
+            <View style={styles.exercisePickerTriggerIconWrap}>
+              <Ionicons name="add-circle-outline" size={16} color={palette.accent} />
+            </View>
+            <View style={styles.exercisePickerTriggerTextWrap}>
+              <Text style={styles.exercisePickerTriggerTitle}>{t('exercise.createTrigger')}</Text>
+              <Text style={styles.exercisePickerTriggerSubtitle}>{t('workout.createExercisesHint')}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
+          </TouchableOpacity>
 
           <View style={styles.toolbarRow}>
             <View style={styles.searchBar}>
@@ -692,7 +697,7 @@ export default function WorkoutScreen() {
               <TextInput
                 value={exerciseQuery}
                 onChangeText={setExerciseQuery}
-                placeholder="Search exercises"
+                placeholder={t('workout.searchExercisesPlaceholder')}
                 placeholderTextColor={palette.textMuted}
                 style={styles.searchInput}
                 autoCorrect={false}
@@ -704,11 +709,11 @@ export default function WorkoutScreen() {
           {isLoadingCatalog ? (
             <View style={styles.statusContainer}>
               <ActivityIndicator size="small" color={palette.accent} />
-              <Text style={styles.statusText}>Loading exercises...</Text>
+              <Text style={styles.statusText}>{t('exercise.loadingCatalog')}</Text>
             </View>
           ) : catalogError ? (
             <View style={styles.statusContainer}>
-              <Text style={styles.statusTitle}>Unable to load exercises</Text>
+              <Text style={styles.statusTitle}>{t('workout.unableToLoadExercises')}</Text>
               <Text style={styles.statusText}>{catalogError}</Text>
               <TouchableOpacity
                 style={styles.retryButton}
@@ -718,13 +723,13 @@ export default function WorkoutScreen() {
                 }}
                 activeOpacity={0.88}
               >
-                <Text style={styles.retryButtonText}>Retry</Text>
+                <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
               </TouchableOpacity>
             </View>
           ) : groupedExercises.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>No exercises found</Text>
-              <Text style={styles.emptySubtitle}>Try another keyword or create a custom movement.</Text>
+              <Text style={styles.emptyTitle}>{t('exercise.emptySearchTitle')}</Text>
+              <Text style={styles.emptySubtitle}>{t('exercise.emptySearchSubtitle')}</Text>
             </View>
           ) : (
             groupedExercises.map(([muscle, groupedItems], muscleIndex) => (
@@ -743,10 +748,10 @@ export default function WorkoutScreen() {
                     >
                       <View style={styles.exerciseRow}>
                         <View style={styles.exerciseTextWrap}>
-                          <Text style={styles.exerciseName}>{exercise.name}</Text>
-                          <Text style={styles.exerciseMeta}>{exercise.equipment ?? 'Bodyweight'}</Text>
+                            <Text style={styles.exerciseName}>{getDisplayExerciseName(exercise)}</Text>
+                            <Text style={styles.exerciseMeta}>{getDisplayEquipment(exercise)}</Text>
                         </View>
-                        <Text style={styles.exerciseMuscle}>{exercise.muscle_group ?? 'General'}</Text>
+                          <Text style={styles.exerciseMuscle}>{getDisplayMuscle(exercise)}</Text>
                       </View>
                     </Animated.View>
                   ))}
@@ -768,70 +773,56 @@ export default function WorkoutScreen() {
 
           <View style={[styles.modalSheet, isWeb && styles.modalSheetWeb]}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Create Template</Text>
+            <Text style={styles.modalTitle}>{t('workout.createTemplate')}</Text>
 
             <TextInput
               value={templateNameInput}
               onChangeText={(value) => setTemplateNameInput(value.substring(0, INPUT_LIMITS.nameMax))}
               style={styles.modalInput}
-              placeholder="Template Name"
+              placeholder={t('workout.templateName')}
               placeholderTextColor={palette.textMuted}
               autoCapitalize="words"
               maxLength={INPUT_LIMITS.nameMax}
             />
 
-            <Text style={styles.modalSectionTitle}>Exercises ({selectedTemplateExercises.length})</Text>
+            <Text style={styles.modalSectionTitle}>{`${t('workout.templateExercises')} (${selectedTemplateExercises.length})`}</Text>
 
             {isLoadingCatalog ? (
               <View style={styles.modalStatusContainer}>
                 <ActivityIndicator size="small" color={palette.accent} />
-                <Text style={styles.modalStatusText}>Loading exercise catalog...</Text>
+                <Text style={styles.modalStatusText}>{t('workout.loadingExerciseCatalog')}</Text>
               </View>
             ) : catalogError ? (
               <View style={styles.modalStatusContainer}>
-                <Text style={styles.modalStatusTitle}>Unable to load exercises</Text>
+                <Text style={styles.modalStatusTitle}>{t('workout.unableToLoadExercises')}</Text>
                 <Text style={styles.modalStatusText}>{catalogError}</Text>
                 <TouchableOpacity
                   style={styles.modalRetryButton}
                   onPress={() => void loadCatalogExercises()}
                   activeOpacity={0.88}
                 >
-                  <Text style={styles.modalRetryButtonText}>Retry</Text>
+                  <Text style={styles.modalRetryButtonText}>{t('common.retry')}</Text>
                 </TouchableOpacity>
               </View>
             ) : catalogExercises.length === 0 ? (
               <View style={styles.modalStatusContainer}>
-                <Text style={styles.modalStatusTitle}>No exercises available</Text>
-                <Text style={styles.modalStatusText}>Create exercises first, then build templates.</Text>
+                <Text style={styles.modalStatusTitle}>{t('workout.noExercisesAvailable')}</Text>
+                <Text style={styles.modalStatusText}>{t('workout.createExercisesHint')}</Text>
               </View>
             ) : (
               <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
                 {catalogExercises.map((exercise) => {
                   const selectedOrder = selectionOrder.get(exercise.id);
-                  const selectedEntry = selectedTemplateExercises.find((entry) => entry.exerciseId === exercise.id);
-                  const isSelected = selectedEntry !== undefined;
+                  const isSelected = selectedOrder !== undefined;
 
                   if (isSelected) {
                     return (
                       <View key={exercise.id} style={[styles.modalExerciseRow, styles.modalExerciseRowSelected]}>
                         <View style={styles.modalExerciseTextWrap}>
-                          <Text style={styles.modalExerciseName}>{exercise.name}</Text>
+                          <Text style={styles.modalExerciseName}>{getDisplayExerciseName(exercise)}</Text>
                           <Text style={styles.modalExerciseMeta}>
-                            {exercise.muscle_group ?? 'General'} - {exercise.equipment ?? 'Bodyweight'}
+                            {getDisplayMuscle(exercise)} - {getDisplayEquipment(exercise)}
                           </Text>
-
-                          <View style={styles.restInputRow}>
-                            <Text style={styles.restInputLabel}>Rest (s)</Text>
-                            <TextInput
-                              value={selectedEntry.restSecondsInput}
-                              onChangeText={(value) => updateExerciseRestSeconds(exercise.id, value)}
-                              style={styles.restInput}
-                              keyboardType="numeric"
-                              placeholder="90"
-                              placeholderTextColor={palette.textMuted}
-                              maxLength={3}
-                            />
-                          </View>
                         </View>
 
                         <View style={styles.selectedActionsWrap}>
@@ -859,9 +850,9 @@ export default function WorkoutScreen() {
                       onPress={() => toggleExerciseSelection(exercise.id)}
                     >
                       <View style={styles.modalExerciseTextWrap}>
-                        <Text style={styles.modalExerciseName}>{exercise.name}</Text>
+                        <Text style={styles.modalExerciseName}>{getDisplayExerciseName(exercise)}</Text>
                         <Text style={styles.modalExerciseMeta}>
-                          {exercise.muscle_group ?? 'General'} - {exercise.equipment ?? 'Bodyweight'}
+                          {getDisplayMuscle(exercise)} - {getDisplayEquipment(exercise)}
                         </Text>
                       </View>
 
@@ -870,7 +861,9 @@ export default function WorkoutScreen() {
                           <Text style={styles.orderBadgeText}>{selectedOrder}</Text>
                         </View>
                       ) : (
-                        <Ionicons name="add-circle-outline" size={22} color={palette.accent} />
+                        <View style={styles.addActionButton}>
+                          <Ionicons name="add" size={16} color={palette.accent} />
+                        </View>
                       )}
                     </TouchableOpacity>
                   );
@@ -884,7 +877,7 @@ export default function WorkoutScreen() {
                 onPress={() => setIsCreateTemplateModalVisible(false)}
                 activeOpacity={0.88}
               >
-                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+                <Text style={styles.modalCancelButtonText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -896,7 +889,7 @@ export default function WorkoutScreen() {
                 {isSavingTemplate ? (
                   <ActivityIndicator size="small" color={palette.textPrimary} />
                 ) : (
-                  <Text style={styles.modalCreateButtonText}>Save Template</Text>
+                  <Text style={styles.modalCreateButtonText}>{t('workout.saveTemplate')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -915,13 +908,13 @@ export default function WorkoutScreen() {
 
           <View style={[styles.modalSheet, isWeb && styles.modalSheetWeb]}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Create Routine</Text>
+            <Text style={styles.modalTitle}>{t('routines.createRoutine')}</Text>
 
             <TextInput
               value={routineNameInput}
               onChangeText={(value) => setRoutineNameInput(value.substring(0, INPUT_LIMITS.nameMax))}
               style={styles.modalInput}
-              placeholder="Routine Name"
+              placeholder={t('routines.routineName')}
               placeholderTextColor={palette.textMuted}
               autoCapitalize="words"
               maxLength={INPUT_LIMITS.nameMax}
@@ -930,7 +923,7 @@ export default function WorkoutScreen() {
               value={routineNotesInput}
               onChangeText={(value) => setRoutineNotesInput(value.substring(0, INPUT_LIMITS.notesMax))}
               style={[styles.modalInput, styles.modalNotesInput]}
-              placeholder="Notes (optional)"
+              placeholder={t('routines.notesOptional')}
               placeholderTextColor={palette.textMuted}
               autoCapitalize="sentences"
               multiline
@@ -938,16 +931,16 @@ export default function WorkoutScreen() {
               maxLength={INPUT_LIMITS.notesMax}
             />
 
-            <Text style={styles.modalSectionTitle}>Exercises ({selectedRoutineExerciseIds.length})</Text>
+            <Text style={styles.modalSectionTitle}>{`${t('routines.exercises')} (${selectedRoutineExerciseIds.length})`}</Text>
 
             {isLoadingCatalog ? (
               <View style={styles.modalStatusContainer}>
                 <ActivityIndicator size="small" color={palette.accent} />
-                <Text style={styles.modalStatusText}>Loading exercise catalog...</Text>
+                <Text style={styles.modalStatusText}>{t('routines.loadingCatalog')}</Text>
               </View>
             ) : catalogError ? (
               <View style={styles.modalStatusContainer}>
-                <Text style={styles.modalStatusTitle}>Unable to load exercises</Text>
+                <Text style={styles.modalStatusTitle}>{t('routines.unableToLoadExercises')}</Text>
                 <Text style={styles.modalStatusText}>{catalogError}</Text>
                 <TouchableOpacity
                   style={styles.modalRetryButton}
@@ -957,13 +950,13 @@ export default function WorkoutScreen() {
                   }}
                   activeOpacity={0.88}
                 >
-                  <Text style={styles.modalRetryButtonText}>Retry</Text>
+                  <Text style={styles.modalRetryButtonText}>{t('common.retry')}</Text>
                 </TouchableOpacity>
               </View>
             ) : catalogExercises.length === 0 ? (
               <View style={styles.modalStatusContainer}>
-                <Text style={styles.modalStatusTitle}>No exercises available</Text>
-                <Text style={styles.modalStatusText}>Create exercises first, then build routines.</Text>
+                <Text style={styles.modalStatusTitle}>{t('routines.noExercisesAvailable')}</Text>
+                <Text style={styles.modalStatusText}>{t('routines.noExercisesHint')}</Text>
               </View>
             ) : (
               <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
@@ -979,9 +972,9 @@ export default function WorkoutScreen() {
                       onPress={() => toggleRoutineExerciseSelection(exercise.id)}
                     >
                       <View style={styles.modalExerciseTextWrap}>
-                        <Text style={styles.modalExerciseName}>{exercise.name}</Text>
+                        <Text style={styles.modalExerciseName}>{getDisplayExerciseName(exercise)}</Text>
                         <Text style={styles.modalExerciseMeta}>
-                          {exercise.muscle_group ?? 'General'} - {exercise.equipment ?? 'Bodyweight'}
+                          {getDisplayMuscle(exercise)} - {getDisplayEquipment(exercise)}
                         </Text>
                       </View>
 
@@ -990,7 +983,9 @@ export default function WorkoutScreen() {
                           <Text style={styles.orderBadgeText}>{selectedOrder}</Text>
                         </View>
                       ) : (
-                        <Ionicons name="add-circle-outline" size={22} color={palette.accent} />
+                        <View style={styles.addActionButton}>
+                          <Ionicons name="add" size={16} color={palette.accent} />
+                        </View>
                       )}
                     </TouchableOpacity>
                   );
@@ -1004,7 +999,7 @@ export default function WorkoutScreen() {
                 onPress={() => setIsCreateRoutineModalVisible(false)}
                 activeOpacity={0.88}
               >
-                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+                <Text style={styles.modalCancelButtonText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1016,7 +1011,7 @@ export default function WorkoutScreen() {
                 {isCreatingRoutine ? (
                   <ActivityIndicator size="small" color={palette.textPrimary} />
                 ) : (
-                  <Text style={styles.modalCreateButtonText}>Create Routine</Text>
+                  <Text style={styles.modalCreateButtonText}>{t('routines.createRoutine')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1035,35 +1030,57 @@ export default function WorkoutScreen() {
 
           <View style={[styles.modalSheet, isWeb && styles.modalSheetWeb]}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Create Exercise</Text>
+            <Text style={styles.modalTitle}>{t('workout.createExercise')}</Text>
 
             <TextInput
               value={exerciseNameInput}
               onChangeText={(value) => setExerciseNameInput(value.substring(0, INPUT_LIMITS.nameMax))}
-              placeholder="Name"
+              placeholder={t('workout.name')}
               placeholderTextColor={palette.textMuted}
               style={styles.modalInput}
               autoCapitalize="words"
               maxLength={INPUT_LIMITS.nameMax}
             />
-            <TextInput
-              value={muscleGroupInput}
-              onChangeText={(value) => setMuscleGroupInput(value.substring(0, INPUT_LIMITS.nameMax))}
-              placeholder="Muscle Group"
-              placeholderTextColor={palette.textMuted}
-              style={styles.modalInput}
-              autoCapitalize="words"
-              maxLength={INPUT_LIMITS.nameMax}
-            />
-            <TextInput
-              value={equipmentInput}
-              onChangeText={(value) => setEquipmentInput(value.substring(0, INPUT_LIMITS.nameMax))}
-              placeholder="Equipment"
-              placeholderTextColor={palette.textMuted}
-              style={styles.modalInput}
-              autoCapitalize="words"
-              maxLength={INPUT_LIMITS.nameMax}
-            />
+
+            <Text style={styles.optionSectionLabel}>{t('workout.muscleGroup')}</Text>
+            <View style={styles.optionChipGrid}>
+              {EXERCISE_MUSCLE_OPTIONS.map((muscleKey) => {
+                const isSelected = selectedMuscleKey === muscleKey;
+
+                return (
+                  <TouchableOpacity
+                    key={muscleKey}
+                    style={[styles.optionChip, isSelected && styles.optionChipSelected]}
+                    activeOpacity={0.88}
+                    onPress={() => setSelectedMuscleKey(muscleKey)}
+                  >
+                    <Text style={[styles.optionChipText, isSelected && styles.optionChipTextSelected]}>
+                      {t(EXERCISE_MUSCLE_TRANSLATION_KEY[muscleKey])}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={styles.optionSectionLabel}>{t('workout.equipment')}</Text>
+            <View style={styles.optionChipGrid}>
+              {EXERCISE_EQUIPMENT_OPTIONS.map((equipmentKey) => {
+                const isSelected = selectedEquipmentKey === equipmentKey;
+
+                return (
+                  <TouchableOpacity
+                    key={equipmentKey}
+                    style={[styles.optionChip, isSelected && styles.optionChipSelected]}
+                    activeOpacity={0.88}
+                    onPress={() => setSelectedEquipmentKey(equipmentKey)}
+                  >
+                    <Text style={[styles.optionChipText, isSelected && styles.optionChipTextSelected]}>
+                      {t(EXERCISE_EQUIPMENT_TRANSLATION_KEY[equipmentKey])}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
             <View style={styles.modalButtonRow}>
               <TouchableOpacity
@@ -1071,7 +1088,7 @@ export default function WorkoutScreen() {
                 onPress={() => setIsCreateExerciseModalVisible(false)}
                 activeOpacity={0.88}
               >
-                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+                <Text style={styles.modalCancelButtonText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1083,7 +1100,7 @@ export default function WorkoutScreen() {
                 {isCreatingExercise ? (
                   <ActivityIndicator size="small" color={palette.textPrimary} />
                 ) : (
-                  <Text style={styles.modalCreateButtonText}>Create</Text>
+                  <Text style={styles.modalCreateButtonText}>{t('common.create')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1318,6 +1335,44 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 14,
   },
+  exercisePickerTrigger: {
+    marginTop: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#0D1624',
+    minHeight: 58,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 10,
+  },
+  exercisePickerTriggerIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#1E3A5F',
+    backgroundColor: '#0A1A2D',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exercisePickerTriggerTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  exercisePickerTriggerTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  exercisePickerTriggerSubtitle: {
+    color: '#94A3B8',
+    fontSize: 12,
+    lineHeight: 17,
+  },
   searchBar: {
     backgroundColor: palette.inputBackground,
     borderWidth: 1,
@@ -1470,6 +1525,44 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: 2,
   },
+  optionSectionLabel: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.35,
+    marginBottom: 6,
+    marginTop: 2,
+  },
+  optionChipGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    columnGap: 8,
+    rowGap: 8,
+    marginBottom: 10,
+  },
+  optionChip: {
+    minHeight: 34,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#0D1624',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  optionChipSelected: {
+    borderColor: '#3B82F6',
+    backgroundColor: '#122744',
+  },
+  optionChipText: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  optionChipTextSelected: {
+    color: '#EAF1FF',
+  },
   modalList: {
     maxHeight: 260,
   },
@@ -1511,14 +1604,15 @@ const styles = StyleSheet.create({
   modalExerciseRow: {
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 14,
+    borderRadius: 16,
     backgroundColor: palette.surfaceAlt,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 56,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   modalExerciseRowSelected: {
     borderColor: palette.accent,
@@ -1526,67 +1620,52 @@ const styles = StyleSheet.create({
   },
   modalExerciseTextWrap: {
     flex: 1,
-    paddingRight: 12,
+    paddingRight: 14,
   },
   modalExerciseName: {
     color: palette.textPrimary,
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 2,
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 4,
+    lineHeight: 22,
   },
   modalExerciseMeta: {
-    color: palette.textSecondary,
-    fontSize: 13,
-  },
-  restInputRow: {
-    marginTop: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    columnGap: 8,
-  },
-  restInputLabel: {
-    color: '#B8C6DB',
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
-  restInput: {
-    minWidth: 68,
-    height: 32,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#3B82F6',
-    backgroundColor: '#122744',
-    color: '#E5EDFF',
-    textAlign: 'center',
-    fontSize: 13,
-    fontWeight: '800',
-    paddingHorizontal: 8,
-    fontVariant: ['tabular-nums'],
+    color: palette.textMuted,
+    fontSize: 12,
+    fontWeight: '500',
   },
   selectedActionsWrap: {
     alignItems: 'center',
     rowGap: 8,
   },
   orderBadge: {
-    minWidth: 28,
-    height: 28,
-    borderRadius: 14,
+    minWidth: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: palette.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 9,
   },
   orderBadgeText: {
     color: '#FFFFFF',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '800',
   },
+  addActionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#0D1624',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   removeSelectedButton: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: '#EF4444',
     backgroundColor: '#7F1D1D',

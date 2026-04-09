@@ -15,7 +15,9 @@ import {
   View,
 } from 'react-native';
 import Animated, { FadeInDown, FadeInUp, LinearTransition } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/theme';
+import { getEquipmentTranslationKey, getMuscleTranslationKey } from '@/constants/exerciseCatalog';
 import {
   createRoutine,
   getErrorMessage,
@@ -32,6 +34,7 @@ const cardLayoutTransition = LinearTransition.springify().damping(16).stiffness(
 type ExerciseRow = Tables<'exercises'>;
 
 export default function RoutinesScreen() {
+  const { t } = useTranslation();
   const isWeb = Platform.OS === 'web';
   const modalAnimationType: 'fade' | 'slide' = isWeb ? 'fade' : 'slide';
   const [routines, setRoutines] = useState<RoutineSummary[]>([]);
@@ -103,6 +106,16 @@ export default function RoutinesScreen() {
     return new Map(selectedExerciseIds.map((exerciseId, index) => [exerciseId, index + 1]));
   }, [selectedExerciseIds]);
 
+  const getExerciseMuscleLabel = useCallback((exercise: ExerciseRow) => {
+    const muscleKey = getMuscleTranslationKey(exercise.muscle_group);
+    return muscleKey ? t(muscleKey) : t('exercise.general');
+  }, [t]);
+
+  const getExerciseEquipmentLabel = useCallback((exercise: ExerciseRow) => {
+    const equipmentKey = getEquipmentTranslationKey(exercise.equipment);
+    return equipmentKey ? t(equipmentKey) : t('exercise.equipment.bodyweight');
+  }, [t]);
+
   function handleStartRoutine(routineId: string) {
     router.push({ pathname: '/workout/active', params: { routineId } } as any);
   }
@@ -134,12 +147,12 @@ export default function RoutinesScreen() {
     });
 
     if (!normalizedName) {
-      Alert.alert('Validation', 'Routine name is required.');
+      Alert.alert(t('validation.title'), t('validation.routineNameRequired'));
       return;
     }
 
     if (selectedExerciseIds.length === 0) {
-      Alert.alert('Validation', 'Select at least one exercise for this routine.');
+      Alert.alert(t('validation.title'), t('validation.routineExerciseRequired'));
       return;
     }
 
@@ -150,8 +163,9 @@ export default function RoutinesScreen() {
       setIsCreateModalVisible(false);
       resetRoutineForm();
       await loadRoutines();
+      Alert.alert(t('routines.createRoutineSuccessTitle'), t('routines.createRoutineSuccessDescription'));
     } catch (error) {
-      Alert.alert('Unable to create routine', getErrorMessage(error));
+      Alert.alert(t('routines.createRoutineError'), getErrorMessage(error));
     } finally {
       setIsCreatingRoutine(false);
     }
@@ -170,28 +184,28 @@ export default function RoutinesScreen() {
           onPress={() => setIsCreateModalVisible(true)}
         >
           <Ionicons name="add" size={24} color="#FFFFFF" />
-          <Text style={styles.newRoutineButtonText}>New Routine</Text>
+          <Text style={styles.newRoutineButtonText}>{t('routines.newRoutine')}</Text>
         </TouchableOpacity>
       </Animated.View>
 
-      <Text style={styles.sectionTitle}>Your Routines</Text>
+      <Text style={styles.sectionTitle}>{t('routines.yourRoutines')}</Text>
       {isLoadingRoutines ? (
         <View style={styles.statusContainer}>
           <ActivityIndicator size="small" color={palette.accent} />
-          <Text style={styles.statusText}>Loading routines...</Text>
+          <Text style={styles.statusText}>{t('routines.loadingRoutines')}</Text>
         </View>
       ) : routinesError ? (
         <View style={styles.statusContainer}>
-          <Text style={styles.statusTitle}>Unable to load routines</Text>
+          <Text style={styles.statusTitle}>{t('routines.unableToLoadRoutines')}</Text>
           <Text style={styles.statusText}>{routinesError}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={() => void loadRoutines()} activeOpacity={0.88}>
-            <Text style={styles.retryButtonText}>Retry</Text>
+            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
       ) : routines.length === 0 ? (
         <View style={styles.statusContainer}>
-          <Text style={styles.statusTitle}>No routines yet</Text>
-          <Text style={styles.statusText}>Create your first routine to speed up workout starts.</Text>
+          <Text style={styles.statusTitle}>{t('routines.noRoutinesTitle')}</Text>
+          <Text style={styles.statusText}>{t('routines.noRoutinesDescription')}</Text>
         </View>
       ) : (
         routines.map((routine, index) => (
@@ -205,8 +219,8 @@ export default function RoutinesScreen() {
                 <Text style={styles.routineName}>{routine.name}</Text>
                 <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
               </View>
-              <Text style={styles.routineMeta}>{routine.exerciseCount} exercises</Text>
-              <Text style={styles.routineNotes}>{routine.notes ?? 'No notes available.'}</Text>
+              <Text style={styles.routineMeta}>{`${routine.exerciseCount} ${t('routines.exercises').toLowerCase()}`}</Text>
+              <Text style={styles.routineNotes}>{routine.notes ?? t('routines.noNotes')}</Text>
 
               <TouchableOpacity
                 style={styles.startRoutineButton}
@@ -214,7 +228,7 @@ export default function RoutinesScreen() {
                 onPress={() => handleStartRoutine(routine.id)}
               >
                 <Ionicons name="play" size={15} color="#FFFFFF" />
-                <Text style={styles.startRoutineButtonText}>Start Routine</Text>
+                <Text style={styles.startRoutineButtonText}>{t('routines.startRoutine')}</Text>
               </TouchableOpacity>
             </View>
           </Animated.View>
@@ -232,13 +246,13 @@ export default function RoutinesScreen() {
 
           <View style={[styles.modalSheet, isWeb && styles.modalSheetWeb]}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Create Routine</Text>
+            <Text style={styles.modalTitle}>{t('routines.createRoutine')}</Text>
 
             <TextInput
               value={routineNameInput}
               onChangeText={(value) => setRoutineNameInput(value.substring(0, INPUT_LIMITS.nameMax))}
               style={styles.modalInput}
-              placeholder="Routine Name"
+              placeholder={t('routines.routineName')}
               placeholderTextColor={palette.textMuted}
               autoCapitalize="words"
               maxLength={INPUT_LIMITS.nameMax}
@@ -247,7 +261,7 @@ export default function RoutinesScreen() {
               value={routineNotesInput}
               onChangeText={(value) => setRoutineNotesInput(value.substring(0, INPUT_LIMITS.notesMax))}
               style={[styles.modalInput, styles.modalNotesInput]}
-              placeholder="Notes (optional)"
+              placeholder={t('routines.notesOptional')}
               placeholderTextColor={palette.textMuted}
               autoCapitalize="sentences"
               multiline
@@ -255,29 +269,29 @@ export default function RoutinesScreen() {
               maxLength={INPUT_LIMITS.notesMax}
             />
 
-            <Text style={styles.modalSectionTitle}>Exercises ({selectedExerciseIds.length})</Text>
+            <Text style={styles.modalSectionTitle}>{`${t('routines.exercises')} (${selectedExerciseIds.length})`}</Text>
 
             {isLoadingCatalog ? (
               <View style={styles.modalStatusContainer}>
                 <ActivityIndicator size="small" color={palette.accent} />
-                <Text style={styles.modalStatusText}>Loading exercise catalog...</Text>
+                <Text style={styles.modalStatusText}>{t('routines.loadingCatalog')}</Text>
               </View>
             ) : catalogError ? (
               <View style={styles.modalStatusContainer}>
-                <Text style={styles.modalStatusTitle}>Unable to load exercises</Text>
+                <Text style={styles.modalStatusTitle}>{t('routines.unableToLoadExercises')}</Text>
                 <Text style={styles.modalStatusText}>{catalogError}</Text>
                 <TouchableOpacity
                   style={styles.modalRetryButton}
                   onPress={() => void loadCatalogExercises()}
                   activeOpacity={0.88}
                 >
-                  <Text style={styles.modalRetryButtonText}>Retry</Text>
+                  <Text style={styles.modalRetryButtonText}>{t('common.retry')}</Text>
                 </TouchableOpacity>
               </View>
             ) : catalogExercises.length === 0 ? (
               <View style={styles.modalStatusContainer}>
-                <Text style={styles.modalStatusTitle}>No exercises available</Text>
-                <Text style={styles.modalStatusText}>Create exercises first, then build routines.</Text>
+                <Text style={styles.modalStatusTitle}>{t('routines.noExercisesAvailable')}</Text>
+                <Text style={styles.modalStatusText}>{t('routines.noExercisesHint')}</Text>
               </View>
             ) : (
               <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
@@ -299,7 +313,7 @@ export default function RoutinesScreen() {
                         <View style={styles.modalExerciseTextWrap}>
                           <Text style={styles.modalExerciseName}>{exercise.name}</Text>
                           <Text style={styles.modalExerciseMeta}>
-                            {exercise.muscle_group ?? 'General'} - {exercise.equipment ?? 'Bodyweight'}
+                            {getExerciseMuscleLabel(exercise)} - {getExerciseEquipmentLabel(exercise)}
                           </Text>
                         </View>
 
@@ -323,7 +337,7 @@ export default function RoutinesScreen() {
                 onPress={() => setIsCreateModalVisible(false)}
                 activeOpacity={0.88}
               >
-                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+                <Text style={styles.modalCancelButtonText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -335,7 +349,7 @@ export default function RoutinesScreen() {
                 {isCreatingRoutine ? (
                   <ActivityIndicator size="small" color={palette.textPrimary} />
                 ) : (
-                  <Text style={styles.modalCreateButtonText}>Create Routine</Text>
+                  <Text style={styles.modalCreateButtonText}>{t('routines.createRoutine')}</Text>
                 )}
               </TouchableOpacity>
             </View>

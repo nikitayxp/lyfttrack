@@ -109,6 +109,7 @@ export async function finishWorkout(input: FinishWorkoutInput): Promise<FinishWo
       notes: input.notes,
       templateId: input.templateId ?? null,
       exerciseRestSecondsByExerciseId: input.exerciseRestSecondsByExerciseId,
+      notesByExerciseId: input.notesByExerciseId,
       startTime: input.startTime,
       endTime,
       setDrafts: completedSetDrafts,
@@ -254,24 +255,51 @@ export async function createWorkoutWithSets(
   );
 
   const restSecondsByExerciseId = input.exerciseRestSecondsByExerciseId ?? {};
+  const notesByExerciseId = input.notesByExerciseId ?? {};
 
-  const workoutExerciseRows: TablesInsert<'workout_exercises'>[] = uniqueExerciseIds.map((exerciseId, index) => ({
-    workout_id: createdWorkout.id,
-    exercise_id: exerciseId,
-    order: index + 1,
-    rest_time: toSafeInteger(restSecondsByExerciseId[exerciseId], {
-      min: 0,
-      max: 3600,
-    }) ?? 0,
-  }));
+  const workoutExerciseRows: TablesInsert<'workout_exercises'>[] = uniqueExerciseIds.map((exerciseId, index) => {
+    const rawNotes = notesByExerciseId[exerciseId];
+    const normalizedNotes = normalizeWriteText(
+      typeof rawNotes === 'string' ? rawNotes : null,
+      1000
+    );
+
+    return {
+      workout_id: createdWorkout.id,
+      exercise_id: exerciseId,
+      order: index + 1,
+      rest_time: toSafeInteger(restSecondsByExerciseId[exerciseId], {
+        min: 0,
+        max: 3600,
+      }) ?? 0,
+      notes: normalizedNotes,
+    };
+  });
 
   const workoutExerciseIdByExercise = new Map<string, string>();
 
   if (workoutExerciseRows.length > 0) {
-    const { data: insertedWorkoutExercises, error: workoutExercisesError } = await supabase
+    let { data: insertedWorkoutExercises, error: workoutExercisesError } = await supabase
       .from('workout_exercises')
       .insert(workoutExerciseRows)
       .select('id, exercise_id');
+
+    // If the `notes` column isn't present yet (older schema), retry without it.
+    if (workoutExercisesError) {
+      const errorMessage = workoutExercisesError.message?.toLowerCase() ?? '';
+      const isNotesColumnMissing =
+        errorMessage.includes("column") && errorMessage.includes("notes");
+
+      if (isNotesColumnMissing) {
+        const legacyRows = workoutExerciseRows.map(({ notes: _ignored, ...rest }) => rest);
+        const retry = await supabase
+          .from('workout_exercises')
+          .insert(legacyRows)
+          .select('id, exercise_id');
+        insertedWorkoutExercises = retry.data;
+        workoutExercisesError = retry.error;
+      }
+    }
 
     if (workoutExercisesError) {
       if (isWorkoutExercisesTableMissing(workoutExercisesError)) {
@@ -350,6 +378,26 @@ export async function createWorkoutWithSets(
     setsError = retryResult.error;
   }
 
+  if (setsError) {
+    const errorMessage = setsError.message?.toLowerCase() ?? '';
+    const isSideColumnMissing =
+      errorMessage.includes('column') && errorMessage.includes("side");
+
+    if (isSideColumnMissing) {
+      const legacySetRowsNoSide: TablesInsert<'sets'>[] = setRows.map(
+        ({ side: _ignored, ...rest }) => rest as TablesInsert<'sets'>
+      );
+
+      console.warn('[createWorkoutWithSets] sets.side column missing, retrying insert without it', {
+        workoutId: createdWorkout.id,
+        error: extractSupabaseErrorMeta(setsError),
+      });
+
+      const retryResult = await insertSets(legacySetRowsNoSide);
+      setsError = retryResult.error;
+    }
+  }
+
   if (!setsError) {
     return {
       workoutId: createdWorkout.id,
@@ -369,3 +417,157 @@ export async function createWorkoutWithSets(
     `Unable to save sets: ${setsError.message}. Workout ${createdWorkout.id} was rolled back successfully.`
   );
 }
+
+// ---------- Edit Workout (completed) ----------
+
+export type WorkoutSetPatch = {
+  setId: string;
+  weight?: number | null;
+  reps?: number | null;
+  rir?: number | null;
+  side?: 'both' | 'left' | 'right';
+};
+
+export type UpdateWorkoutSetsInput = {
+  workoutId: string;
+  setPatches: WorkoutSetPatch[];
+  workoutName?: string | null;
+  notesByExerciseId?: Record<string, string | null | undefined>;
+};
+
+/**
+ * Edit a completed workout's sets (weight/reps/rir/side) plus optional workout
+ * name and per-workout-exercise notes. Rows are scoped to the current user via
+ * RLS; we also filter by workout_id to make the intent explicit.
+ *
+ * Missing columns (`side` on sets, `notes` on workout_exercises) are handled
+ * gracefully so the client works before/after the schema migration runs.
+ */
+export async function updateWorkoutSets(input: UpdateWorkoutSetsInput): Promise<void> {
+  const normalizedWorkoutId = input.workoutId.trim();
+
+  if (!normalizedWorkoutId) {
+    throw new WorkoutSaveValidationError('Workout id is required');
+  }
+
+  const user = await getAuthenticatedUserOrThrow();
+
+  if (typeof input.workoutName === 'string') {
+    const normalizedName = normalizeWriteText(input.workoutName, INPUT_LIMITS.nameMax) ?? 'Workout';
+    const { error: workoutUpdateError } = await supabase
+      .from('workouts')
+      .update({ name: normalizedName })
+      .eq('id', normalizedWorkoutId)
+      .eq('user_id', user.id);
+
+    if (workoutUpdateError) {
+      throw new Error(`Unable to update workout: ${workoutUpdateError.message}`);
+    }
+  }
+
+  for (const patch of input.setPatches) {
+    const normalizedSetId = patch.setId?.trim();
+
+    if (!normalizedSetId) {
+      continue;
+    }
+
+    const updatePayload: Record<string, unknown> = {};
+
+    if (patch.weight !== undefined) {
+      updatePayload.weight = toSafeNumber(patch.weight, {
+        min: 0,
+        max: INPUT_LIMITS.weightMax,
+        decimals: 2,
+      });
+    }
+
+    if (patch.reps !== undefined) {
+      updatePayload.reps = toSafeInteger(patch.reps, {
+        min: 0,
+        max: INPUT_LIMITS.repsMax,
+      });
+    }
+
+    if (patch.rir !== undefined) {
+      updatePayload.rir = toSafeInteger(patch.rir, {
+        min: 0,
+        max: INPUT_LIMITS.rirMax,
+      });
+    }
+
+    if (patch.side !== undefined) {
+      updatePayload.side = patch.side;
+    }
+
+    if (Object.keys(updatePayload).length === 0) {
+      continue;
+    }
+
+    const baseQuery = () =>
+      supabase
+        .from('sets')
+        .update(updatePayload as Record<string, never>)
+        .eq('id', normalizedSetId)
+        .eq('workout_id', normalizedWorkoutId);
+
+    let { error: updateError } = await baseQuery();
+
+    if (updateError) {
+      const meta = extractSupabaseErrorMeta(updateError);
+      const message = `${meta.message} ${meta.details ?? ''}`.toLowerCase();
+      const isSideColumnMissing = message.includes("'side'") || message.includes('column "side"') || message.includes('sets.side');
+
+      if (isSideColumnMissing && 'side' in updatePayload) {
+        const { side: _sideIgnored, ...fallbackPayload } = updatePayload;
+
+        if (Object.keys(fallbackPayload).length === 0) {
+          continue;
+        }
+
+        const retry = await supabase
+          .from('sets')
+          .update(fallbackPayload as Record<string, never>)
+          .eq('id', normalizedSetId)
+          .eq('workout_id', normalizedWorkoutId);
+
+        updateError = retry.error;
+      }
+    }
+
+    if (updateError) {
+      throw new Error(`Unable to update set ${normalizedSetId}: ${updateError.message}`);
+    }
+  }
+
+  if (input.notesByExerciseId) {
+    for (const [exerciseId, rawNotes] of Object.entries(input.notesByExerciseId)) {
+      const normalizedExerciseId = exerciseId?.trim();
+
+      if (!normalizedExerciseId) {
+        continue;
+      }
+
+      const normalizedNotes = typeof rawNotes === 'string'
+        ? sanitizeText(rawNotes, { maxLength: INPUT_LIMITS.notesMax, allowEmpty: true })
+        : null;
+
+      const { error: notesError } = await supabase
+        .from('workout_exercises')
+        .update({ notes: normalizedNotes } as Record<string, never>)
+        .eq('workout_id', normalizedWorkoutId)
+        .eq('exercise_id', normalizedExerciseId);
+
+      if (notesError) {
+        const meta = extractSupabaseErrorMeta(notesError);
+        const message = `${meta.message} ${meta.details ?? ''}`.toLowerCase();
+        const isNotesColumnMissing = message.includes("'notes'") || message.includes('column "notes"') || message.includes('workout_exercises.notes');
+
+        if (!isNotesColumnMissing) {
+          throw new Error(`Unable to update workout exercise notes: ${notesError.message}`);
+        }
+      }
+    }
+  }
+}
+

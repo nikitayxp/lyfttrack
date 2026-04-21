@@ -1,6 +1,7 @@
 import type { Tables } from '@/types/database';
 
 export type WorkoutSetType = Exclude<Tables<'sets'>['set_type'], null>;
+export type WorkoutSetSide = Tables<'sets'>['side'];
 
 export type WorkoutSetDraft = {
   exerciseId: string | null | undefined;
@@ -9,6 +10,7 @@ export type WorkoutSetDraft = {
   reps?: number | null;
   rir?: number | null;
   setType?: WorkoutSetType | string | null;
+  side?: WorkoutSetSide | string | null;
 };
 
 export type WorkoutSetProgressDraft = WorkoutSetDraft & {
@@ -20,6 +22,8 @@ export type CreateWorkoutWithSetsInput = {
   notes?: string | null;
   templateId?: string | null;
   exerciseRestSecondsByExerciseId?: Record<string, number | null | undefined>;
+  /** Map of exercise.id → per-workout notes snapshot. */
+  notesByExerciseId?: Record<string, string | null | undefined>;
   startTime: string;
   endTime: string;
   setDrafts: WorkoutSetDraft[];
@@ -35,6 +39,7 @@ export type FinishWorkoutInput = {
   notes?: string | null;
   templateId?: string | null;
   exerciseRestSecondsByExerciseId?: Record<string, number | null | undefined>;
+  notesByExerciseId?: Record<string, string | null | undefined>;
   startTime: string;
   setDrafts: WorkoutSetProgressDraft[];
 };

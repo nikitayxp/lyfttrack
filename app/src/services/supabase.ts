@@ -20,7 +20,9 @@ type SupabaseStorage = {
   removeItem: (key: string) => Promise<void> | void;
 };
 
-const PASSWORD_RESET_REDIRECT_FALLBACK = 'lyfttrack://reset-password';
+const AUTH_WEB_APP_URL_FALLBACK = 'https://lyfttrack-app.vercel.app';
+const PASSWORD_RESET_PATH = '/reset-password';
+const SIGN_IN_PATH = '/sign-in';
 
 function normalizeUrlValue(value: string | undefined): string | null {
   const normalized = value?.trim();
@@ -35,6 +37,22 @@ function removeTrailingSlashes(value: string): string {
   return value.replace(/\/+$/, '');
 }
 
+function resolveAuthWebBaseUrl(): string {
+  const explicitAuthWebUrl = normalizeUrlValue(process.env.EXPO_PUBLIC_AUTH_WEB_URL);
+
+  if (explicitAuthWebUrl && !isLocalhostUrl(explicitAuthWebUrl)) {
+    return removeTrailingSlashes(explicitAuthWebUrl);
+  }
+
+  const siteUrl = normalizeUrlValue(process.env.EXPO_PUBLIC_SITE_URL);
+
+  if (siteUrl && !isLocalhostUrl(siteUrl)) {
+    return removeTrailingSlashes(siteUrl);
+  }
+
+  return AUTH_WEB_APP_URL_FALLBACK;
+}
+
 export function getPasswordResetRedirectTo(): string {
   const explicitRedirect = normalizeUrlValue(process.env.EXPO_PUBLIC_PASSWORD_RESET_REDIRECT);
 
@@ -42,13 +60,17 @@ export function getPasswordResetRedirectTo(): string {
     return explicitRedirect;
   }
 
-  const siteUrl = normalizeUrlValue(process.env.EXPO_PUBLIC_SITE_URL);
+  return `${resolveAuthWebBaseUrl()}${PASSWORD_RESET_PATH}`;
+}
 
-  if (siteUrl && !isLocalhostUrl(siteUrl)) {
-    return `${removeTrailingSlashes(siteUrl)}/reset-password`;
+export function getEmailChangeRedirectTo(): string {
+  const explicitRedirect = normalizeUrlValue(process.env.EXPO_PUBLIC_EMAIL_CHANGE_REDIRECT);
+
+  if (explicitRedirect && !isLocalhostUrl(explicitRedirect)) {
+    return explicitRedirect;
   }
 
-  return PASSWORD_RESET_REDIRECT_FALLBACK;
+  return `${resolveAuthWebBaseUrl()}${SIGN_IN_PATH}`;
 }
 
 function createAuthStorage(): SupabaseStorage | undefined {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { LineChart } from 'react-native-gifted-charts';
+import { BarChart } from 'react-native-gifted-charts';
 import {
   ActivityIndicator,
   Alert,
@@ -36,9 +36,11 @@ import {
   type ExerciseLibraryEquipmentFilter,
   type ExerciseLibraryMuscleFilter,
   getErrorMessage,
+  getExercisesByIds,
   getExercisesCatalog,
   getLastExerciseRestTimes,
   getRoutineById,
+  getWorkoutDetails,
 } from '@/services/workoutService';
 import { finishWorkout } from '@/services/sessionRepository';
 import { getTemplateById } from '@/services/templateService';
@@ -50,9 +52,11 @@ import {
 } from '@/services/workoutSession.types';
 import {
   createExerciseBlock,
+  createExerciseBlockFromSets,
   normalizeSetTypeOption,
   getCompletedExerciseNames,
   type ActiveExercise,
+  type CopySetSeed,
   type ExerciseRow,
 } from '@/hooks/useActiveWorkoutState';
 import { useWorkoutContext } from '@/context/WorkoutContext';
@@ -122,8 +126,20 @@ function buildWorkoutSetDrafts(exercises: ActiveExercise[]): WorkoutSetProgressD
       }),
       completed: setItem.completed,
       setType: normalizeSetTypeOption(setItem.set_type),
+      side: setItem.side ?? 'both',
     }))
   );
+}
+
+function buildExerciseNotesMap(exercises: ActiveExercise[]): Record<string, string | null> {
+  const result: Record<string, string | null> = {};
+  for (const exercise of exercises) {
+    const id = exercise.exercise.id?.trim();
+    if (!id) continue;
+    const trimmed = (exercise.notes ?? '').trim();
+    result[id] = trimmed.length > 0 ? trimmed : null;
+  }
+  return result;
 }
 
 function buildCatalogCacheKey(filters: ExerciseCatalogFilters): string {
@@ -174,6 +190,7 @@ export default function ActiveWorkout() {
   const searchParams = useLocalSearchParams<{
     routineId?: string | string[];
     templateId?: string | string[];
+    copyFromWorkoutId?: string | string[];
   }>();
 
   const routeRoutineId = useMemo(() => {
@@ -196,6 +213,16 @@ export default function ActiveWorkout() {
     return rawTemplateId;
   }, [searchParams.templateId]);
 
+  const routeCopyFromWorkoutId = useMemo(() => {
+    const rawWorkoutId = searchParams.copyFromWorkoutId;
+
+    if (Array.isArray(rawWorkoutId)) {
+      return rawWorkoutId[0];
+    }
+
+    return rawWorkoutId;
+  }, [searchParams.copyFromWorkoutId]);
+
   const {
     workoutStartedAtMs,
     elapsedSeconds,
@@ -208,6 +235,8 @@ export default function ActiveWorkout() {
     setActiveExercisesWithRef,
     handleSetCompletionToggle,
     updateSetInput,
+    updateSetSide,
+    updateExerciseNotes,
     addSet,
     addExercise,
     clearExercises,
@@ -231,10 +260,13 @@ export default function ActiveWorkout() {
   const [catalogExercises, setCatalogExercises] = useState<ExerciseRow[]>([]);
   const [preloadedRoutineId, setPreloadedRoutineId] = useState<string | null>(null);
   const [preloadedTemplateId, setPreloadedTemplateId] = useState<string | null>(null);
+  const [preloadedCopyWorkoutId, setPreloadedCopyWorkoutId] = useState<string | null>(null);
   const [isPreloadingRoutine, setIsPreloadingRoutine] = useState(false);
   const [isPreloadingTemplate, setIsPreloadingTemplate] = useState(false);
+  const [isPreloadingCopyWorkout, setIsPreloadingCopyWorkout] = useState(false);
   const [routinePreloadError, setRoutinePreloadError] = useState<string | null>(null);
   const [templatePreloadError, setTemplatePreloadError] = useState<string | null>(null);
+  const [copyWorkoutPreloadError, setCopyWorkoutPreloadError] = useState<string | null>(null);
   const [isLoadingExercises, setIsLoadingExercises] = useState(true);
   const [exerciseLoadError, setExerciseLoadError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -274,8 +306,7 @@ export default function ActiveWorkout() {
       visibleLivePoints.map((point, index) => ({
         value: Math.max(0, Number(point.value.toFixed(1))),
         label: point.label,
-        dataPointColor: index === selectedLivePointIndex ? '#FFFFFF' : LIVE_CHART_COLOR,
-        dataPointRadius: index === selectedLivePointIndex ? 5.5 : 4,
+        frontColor: index === selectedLivePointIndex ? '#60A5FA' : LIVE_CHART_COLOR,
         onPress: () => setSelectedLivePointIndex(index),
       })),
     [selectedLivePointIndex, visibleLivePoints]
@@ -450,7 +481,63 @@ export default function ActiveWorkout() {
     [applySuggestedWorkoutTitle, preloadedTemplateId, setActiveExercisesWithRef, setActiveTemplateId]
   );
 
+  const preloadFromPastWorkout = useCallback(
+    async (workoutId: string, force = false) => {
+      const normalizedWorkoutId = workoutId.trim();
+
+      if (!normalizedWorkoutId) {
+        return;
+      }
+
+      if (!force && preloadedCopyWorkoutId === normalizedWorkoutId) {
+        return;
+      }
+
+      setIsPreloadingCopyWorkout(true);
+      setCopyWorkoutPreloadError(null);
+
+      try {
+        const details = await getWorkoutDetails(normalizedWorkoutId);
+
+        const uniqueExerciseIds = [...new Set(details.exercises.map((entry) => entry.exercise_id).filter(Boolean))];
+        const catalogRows = uniqueExerciseIds.length > 0 ? await getExercisesByIds(uniqueExerciseIds) : [];
+        const catalogById = new Map(catalogRows.map((row) => [row.id, row] as const));
+
+        const blocks = details.exercises
+          .filter((entry) => catalogById.has(entry.exercise_id))
+          .map((entry) => {
+            const exerciseRow = catalogById.get(entry.exercise_id)!;
+            const seeds: CopySetSeed[] = entry.sets.map((setItem) => ({
+              setType: setItem.set_type,
+              weight: setItem.weight,
+              reps: setItem.reps,
+              rir: setItem.rir,
+            }));
+
+            return createExerciseBlockFromSets(exerciseRow, seeds, {
+              defaultRestSeconds: entry.rest_time ?? undefined,
+              notes: null,
+            });
+          });
+
+        setActiveExercisesWithRef(blocks);
+        setPreloadedCopyWorkoutId(normalizedWorkoutId);
+        applySuggestedWorkoutTitle(details.name);
+      } catch (error) {
+        setCopyWorkoutPreloadError(getErrorMessage(error));
+      } finally {
+        setIsPreloadingCopyWorkout(false);
+      }
+    },
+    [applySuggestedWorkoutTitle, preloadedCopyWorkoutId, setActiveExercisesWithRef]
+  );
+
   useEffect(() => {
+    if (routeCopyFromWorkoutId) {
+      void preloadFromPastWorkout(routeCopyFromWorkoutId);
+      return;
+    }
+
     if (routeTemplateId) {
       void preloadTemplate(routeTemplateId);
       return;
@@ -459,7 +546,7 @@ export default function ActiveWorkout() {
     if (routeRoutineId) {
       void preloadRoutine(routeRoutineId);
     }
-  }, [preloadRoutine, preloadTemplate, routeRoutineId, routeTemplateId]);
+  }, [preloadFromPastWorkout, preloadRoutine, preloadTemplate, routeCopyFromWorkoutId, routeRoutineId, routeTemplateId]);
 
   const loadExerciseProgressForModal = useCallback(async (exercise: ExerciseRow, forceRefresh = false) => {
     const normalizedExerciseId = exercise.id.trim();
@@ -652,6 +739,7 @@ export default function ActiveWorkout() {
         notes: null,
         templateId: activeTemplateId ?? routeTemplateId ?? null,
         exerciseRestSecondsByExerciseId: getExerciseRestSecondsByExerciseId(),
+        notesByExerciseId: buildExerciseNotesMap(finishSnapshot),
         startTime,
         setDrafts,
       });
@@ -741,9 +829,17 @@ export default function ActiveWorkout() {
     router.replace('/(tabs)' as any);
   }, [clearExercises, safeDeactivateKeepAwake]);
 
-  const routePreloadLabel = routeTemplateId ? 'template' : 'routine';
-  const isPreloadingRoute = routeTemplateId ? isPreloadingTemplate : isPreloadingRoutine;
-  const routePreloadError = routeTemplateId ? templatePreloadError : routinePreloadError;
+  const routePreloadLabel = routeCopyFromWorkoutId ? 'copy' : routeTemplateId ? 'template' : 'routine';
+  const isPreloadingRoute = routeCopyFromWorkoutId
+    ? isPreloadingCopyWorkout
+    : routeTemplateId
+      ? isPreloadingTemplate
+      : isPreloadingRoutine;
+  const routePreloadError = routeCopyFromWorkoutId
+    ? copyWorkoutPreloadError
+    : routeTemplateId
+      ? templatePreloadError
+      : routinePreloadError;
 
   const getExerciseMuscleLabel = (exercise: ExerciseRow): string => {
     const muscleKey = getExerciseMuscleTranslationKey({
@@ -953,6 +1049,16 @@ export default function ActiveWorkout() {
                     </View>
                   </View>
 
+                  <TextInput
+                    value={exercise.notes ?? ''}
+                    onChangeText={(value) => updateExerciseNotes(exercise.id, value)}
+                    style={styles.exerciseNotesInput}
+                    placeholder={t('workout.exerciseNotesPlaceholder')}
+                    placeholderTextColor={palette.textMuted}
+                    multiline
+                    maxLength={1000}
+                  />
+
                   <View style={[styles.tableRow, styles.tableHeaderRow]}>
                     <Text style={[styles.headerLabel, styles.cellSet]}>Set</Text>
                     <Text style={[styles.headerLabel, styles.cellKg]}>kg</Text>
@@ -964,12 +1070,24 @@ export default function ActiveWorkout() {
                   </View>
 
                   {exercise.sets.map((setItem) => {
+                    const nextSide: 'both' | 'left' | 'right' =
+                      setItem.side === 'both' ? 'left' : setItem.side === 'left' ? 'right' : 'both';
+                    const sideLabel =
+                      setItem.side === 'left' ? 'L' : setItem.side === 'right' ? 'R' : 'LR';
+                    const sideColor =
+                      setItem.side === 'both' ? palette.textMuted : palette.accent;
+
                     return (
                       <View key={setItem.id} style={styles.setRowWrapper}>
                         <View style={[styles.tableRow, setItem.completed && styles.completedRow]}>
-                          <View style={styles.cellSet}>
+                          <TouchableOpacity
+                            style={styles.cellSet}
+                            activeOpacity={0.7}
+                            onPress={() => updateSetSide(exercise.id, setItem.id, nextSide)}
+                          >
                             <Text style={styles.setNumberText}>{setItem.set_number ?? '-'}</Text>
-                          </View>
+                            <Text style={[styles.setSideBadge, { color: sideColor }]}>{sideLabel}</Text>
+                          </TouchableOpacity>
 
                           <TextInput
                             value={setItem.weightInput}
@@ -1335,9 +1453,13 @@ export default function ActiveWorkout() {
             <View style={styles.liveStatsHeaderRow}>
               <View style={styles.liveStatsHeaderTextWrap}>
                 <Text style={styles.liveStatsTitle}>
-                  {statsExercise ? getLocalizedExerciseName(statsExercise, language) : 'Live Stats'}
+                  {statsExercise ? getLocalizedExerciseName(statsExercise, language) : t('workout.liveStatsTitle')}
                 </Text>
-                <Text style={styles.liveStatsSubtitle}>Recent volume trend while you train.</Text>
+                <Text style={styles.liveStatsSubtitle}>
+                  {t('workout.liveStatsSubtitle', {
+                    name: statsExercise ? getLocalizedExerciseName(statsExercise, language) : '',
+                  })}
+                </Text>
               </View>
 
               <TouchableOpacity style={styles.liveStatsCloseButton} activeOpacity={0.88} onPress={closeExerciseStatsModal}>
@@ -1348,11 +1470,11 @@ export default function ActiveWorkout() {
             {isLoadingExerciseStats ? (
               <View style={styles.liveStatsStatusWrap}>
                 <ActivityIndicator size="small" color={LIVE_CHART_COLOR} />
-                <Text style={styles.liveStatsStatusText}>Loading evolution chart...</Text>
+                <Text style={styles.liveStatsStatusText}>{t('workout.liveStatsLoading')}</Text>
               </View>
             ) : exerciseStatsError ? (
               <View style={styles.liveStatsStatusWrap}>
-                <Text style={styles.liveStatsStatusTitle}>Unable to load live stats</Text>
+                <Text style={styles.liveStatsStatusTitle}>{t('workout.liveStatsUnableTitle')}</Text>
                 <Text style={styles.liveStatsStatusText}>{exerciseStatsError}</Text>
                 <TouchableOpacity
                   style={styles.liveStatsRetryButton}
@@ -1363,12 +1485,12 @@ export default function ActiveWorkout() {
                     }
                   }}
                 >
-                  <Text style={styles.liveStatsRetryText}>Retry</Text>
+                  <Text style={styles.liveStatsRetryText}>{t('workout.liveStatsRetry')}</Text>
                 </TouchableOpacity>
               </View>
             ) : liveStatsChartData.length === 0 ? (
               <View style={styles.liveStatsStatusWrap}>
-                <Text style={styles.liveStatsStatusText}>No completed sessions yet for this exercise.</Text>
+                <Text style={styles.liveStatsStatusText}>{t('workout.liveStatsEmpty')}</Text>
               </View>
             ) : (
               <View style={styles.liveChartCard}>
@@ -1380,54 +1502,55 @@ export default function ActiveWorkout() {
                   >
                     <Text style={styles.liveStatsWindowToggleText}>
                       {showAllLivePoints
-                        ? `Show last ${LIVE_CHART_DEFAULT_WINDOW}`
-                        : `Show all sessions (${statsExerciseProgress.length})`}
+                        ? t('workout.liveStatsShowLast', { count: LIVE_CHART_DEFAULT_WINDOW })
+                        : t('workout.liveStatsShowAll', { count: statsExerciseProgress.length })}
                     </Text>
                   </TouchableOpacity>
                 ) : null}
 
-                <LineChart
+                <BarChart
                   data={liveStatsChartData}
                   width={liveChartWidth}
-                  height={252}
+                  height={220}
                   maxValue={liveChartMaxValue}
-                  color={LIVE_CHART_COLOR}
-                  thickness={3}
-                  hideDataPoints={false}
-                  dataPointsColor={LIVE_CHART_COLOR}
-                  dataPointsRadius={4}
-                  areaChart
-                  startFillColor={LIVE_CHART_COLOR}
-                  startOpacity={0.22}
-                  endFillColor={LIVE_CHART_COLOR}
-                  endOpacity={0.02}
+                  barWidth={Math.max(14, Math.min(26, Math.floor(liveChartWidth / Math.max(liveStatsChartData.length, 1)) - 8))}
+                  spacing={10}
+                  initialSpacing={10}
+                  endSpacing={6}
+                  roundedTop
+                  frontColor={LIVE_CHART_COLOR}
+                  gradientColor="#60A5FA"
+                  showGradient
                   yAxisColor="#253041"
                   xAxisColor="#253041"
-                  yAxisLabelWidth={74}
-                  xAxisLabelsHeight={40}
-                  labelsExtraHeight={12}
+                  yAxisLabelWidth={62}
+                  xAxisLabelsHeight={44}
+                  xAxisLabelsVerticalShift={14}
+                  labelsExtraHeight={18}
                   overflowTop={24}
-                  overflowBottom={16}
                   yAxisTextStyle={styles.liveStatsAxisText}
-                  xAxisLabelTextStyle={styles.liveStatsAxisText}
+                  xAxisLabelTextStyle={styles.liveStatsXAxisLabel}
                   formatYLabel={(label) => formatVolumeAxisLabel(label)}
                   rulesColor="#1F2937"
                   noOfSections={4}
-                  initialSpacing={10}
-                  endSpacing={0}
-                  onBackgroundPress={() => setSelectedLivePointIndex(null)}
-                  adjustToWidth={true}
+                  isAnimated
+                  adjustToWidth
                 />
 
                 {selectedLivePoint ? (
                   <View style={styles.liveStatsSelectedPointCard}>
                     <Text style={styles.liveStatsSelectedPointLabel}>{selectedLivePoint.label}</Text>
                     <Text style={styles.liveStatsSelectedPointValue}>{formatVolumeAxisLabel(selectedLivePoint.value)}</Text>
-                    <Text style={styles.liveStatsSelectedPointMeta}>Tap points to inspect session evolution.</Text>
+                    <Text style={styles.liveStatsSelectedPointMeta}>{t('workout.liveStatsTapHint')}</Text>
                   </View>
                 ) : null}
 
-                <Text style={styles.liveStatsFootnote}>{`Showing ${liveStatsChartData.length} of ${statsExerciseProgress.length} sessions`}</Text>
+                <Text style={styles.liveStatsFootnote}>
+                  {t('workout.liveStatsFootnote', {
+                    visible: liveStatsChartData.length,
+                    total: statsExerciseProgress.length,
+                  })}
+                </Text>
               </View>
             )}
           </View>
@@ -1719,6 +1842,25 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
   },
+  setSideBadge: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    marginTop: 1,
+  },
+  exerciseNotesInput: {
+    minHeight: 40,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 10,
+    color: palette.textPrimary,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    fontSize: 13,
+    lineHeight: 18,
+  },
   cellKg: {
     flex: 1.2,
     minWidth: 58,
@@ -1994,6 +2136,12 @@ const styles = StyleSheet.create({
   liveStatsAxisText: {
     color: '#8FA2BA',
     fontSize: 11,
+  },
+  liveStatsXAxisLabel: {
+    color: '#8FA2BA',
+    fontSize: 11,
+    marginTop: 8,
+    textAlign: 'center',
   },
   liveStatsSelectedPointCard: {
     marginTop: 10,

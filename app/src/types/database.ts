@@ -16,7 +16,9 @@ export type Database = {
     Tables: {
       exercises: {
         Row: {
+          created_at: string | null
           created_by: string | null
+          description: string | null
           equipment: string | null
           id: string
           is_custom: boolean
@@ -28,7 +30,9 @@ export type Database = {
           name_pt: string | null
         }
         Insert: {
+          created_at?: string | null
           created_by?: string | null
+          description?: string | null
           equipment?: string | null
           id?: string
           is_custom?: boolean
@@ -40,7 +44,9 @@ export type Database = {
           name_pt?: string | null
         }
         Update: {
+          created_at?: string | null
           created_by?: string | null
+          description?: string | null
           equipment?: string | null
           id?: string
           is_custom?: boolean
@@ -434,6 +440,7 @@ export type Database = {
         Row: {
           exercise_id: string
           id: string
+          notes: string | null
           order: number
           rest_time: number | null
           workout_id: string
@@ -441,6 +448,7 @@ export type Database = {
         Insert: {
           exercise_id: string
           id?: string
+          notes?: string | null
           order: number
           rest_time?: number | null
           workout_id: string
@@ -448,6 +456,7 @@ export type Database = {
         Update: {
           exercise_id?: string
           id?: string
+          notes?: string | null
           order?: number
           rest_time?: number | null
           workout_id?: string
@@ -477,6 +486,7 @@ export type Database = {
           rir: number | null
           set_number: number | null
           set_type: "normal" | "warmup" | "drop" | "failure" | null
+          side: "both" | "left" | "right"
           weight: number | null
           workout_exercise_id: string | null
           workout_id: string | null
@@ -488,6 +498,7 @@ export type Database = {
           rir?: number | null
           set_number?: number | null
           set_type?: "normal" | "warmup" | "drop" | "failure" | null
+          side?: "both" | "left" | "right"
           weight?: number | null
           workout_exercise_id?: string | null
           workout_id?: string | null
@@ -499,6 +510,7 @@ export type Database = {
           rir?: number | null
           set_number?: number | null
           set_type?: "normal" | "warmup" | "drop" | "failure" | null
+          side?: "both" | "left" | "right"
           weight?: number | null
           workout_exercise_id?: string | null
           workout_id?: string | null

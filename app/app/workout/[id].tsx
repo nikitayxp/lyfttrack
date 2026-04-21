@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
 import {
+  getAuthenticatedUserOrThrow,
   getErrorMessage,
   getWorkoutDetails,
   type WorkoutDetails,
@@ -101,6 +102,45 @@ export default function WorkoutDetailsScreen() {
   const [details, setDetails] = useState<WorkoutDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    getAuthenticatedUserOrThrow()
+      .then((user) => {
+        if (!cancelled) {
+          setCurrentUserId(user.id);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCurrentUserId(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const isOwnWorkout = Boolean(details && currentUserId && details.user_id === currentUserId);
+
+  const handleCopyWorkout = useCallback(() => {
+    if (!workoutId) {
+      return;
+    }
+
+    router.push(`/workout/active?copyFromWorkoutId=${encodeURIComponent(workoutId)}` as any);
+  }, [workoutId]);
+
+  const handleEditWorkout = useCallback(() => {
+    if (!workoutId) {
+      return;
+    }
+
+    router.push(`/workout/edit/${encodeURIComponent(workoutId)}` as any);
+  }, [workoutId]);
 
   const loadDetails = useCallback(async () => {
     if (!workoutId) {
@@ -223,6 +263,28 @@ export default function WorkoutDetailsScreen() {
                 </Text>
               </View>
             ) : null}
+
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.actionButtonPrimary]}
+                activeOpacity={0.88}
+                onPress={handleCopyWorkout}
+              >
+                <Ionicons name="copy-outline" size={16} color="#FFFFFF" />
+                <Text style={styles.actionButtonTextPrimary}>{t('workoutDetails.copyWorkout')}</Text>
+              </TouchableOpacity>
+
+              {isOwnWorkout ? (
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.actionButtonSecondary]}
+                  activeOpacity={0.88}
+                  onPress={handleEditWorkout}
+                >
+                  <Ionicons name="create-outline" size={16} color={palette.textPrimary} />
+                  <Text style={styles.actionButtonTextSecondary}>{t('workoutDetails.editWorkout')}</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
           </View>
 
           {details.exercises.length === 0 ? (
@@ -448,6 +510,39 @@ const styles = StyleSheet.create({
   topSetPillText: {
     color: '#FBBF24',
     fontSize: 12,
+    fontWeight: '700',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 11,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  actionButtonPrimary: {
+    backgroundColor: '#2563EB',
+    borderColor: '#3B82F6',
+  },
+  actionButtonSecondary: {
+    backgroundColor: '#111827',
+    borderColor: '#334155',
+  },
+  actionButtonTextPrimary: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  actionButtonTextSecondary: {
+    color: '#E5E7EB',
+    fontSize: 13,
     fontWeight: '700',
   },
   emptyCard: {

@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -15,9 +16,16 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
-import { getProfile, updateProfile } from '@/services/profileService';
-import { getPasswordResetRedirectTo, supabase } from '@/services/supabase';
+import {
+  getProfile,
+  pickAvatarFromLibrary,
+  updateProfile,
+  uploadAvatar,
+  withAvatarCacheBuster,
+} from '@/services/profileService';
+import { getEmailChangeRedirectTo, getPasswordResetRedirectTo, supabase } from '@/services/supabase';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
+import { ConfirmModal } from '@/components/common/ConfirmModal';
 
 const palette = Colors.dark;
 
@@ -29,11 +37,29 @@ function toErrorMessage(error: unknown, fallbackMessage: string): string {
   return fallbackMessage;
 }
 
+function initialsFromName(value: string): string {
+  const normalized = value.trim();
+
+  if (!normalized) {
+    return 'LT';
+  }
+
+  return normalized
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
+}
+
 export default function EditProfileScreen() {
   const { t } = useTranslation();
   const [usernameInput, setUsernameInput] = useState('');
   const [fullNameInput, setFullNameInput] = useState('');
   const [bioInput, setBioInput] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarVersion, setAvatarVersion] = useState(() => Date.now());
   const [currentEmail, setCurrentEmail] = useState('');
   const [pendingEmailInput, setPendingEmailInput] = useState('');
   const [actionFeedback, setActionFeedback] = useState<{
@@ -43,9 +69,12 @@ export default function EditProfileScreen() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isRemovingAvatar, setIsRemovingAvatar] = useState(false);
   const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
   const [isSendingPasswordReset, setIsSendingPasswordReset] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isLogoutModalVisible, setIsLogoutModalVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const loadProfile = useCallback(async () => {
@@ -57,6 +86,8 @@ export default function EditProfileScreen() {
       setUsernameInput(profile.username ?? '');
       setFullNameInput(profile.full_name ?? '');
       setBioInput(profile.bio ?? '');
+      setAvatarUrl(profile.avatar_url ?? null);
+      setAvatarVersion(Date.now());
 
       const {
         data: { user },
@@ -139,6 +170,86 @@ export default function EditProfileScreen() {
     }
   }, [bioInput, fullNameInput, isSaving, t, usernameInput]);
 
+  const handleChangeAvatar = useCallback(async () => {
+    if (isUploadingAvatar || isRemovingAvatar) {
+      return;
+    }
+
+    setActionFeedback(null);
+    setIsUploadingAvatar(true);
+
+    try {
+      const selectedAvatar = await pickAvatarFromLibrary();
+
+      if (!selectedAvatar) {
+        return;
+      }
+
+      const updatedProfile = await uploadAvatar(selectedAvatar);
+      setAvatarUrl(updatedProfile.avatar_url ?? null);
+      setAvatarVersion(Date.now());
+
+      const successMessage = t('profileEdit.alerts.avatarUpdatedDescription');
+      setActionFeedback({
+        type: 'success',
+        message: successMessage,
+      });
+
+      if (Platform.OS !== 'web') {
+        Alert.alert(t('profileEdit.alerts.avatarUpdatedTitle'), successMessage);
+      }
+    } catch (error) {
+      const message = toErrorMessage(error, t('common.unknownError'));
+      setActionFeedback({
+        type: 'error',
+        message,
+      });
+
+      if (Platform.OS !== 'web') {
+        Alert.alert(t('profileEdit.alerts.avatarUploadError'), message);
+      }
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  }, [isRemovingAvatar, isUploadingAvatar, t]);
+
+  const handleRemoveAvatar = useCallback(async () => {
+    if (isRemovingAvatar || isUploadingAvatar || !avatarUrl) {
+      return;
+    }
+
+    setActionFeedback(null);
+    setIsRemovingAvatar(true);
+
+    try {
+      await updateProfile({ avatarUrl: null });
+      setAvatarUrl(null);
+      setAvatarVersion(Date.now());
+
+      const successMessage = t('profileEdit.alerts.avatarRemovedDescription');
+      setActionFeedback({
+        type: 'success',
+        message: successMessage,
+      });
+
+      if (Platform.OS !== 'web') {
+        Alert.alert(t('profileEdit.alerts.avatarUpdatedTitle'), successMessage);
+      }
+    } catch (error) {
+      const message = toErrorMessage(error, t('common.unknownError'));
+      setActionFeedback({
+        type: 'error',
+        message,
+      });
+
+      if (Platform.OS !== 'web') {
+        Alert.alert(t('profileEdit.alerts.avatarRemoveError'), message);
+      }
+    } finally {
+      setIsRemovingAvatar(false);
+    }
+  }, [avatarUrl, isRemovingAvatar, isUploadingAvatar, t]);
+
   const handleUpdateEmail = useCallback(async () => {
     if (isUpdatingEmail) {
       return;
@@ -162,6 +273,8 @@ export default function EditProfileScreen() {
     try {
       const { error } = await supabase.auth.updateUser({
         email: normalizedEmail,
+      }, {
+        emailRedirectTo: getEmailChangeRedirectTo(),
       });
 
       if (error) {
@@ -242,38 +355,15 @@ export default function EditProfileScreen() {
     }
   }, [currentEmail, isSendingPasswordReset, pendingEmailInput, t]);
 
-  const confirmLogout = useCallback(async (): Promise<boolean> => {
-    const confirmDescription = t('profileEdit.alerts.logoutConfirmDescription');
-
-    if (Platform.OS === 'web') {
-      const confirmFn = (globalThis as { confirm?: (message?: string) => boolean }).confirm;
-      return confirmFn ? confirmFn(confirmDescription) : true;
-    }
-
-    return await new Promise((resolve) => {
-      Alert.alert(t('profileEdit.alerts.logoutConfirmTitle'), confirmDescription, [
-        {
-          text: t('common.cancel'),
-          style: 'cancel',
-          onPress: () => resolve(false),
-        },
-        {
-          text: t('profileEdit.logoutAction'),
-          style: 'destructive',
-          onPress: () => resolve(true),
-        },
-      ]);
-    });
-  }, [t]);
-
-  const handleLogout = useCallback(async () => {
+  const handleLogoutRequest = useCallback(() => {
     if (isLoggingOut) {
       return;
     }
+    setIsLogoutModalVisible(true);
+  }, [isLoggingOut]);
 
-    const shouldSignOut = await confirmLogout();
-
-    if (!shouldSignOut) {
+  const handleLogoutConfirmed = useCallback(async () => {
+    if (isLoggingOut) {
       return;
     }
 
@@ -291,6 +381,7 @@ export default function EditProfileScreen() {
         throw error;
       }
 
+      setIsLogoutModalVisible(false);
       router.replace('/(auth)' as any);
     } catch (error) {
       const message = toErrorMessage(error, t('common.unknownError'));
@@ -299,6 +390,7 @@ export default function EditProfileScreen() {
         type: 'error',
         message,
       });
+      setIsLogoutModalVisible(false);
 
       if (Platform.OS !== 'web') {
         Alert.alert(t('profileEdit.alerts.logoutError'), message);
@@ -306,7 +398,7 @@ export default function EditProfileScreen() {
     } finally {
       setIsLoggingOut(false);
     }
-  }, [confirmLogout, isLoggingOut, t]);
+  }, [isLoggingOut, t]);
 
   const feedbackStyles = actionFeedback?.type === 'success'
     ? [styles.feedbackBanner, styles.feedbackBannerSuccess]
@@ -319,6 +411,10 @@ export default function EditProfileScreen() {
     : actionFeedback?.type === 'error'
       ? styles.feedbackBannerTextError
       : styles.feedbackBannerTextInfo;
+
+  const avatarPreviewUrl = withAvatarCacheBuster(avatarUrl, avatarVersion);
+  const displayName = fullNameInput.trim() || usernameInput.trim() || t('profileEdit.unavailable');
+  const avatarInitials = initialsFromName(displayName);
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -358,6 +454,60 @@ export default function EditProfileScreen() {
           </View>
         ) : (
           <>
+            <View style={styles.avatarCard}>
+              <Text style={styles.accountTitle}>{t('profileEdit.profilePhotoTitle')}</Text>
+              <Text style={styles.accountHint}>{t('profileEdit.profilePhotoHint')}</Text>
+
+              <View style={styles.avatarRow}>
+                <View style={styles.avatarFrame}>
+                  {avatarPreviewUrl ? (
+                    <Image source={{ uri: avatarPreviewUrl }} style={styles.avatarImage} />
+                  ) : (
+                    <View style={styles.avatarFallback}>
+                      <Text style={styles.avatarFallbackText}>{avatarInitials}</Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.avatarActionsColumn}>
+                  <TouchableOpacity
+                    style={[styles.avatarActionPrimary, isUploadingAvatar && styles.accountActionDisabled]}
+                    activeOpacity={0.9}
+                    onPress={() => void handleChangeAvatar()}
+                    disabled={isUploadingAvatar || isRemovingAvatar}
+                  >
+                    {isUploadingAvatar ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Ionicons name="camera-outline" size={16} color="#FFFFFF" />
+                        <Text style={styles.avatarActionPrimaryText}>{t('profileEdit.changePhoto')}</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.avatarActionSecondary,
+                      (!avatarUrl || isRemovingAvatar) && styles.accountActionDisabled,
+                    ]}
+                    activeOpacity={0.9}
+                    onPress={() => void handleRemoveAvatar()}
+                    disabled={!avatarUrl || isRemovingAvatar || isUploadingAvatar}
+                  >
+                    {isRemovingAvatar ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Ionicons name="trash-outline" size={16} color="#FFFFFF" />
+                        <Text style={styles.avatarActionSecondaryText}>{t('profileEdit.removePhoto')}</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+
             <View style={styles.formCard}>
               <Text style={styles.inputLabel}>{t('profileEdit.usernameLabel')}</Text>
               <TextInput
@@ -461,7 +611,7 @@ export default function EditProfileScreen() {
               <TouchableOpacity
                 style={[styles.logoutButton, isLoggingOut && styles.logoutButtonDisabled]}
                 activeOpacity={0.85}
-                onPress={() => void handleLogout()}
+                onPress={handleLogoutRequest}
                 disabled={isLoggingOut}
               >
                 {isLoggingOut ? (
@@ -478,6 +628,19 @@ export default function EditProfileScreen() {
           </>
         )}
       </ScrollView>
+
+      <ConfirmModal
+        visible={isLogoutModalVisible}
+        title={t('profileEdit.alerts.logoutConfirmTitle')}
+        description={t('profileEdit.alerts.logoutConfirmDescription')}
+        confirmLabel={t('profileEdit.logoutAction')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={() => void handleLogoutConfirmed()}
+        onCancel={() => setIsLogoutModalVisible(false)}
+        busy={isLoggingOut}
+        tone="danger"
+        icon="log-out-outline"
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -575,6 +738,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   formCard: {
+    marginTop: 14,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: palette.border,
@@ -715,6 +879,85 @@ const styles = StyleSheet.create({
   },
   accountActionDisabled: {
     opacity: 0.75,
+  },
+  avatarCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: '#111111',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    rowGap: 10,
+  },
+  avatarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 12,
+  },
+  avatarFrame: {
+    width: 88,
+    height: 88,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#2D3B52',
+    backgroundColor: '#0B1320',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarFallback: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#162034',
+  },
+  avatarFallbackText: {
+    color: '#DCE8FF',
+    fontSize: 28,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+  },
+  avatarActionsColumn: {
+    flex: 1,
+    rowGap: 8,
+  },
+  avatarActionPrimary: {
+    minHeight: 40,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: palette.accent,
+    backgroundColor: palette.accent,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    columnGap: 8,
+  },
+  avatarActionPrimaryText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  avatarActionSecondary: {
+    minHeight: 40,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#000000',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    columnGap: 8,
+  },
+  avatarActionSecondaryText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
   },
   logoutCard: {
     marginTop: 24,

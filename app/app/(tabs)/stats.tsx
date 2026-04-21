@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
-import { BarChart, LineChart } from 'react-native-gifted-charts';
+import { BarChart } from 'react-native-gifted-charts';
 import { useTranslation } from 'react-i18next';
 import {
   getAllTimePRs,
@@ -46,26 +46,6 @@ const METRIC_FILTERS: readonly {
     descriptionKey: 'stats.metricRepsDescription',
   },
 ];
-
-function muscleColor(muscle: string): string {
-  const normalized = muscle.trim().toLowerCase();
-
-  if (normalized.includes('chest')) return '#3B82F6';
-  if (normalized.includes('back')) return '#06B6D4';
-  if (normalized.includes('should')) return '#F59E0B';
-  if (normalized.includes('bicep')) return '#A855F7';
-  if (normalized.includes('tricep')) return '#C084FC';
-  if (normalized.includes('forearm')) return '#8B5CF6';
-  if (normalized.includes('quadricep')) return '#22C55E';
-  if (normalized.includes('hamstring')) return '#16A34A';
-  if (normalized.includes('glute')) return '#14B8A6';
-  if (normalized.includes('calf')) return '#10B981';
-  if (normalized.includes('leg')) return '#22C55E';
-  if (normalized.includes('arm')) return '#A855F7';
-  if (normalized.includes('core')) return '#F97316';
-
-  return '#94A3B8';
-}
 
 function formatNumericValue(value: number): string {
   const safeValue = Number.isFinite(value) ? value : 0;
@@ -182,14 +162,14 @@ export default function StatsScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [weeklyVolumeError, setWeeklyVolumeError] = useState<string | null>(null);
   const [selectedProgressPointIndex, setSelectedProgressPointIndex] = useState<number | null>(null);
+  const [selectedWeeklyPointIndex, setSelectedWeeklyPointIndex] = useState<number | null>(null);
 
   const chartWidth = useMemo(() => {
     const availableWidth = Math.max(280, windowWidth - 40);
     return Math.min(availableWidth, 360);
   }, [windowWidth]);
-  const weeklyChartWidth = useMemo(() => {
-    const availableWidth = Math.max(250, windowWidth - 40);
-    return Math.min(availableWidth, 340);
+  const weeklyChartViewportWidth = useMemo(() => {
+    return Math.max(280, windowWidth - 40);
   }, [windowWidth]);
 
   const loadTrackedExercises = useCallback(async () => {
@@ -281,8 +261,8 @@ export default function StatsScreen() {
       progress.map((point, index) => ({
         value: Math.max(0, point.value),
         label: point.label,
-        dataPointColor: index === selectedProgressPointIndex ? '#FFFFFF' : CHART_NEON,
-        dataPointRadius: index === selectedProgressPointIndex ? 5.5 : 4,
+        // Hevy-style: solid neon bar, subtly brighter when selected.
+        frontColor: index === selectedProgressPointIndex ? '#60A5FA' : CHART_NEON,
         onPress: () => setSelectedProgressPointIndex(index),
       })),
     [progress, selectedProgressPointIndex]
@@ -334,13 +314,19 @@ export default function StatsScreen() {
 
   const weeklyBarData = useMemo(
     () =>
-      weeklyVolume.map((item) => ({
+      weeklyVolume.map((item, index) => ({
         value: item.sets,
         label: item.muscle,
-        frontColor: CHART_NEON,
+        frontColor: index === selectedWeeklyPointIndex ? '#60A5FA' : CHART_NEON,
+        onPress: () => setSelectedWeeklyPointIndex(index),
       })),
-    [weeklyVolume]
+    [selectedWeeklyPointIndex, weeklyVolume]
   );
+
+  const weeklyChartWidth = useMemo(() => {
+    const calculatedWidth = weeklyBarData.length * 92 + 36;
+    return Math.max(weeklyChartViewportWidth, calculatedWidth);
+  }, [weeklyBarData.length, weeklyChartViewportWidth]);
 
   const weeklyVolumeMaxValue = useMemo(() => {
     const maxValue = weeklyVolume.reduce((currentMax, entry) => Math.max(currentMax, entry.sets), 0);
@@ -351,6 +337,21 @@ export default function StatsScreen() {
 
     return Math.max(4, Math.ceil(maxValue * 1.25));
   }, [weeklyVolume]);
+
+  useEffect(() => {
+    if (weeklyBarData.length === 0) {
+      setSelectedWeeklyPointIndex(null);
+      return;
+    }
+
+    setSelectedWeeklyPointIndex((currentValue) => {
+      if (currentValue === null || currentValue >= weeklyBarData.length) {
+        return weeklyBarData.length - 1;
+      }
+
+      return currentValue;
+    });
+  }, [weeklyBarData.length]);
 
   const selectedExerciseName = useMemo(() => {
     if (!selectedExerciseId) {
@@ -397,6 +398,14 @@ export default function StatsScreen() {
     return `${formatCompactAxisNumber(selectedProgressPoint.volumeTotal)} ${t('stats.unitKg')} • ${formatNumericValue(selectedProgressPoint.repsTotal)} ${t('stats.unitReps')} • ${formatNumericValue(selectedProgressPoint.durationMinutes)} ${t('stats.unitMin')}`;
   }, [selectedProgressPoint, t]);
 
+  const selectedWeeklyPoint = useMemo(() => {
+    if (selectedWeeklyPointIndex === null) {
+      return null;
+    }
+
+    return weeklyVolume[selectedWeeklyPointIndex] ?? null;
+  }, [selectedWeeklyPointIndex, weeklyVolume]);
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
@@ -428,48 +437,47 @@ export default function StatsScreen() {
             <Text style={styles.placeholderText}>{t('stats.noWeeklySets')}</Text>
           </View>
         ) : (
-          <View style={styles.weeklyVolumeWrap}>
-            <View style={styles.weeklyVolumeChartWrap}>
+          <View style={styles.chartWrap}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.weeklyChartScrollContent}
+            >
               <BarChart
                 data={weeklyBarData}
                 width={weeklyChartWidth}
-                height={232}
-                horizontal
-                barWidth={18}
-                spacing={12}
-                initialSpacing={6}
-                endSpacing={0}
-                yAxisLabelWidth={52}
-                xAxisLabelsHeight={22}
-                labelsExtraHeight={8}
-                overflowTop={20}
-                roundedTop
-                roundedBottom
-                noOfSections={4}
+                height={220}
                 maxValue={weeklyVolumeMaxValue}
-                rulesColor="#1F2937"
-                xAxisColor="#253041"
+                barWidth={Math.max(22, Math.min(34, Math.floor(weeklyChartWidth / Math.max(weeklyBarData.length, 1)) - 26))}
+                spacing={14}
+                initialSpacing={12}
+                endSpacing={10}
+                roundedTop
+                frontColor={CHART_NEON}
+                gradientColor="#60A5FA"
+                showGradient
                 yAxisColor="#253041"
-                xAxisThickness={1}
-                yAxisThickness={1}
-                xAxisLabelTextStyle={styles.axisText}
+                xAxisColor="#253041"
+                yAxisLabelWidth={64}
+                xAxisLabelsHeight={50}
+                xAxisLabelsVerticalShift={16}
+                labelsExtraHeight={20}
+                overflowTop={24}
                 yAxisTextStyle={styles.axisText}
+                xAxisLabelTextStyle={styles.xAxisLabelText}
                 formatYLabel={(label) => formatCompactAxisNumber(label)}
-                hideOrigin
+                rulesColor="#1F2937"
+                noOfSections={4}
                 isAnimated
-                adjustToWidth={true}
               />
-            </View>
+            </ScrollView>
 
-            <View style={styles.weeklyVolumeLegendWrap}>
-              {weeklyVolume.map((entry) => (
-                <View key={entry.muscle} style={styles.weeklyVolumeLegendRow}>
-                  <View style={[styles.weeklyVolumeLegendDot, { backgroundColor: muscleColor(entry.muscle) }]} />
-                  <Text style={styles.weeklyVolumeLegendMuscle}>{entry.muscle}</Text>
-                  <Text style={styles.weeklyVolumeLegendSets}>{`${entry.sets} ${t('stats.weeklySetsSuffix')}`}</Text>
-                </View>
-              ))}
-            </View>
+            {selectedWeeklyPoint ? (
+              <View style={styles.selectedPointCard}>
+                <Text style={styles.selectedPointLabel}>{selectedWeeklyPoint.muscle}</Text>
+                <Text style={styles.selectedPointValue}>{`${selectedWeeklyPoint.sets} ${t('stats.weeklySetsSuffix')}`}</Text>
+              </View>
+            ) : null}
           </View>
         )}
       </View>
@@ -535,37 +543,33 @@ export default function StatsScreen() {
           </View>
         ) : (
           <View style={styles.chartWrap}>
-            <LineChart
+            <BarChart
               data={lineData}
               width={chartWidth}
-              height={258}
+              height={220}
               maxValue={chartMaxValue}
-              color={CHART_NEON}
-              thickness={3}
-              hideDataPoints={false}
-              dataPointsColor={CHART_NEON}
-              dataPointsRadius={4}
-              areaChart
-              startFillColor={CHART_NEON}
-              startOpacity={0.24}
-              endFillColor={CHART_NEON}
-              endOpacity={0.02}
+              barWidth={Math.max(14, Math.min(28, Math.floor(chartWidth / Math.max(lineData.length, 1)) - 8))}
+              spacing={10}
+              initialSpacing={10}
+              endSpacing={6}
+              roundedTop
+              frontColor={CHART_NEON}
+              gradientColor="#60A5FA"
+              showGradient
               yAxisColor="#253041"
               xAxisColor="#253041"
-              yAxisLabelWidth={74}
-              xAxisLabelsHeight={40}
-              labelsExtraHeight={12}
+              yAxisLabelWidth={64}
+              xAxisLabelsHeight={48}
+              xAxisLabelsVerticalShift={16}
+              labelsExtraHeight={20}
               overflowTop={24}
-              overflowBottom={16}
               yAxisTextStyle={styles.axisText}
-              xAxisLabelTextStyle={styles.axisText}
+              xAxisLabelTextStyle={styles.xAxisLabelText}
               formatYLabel={(label) => formatMetricAxisLabel(label, metric)}
               rulesColor="#1F2937"
               noOfSections={4}
-              initialSpacing={10}
-              endSpacing={0}
-              onBackgroundPress={() => setSelectedProgressPointIndex(null)}
-              adjustToWidth={true}
+              isAnimated
+              adjustToWidth
             />
 
             {selectedProgressPoint && selectedProgressValueText ? (
@@ -771,49 +775,8 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     paddingHorizontal: 8,
   },
-  weeklyVolumeWrap: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#1F2937',
-    backgroundColor: '#0D1624',
-    paddingTop: 10,
-    paddingBottom: 10,
-    paddingHorizontal: 8,
-  },
-  weeklyVolumeChartWrap: {
-    minHeight: 236,
-    marginBottom: 8,
-  },
-  weeklyVolumeLegendWrap: {
-    rowGap: 6,
-  },
-  weeklyVolumeLegendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    columnGap: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#1F2937',
-    backgroundColor: '#0B1320',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-  },
-  weeklyVolumeLegendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 999,
-  },
-  weeklyVolumeLegendMuscle: {
-    flex: 1,
-    color: '#D7E1F0',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  weeklyVolumeLegendSets: {
-    color: '#8FA2BA',
-    fontSize: 12,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
+  weeklyChartScrollContent: {
+    paddingRight: 8,
   },
   chartStatusWrap: {
     minHeight: 190,
@@ -828,6 +791,12 @@ const styles = StyleSheet.create({
   axisText: {
     color: '#8FA2BA',
     fontSize: 11,
+  },
+  xAxisLabelText: {
+    color: '#8FA2BA',
+    fontSize: 11,
+    marginTop: 8,
+    textAlign: 'center',
   },
   selectedPointCard: {
     marginTop: 10,

@@ -527,7 +527,15 @@ export function buildSetInsertRow(
     reps: normalizedReps,
     rir: normalizedRir,
     set_type: normalizeSetType(draft.setType),
+    side: normalizeSetSide(draft.side),
   };
+}
+
+export function normalizeSetSide(value: unknown): 'both' | 'left' | 'right' {
+  if (value === 'left' || value === 'right') {
+    return value;
+  }
+  return 'both';
 }
 
 function toErrorMessage(error: unknown): string {
@@ -559,6 +567,7 @@ export function toCompletedSetDrafts(setDrafts: WorkoutSetProgressDraft[]): Work
       reps: draft.reps,
       rir: draft.rir,
       setType: draft.setType,
+      side: draft.side,
     }));
 }
 
@@ -887,6 +896,22 @@ export async function getExercisesCatalog(filters: ExerciseCatalogFilters = {}):
   const dedupedBuiltIns = dedupeBuiltinCatalogRows(builtInRows);
 
   return [...dedupedBuiltIns, ...customRows].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function getExercisesByIds(exerciseIds: string[]): Promise<ExerciseCatalogItem[]> {
+  const normalizedIds = [...new Set(exerciseIds.map((value) => value?.trim()).filter((value): value is string => Boolean(value)))];
+
+  if (normalizedIds.length === 0) {
+    return [];
+  }
+
+  const { data, error } = await supabase.from('exercises').select('*').in('id', normalizedIds);
+
+  if (error) {
+    throw new Error(`Unable to load exercises: ${error.message}`);
+  }
+
+  return data ?? [];
 }
 
 export async function createExercise(input: CreateExerciseInput): Promise<ExerciseCatalogItem> {

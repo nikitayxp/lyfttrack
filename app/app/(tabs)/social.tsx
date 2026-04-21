@@ -18,11 +18,13 @@ import { Colors } from '@/constants/Colors';
 import {
   acceptRequest,
   getFriends,
+  getLiveFriendWorkouts,
   getPendingRequests,
   rejectRequest,
   searchUsers,
   sendFriendRequest,
   type FriendListItem,
+  type LiveFriendWorkout,
   type PendingFriendRequest,
   type SocialSearchResult,
 } from '@/services/socialService';
@@ -72,6 +74,7 @@ export default function SocialScreen() {
   const [searchResults, setSearchResults] = useState<SocialSearchResult[]>([]);
   const [pendingRequests, setPendingRequests] = useState<PendingFriendRequest[]>([]);
   const [friends, setFriends] = useState<FriendListItem[]>([]);
+  const [liveFriendWorkouts, setLiveFriendWorkouts] = useState<LiveFriendWorkout[]>([]);
 
   const [isLoadingSocial, setIsLoadingSocial] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -104,13 +107,34 @@ export default function SocialScreen() {
     setSocialError(null);
 
     try {
-      const [pending, friendList] = await Promise.all([getPendingRequests(), getFriends()]);
+      const [pending, friendList, live] = await Promise.all([
+        getPendingRequests(),
+        getFriends(),
+        getLiveFriendWorkouts(),
+      ]);
       setPendingRequests(pending);
       setFriends(friendList);
+      setLiveFriendWorkouts(live);
     } catch (error) {
       setSocialError(toErrorMessage(error));
     }
   }, [toErrorMessage]);
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      getLiveFriendWorkouts()
+        .then((live) => setLiveFriendWorkouts(live))
+        .catch(() => {
+          // Non-fatal — badges just won't update until next refresh.
+        });
+    }, 30_000);
+    return () => clearInterval(intervalId);
+  }, []);
+
+  const liveFriendIds = useMemo(
+    () => new Set(liveFriendWorkouts.map((w) => w.userId)),
+    [liveFriendWorkouts]
+  );
 
   useEffect(() => {
     const run = async () => {
@@ -406,29 +430,48 @@ export default function SocialScreen() {
         ) : friends.length === 0 ? (
           <Text style={styles.helperText}>{t('social.friends.empty')}</Text>
         ) : (
-          friends.map((friend) => (
-            <TouchableOpacity
-              key={friend.friendshipId}
-              style={styles.friendItem}
-              activeOpacity={0.86}
-              onPress={() => openPublicProfile(friend.profile.id)}
-            >
-              {friend.profile.avatar_url ? (
-                <Image source={{ uri: friend.profile.avatar_url }} style={styles.avatar} />
-              ) : (
-                <View style={styles.avatarFallback}>
-                  <Text style={styles.avatarFallbackText}>{initialsOf(friend.profile)}</Text>
-                </View>
-              )}
+          [...friends]
+            .sort((a, b) => {
+              const aLive = liveFriendIds.has(a.profile.id) ? 1 : 0;
+              const bLive = liveFriendIds.has(b.profile.id) ? 1 : 0;
+              return bLive - aLive;
+            })
+            .map((friend) => {
+              const isLive = liveFriendIds.has(friend.profile.id);
+              return (
+                <TouchableOpacity
+                  key={friend.friendshipId}
+                  style={styles.friendItem}
+                  activeOpacity={0.86}
+                  onPress={() => openPublicProfile(friend.profile.id)}
+                >
+                  {friend.profile.avatar_url ? (
+                    <Image source={{ uri: friend.profile.avatar_url }} style={styles.avatar} />
+                  ) : (
+                    <View style={styles.avatarFallback}>
+                      <Text style={styles.avatarFallbackText}>{initialsOf(friend.profile)}</Text>
+                    </View>
+                  )}
 
-              <View style={styles.userMetaWrap}>
-                <Text style={styles.userName}>{displayNameOf(friend.profile)}</Text>
-                <Text style={styles.userHandle}>@{friend.profile.username}</Text>
-              </View>
+                  <View style={styles.userMetaWrap}>
+                    <Text style={styles.userName}>{displayNameOf(friend.profile)}</Text>
+                    <Text style={styles.userHandle}>@{friend.profile.username}</Text>
+                    {isLive ? (
+                      <View style={styles.liveBadge}>
+                        <View style={styles.liveDot} />
+                        <Text style={styles.liveBadgeText}>{t('social.friends.trainingNow')}</Text>
+                      </View>
+                    ) : null}
+                  </View>
 
-              <Ionicons name="people-outline" size={18} color={palette.textMuted} />
-            </TouchableOpacity>
-          ))
+                  <Ionicons
+                    name={isLive ? 'fitness' : 'people-outline'}
+                    size={18}
+                    color={isLive ? '#34D399' : palette.textMuted}
+                  />
+                </TouchableOpacity>
+              );
+            })
         )}
       </View>
     </ScrollView>
@@ -643,6 +686,31 @@ const styles = StyleSheet.create({
     color: palette.textMuted,
     fontSize: 12,
     fontWeight: '500',
+  },
+  liveBadge: {
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    columnGap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: 'rgba(52,211,153,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(52,211,153,0.3)',
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#34D399',
+  },
+  liveBadgeText: {
+    color: '#34D399',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   userActionButton: {
     minHeight: 36,

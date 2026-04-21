@@ -32,6 +32,8 @@ export type DraftSet = {
   weightInput: string;
   repsInput: string;
   rirInput: string;
+  /** Unilateral side. Older drafts may omit this; default to 'both' on load. */
+  side?: 'both' | 'left' | 'right';
 };
 
 export type DraftExercise = {
@@ -42,6 +44,8 @@ export type DraftExercise = {
   equipment: string | null;
   defaultRestSeconds: number;
   sets: DraftSet[];
+  /** Per-workout snapshot of the exercise notes. */
+  notes?: string | null;
 };
 
 export type WorkoutDraft = {

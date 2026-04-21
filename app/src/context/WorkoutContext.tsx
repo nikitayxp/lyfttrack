@@ -34,6 +34,8 @@ type WorkoutContextValue = {
   setActiveExercisesWithRef: (nextValue: ActiveExercisesUpdater) => void;
   handleSetCompletionToggle: (exerciseId: string, setId: string) => void;
   updateSetInput: (exerciseId: string, setId: string, field: 'weightInput' | 'repsInput' | 'rirInput', value: string) => void;
+  updateSetSide: (exerciseId: string, setId: string, side: 'both' | 'left' | 'right') => void;
+  updateExerciseNotes: (exerciseId: string, notes: string | null) => void;
   addSet: (exerciseId: string) => void;
   addExercise: (exercise: ExerciseRow) => void;
   clearExercises: () => void;
@@ -108,6 +110,8 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
     setActiveExercisesWithRef,
     handleSetCompletionToggle,
     updateSetInput,
+    updateSetSide,
+    updateExerciseNotes,
     addSet,
     addExercise,
     clearExercises,
@@ -464,6 +468,8 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
     setActiveExercisesWithRef,
     handleSetCompletionToggle,
     updateSetInput,
+    updateSetSide,
+    updateExerciseNotes,
     addSet,
     addExercise: addExerciseToWorkout,
     clearExercises: clearWorkout,
@@ -513,6 +519,8 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
     setActiveExercisesWithRef,
     toggleExerciseStopwatch,
     updateSetInput,
+    updateSetSide,
+    updateExerciseNotes,
     workoutStartedAtMs,
     acceptRecoveredDraftWithTimer,
   ]);

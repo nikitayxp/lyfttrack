@@ -566,3 +566,46 @@ export async function getFriends(): Promise<FriendListItem[]> {
 
   return result;
 }
+
+export type LiveFriendWorkout = {
+  userId: string;
+  workoutId: string;
+  startedAt: string;
+  name: string | null;
+};
+
+/**
+ * Returns any friends who currently have an in-progress workout
+ * (a `workouts` row with `end_time IS NULL` created within the last 6 hours).
+ * The 6h window prevents stale rows from a crash from showing up forever.
+ */
+export async function getLiveFriendWorkouts(): Promise<LiveFriendWorkout[]> {
+  const friends = await getFriends();
+
+  if (friends.length === 0) {
+    return [];
+  }
+
+  const friendIds = friends.map((f) => f.profile.id);
+  const sixHoursAgoIso = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from('workouts')
+    .select('id, user_id, name, start_time, end_time')
+    .in('user_id', friendIds)
+    .is('end_time', null)
+    .gte('start_time', sixHoursAgoIso)
+    .order('start_time', { ascending: false });
+
+  if (error) {
+    console.warn('[getLiveFriendWorkouts] failed', error);
+    return [];
+  }
+
+  return (data ?? []).map((row) => ({
+    userId: row.user_id,
+    workoutId: row.id,
+    startedAt: row.start_time,
+    name: row.name,
+  }));
+}

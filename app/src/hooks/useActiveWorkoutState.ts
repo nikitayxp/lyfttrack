@@ -24,6 +24,7 @@ export type ExerciseRow = Tables<'exercises'>;
 export type SetRow = Tables<'sets'>;
 
 export type SetTypeOption = Exclude<SetRow['set_type'], null>;
+export type SetSideOption = SetRow['side'];
 export type SetInputField = 'weightInput' | 'repsInput' | 'rirInput';
 
 export type ActiveSet = Pick<SetRow, 'id' | 'set_number' | 'weight' | 'reps' | 'rir' | 'set_type'> & {
@@ -31,6 +32,7 @@ export type ActiveSet = Pick<SetRow, 'id' | 'set_number' | 'weight' | 'reps' | '
   weightInput: string;
   repsInput: string;
   rirInput: string;
+  side: SetSideOption;
 };
 
 export type ActiveExercise = {
@@ -38,6 +40,8 @@ export type ActiveExercise = {
   exercise: ExerciseRow;
   defaultRestSeconds: number;
   sets: ActiveSet[];
+  /** Per-workout snapshot of the exercise description/notes. */
+  notes: string | null;
 };
 
 export type ActiveExercisesUpdater = ActiveExercise[] | ((currentValue: ActiveExercise[]) => ActiveExercise[]);
@@ -76,7 +80,13 @@ export function normalizeExerciseRestSeconds(value: number | null | undefined): 
 export function createSet(
   exerciseId: string,
   setNumber: number,
-  initial?: { weightInput?: string; repsInput?: string; rirInput?: string; setType?: SetTypeOption }
+  initial?: {
+    weightInput?: string;
+    repsInput?: string;
+    rirInput?: string;
+    setType?: SetTypeOption;
+    side?: SetSideOption;
+  }
 ): ActiveSet {
   const weightInput = initial?.weightInput ?? '';
   const repsInput = initial?.repsInput ?? '';
@@ -85,6 +95,7 @@ export function createSet(
     id: `${exerciseId}-set-${setNumber}-${Math.random().toString(36).slice(2, 8)}`,
     set_number: setNumber,
     set_type: initial?.setType ?? 'normal',
+    side: initial?.side ?? 'both',
     weight: parseOptionalWeight(weightInput),
     reps: parseOptionalReps(repsInput),
     rir: parseOptionalRir(rirInput),
@@ -100,10 +111,58 @@ export function createExerciseBlock(exercise: ExerciseRow, defaultRestSeconds = 
     id: `active-${exercise.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     exercise,
     defaultRestSeconds: normalizeExerciseRestSeconds(defaultRestSeconds),
+    notes: exercise.description ?? null,
     sets: [
       createSet(exercise.id, 1, { setType: 'warmup' }),
       createSet(exercise.id, 2, { setType: 'normal' }),
     ],
+  };
+}
+
+export type CopySetSeed = {
+  setType?: SetTypeOption | null;
+  weight?: number | null;
+  reps?: number | null;
+  rir?: number | null;
+  side?: SetSideOption | null;
+};
+
+/**
+ * Build an ActiveExercise from a list of past set seeds (e.g. when copying a
+ * previous workout). Inputs (kg/reps/rir) are pre-filled but every set starts
+ * uncompleted, so the user has to tick them off as they execute.
+ */
+export function createExerciseBlockFromSets(
+  exercise: ExerciseRow,
+  sets: CopySetSeed[],
+  options: { defaultRestSeconds?: number; notes?: string | null } = {}
+): ActiveExercise {
+  const safeSets = sets.length > 0 ? sets : [{ setType: 'warmup' as SetTypeOption }, { setType: 'normal' as SetTypeOption }];
+
+  return {
+    id: `active-${exercise.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    exercise,
+    defaultRestSeconds: normalizeExerciseRestSeconds(options.defaultRestSeconds ?? DEFAULT_REST_SECONDS),
+    notes: options.notes ?? exercise.description ?? null,
+    sets: safeSets.map((seed, index) => {
+      const weightInput = seed.weight != null && Number.isFinite(seed.weight) && seed.weight > 0
+        ? String(seed.weight)
+        : '';
+      const repsInput = seed.reps != null && Number.isFinite(seed.reps) && seed.reps > 0
+        ? String(Math.trunc(seed.reps))
+        : '';
+      const rirInput = seed.rir != null && Number.isFinite(seed.rir)
+        ? String(seed.rir)
+        : '';
+
+      return createSet(exercise.id, index + 1, {
+        setType: (seed.setType as SetTypeOption | undefined) ?? 'normal',
+        side: (seed.side as SetSideOption | undefined) ?? 'both',
+        weightInput,
+        repsInput,
+        rirInput,
+      });
+    }),
   };
 }
 
@@ -125,10 +184,12 @@ function exerciseToDraft(exercise: ActiveExercise): DraftExercise {
     muscle_group: exercise.exercise.muscle_group ?? null,
     equipment: exercise.exercise.equipment ?? null,
     defaultRestSeconds: exercise.defaultRestSeconds,
+    notes: exercise.notes ?? null,
     sets: exercise.sets.map((s) => ({
       id: s.id,
       set_number: s.set_number,
       set_type: s.set_type ?? 'normal',
+      side: s.side ?? 'both',
       weight: s.weight,
       reps: s.reps,
       rir: s.rir,
@@ -138,6 +199,10 @@ function exerciseToDraft(exercise: ActiveExercise): DraftExercise {
       rirInput: s.rirInput,
     })),
   };
+}
+
+function normalizeSide(value: unknown): SetSideOption {
+  return value === 'left' || value === 'right' ? value : 'both';
 }
 
 function draftToActiveExercise(draft: DraftExercise): ActiveExercise {
@@ -161,10 +226,12 @@ function draftToActiveExercise(draft: DraftExercise): ActiveExercise {
     id: draft.id,
     exercise,
     defaultRestSeconds: draft.defaultRestSeconds,
+    notes: draft.notes ?? null,
     sets: draft.sets.map((s) => ({
       id: s.id,
       set_number: s.set_number,
       set_type: s.set_type as SetTypeOption,
+      side: normalizeSide(s.side),
       weight: s.weight,
       reps: s.reps,
       rir: s.rir,
@@ -392,6 +459,37 @@ export function useActiveWorkoutState({
     );
   }, [setActiveExercisesWithRef]);
 
+  const updateSetSide = useCallback(
+    (exerciseId: string, setId: string, side: SetSideOption) => {
+      setActiveExercisesWithRef((currentValue) =>
+        currentValue.map((exercise) => {
+          if (exercise.id !== exerciseId) return exercise;
+
+          return {
+            ...exercise,
+            sets: exercise.sets.map((setItem) =>
+              setItem.id === setId ? { ...setItem, side } : setItem
+            ),
+          };
+        })
+      );
+    },
+    [setActiveExercisesWithRef]
+  );
+
+  const updateExerciseNotes = useCallback(
+    (exerciseId: string, notes: string | null) => {
+      const trimmed = (notes ?? '').trim();
+      const next = trimmed.length === 0 ? null : trimmed.slice(0, 1000);
+      setActiveExercisesWithRef((currentValue) =>
+        currentValue.map((exercise) =>
+          exercise.id === exerciseId ? { ...exercise, notes: next } : exercise
+        )
+      );
+    },
+    [setActiveExercisesWithRef]
+  );
+
   const addSet = useCallback((exerciseId: string) => {
     setActiveExercisesWithRef((currentValue) =>
       currentValue.map((exercise) => {
@@ -443,6 +541,8 @@ export function useActiveWorkoutState({
     setActiveExercisesWithRef,
     handleSetCompletionToggle,
     updateSetInput,
+    updateSetSide,
+    updateExerciseNotes,
     addSet,
     addExercise,
     clearExercises,

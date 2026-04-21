@@ -100,8 +100,16 @@ function getWorkoutDurationMinutes(startTimeIso: string | null | undefined, endT
   return Math.max(0, Math.round((endMs - startMs) / (1000 * 60)));
 }
 
-function formatProgressLabel(dateIso: string): string {
-  return new Date(dateIso).toLocaleDateString('en-US', {
+function formatProgressLabel(dateIso: string, localeTag?: string): string {
+  const d = new Date(`${dateIso}T12:00:00.000Z`);
+  const locale =
+    localeTag === 'pt' || localeTag?.toLowerCase().startsWith('pt')
+      ? 'pt-PT'
+      : localeTag && localeTag.length > 2
+        ? localeTag
+        : 'en-US';
+
+  return d.toLocaleDateString(locale, {
     month: 'short',
     day: 'numeric',
   });

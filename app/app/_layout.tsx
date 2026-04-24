@@ -1,5 +1,6 @@
-import { useCallback, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Platform,
   StyleSheet,
   useWindowDimensions,
@@ -9,6 +10,7 @@ import {
 import { router, Stack, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as WebBrowser from 'expo-web-browser';
 import { Colors } from '@/constants/theme';
 import { supabase } from '@/services/supabase';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
@@ -33,6 +35,11 @@ const webViewportFill: ViewStyle = {
 const desktopShellWebShadow = {
   boxShadow: '0px 24px 64px rgba(0, 0, 0, 0.42)',
 } as any;
+
+WebBrowser.maybeCompleteAuthSession();
+
+const AUTH_SIGN_IN_ROUTE = '/(auth)/sign-in';
+const AUTHENTICATED_HOME_ROUTE = '/(tabs)';
 
 const styles = StyleSheet.create({
   root: {
@@ -106,6 +113,11 @@ const styles = StyleSheet.create({
     elevation: 20,
     transform: [{ translateY: 0 }],
   },
+  authGuardLoadingWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
 
 export default function RootLayout() {
@@ -113,9 +125,15 @@ export default function RootLayout() {
   const isWeb = Platform.OS === 'web';
   const isDesktopWeb = isWeb && width > DESKTOP_WEB_MOCKUP_MIN_WIDTH;
   const segments = useSegments();
-  const currentAuthSegment = String(segments[1] ?? '');
-  const isTabsRoute = segments[0] === '(tabs)';
-  const isResetPasswordRoute = segments[0] === '(auth)' && currentAuthSegment === 'reset-password';
+  const rootSegment = String(segments[0] ?? '');
+  const childSegment = String(segments[1] ?? '');
+  const [session, setSession] = useState<Session | null>(null);
+  const [isAuthBootstrapPending, setIsAuthBootstrapPending] = useState(true);
+  const isTabsRoute = rootSegment === '(tabs)';
+  const inAuthGroup = rootSegment === '(auth)';
+  const isOAuthCallbackRoute = rootSegment === 'callback' || childSegment === 'callback';
+  const isResetPasswordRoute = inAuthGroup && childSegment === 'reset-password';
+  const isAuthLikeRoute = inAuthGroup || isOAuthCallbackRoute;
   const safeAreaStyle = isWeb ? styles.safeAreaWeb : styles.safeArea;
 
   useEffect(() => {
@@ -191,40 +209,26 @@ export default function RootLayout() {
     };
   }, [isWeb, isDesktopWeb]);
 
-  const redirectForSession = useCallback((session: Session | null) => {
-    const inAuthGroup = segments[0] === '(auth)';
-
-    if (session) {
-      if (inAuthGroup && !isResetPasswordRoute) {
-        router.replace('/(tabs)' as any);
-      }
-
-      return;
-    }
-
-    if (!inAuthGroup) {
-      router.replace('/(auth)' as any);
-    }
-  }, [isResetPasswordRoute, segments]);
-
   useEffect(() => {
     let isMounted = true;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
       if (!isMounted) {
         return;
       }
 
-      redirectForSession(session);
+      setSession(initialSession);
+      setIsAuthBootstrapPending(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (_event, nextSession) => {
         if (!isMounted) {
           return;
         }
 
-        redirectForSession(session);
+        setSession(nextSession);
+        setIsAuthBootstrapPending(false);
       }
     );
 
@@ -232,7 +236,36 @@ export default function RootLayout() {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, [redirectForSession]);
+  }, []);
+
+  useEffect(() => {
+    if (isAuthBootstrapPending) {
+      return;
+    }
+
+    if (session) {
+      if (isAuthLikeRoute && !isResetPasswordRoute) {
+        router.replace(AUTHENTICATED_HOME_ROUTE as any);
+      }
+
+      return;
+    }
+
+    if (!isAuthLikeRoute) {
+      router.replace(AUTH_SIGN_IN_ROUTE as any);
+    }
+  }, [isAuthBootstrapPending, isAuthLikeRoute, isResetPasswordRoute, session]);
+
+  if (isAuthBootstrapPending) {
+    return (
+      <View style={styles.root}>
+        <View style={styles.authGuardLoadingWrap}>
+          <ActivityIndicator size="small" color={palette.accent} />
+        </View>
+        <StatusBar style="light" />
+      </View>
+    );
+  }
 
   const layout = (
     <PreferencesProvider>
@@ -259,6 +292,14 @@ export default function RootLayout() {
             />
             <Stack.Screen
               name="workout/[id]"
+              options={{
+                headerShown: false,
+                animation: 'slide_from_right',
+                statusBarStyle: 'light',
+              }}
+            />
+            <Stack.Screen
+              name="workout/edit/[id]"
               options={{
                 headerShown: false,
                 animation: 'slide_from_right',

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 import { Database } from '@/types/database';
 
@@ -23,6 +24,7 @@ type SupabaseStorage = {
 const AUTH_WEB_APP_URL_FALLBACK = 'https://lyfttrack-app.vercel.app';
 const PASSWORD_RESET_PATH = '/reset-password';
 const SIGN_IN_PATH = '/sign-in';
+const GOOGLE_OAUTH_CALLBACK_PATH = '/callback';
 
 function normalizeUrlValue(value: string | undefined): string | null {
   const normalized = value?.trim();
@@ -71,6 +73,18 @@ export function getEmailChangeRedirectTo(): string {
   }
 
   return `${resolveAuthWebBaseUrl()}${SIGN_IN_PATH}`;
+}
+
+export function getGoogleOAuthRedirectTo(): string {
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      return `${removeTrailingSlashes(window.location.origin)}${GOOGLE_OAUTH_CALLBACK_PATH}`;
+    }
+
+    return `${resolveAuthWebBaseUrl()}${GOOGLE_OAUTH_CALLBACK_PATH}`;
+  }
+
+  return Linking.createURL('callback');
 }
 
 function createAuthStorage(): SupabaseStorage | undefined {

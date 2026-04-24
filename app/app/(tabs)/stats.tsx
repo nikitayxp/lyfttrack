@@ -145,8 +145,9 @@ function SkeletonPanel({ lines = 3, minHeight = 190 }: SkeletonPanelProps) {
 }
 
 export default function StatsScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { width: windowWidth } = useWindowDimensions();
+  const localeTag = i18n.language;
   const [exercises, setExercises] = useState<StatsExerciseOption[]>([]);
   const [selectedExerciseId, setSelectedExerciseId] = useState<string | null>(null);
   const [metric, setMetric] = useState<ProgressMetric>('volume');
@@ -209,7 +210,7 @@ export default function StatsScreen() {
 
     try {
       const [points, personalRecords] = await Promise.all([
-        getExerciseProgress(selectedExerciseId, metric),
+        getExerciseProgress(selectedExerciseId, metric, localeTag),
         getExercisePersonalRecords(selectedExerciseId),
       ]);
 
@@ -223,14 +224,14 @@ export default function StatsScreen() {
     } finally {
       setIsLoadingStats(false);
     }
-  }, [metric, selectedExerciseId, t]);
+  }, [localeTag, metric, selectedExerciseId, t]);
 
   const loadWeeklyVolume = useCallback(async () => {
     setIsLoadingWeeklyVolume(true);
     setWeeklyVolumeError(null);
 
     try {
-      const [weeklyRows, hallRows] = await Promise.all([getWeeklyVolumeByMuscle(), getAllTimePRs()]);
+      const [weeklyRows, hallRows] = await Promise.all([getWeeklyVolumeByMuscle(localeTag), getAllTimePRs()]);
 
       setWeeklyVolume(weeklyRows);
       setAllTimePrs(hallRows);
@@ -242,7 +243,7 @@ export default function StatsScreen() {
     } finally {
       setIsLoadingWeeklyVolume(false);
     }
-  }, [t]);
+  }, [localeTag, t]);
 
   useEffect(() => {
     void loadTrackedExercises();
@@ -459,9 +460,9 @@ export default function StatsScreen() {
                 yAxisColor="#253041"
                 xAxisColor="#253041"
                 yAxisLabelWidth={64}
-                xAxisLabelsHeight={50}
-                xAxisLabelsVerticalShift={16}
-                labelsExtraHeight={20}
+                xAxisLabelsHeight={56}
+                xAxisLabelsVerticalShift={26}
+                labelsExtraHeight={32}
                 overflowTop={24}
                 yAxisTextStyle={styles.axisText}
                 xAxisLabelTextStyle={styles.xAxisLabelText}
@@ -559,9 +560,9 @@ export default function StatsScreen() {
               yAxisColor="#253041"
               xAxisColor="#253041"
               yAxisLabelWidth={64}
-              xAxisLabelsHeight={48}
-              xAxisLabelsVerticalShift={16}
-              labelsExtraHeight={20}
+              xAxisLabelsHeight={56}
+              xAxisLabelsVerticalShift={26}
+              labelsExtraHeight={32}
               overflowTop={24}
               yAxisTextStyle={styles.axisText}
               xAxisLabelTextStyle={styles.xAxisLabelText}

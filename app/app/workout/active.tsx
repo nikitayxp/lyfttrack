@@ -77,6 +77,7 @@ const DESKTOP_WEB_MIN_WIDTH = 768;
 const LIVE_CHART_COLOR = '#3B82F6';
 const ROOT_SCREEN_BG = palette.bgPrimary;
 const LIVE_CHART_DEFAULT_WINDOW = 12;
+const LIVE_STATS_MODAL_ENABLED = false;
 const MUSCLE_FILTER_CHIP_KEYS: readonly ExerciseLibraryMuscleFilter[] = [
   'all',
   ...EXERCISE_MUSCLE_OPTIONS,
@@ -574,7 +575,7 @@ export default function ActiveWorkout() {
     setExerciseStatsError(null);
 
     try {
-      const progressPoints = await getExerciseProgress(normalizedExerciseId, 'volume');
+      const progressPoints = await getExerciseProgress(normalizedExerciseId, 'volume', language);
       exerciseProgressCacheRef.current.set(normalizedExerciseId, progressPoints);
 
       if (statsRequestVersionRef.current !== requestVersion) {
@@ -594,10 +595,15 @@ export default function ActiveWorkout() {
         setIsLoadingExerciseStats(false);
       }
     }
-  }, []);
+  }, [language]);
 
   const openExerciseStatsModal = useCallback(
     (exercise: ExerciseRow) => {
+      if (!LIVE_STATS_MODAL_ENABLED) {
+        router.push('/(tabs)/stats' as any);
+        return;
+      }
+
       setStatsExercise(exercise);
       setIsExerciseStatsVisible(true);
       void loadExerciseProgressForModal(exercise);
@@ -614,6 +620,10 @@ export default function ActiveWorkout() {
   }, []);
 
   useEffect(() => {
+    if (!LIVE_STATS_MODAL_ENABLED) {
+      return;
+    }
+
     const exerciseIdsToPrefetch = [...new Set(activeExercises.map((entry) => entry.exercise.id.trim()).filter(Boolean))].filter(
       (exerciseId) =>
         !requestedProgressExerciseIdsRef.current.has(exerciseId) &&
@@ -631,14 +641,14 @@ export default function ActiveWorkout() {
     void Promise.all(
       exerciseIdsToPrefetch.map(async (exerciseId) => {
         try {
-          const progressPoints = await getExerciseProgress(exerciseId, 'volume');
+          const progressPoints = await getExerciseProgress(exerciseId, 'volume', language);
           exerciseProgressCacheRef.current.set(exerciseId, progressPoints);
         } catch {
           // Silent prefetch failure; modal load will show actionable errors.
         }
       })
     );
-  }, [activeExercises]);
+  }, [activeExercises, language]);
 
   async function handleCreateExercise() {
     const normalizedName = sanitizeText(newExerciseName, {
@@ -829,7 +839,11 @@ export default function ActiveWorkout() {
     router.replace('/(tabs)' as any);
   }, [clearExercises, safeDeactivateKeepAwake]);
 
-  const routePreloadLabel = routeCopyFromWorkoutId ? 'copy' : routeTemplateId ? 'template' : 'routine';
+  const routePreloadLabel = routeCopyFromWorkoutId
+    ? t('workout.routeCopyLabel')
+    : routeTemplateId
+      ? t('workout.routeTemplateLabel')
+      : t('workout.routeRoutineLabel');
   const isPreloadingRoute = routeCopyFromWorkoutId
     ? isPreloadingCopyWorkout
     : routeTemplateId
@@ -933,12 +947,12 @@ export default function ActiveWorkout() {
           {isPreloadingRoute && activeExercises.length === 0 ? (
             <View style={styles.statusCard}>
               <ActivityIndicator size="small" color={palette.accent} />
-              <Text style={styles.statusTitle}>{`Loading ${routePreloadLabel}...`}</Text>
-              <Text style={styles.statusSubtitle}>Preparing your exercises with default sets.</Text>
+              <Text style={styles.statusTitle}>{t('workout.loadingRoute', { label: routePreloadLabel })}</Text>
+              <Text style={styles.statusSubtitle}>{t('workout.loadingRouteDescription')}</Text>
             </View>
           ) : routePreloadError && activeExercises.length === 0 ? (
             <View style={styles.statusCard}>
-              <Text style={styles.statusTitle}>{`Unable to load ${routePreloadLabel}`}</Text>
+              <Text style={styles.statusTitle}>{t('workout.unableToLoadRoute', { label: routePreloadLabel })}</Text>
               <Text style={styles.statusSubtitle}>{routePreloadError}</Text>
               {(routeTemplateId || routeRoutineId) ? (
                 <TouchableOpacity
@@ -955,14 +969,14 @@ export default function ActiveWorkout() {
                     }
                   }}
                 >
-                  <Text style={styles.statusRetryButtonText}>Retry</Text>
+                  <Text style={styles.statusRetryButtonText}>{t('common.retry')}</Text>
                 </TouchableOpacity>
               ) : null}
             </View>
           ) : activeExercises.length === 0 ? (
             <View style={styles.emptyWorkoutCard}>
-              <Text style={styles.emptyWorkoutTitle}>No exercises yet</Text>
-              <Text style={styles.emptyWorkoutSubtitle}>Add an exercise to start logging your sets.</Text>
+              <Text style={styles.emptyWorkoutTitle}>{t('workout.emptyWorkoutTitle')}</Text>
+              <Text style={styles.emptyWorkoutSubtitle}>{t('workout.emptyWorkoutSubtitle')}</Text>
             </View>
           ) : (
             activeExercises.map((exercise, exerciseIndex) => {
@@ -1060,10 +1074,10 @@ export default function ActiveWorkout() {
                   />
 
                   <View style={[styles.tableRow, styles.tableHeaderRow]}>
-                    <Text style={[styles.headerLabel, styles.cellSet]}>Set</Text>
+                    <Text style={[styles.headerLabel, styles.cellSet]}>{t('workout.setHeader')}</Text>
                     <Text style={[styles.headerLabel, styles.cellKg]}>kg</Text>
-                    <Text style={[styles.headerLabel, styles.cellReps]}>Reps</Text>
-                    <Text style={[styles.headerLabel, styles.cellRir]}>RIR</Text>
+                    <Text style={[styles.headerLabel, styles.cellReps]}>{t('workout.repsHeader')}</Text>
+                    <Text style={[styles.headerLabel, styles.cellRir]}>{t('workout.rirHeader')}</Text>
                     <View style={styles.cellCheck}>
                       <Ionicons name="checkmark" size={15} color={palette.textMuted} />
                     </View>
@@ -1136,7 +1150,7 @@ export default function ActiveWorkout() {
 
                   <TouchableOpacity style={styles.addSetButton} activeOpacity={0.88} onPress={() => addSet(exercise.id)}>
                     <Ionicons name="add" size={16} color={palette.textSecondary} />
-                    <Text style={styles.addSetText}>Add Set</Text>
+                    <Text style={styles.addSetText}>{t('workout.addSetAction')}</Text>
                   </TouchableOpacity>
                 </View>
               );
@@ -1438,124 +1452,126 @@ export default function ActiveWorkout() {
         </View>
       </Modal>
 
-      <Modal
-        visible={isExerciseStatsVisible}
-        transparent
-        animationType={modalAnimationType}
-        onRequestClose={closeExerciseStatsModal}
-      >
-        <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
-          <Pressable style={styles.modalDismissArea} onPress={closeExerciseStatsModal} />
+      {LIVE_STATS_MODAL_ENABLED ? (
+        <Modal
+          visible={isExerciseStatsVisible}
+          transparent
+          animationType={modalAnimationType}
+          onRequestClose={closeExerciseStatsModal}
+        >
+          <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
+            <Pressable style={styles.modalDismissArea} onPress={closeExerciseStatsModal} />
 
-          <View style={[styles.liveStatsSheet, isWeb && styles.liveStatsSheetWeb]}>
-            <View style={styles.modalHandle} />
+            <View style={[styles.liveStatsSheet, isWeb && styles.liveStatsSheetWeb]}>
+              <View style={styles.modalHandle} />
 
-            <View style={styles.liveStatsHeaderRow}>
-              <View style={styles.liveStatsHeaderTextWrap}>
-                <Text style={styles.liveStatsTitle}>
-                  {statsExercise ? getLocalizedExerciseName(statsExercise, language) : t('workout.liveStatsTitle')}
-                </Text>
-                <Text style={styles.liveStatsSubtitle}>
-                  {t('workout.liveStatsSubtitle', {
-                    name: statsExercise ? getLocalizedExerciseName(statsExercise, language) : '',
-                  })}
-                </Text>
-              </View>
+              <View style={styles.liveStatsHeaderRow}>
+                <View style={styles.liveStatsHeaderTextWrap}>
+                  <Text style={styles.liveStatsTitle}>
+                    {statsExercise ? getLocalizedExerciseName(statsExercise, language) : t('workout.liveStatsTitle')}
+                  </Text>
+                  <Text style={styles.liveStatsSubtitle}>
+                    {t('workout.liveStatsSubtitle', {
+                      name: statsExercise ? getLocalizedExerciseName(statsExercise, language) : '',
+                    })}
+                  </Text>
+                </View>
 
-              <TouchableOpacity style={styles.liveStatsCloseButton} activeOpacity={0.88} onPress={closeExerciseStatsModal}>
-                <Ionicons name="close" size={18} color={palette.textPrimary} />
-              </TouchableOpacity>
-            </View>
-
-            {isLoadingExerciseStats ? (
-              <View style={styles.liveStatsStatusWrap}>
-                <ActivityIndicator size="small" color={LIVE_CHART_COLOR} />
-                <Text style={styles.liveStatsStatusText}>{t('workout.liveStatsLoading')}</Text>
-              </View>
-            ) : exerciseStatsError ? (
-              <View style={styles.liveStatsStatusWrap}>
-                <Text style={styles.liveStatsStatusTitle}>{t('workout.liveStatsUnableTitle')}</Text>
-                <Text style={styles.liveStatsStatusText}>{exerciseStatsError}</Text>
-                <TouchableOpacity
-                  style={styles.liveStatsRetryButton}
-                  activeOpacity={0.88}
-                  onPress={() => {
-                    if (statsExercise) {
-                      void loadExerciseProgressForModal(statsExercise, true);
-                    }
-                  }}
-                >
-                  <Text style={styles.liveStatsRetryText}>{t('workout.liveStatsRetry')}</Text>
+                <TouchableOpacity style={styles.liveStatsCloseButton} activeOpacity={0.88} onPress={closeExerciseStatsModal}>
+                  <Ionicons name="close" size={18} color={palette.textPrimary} />
                 </TouchableOpacity>
               </View>
-            ) : liveStatsChartData.length === 0 ? (
-              <View style={styles.liveStatsStatusWrap}>
-                <Text style={styles.liveStatsStatusText}>{t('workout.liveStatsEmpty')}</Text>
-              </View>
-            ) : (
-              <View style={styles.liveChartCard}>
-                {statsExerciseProgress.length > LIVE_CHART_DEFAULT_WINDOW ? (
+
+              {isLoadingExerciseStats ? (
+                <View style={styles.liveStatsStatusWrap}>
+                  <ActivityIndicator size="small" color={LIVE_CHART_COLOR} />
+                  <Text style={styles.liveStatsStatusText}>{t('workout.liveStatsLoading')}</Text>
+                </View>
+              ) : exerciseStatsError ? (
+                <View style={styles.liveStatsStatusWrap}>
+                  <Text style={styles.liveStatsStatusTitle}>{t('workout.liveStatsUnableTitle')}</Text>
+                  <Text style={styles.liveStatsStatusText}>{exerciseStatsError}</Text>
                   <TouchableOpacity
-                    style={styles.liveStatsWindowToggle}
+                    style={styles.liveStatsRetryButton}
                     activeOpacity={0.88}
-                    onPress={() => setShowAllLivePoints((currentValue) => !currentValue)}
+                    onPress={() => {
+                      if (statsExercise) {
+                        void loadExerciseProgressForModal(statsExercise, true);
+                      }
+                    }}
                   >
-                    <Text style={styles.liveStatsWindowToggleText}>
-                      {showAllLivePoints
-                        ? t('workout.liveStatsShowLast', { count: LIVE_CHART_DEFAULT_WINDOW })
-                        : t('workout.liveStatsShowAll', { count: statsExerciseProgress.length })}
-                    </Text>
+                    <Text style={styles.liveStatsRetryText}>{t('workout.liveStatsRetry')}</Text>
                   </TouchableOpacity>
-                ) : null}
+                </View>
+              ) : liveStatsChartData.length === 0 ? (
+                <View style={styles.liveStatsStatusWrap}>
+                  <Text style={styles.liveStatsStatusText}>{t('workout.liveStatsEmpty')}</Text>
+                </View>
+              ) : (
+                <View style={styles.liveChartCard}>
+                  {statsExerciseProgress.length > LIVE_CHART_DEFAULT_WINDOW ? (
+                    <TouchableOpacity
+                      style={styles.liveStatsWindowToggle}
+                      activeOpacity={0.88}
+                      onPress={() => setShowAllLivePoints((currentValue) => !currentValue)}
+                    >
+                      <Text style={styles.liveStatsWindowToggleText}>
+                        {showAllLivePoints
+                          ? t('workout.liveStatsShowLast', { count: LIVE_CHART_DEFAULT_WINDOW })
+                          : t('workout.liveStatsShowAll', { count: statsExerciseProgress.length })}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
 
-                <BarChart
-                  data={liveStatsChartData}
-                  width={liveChartWidth}
-                  height={220}
-                  maxValue={liveChartMaxValue}
-                  barWidth={Math.max(14, Math.min(26, Math.floor(liveChartWidth / Math.max(liveStatsChartData.length, 1)) - 8))}
-                  spacing={10}
-                  initialSpacing={10}
-                  endSpacing={6}
-                  roundedTop
-                  frontColor={LIVE_CHART_COLOR}
-                  gradientColor="#60A5FA"
-                  showGradient
-                  yAxisColor="#253041"
-                  xAxisColor="#253041"
-                  yAxisLabelWidth={62}
-                  xAxisLabelsHeight={44}
-                  xAxisLabelsVerticalShift={14}
-                  labelsExtraHeight={18}
-                  overflowTop={24}
-                  yAxisTextStyle={styles.liveStatsAxisText}
-                  xAxisLabelTextStyle={styles.liveStatsXAxisLabel}
-                  formatYLabel={(label) => formatVolumeAxisLabel(label)}
-                  rulesColor="#1F2937"
-                  noOfSections={4}
-                  isAnimated
-                  adjustToWidth
-                />
+                  <BarChart
+                    data={liveStatsChartData}
+                    width={liveChartWidth}
+                    height={220}
+                    maxValue={liveChartMaxValue}
+                    barWidth={Math.max(14, Math.min(26, Math.floor(liveChartWidth / Math.max(liveStatsChartData.length, 1)) - 8))}
+                    spacing={10}
+                    initialSpacing={10}
+                    endSpacing={6}
+                    roundedTop
+                    frontColor={LIVE_CHART_COLOR}
+                    gradientColor="#60A5FA"
+                    showGradient
+                    yAxisColor="#253041"
+                    xAxisColor="#253041"
+                    yAxisLabelWidth={62}
+                    xAxisLabelsHeight={56}
+                    xAxisLabelsVerticalShift={26}
+                    labelsExtraHeight={32}
+                    overflowTop={24}
+                    yAxisTextStyle={styles.liveStatsAxisText}
+                    xAxisLabelTextStyle={styles.liveStatsXAxisLabel}
+                    formatYLabel={(label) => formatVolumeAxisLabel(label)}
+                    rulesColor="#1F2937"
+                    noOfSections={4}
+                    isAnimated
+                    adjustToWidth
+                  />
 
-                {selectedLivePoint ? (
-                  <View style={styles.liveStatsSelectedPointCard}>
-                    <Text style={styles.liveStatsSelectedPointLabel}>{selectedLivePoint.label}</Text>
-                    <Text style={styles.liveStatsSelectedPointValue}>{formatVolumeAxisLabel(selectedLivePoint.value)}</Text>
-                    <Text style={styles.liveStatsSelectedPointMeta}>{t('workout.liveStatsTapHint')}</Text>
-                  </View>
-                ) : null}
+                  {selectedLivePoint ? (
+                    <View style={styles.liveStatsSelectedPointCard}>
+                      <Text style={styles.liveStatsSelectedPointLabel}>{selectedLivePoint.label}</Text>
+                      <Text style={styles.liveStatsSelectedPointValue}>{formatVolumeAxisLabel(selectedLivePoint.value)}</Text>
+                      <Text style={styles.liveStatsSelectedPointMeta}>{t('workout.liveStatsTapHint')}</Text>
+                    </View>
+                  ) : null}
 
-                <Text style={styles.liveStatsFootnote}>
-                  {t('workout.liveStatsFootnote', {
-                    visible: liveStatsChartData.length,
-                    total: statsExerciseProgress.length,
-                  })}
-                </Text>
-              </View>
-            )}
+                  <Text style={styles.liveStatsFootnote}>
+                    {t('workout.liveStatsFootnote', {
+                      visible: liveStatsChartData.length,
+                      total: statsExerciseProgress.length,
+                    })}
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
+      ) : null}
 
       <WorkoutSummary
         visible={isSummaryVisible && finishSummary !== null}

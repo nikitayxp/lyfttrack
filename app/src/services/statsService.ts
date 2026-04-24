@@ -85,6 +85,11 @@ function estimate1RM(weight: number, reps: number): number {
   return weight * (1 + reps / 30);
 }
 
+function isPortugueseLocale(localeTag?: string): boolean {
+  const normalized = localeTag?.trim().toLowerCase();
+  return Boolean(normalized && normalized.startsWith('pt'));
+}
+
 function getWorkoutDurationMinutes(startTimeIso: string | null | undefined, endTimeIso: string | null | undefined): number {
   if (!startTimeIso || !endTimeIso) {
     return 0;
@@ -102,12 +107,11 @@ function getWorkoutDurationMinutes(startTimeIso: string | null | undefined, endT
 
 function formatProgressLabel(dateIso: string, localeTag?: string): string {
   const d = new Date(`${dateIso}T12:00:00.000Z`);
-  const locale =
-    localeTag === 'pt' || localeTag?.toLowerCase().startsWith('pt')
-      ? 'pt-PT'
-      : localeTag && localeTag.length > 2
-        ? localeTag
-        : 'en-US';
+  const locale = isPortugueseLocale(localeTag)
+    ? 'pt-PT'
+    : localeTag && localeTag.length > 2
+      ? localeTag
+      : 'en-US';
 
   return d.toLocaleDateString(locale, {
     month: 'short',
@@ -115,9 +119,9 @@ function formatProgressLabel(dateIso: string, localeTag?: string): string {
   });
 }
 
-function normalizeMuscleLabel(exercise: WeeklyExerciseRef | null | undefined): string {
+function normalizeMuscleLabel(exercise: WeeklyExerciseRef | null | undefined, localeTag?: string): string {
   if (!exercise) {
-    return 'Other';
+    return isPortugueseLocale(localeTag) ? 'Outros' : 'Other';
   }
 
   const normalizedKey = resolveExerciseMuscleKey({
@@ -130,10 +134,12 @@ function normalizeMuscleLabel(exercise: WeeklyExerciseRef | null | undefined): s
   });
 
   if (!normalizedKey) {
-    return 'Other';
+    return isPortugueseLocale(localeTag) ? 'Outros' : 'Other';
   }
 
-  return EXERCISE_MUSCLE_LABELS[normalizedKey].en;
+  return isPortugueseLocale(localeTag)
+    ? EXERCISE_MUSCLE_LABELS[normalizedKey].pt
+    : EXERCISE_MUSCLE_LABELS[normalizedKey].en;
 }
 
 function getWeekStartKey(dateValue: Date): string {
@@ -211,7 +217,8 @@ export async function getTrackedExercises(): Promise<StatsExerciseOption[]> {
 
 export async function getExerciseProgress(
   exerciseId: string,
-  metric: ProgressMetric = 'volume'
+  metric: ProgressMetric = 'volume',
+  localeTag?: string
 ): Promise<ExerciseProgressPoint[]> {
   const rows = await getExerciseSetRowsForUser(exerciseId);
 
@@ -280,7 +287,7 @@ export async function getExerciseProgress(
 
       return {
         date,
-        label: formatProgressLabel(date),
+        label: formatProgressLabel(date, localeTag),
         value,
         volumeTotal,
         repsTotal,
@@ -395,7 +402,7 @@ export async function getAllTimePRs(): Promise<AllTimePR[]> {
   });
 }
 
-export async function getWeeklyVolumeByMuscle(): Promise<WeeklyVolumeByMuscle[]> {
+export async function getWeeklyVolumeByMuscle(localeTag?: string): Promise<WeeklyVolumeByMuscle[]> {
   const user = await getAuthenticatedUserOrThrow();
   const sinceIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -422,7 +429,7 @@ export async function getWeeklyVolumeByMuscle(): Promise<WeeklyVolumeByMuscle[]>
     }
 
     const exercise = resolveEmbeddedObject(row.exercises);
-    const muscle = normalizeMuscleLabel(exercise);
+    const muscle = normalizeMuscleLabel(exercise, localeTag);
     setsByMuscle.set(muscle, (setsByMuscle.get(muscle) ?? 0) + 1);
   }
 

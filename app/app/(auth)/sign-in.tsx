@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
+import { startGoogleOAuth } from '@/services/authService';
 import { getPasswordResetRedirectTo, supabase } from '@/services/supabase';
 
 const palette = Colors.dark;
@@ -83,8 +84,18 @@ export default function SignInScreen() {
     }
   }
 
-  function handleGooglePress() {
-    setFeedback({ message: t('auth.signIn.googleSoon'), type: 'info' });
+  async function handleGooglePress() {
+    setFeedback(null);
+
+    try {
+      await startGoogleOAuth();
+    } catch (error) {
+      const message = error instanceof Error && error.message === 'oauth-cancelled'
+        ? t('auth.signIn.googleCancelled')
+        : t('auth.signIn.googleError');
+
+      setFeedback({ message, type: 'error' });
+    }
   }
 
   return (

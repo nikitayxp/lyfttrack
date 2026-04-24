@@ -432,6 +432,7 @@ export type UpdateWorkoutSetsInput = {
   workoutId: string;
   setPatches: WorkoutSetPatch[];
   workoutName?: string | null;
+  workoutNotes?: string | null;
   notesByExerciseId?: Record<string, string | null | undefined>;
 };
 
@@ -452,16 +453,27 @@ export async function updateWorkoutSets(input: UpdateWorkoutSetsInput): Promise<
 
   const user = await getAuthenticatedUserOrThrow();
 
-  if (typeof input.workoutName === 'string') {
-    const normalizedName = normalizeWriteText(input.workoutName, INPUT_LIMITS.nameMax) ?? 'Workout';
-    const { error: workoutUpdateError } = await supabase
-      .from('workouts')
-      .update({ name: normalizedName })
-      .eq('id', normalizedWorkoutId)
-      .eq('user_id', user.id);
+  if (typeof input.workoutName === 'string' || typeof input.workoutNotes === 'string') {
+    const workoutUpdatePayload: Record<string, unknown> = {};
 
-    if (workoutUpdateError) {
-      throw new Error(`Unable to update workout: ${workoutUpdateError.message}`);
+    if (typeof input.workoutName === 'string') {
+      workoutUpdatePayload.name = normalizeWriteText(input.workoutName, INPUT_LIMITS.nameMax) ?? 'Workout';
+    }
+
+    if (typeof input.workoutNotes === 'string') {
+      workoutUpdatePayload.notes = normalizeWriteText(input.workoutNotes, INPUT_LIMITS.notesMax);
+    }
+
+    if (Object.keys(workoutUpdatePayload).length > 0) {
+      const { error: workoutUpdateError } = await supabase
+        .from('workouts')
+        .update(workoutUpdatePayload as Record<string, never>)
+        .eq('id', normalizedWorkoutId)
+        .eq('user_id', user.id);
+
+      if (workoutUpdateError) {
+        throw new Error(`Unable to update workout: ${workoutUpdateError.message}`);
+      }
     }
   }
 

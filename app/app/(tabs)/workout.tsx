@@ -17,6 +17,7 @@ import {
 import Animated, { FadeInDown, FadeInUp, LinearTransition } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/theme';
+import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import {
   EXERCISE_EQUIPMENT_OPTIONS,
   EXERCISE_EQUIPMENT_TRANSLATION_KEY,
@@ -48,7 +49,7 @@ import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 
 const palette = Colors.dark;
-const CARD_BG = '#111827';
+const CARD_BG = palette.surface;
 const cardLayoutTransition = LinearTransition.springify().damping(16).stiffness(180);
 
 type ExerciseRow = Tables<'exercises'>;
@@ -448,7 +449,7 @@ export default function WorkoutScreen() {
             <TouchableOpacity
               key={mode}
               style={[styles.modeChip, isActive && styles.modeChipActive]}
-              activeOpacity={0.9}
+              activeOpacity={ACTIVE_OPACITY}
               onPress={() => setActiveMode(mode)}
             >
               <Text style={[styles.modeChipText, isActive && styles.modeChipTextActive]}>{modeLabelMap[mode]}</Text>
@@ -459,7 +460,7 @@ export default function WorkoutScreen() {
 
       {activeMode === 'start' ? (
         <>
-          <TouchableOpacity style={styles.primaryButton} activeOpacity={0.9} onPress={handleStartEmptyWorkout}>
+          <TouchableOpacity style={styles.primaryButton} activeOpacity={ACTIVE_OPACITY} onPress={handleStartEmptyWorkout}>
             <Ionicons name="play" size={22} color="#FFFFFF" />
             <Text style={styles.primaryButtonText}>{t('workout.startEmptyWorkout')}</Text>
           </TouchableOpacity>
@@ -468,7 +469,7 @@ export default function WorkoutScreen() {
             <Text style={styles.sectionTitle}>{t('workout.quickStartTemplates')}</Text>
             <TouchableOpacity
               style={styles.createTemplateButton}
-              activeOpacity={0.88}
+              activeOpacity={ACTIVE_OPACITY}
               onPress={() => setActiveMode('templates')}
             >
               <Ionicons name="layers-outline" size={16} color="#FFFFFF" />
@@ -488,7 +489,7 @@ export default function WorkoutScreen() {
               <View style={styles.statusContainer}>
                 <Text style={styles.statusTitle}>{t('workout.unableToLoadTemplates')}</Text>
                 <Text style={styles.statusText}>{templatesError}</Text>
-                <TouchableOpacity style={styles.retryButton} onPress={() => void loadTemplates()} activeOpacity={0.88}>
+                <TouchableOpacity style={styles.retryButton} onPress={() => void loadTemplates()} activeOpacity={ACTIVE_OPACITY}>
                   <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
                 </TouchableOpacity>
               </View>
@@ -511,7 +512,7 @@ export default function WorkoutScreen() {
                 >
                   <TouchableOpacity
                     style={styles.quickStartCard}
-                    activeOpacity={0.88}
+                    activeOpacity={ACTIVE_OPACITY}
                     onPress={() => void handleStartTemplate(template.id)}
                     disabled={startingTemplateId !== null}
                   >
@@ -540,7 +541,7 @@ export default function WorkoutScreen() {
             <Text style={styles.sectionTitle}>{t('workout.templates')}</Text>
             <TouchableOpacity
               style={styles.createTemplateButton}
-              activeOpacity={0.88}
+              activeOpacity={ACTIVE_OPACITY}
               onPress={() => setIsCreateTemplateModalVisible(true)}
             >
               <Ionicons name="add" size={16} color="#FFFFFF" />
@@ -560,7 +561,7 @@ export default function WorkoutScreen() {
               <View style={styles.statusContainer}>
                 <Text style={styles.statusTitle}>{t('workout.unableToLoadTemplates')}</Text>
                 <Text style={styles.statusText}>{templatesError}</Text>
-                <TouchableOpacity style={styles.retryButton} onPress={() => void loadTemplates()} activeOpacity={0.88}>
+                <TouchableOpacity style={styles.retryButton} onPress={() => void loadTemplates()} activeOpacity={ACTIVE_OPACITY}>
                   <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
                 </TouchableOpacity>
               </View>
@@ -583,7 +584,7 @@ export default function WorkoutScreen() {
                 >
                   <TouchableOpacity
                     style={styles.quickStartCard}
-                    activeOpacity={0.88}
+                    activeOpacity={ACTIVE_OPACITY}
                     onPress={() => void handleStartTemplate(template.id)}
                     disabled={startingTemplateId !== null}
                   >
@@ -608,7 +609,7 @@ export default function WorkoutScreen() {
             <Text style={styles.sectionTitle}>{t('workout.createRoutine')}</Text>
             <TouchableOpacity
               style={styles.createTemplateButton}
-              activeOpacity={0.88}
+              activeOpacity={ACTIVE_OPACITY}
               onPress={() => setIsCreateRoutineModalVisible(true)}
             >
               <Ionicons name="add" size={16} color="#FFFFFF" />
@@ -634,7 +635,7 @@ export default function WorkoutScreen() {
                     setHasLoadedRoutines(false);
                     void loadRoutines();
                   }}
-                  activeOpacity={0.88}
+                  activeOpacity={ACTIVE_OPACITY}
                 >
                   <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
                 </TouchableOpacity>
@@ -661,7 +662,7 @@ export default function WorkoutScreen() {
 
                     <TouchableOpacity
                       style={styles.startRoutineButton}
-                      activeOpacity={0.88}
+                      activeOpacity={ACTIVE_OPACITY}
                       onPress={() => handleStartRoutine(routine.id)}
                     >
                       <Ionicons name="play" size={15} color="#FFFFFF" />
@@ -685,7 +686,7 @@ export default function WorkoutScreen() {
 
           <TouchableOpacity
             style={styles.exercisePickerTrigger}
-            activeOpacity={0.88}
+            activeOpacity={ACTIVE_OPACITY}
             onPress={() => setIsCreateExerciseModalVisible(true)}
           >
             <View style={styles.exercisePickerTriggerIconWrap}>
@@ -728,7 +729,7 @@ export default function WorkoutScreen() {
                   setHasLoadedCatalog(false);
                   void loadCatalogExercises();
                 }}
-                activeOpacity={0.88}
+                activeOpacity={ACTIVE_OPACITY}
               >
                 <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
               </TouchableOpacity>
@@ -806,7 +807,7 @@ export default function WorkoutScreen() {
                 <TouchableOpacity
                   style={styles.modalRetryButton}
                   onPress={() => void loadCatalogExercises()}
-                  activeOpacity={0.88}
+                  activeOpacity={ACTIVE_OPACITY}
                 >
                   <Text style={styles.modalRetryButtonText}>{t('common.retry')}</Text>
                 </TouchableOpacity>
@@ -839,7 +840,7 @@ export default function WorkoutScreen() {
 
                           <TouchableOpacity
                             style={styles.removeSelectedButton}
-                            activeOpacity={0.88}
+                            activeOpacity={ACTIVE_OPACITY}
                             onPress={() => toggleExerciseSelection(exercise.id)}
                           >
                             <Ionicons name="remove" size={14} color="#FFFFFF" />
@@ -853,7 +854,7 @@ export default function WorkoutScreen() {
                     <TouchableOpacity
                       key={exercise.id}
                       style={styles.modalExerciseRow}
-                      activeOpacity={0.88}
+                      activeOpacity={ACTIVE_OPACITY}
                       onPress={() => toggleExerciseSelection(exercise.id)}
                     >
                       <View style={styles.modalExerciseTextWrap}>
@@ -882,7 +883,7 @@ export default function WorkoutScreen() {
               <TouchableOpacity
                 style={styles.modalCancelButton}
                 onPress={() => setIsCreateTemplateModalVisible(false)}
-                activeOpacity={0.88}
+                activeOpacity={ACTIVE_OPACITY}
               >
                 <Text style={styles.modalCancelButtonText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
@@ -890,7 +891,7 @@ export default function WorkoutScreen() {
               <TouchableOpacity
                 style={[styles.modalCreateButton, isSavingTemplate && styles.modalCreateButtonDisabled]}
                 onPress={() => void handleCreateTemplate()}
-                activeOpacity={0.88}
+                activeOpacity={ACTIVE_OPACITY}
                 disabled={isSavingTemplate}
               >
                 {isSavingTemplate ? (
@@ -955,7 +956,7 @@ export default function WorkoutScreen() {
                     setHasLoadedCatalog(false);
                     void loadCatalogExercises();
                   }}
-                  activeOpacity={0.88}
+                  activeOpacity={ACTIVE_OPACITY}
                 >
                   <Text style={styles.modalRetryButtonText}>{t('common.retry')}</Text>
                 </TouchableOpacity>
@@ -975,7 +976,7 @@ export default function WorkoutScreen() {
                     <TouchableOpacity
                       key={exercise.id}
                       style={[styles.modalExerciseRow, isSelected && styles.modalExerciseRowSelected]}
-                      activeOpacity={0.88}
+                      activeOpacity={ACTIVE_OPACITY}
                       onPress={() => toggleRoutineExerciseSelection(exercise.id)}
                     >
                       <View style={styles.modalExerciseTextWrap}>
@@ -1004,7 +1005,7 @@ export default function WorkoutScreen() {
               <TouchableOpacity
                 style={styles.modalCancelButton}
                 onPress={() => setIsCreateRoutineModalVisible(false)}
-                activeOpacity={0.88}
+                activeOpacity={ACTIVE_OPACITY}
               >
                 <Text style={styles.modalCancelButtonText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
@@ -1012,7 +1013,7 @@ export default function WorkoutScreen() {
               <TouchableOpacity
                 style={[styles.modalCreateButton, isCreatingRoutine && styles.modalCreateButtonDisabled]}
                 onPress={() => void handleCreateRoutine()}
-                activeOpacity={0.88}
+                activeOpacity={ACTIVE_OPACITY}
                 disabled={isCreatingRoutine}
               >
                 {isCreatingRoutine ? (
@@ -1058,7 +1059,7 @@ export default function WorkoutScreen() {
                   <TouchableOpacity
                     key={muscleKey}
                     style={[styles.optionChip, isSelected && styles.optionChipSelected]}
-                    activeOpacity={0.88}
+                    activeOpacity={ACTIVE_OPACITY}
                     onPress={() => setSelectedMuscleKey(muscleKey)}
                   >
                     <Text style={[styles.optionChipText, isSelected && styles.optionChipTextSelected]}>
@@ -1078,7 +1079,7 @@ export default function WorkoutScreen() {
                   <TouchableOpacity
                     key={equipmentKey}
                     style={[styles.optionChip, isSelected && styles.optionChipSelected]}
-                    activeOpacity={0.88}
+                    activeOpacity={ACTIVE_OPACITY}
                     onPress={() => setSelectedEquipmentKey(equipmentKey)}
                   >
                     <Text style={[styles.optionChipText, isSelected && styles.optionChipTextSelected]}>
@@ -1093,7 +1094,7 @@ export default function WorkoutScreen() {
               <TouchableOpacity
                 style={styles.modalCancelButton}
                 onPress={() => setIsCreateExerciseModalVisible(false)}
-                activeOpacity={0.88}
+                activeOpacity={ACTIVE_OPACITY}
               >
                 <Text style={styles.modalCancelButtonText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
@@ -1101,7 +1102,7 @@ export default function WorkoutScreen() {
               <TouchableOpacity
                 style={[styles.modalCreateButton, isCreatingExercise && styles.modalCreateButtonDisabled]}
                 onPress={() => void handleCreateExercise()}
-                activeOpacity={0.88}
+                activeOpacity={ACTIVE_OPACITY}
                 disabled={isCreatingExercise}
               >
                 {isCreatingExercise ? (
@@ -1149,38 +1150,38 @@ const styles = StyleSheet.create({
   modeChip: {
     flex: 1,
     minHeight: 40,
-    borderRadius: 12,
+    borderRadius: Radius.button,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: palette.inputStroke,
     backgroundColor: '#0F172A',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 8,
   },
   modeChipActive: {
-    borderColor: '#2563EB',
+    borderColor: palette.accent,
     backgroundColor: '#1D4ED8',
   },
   modeChipText: {
-    color: '#CBD5E1',
+    color: palette.chipText,
     fontSize: 12,
     fontWeight: '700',
     textAlign: 'center',
   },
   modeChipTextActive: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
   },
   primaryButton: {
     backgroundColor: palette.accent,
     minHeight: 76,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 10,
   },
   primaryButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 19,
     fontWeight: '800',
   },
@@ -1200,13 +1201,13 @@ const styles = StyleSheet.create({
   },
   sectionCaption: {
     marginTop: 6,
-    color: '#94A3B8',
+    color: palette.labelMuted,
     fontSize: 12,
     lineHeight: 18,
   },
   createTemplateButton: {
     minHeight: 36,
-    borderRadius: 12,
+    borderRadius: Radius.button,
     backgroundColor: palette.accent,
     paddingHorizontal: 10,
     flexDirection: 'row',
@@ -1214,12 +1215,12 @@ const styles = StyleSheet.create({
     columnGap: 6,
   },
   createTemplateButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 12,
     fontWeight: '800',
   },
   statusContainer: {
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: palette.surface,
@@ -1248,18 +1249,18 @@ const styles = StyleSheet.create({
     backgroundColor: palette.accent,
     paddingVertical: 10,
     paddingHorizontal: 18,
-    borderRadius: 16,
+    borderRadius: Radius.card,
   },
   retryButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 14,
     fontWeight: '700',
   },
   quickStartCard: {
     backgroundColor: CARD_BG,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: palette.inputFill,
     paddingHorizontal: 16,
     paddingVertical: 14,
     flexDirection: 'row',
@@ -1289,9 +1290,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   routineCard: {
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: palette.inputFill,
     backgroundColor: CARD_BG,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -1304,29 +1305,29 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   routineName: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 16,
     fontWeight: '800',
     flex: 1,
     paddingRight: 10,
   },
   routineMeta: {
-    color: '#94A3B8',
+    color: palette.labelMuted,
     fontSize: 13,
     fontWeight: '600',
     marginBottom: 6,
   },
   routineNotes: {
-    color: '#CBD5E1',
+    color: palette.chipText,
     fontSize: 13,
     lineHeight: 19,
     marginBottom: 10,
   },
   startRoutineButton: {
     minHeight: 38,
-    borderRadius: 12,
+    borderRadius: Radius.button,
     borderWidth: 1,
-    borderColor: '#2563EB',
+    borderColor: palette.accent,
     backgroundColor: '#1D4ED8',
     flexDirection: 'row',
     alignItems: 'center',
@@ -1334,7 +1335,7 @@ const styles = StyleSheet.create({
     columnGap: 8,
   },
   startRoutineButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 13,
     fontWeight: '800',
   },
@@ -1346,8 +1347,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#0D1624',
+    borderColor: palette.inputStroke,
+    backgroundColor: palette.surfaceAlt,
     minHeight: 58,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -1358,9 +1359,9 @@ const styles = StyleSheet.create({
   exercisePickerTriggerIconWrap: {
     width: 34,
     height: 34,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: '#1E3A5F',
+    borderColor: palette.accentSoft,
     backgroundColor: '#0A1A2D',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1370,13 +1371,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   exercisePickerTriggerTitle: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 14,
     fontWeight: '800',
     marginBottom: 2,
   },
   exercisePickerTriggerSubtitle: {
-    color: '#94A3B8',
+    color: palette.labelMuted,
     fontSize: 12,
     lineHeight: 17,
   },
@@ -1384,7 +1385,7 @@ const styles = StyleSheet.create({
     backgroundColor: palette.inputBackground,
     borderWidth: 1,
     borderColor: palette.inputBorder,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1398,7 +1399,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   emptyState: {
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: palette.surface,
@@ -1428,7 +1429,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   exerciseRow: {
-    borderRadius: 12,
+    borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: '#273247',
     backgroundColor: '#0E1726',
@@ -1444,18 +1445,18 @@ const styles = StyleSheet.create({
     paddingRight: 10,
   },
   exerciseName: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 15,
     fontWeight: '700',
     marginBottom: 2,
   },
   exerciseMeta: {
-    color: '#94A3B8',
+    color: palette.labelMuted,
     fontSize: 12,
     fontWeight: '600',
   },
   exerciseMuscle: {
-    color: '#CBD5E1',
+    color: palette.chipText,
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -1481,8 +1482,8 @@ const styles = StyleSheet.create({
   modalSheet: {
     maxHeight: '82%',
     backgroundColor: palette.surface,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderTopLeftRadius: Radius.card,
+    borderTopRightRadius: Radius.card,
     borderTopWidth: 1,
     borderColor: palette.border,
     paddingTop: 10,
@@ -1500,7 +1501,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     width: 40,
     height: 5,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     backgroundColor: palette.borderStrong,
     marginBottom: 12,
   },
@@ -1515,7 +1516,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.inputBorder,
     color: palette.textPrimary,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     paddingHorizontal: 14,
     paddingVertical: 12,
     marginBottom: 10,
@@ -1533,7 +1534,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   optionSectionLabel: {
-    color: '#94A3B8',
+    color: palette.labelMuted,
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -1550,20 +1551,20 @@ const styles = StyleSheet.create({
   },
   optionChip: {
     minHeight: 34,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#0D1624',
+    borderColor: palette.inputStroke,
+    backgroundColor: palette.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
   },
   optionChipSelected: {
-    borderColor: '#3B82F6',
-    backgroundColor: '#122744',
+    borderColor: palette.accent,
+    backgroundColor: palette.chipFillSelected,
   },
   optionChipText: {
-    color: '#CBD5E1',
+    color: palette.chipText,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -1599,7 +1600,7 @@ const styles = StyleSheet.create({
   modalRetryButton: {
     marginTop: 12,
     backgroundColor: palette.accent,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     paddingVertical: 10,
     paddingHorizontal: 18,
   },
@@ -1611,7 +1612,7 @@ const styles = StyleSheet.create({
   modalExerciseRow: {
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     backgroundColor: palette.surfaceAlt,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -1648,14 +1649,14 @@ const styles = StyleSheet.create({
   orderBadge: {
     minWidth: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     backgroundColor: palette.accent,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 9,
   },
   orderBadgeText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 13,
     fontWeight: '800',
   },
@@ -1664,8 +1665,8 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#0D1624',
+    borderColor: palette.inputStroke,
+    backgroundColor: palette.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1711,7 +1712,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   modalCreateButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 15,
     fontWeight: '800',
   },

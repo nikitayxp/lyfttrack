@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
+import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import {
   acceptRequest,
   getFriends,
@@ -30,8 +31,8 @@ import {
 } from '@/services/socialService';
 
 const palette = Colors.dark;
-const SCREEN_BG = '#000000';
-const CARD_BG = '#111111';
+const SCREEN_BG = palette.bgPrimary;
+const CARD_BG = palette.surface;
 
 function displayNameOf(profile: {
   username: string;
@@ -252,7 +253,7 @@ export default function SocialScreen() {
       <View style={styles.headerRow}>
         <TouchableOpacity
           style={styles.backButton}
-          activeOpacity={0.86}
+          activeOpacity={ACTIVE_OPACITY}
           onPress={() => router.replace('/(tabs)/profile' as any)}
         >
           <Ionicons name="arrow-back" size={18} color={palette.textPrimary} />
@@ -266,7 +267,7 @@ export default function SocialScreen() {
       <View style={styles.card}>
         <View style={styles.searchHeaderRow}>
           <Text style={styles.cardTitle}>{t('social.search.title')}</Text>
-          <TouchableOpacity style={styles.viewAllButton} activeOpacity={0.88} onPress={handleViewAllAthletes}>
+          <TouchableOpacity style={styles.viewAllButton} activeOpacity={ACTIVE_OPACITY} onPress={handleViewAllAthletes}>
             <Text style={styles.viewAllButtonText}>{t('social.search.viewAll')}</Text>
           </TouchableOpacity>
         </View>
@@ -304,7 +305,7 @@ export default function SocialScreen() {
               <View key={result.id} style={styles.searchItem}>
                 <TouchableOpacity
                   style={styles.userLinkArea}
-                  activeOpacity={0.86}
+                  activeOpacity={ACTIVE_OPACITY}
                   onPress={() => openPublicProfile(result.id)}
                 >
                   {result.avatar_url ? (
@@ -323,12 +324,12 @@ export default function SocialScreen() {
 
                 <TouchableOpacity
                   style={[styles.userActionButton, !isActionable && styles.userActionButtonMuted]}
-                  activeOpacity={0.88}
+                  activeOpacity={ACTIVE_OPACITY}
                   onPress={() => void handleSendRequest(result.id)}
                   disabled={!isActionable || isSending}
                 >
                   {isSending ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <ActivityIndicator size="small" color={palette.textPrimary} />
                   ) : (
                     <Text style={styles.userActionText}>{relationLabel(relation)}</Text>
                   )}
@@ -364,7 +365,7 @@ export default function SocialScreen() {
               <View key={request.id} style={styles.requestItem}>
                 <TouchableOpacity
                   style={styles.userLinkArea}
-                  activeOpacity={0.86}
+                  activeOpacity={ACTIVE_OPACITY}
                   onPress={() => {
                     if (profile?.id) {
                       openPublicProfile(profile.id);
@@ -391,19 +392,19 @@ export default function SocialScreen() {
                 <View style={styles.requestActionsWrap}>
                   <TouchableOpacity
                     style={[styles.requestButton, styles.acceptButton]}
-                    activeOpacity={0.88}
+                    activeOpacity={ACTIVE_OPACITY}
                     onPress={() => void handleAccept(request.id)}
                     disabled={isProcessing}
                   >
                     {isProcessing ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
+                      <ActivityIndicator size="small" color={palette.textPrimary} />
                     ) : (
                       <Text style={styles.requestButtonText}>{t('social.pending.accept')}</Text>
                     )}
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.requestButton, styles.rejectButton]}
-                    activeOpacity={0.88}
+                    activeOpacity={ACTIVE_OPACITY}
                     onPress={() => void handleReject(request.id)}
                     disabled={isProcessing}
                   >
@@ -442,7 +443,7 @@ export default function SocialScreen() {
                 <TouchableOpacity
                   key={friend.friendshipId}
                   style={styles.friendItem}
-                  activeOpacity={0.86}
+                  activeOpacity={ACTIVE_OPACITY}
                   onPress={() => openPublicProfile(friend.profile.id)}
                 >
                   {friend.profile.avatar_url ? (
@@ -499,10 +500,10 @@ const styles = StyleSheet.create({
     columnGap: 6,
     minHeight: 34,
     paddingHorizontal: 10,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     borderWidth: 1,
-    borderColor: '#223247',
-    backgroundColor: '#0B1422',
+    borderColor: palette.borderStrong,
+    backgroundColor: palette.surfaceAlt,
   },
   backButtonText: {
     color: palette.textPrimary,
@@ -525,7 +526,7 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: CARD_BG,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.border,
     paddingHorizontal: 14,
@@ -545,16 +546,16 @@ const styles = StyleSheet.create({
   },
   viewAllButton: {
     minHeight: 32,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#0D1624',
+    borderColor: palette.inputStroke,
+    backgroundColor: palette.surfaceAlt,
     paddingHorizontal: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   viewAllButtonText: {
-    color: '#DCE8FF',
+    color: palette.chipTextSelected,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -571,10 +572,10 @@ const styles = StyleSheet.create({
   },
   searchRow: {
     minHeight: 44,
-    borderRadius: 12,
+    borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.inputBorder,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: palette.bgPrimary,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
@@ -613,10 +614,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderRadius: 12,
+    borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: palette.bgPrimary,
     paddingHorizontal: 10,
     paddingVertical: 10,
     marginBottom: 8,
@@ -624,10 +625,10 @@ const styles = StyleSheet.create({
     columnGap: 10,
   },
   requestItem: {
-    borderRadius: 12,
+    borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: palette.bgPrimary,
     paddingHorizontal: 10,
     paddingVertical: 10,
     marginBottom: 8,
@@ -637,10 +638,10 @@ const styles = StyleSheet.create({
   friendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: palette.bgPrimary,
     paddingHorizontal: 10,
     paddingVertical: 10,
     marginBottom: 8,
@@ -695,7 +696,7 @@ const styles = StyleSheet.create({
     columnGap: 6,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     backgroundColor: 'rgba(52,211,153,0.12)',
     borderWidth: 1,
     borderColor: 'rgba(52,211,153,0.3)',
@@ -715,7 +716,7 @@ const styles = StyleSheet.create({
   userActionButton: {
     minHeight: 36,
     minWidth: 102,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     backgroundColor: palette.accent,
     alignItems: 'center',
     justifyContent: 'center',
@@ -726,7 +727,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#27272A',
   },
   userActionText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -736,7 +737,7 @@ const styles = StyleSheet.create({
   },
   requestButton: {
     minHeight: 34,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
@@ -748,7 +749,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#3F3F46',
   },
   requestButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 12,
     fontWeight: '700',
   },

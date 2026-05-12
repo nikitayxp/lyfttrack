@@ -35,6 +35,7 @@ type WorkoutContextValue = {
   handleSetCompletionToggle: (exerciseId: string, setId: string) => void;
   updateSetInput: (exerciseId: string, setId: string, field: 'weightInput' | 'repsInput' | 'rirInput', value: string) => void;
   updateSetSide: (exerciseId: string, setId: string, side: 'both' | 'left' | 'right') => void;
+  updateSetType: (exerciseId: string, setId: string, setType: 'normal' | 'warmup' | 'drop' | 'failure') => void;
   updateExerciseNotes: (exerciseId: string, notes: string | null) => void;
   addSet: (exerciseId: string) => void;
   addExercise: (exercise: ExerciseRow) => void;
@@ -48,6 +49,8 @@ type WorkoutContextValue = {
   discardRecoveredDraft: () => Promise<void>;
   workoutStartedAtMs: number | null;
   elapsedSeconds: number;
+  isTimerPaused: boolean;
+  toggleTimerPause: () => void;
   ensureWorkoutStarted: () => number;
   resetWorkoutSession: () => void;
   safeDeactivateKeepAwake: () => void;
@@ -66,6 +69,8 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
   const [workoutStartedAtMs, setWorkoutStartedAtMs] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [isTimerPaused, setIsTimerPaused] = useState(false);
+  const [pausedElapsedSeconds, setPausedElapsedSeconds] = useState<number | null>(null);
   const [exerciseStopwatchById, setExerciseStopwatchById] = useState<Record<string, ExerciseStopwatchEntry>>({});
   const [exerciseRestSnapshotById, setExerciseRestSnapshotById] = useState<Record<string, number>>({});
   const [stopwatchNowMs, setStopwatchNowMs] = useState(() => Date.now());
@@ -111,6 +116,7 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
     handleSetCompletionToggle,
     updateSetInput,
     updateSetSide,
+    updateSetType,
     updateExerciseNotes,
     addSet,
     addExercise,
@@ -161,9 +167,28 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
     }
   }, [hasActiveWorkout, resetWorkoutSession, workoutStartedAtMs]);
 
+  const toggleTimerPause = useCallback(() => {
+    setIsTimerPaused((prev) => {
+      if (!prev) {
+        setPausedElapsedSeconds(elapsedSeconds);
+      } else {
+        if (pausedElapsedSeconds !== null) {
+          const now = Date.now();
+          setWorkoutStartedAtMs(now - pausedElapsedSeconds * 1000);
+        }
+        setPausedElapsedSeconds(null);
+      }
+      return !prev;
+    });
+  }, [elapsedSeconds, pausedElapsedSeconds]);
+
   useEffect(() => {
     if (workoutStartedAtMs === null) {
       setElapsedSeconds(0);
+      return;
+    }
+
+    if (isTimerPaused) {
       return;
     }
 
@@ -178,7 +203,7 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
     return () => {
       clearInterval(intervalId);
     };
-  }, [workoutStartedAtMs]);
+  }, [workoutStartedAtMs, isTimerPaused]);
 
   const activateKeepAwakeSafely = useCallback(() => {
     if (Platform.OS === 'web') {
@@ -469,6 +494,7 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
     handleSetCompletionToggle,
     updateSetInput,
     updateSetSide,
+    updateSetType,
     updateExerciseNotes,
     addSet,
     addExercise: addExerciseToWorkout,
@@ -482,6 +508,8 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
     discardRecoveredDraft,
     workoutStartedAtMs,
     elapsedSeconds,
+    isTimerPaused,
+    toggleTimerPause,
     ensureWorkoutStarted,
     resetWorkoutSession,
     safeDeactivateKeepAwake,
@@ -520,7 +548,10 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
     toggleExerciseStopwatch,
     updateSetInput,
     updateSetSide,
+    updateSetType,
     updateExerciseNotes,
+    isTimerPaused,
+    toggleTimerPause,
     workoutStartedAtMs,
     acceptRecoveredDraftWithTimer,
   ]);

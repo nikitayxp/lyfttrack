@@ -875,6 +875,33 @@ function matchesEquipmentFilter(exercise: ExerciseCatalogItem, filter: ExerciseL
   return matchesKeywords(normalizedCandidate, EQUIPMENT_FILTER_KEYWORDS[filter]);
 }
 
+export async function getRecentExerciseIds(limit = 20): Promise<string[]> {
+  const user = await getAuthenticatedUserOrThrow();
+
+  const { data, error } = await supabase
+    .from('workout_exercises')
+    .select('exercise_id, workouts!inner(user_id, end_time, start_time)')
+    .eq('workouts.user_id', user.id)
+    .not('workouts.end_time', 'is', null)
+    .order('workouts(start_time)', { ascending: false })
+    .limit(200);
+
+  if (error) return [];
+
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const row of data ?? []) {
+    const id = (row as any).exercise_id as string;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    result.push(id);
+    if (result.length >= limit) break;
+  }
+
+  return result;
+}
+
 export async function getExercisesCatalog(filters: ExerciseCatalogFilters = {}): Promise<ExerciseCatalogItem[]> {
   const muscleFilter = filters.muscle ?? 'all';
   const equipmentFilter = filters.equipment ?? 'all';

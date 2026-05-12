@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
+import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import {
   getAllAthletes,
   searchUsers,
@@ -23,8 +24,8 @@ import {
 } from '@/services/socialService';
 
 const palette = Colors.dark;
-const SCREEN_BG = '#000000';
-const CARD_BG = '#111111';
+const SCREEN_BG = palette.bgPrimary;
+const CARD_BG = palette.surface;
 
 function displayNameOf(profile: SocialSearchResult): string {
   return profile.full_name?.trim() || profile.username;
@@ -159,7 +160,7 @@ export default function AthletesScreen() {
       }
     >
       <View style={styles.headerRow}>
-        <TouchableOpacity style={styles.backButton} activeOpacity={0.86} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backButton} activeOpacity={ACTIVE_OPACITY} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={18} color={palette.textPrimary} />
           <Text style={styles.backButtonText}>{t('common.back')}</Text>
         </TouchableOpacity>
@@ -211,7 +212,7 @@ export default function AthletesScreen() {
               <View key={athlete.id} style={styles.athleteItem}>
                 <TouchableOpacity
                   style={styles.userLinkArea}
-                  activeOpacity={0.86}
+                  activeOpacity={ACTIVE_OPACITY}
                   onPress={() => openPublicProfile(athlete.id)}
                 >
                   {athlete.avatar_url ? (
@@ -230,12 +231,12 @@ export default function AthletesScreen() {
 
                 <TouchableOpacity
                   style={[styles.userActionButton, !isActionable && styles.userActionButtonMuted]}
-                  activeOpacity={0.88}
+                  activeOpacity={ACTIVE_OPACITY}
                   onPress={() => void handleSendRequest(athlete.id)}
                   disabled={!isActionable || isSending}
                 >
                   {isSending ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <ActivityIndicator size="small" color={palette.textPrimary} />
                   ) : (
                     <Text style={styles.userActionText}>{relationLabel(athlete.relation)}</Text>
                   )}
@@ -270,10 +271,10 @@ const styles = StyleSheet.create({
     columnGap: 6,
     minHeight: 34,
     paddingHorizontal: 10,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     borderWidth: 1,
-    borderColor: '#223247',
-    backgroundColor: '#0B1422',
+    borderColor: palette.borderStrong,
+    backgroundColor: palette.surfaceAlt,
   },
   backButtonText: {
     color: palette.textPrimary,
@@ -293,18 +294,18 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   searchCard: {
-    backgroundColor: '#0B1422',
-    borderRadius: 14,
+    backgroundColor: palette.surfaceAlt,
+    borderRadius: Radius.card,
     borderWidth: 1,
-    borderColor: '#223247',
+    borderColor: palette.borderStrong,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
   searchRow: {
     minHeight: 42,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: palette.inputStroke,
     backgroundColor: '#0A111D',
     flexDirection: 'row',
     alignItems: 'center',
@@ -320,7 +321,7 @@ const styles = StyleSheet.create({
   },
   searchModeText: {
     marginTop: 8,
-    color: '#94A3B8',
+    color: palette.labelMuted,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.3,
@@ -328,7 +329,7 @@ const styles = StyleSheet.create({
   },
   listCard: {
     backgroundColor: CARD_BG,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.border,
     paddingHorizontal: 12,
@@ -359,10 +360,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderRadius: 12,
+    borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: palette.bgPrimary,
     paddingHorizontal: 10,
     paddingVertical: 10,
     marginBottom: 8,
@@ -413,7 +414,7 @@ const styles = StyleSheet.create({
   userActionButton: {
     minHeight: 36,
     minWidth: 102,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     backgroundColor: palette.accent,
     alignItems: 'center',
     justifyContent: 'center',
@@ -424,7 +425,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#27272A',
   },
   userActionText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 12,
     fontWeight: '700',
   },

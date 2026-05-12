@@ -16,12 +16,13 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/Colors';
+import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import type { WorkoutCommentWithProfile } from '@/services/interactionService';
 import { formatRelativeTime } from '@/utils/dateUtils';
 
 const palette = Colors.dark;
-const HEADER_BG = '#000000';
-const SHEET_BG = '#000000';
+const HEADER_BG = palette.bgPrimary;
+const SHEET_BG = palette.bgPrimary;
 
 type FeedCommentsModalProps = {
   visible: boolean;
@@ -84,7 +85,7 @@ export function FeedCommentsModal({
         <View style={styles.statusWrap}>
           <Text style={styles.errorTitle}>{t('feed.comments.loadErrorTitle')}</Text>
           <Text style={styles.errorText}>{errorMessage}</Text>
-          <TouchableOpacity style={styles.retryButton} activeOpacity={0.88} onPress={onRetry}>
+          <TouchableOpacity style={styles.retryButton} activeOpacity={ACTIVE_OPACITY} onPress={onRetry}>
             <Text style={styles.retryButtonText}>{t('feed.comments.retry')}</Text>
           </TouchableOpacity>
         </View>
@@ -116,7 +117,7 @@ export function FeedCommentsModal({
       >
         <View style={[styles.screenFrame, isWeb && styles.screenFrameWeb]}>
           <View style={[styles.header, { paddingTop: insets.top + 10 }]}> 
-            <TouchableOpacity style={styles.closeButton} activeOpacity={0.88} onPress={onClose}>
+            <TouchableOpacity style={styles.closeButton} activeOpacity={ACTIVE_OPACITY} onPress={onClose}>
               <Ionicons name="close" size={22} color={palette.textPrimary} />
             </TouchableOpacity>
             <View style={styles.headerTextWrap}>
@@ -169,14 +170,14 @@ export function FeedCommentsModal({
               />
               <TouchableOpacity
                 style={[styles.sendButton, (isSending || inputValue.trim().length === 0) && styles.sendButtonDisabled]}
-                activeOpacity={0.88}
+                activeOpacity={ACTIVE_OPACITY}
                 onPress={onSend}
                 disabled={isSending || inputValue.trim().length === 0}
               >
                 {isSending ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ActivityIndicator size="small" color={palette.textPrimary} />
                 ) : (
-                  <Ionicons name="send" size={16} color="#FFFFFF" />
+                  <Ionicons name="send" size={16} color={palette.textPrimary} />
                 )}
               </TouchableOpacity>
             </View>
@@ -222,10 +223,10 @@ const styles = StyleSheet.create({
   closeButton: {
     width: 34,
     height: 34,
-    borderRadius: 8,
+    borderRadius: Radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#111111',
+    backgroundColor: palette.surface,
     borderWidth: 1,
     borderColor: palette.border,
   },
@@ -286,7 +287,7 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: 12,
-    borderRadius: 8,
+    borderRadius: Radius.sm,
     minHeight: 36,
     paddingHorizontal: 14,
     backgroundColor: palette.accent,
@@ -294,15 +295,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   retryButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 13,
     fontWeight: '700',
   },
   commentItem: {
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#111111',
+    backgroundColor: palette.surface,
     paddingHorizontal: 9,
     paddingVertical: 9,
     flexDirection: 'row',
@@ -357,7 +358,7 @@ const styles = StyleSheet.create({
   inputRow: {
     borderTopWidth: 1,
     borderTopColor: palette.border,
-    backgroundColor: '#111111',
+    backgroundColor: palette.surface,
     paddingTop: 8,
     paddingHorizontal: 10,
     flexDirection: 'row',
@@ -368,10 +369,10 @@ const styles = StyleSheet.create({
     flex: 1,
     maxHeight: 120,
     minHeight: 38,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#000000',
+    backgroundColor: palette.bgPrimary,
     color: palette.textPrimary,
     paddingHorizontal: 10,
     paddingVertical: 8,
@@ -381,7 +382,7 @@ const styles = StyleSheet.create({
   sendButton: {
     width: 38,
     height: 38,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: palette.accent,

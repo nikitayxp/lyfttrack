@@ -21,6 +21,7 @@ export type Database = {
           description: string | null
           equipment: string | null
           id: string
+          image_url: string | null
           is_custom: boolean
           muscle_en: string | null
           muscle_group: string | null
@@ -35,6 +36,7 @@ export type Database = {
           description?: string | null
           equipment?: string | null
           id?: string
+          image_url?: string | null
           is_custom?: boolean
           muscle_en?: string | null
           muscle_group?: string | null
@@ -49,6 +51,7 @@ export type Database = {
           description?: string | null
           equipment?: string | null
           id?: string
+          image_url?: string | null
           is_custom?: boolean
           muscle_en?: string | null
           muscle_group?: string | null

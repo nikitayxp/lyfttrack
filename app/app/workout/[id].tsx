@@ -14,6 +14,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
+import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import {
   getAuthenticatedUserOrThrow,
   getErrorMessage,
@@ -24,8 +25,8 @@ import {
 import { formatRelativeTime } from '@/utils/dateUtils';
 
 const palette = Colors.dark;
-const SCREEN_BG = '#050A12';
-const CARD_BG = '#111827';
+const SCREEN_BG = palette.bgPrimary;
+const CARD_BG = palette.surface;
 const ROOT_SCREEN_BG = SCREEN_BG;
 
 function resolveRouteWorkoutId(rawValue: string | string[] | undefined): string | null {
@@ -183,7 +184,7 @@ export default function WorkoutDetailsScreen() {
       <StatusBar style="light" />
 
       <View style={styles.headerRow}>
-        <TouchableOpacity style={styles.backButton} activeOpacity={0.86} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backButton} activeOpacity={ACTIVE_OPACITY} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={21} color={palette.textPrimary} />
         </TouchableOpacity>
 
@@ -201,7 +202,7 @@ export default function WorkoutDetailsScreen() {
         <View style={styles.statusWrap}>
           <Text style={styles.statusTitle}>{t('workoutDetails.loadErrorTitle')}</Text>
           <Text style={styles.statusText}>{loadError}</Text>
-          <TouchableOpacity style={styles.retryButton} activeOpacity={0.88} onPress={() => void loadDetails()}>
+          <TouchableOpacity style={styles.retryButton} activeOpacity={ACTIVE_OPACITY} onPress={() => void loadDetails()}>
             <Text style={styles.retryButtonText}>{t('workoutDetails.retryAction')}</Text>
           </TouchableOpacity>
         </View>
@@ -267,7 +268,7 @@ export default function WorkoutDetailsScreen() {
             <View style={styles.actionRow}>
               <TouchableOpacity
                 style={[styles.actionButton, styles.actionButtonPrimary]}
-                activeOpacity={0.88}
+                activeOpacity={ACTIVE_OPACITY}
                 onPress={handleCopyWorkout}
               >
                 <Ionicons name="copy-outline" size={16} color="#FFFFFF" />
@@ -277,7 +278,7 @@ export default function WorkoutDetailsScreen() {
               {isOwnWorkout ? (
                 <TouchableOpacity
                   style={[styles.actionButton, styles.actionButtonSecondary]}
-                  activeOpacity={0.88}
+                  activeOpacity={ACTIVE_OPACITY}
                   onPress={handleEditWorkout}
                 >
                   <Ionicons name="create-outline" size={16} color={palette.textPrimary} />
@@ -295,7 +296,12 @@ export default function WorkoutDetailsScreen() {
           ) : (
             details.exercises.map((exercise) => (
               <View key={`${exercise.id ?? exercise.exercise_id}-${exercise.order}`} style={styles.exerciseCard}>
-                <Text style={styles.exerciseName}>{exercise.exercise_name}</Text>
+                <TouchableOpacity
+                  activeOpacity={ACTIVE_OPACITY}
+                  onPress={() => router.push(`/exercise/${exercise.exercise_id}` as any)}
+                >
+                  <Text style={styles.exerciseName}>{exercise.exercise_name}</Text>
+                </TouchableOpacity>
                 <Text style={styles.exerciseMeta}>
                   {(exercise.muscle_group ?? t('exercise.general')) + ' - ' + (exercise.equipment ?? t('exercise.bodyweight'))}
                 </Text>
@@ -339,21 +345,21 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#1F2937',
+    borderBottomColor: palette.inputFill,
     backgroundColor: SCREEN_BG,
   },
   backButton: {
     width: 36,
     height: 36,
-    borderRadius: 12,
+    borderRadius: Radius.button,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#111827',
+    borderColor: palette.inputStroke,
+    backgroundColor: palette.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 17,
     fontWeight: '800',
   },
@@ -377,14 +383,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   statusTitle: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 18,
     fontWeight: '800',
     textAlign: 'center',
     marginBottom: 8,
   },
   statusText: {
-    color: '#94A3B8',
+    color: palette.labelMuted,
     fontSize: 14,
     lineHeight: 20,
     textAlign: 'center',
@@ -393,21 +399,21 @@ const styles = StyleSheet.create({
   retryButton: {
     marginTop: 14,
     minHeight: 40,
-    borderRadius: 12,
+    borderRadius: Radius.button,
     paddingHorizontal: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#2563EB',
+    backgroundColor: palette.accent,
   },
   retryButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 14,
     fontWeight: '800',
   },
   heroCard: {
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
-    borderColor: '#253041',
+    borderColor: palette.borderStrong,
     backgroundColor: CARD_BG,
     paddingHorizontal: 14,
     paddingVertical: 14,
@@ -434,7 +440,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#12335E',
   },
   avatarFallbackText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 15,
     fontWeight: '800',
   },
@@ -442,24 +448,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   profileName: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 15,
     fontWeight: '700',
     marginBottom: 2,
   },
   profileMeta: {
-    color: '#94A3B8',
+    color: palette.labelMuted,
     fontSize: 12,
     fontWeight: '600',
   },
   workoutName: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 20,
     fontWeight: '900',
     marginBottom: 4,
   },
   workoutNotes: {
-    color: '#CBD5E1',
+    color: palette.chipText,
     fontSize: 13,
     lineHeight: 19,
     marginBottom: 10,
@@ -473,15 +479,15 @@ const styles = StyleSheet.create({
   },
   statCard: {
     width: '48.5%',
-    borderRadius: 12,
+    borderRadius: Radius.button,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#0D1624',
+    borderColor: palette.inputStroke,
+    backgroundColor: palette.surfaceAlt,
     paddingHorizontal: 10,
     paddingVertical: 9,
   },
   statLabel: {
-    color: '#94A3B8',
+    color: palette.labelMuted,
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -489,7 +495,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   statValue: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 15,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
@@ -497,7 +503,7 @@ const styles = StyleSheet.create({
   topSetPill: {
     marginTop: 10,
     alignSelf: 'flex-start',
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     borderWidth: 1,
     borderColor: '#78350F',
     backgroundColor: '#2A1E10',
@@ -524,19 +530,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 11,
-    borderRadius: 12,
+    borderRadius: Radius.button,
     borderWidth: 1,
   },
   actionButtonPrimary: {
-    backgroundColor: '#2563EB',
-    borderColor: '#3B82F6',
+    backgroundColor: palette.accent,
+    borderColor: palette.accent,
   },
   actionButtonSecondary: {
-    backgroundColor: '#111827',
-    borderColor: '#334155',
+    backgroundColor: palette.surface,
+    borderColor: palette.inputStroke,
   },
   actionButtonTextPrimary: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -546,9 +552,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   emptyCard: {
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
-    borderColor: '#253041',
+    borderColor: palette.borderStrong,
     backgroundColor: CARD_BG,
     paddingHorizontal: 16,
     paddingVertical: 18,
@@ -556,43 +562,43 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emptyTitle: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 16,
     fontWeight: '800',
     marginBottom: 6,
   },
   emptyText: {
-    color: '#94A3B8',
+    color: palette.labelMuted,
     fontSize: 13,
     lineHeight: 19,
     textAlign: 'center',
   },
   exerciseCard: {
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
-    borderColor: '#253041',
+    borderColor: palette.borderStrong,
     backgroundColor: CARD_BG,
     paddingHorizontal: 12,
     paddingVertical: 12,
     marginBottom: 10,
   },
   exerciseName: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 17,
     fontWeight: '800',
     marginBottom: 3,
   },
   exerciseMeta: {
-    color: '#94A3B8',
+    color: palette.labelMuted,
     fontSize: 12,
     fontWeight: '600',
     marginBottom: 10,
   },
   tableHeaderRow: {
     borderRadius: 11,
-    backgroundColor: '#0D1624',
+    backgroundColor: palette.surfaceAlt,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: palette.inputStroke,
     marginBottom: 4,
   },
   tableRow: {
@@ -602,10 +608,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     columnGap: 6,
     borderBottomWidth: 1,
-    borderBottomColor: '#1F2937',
+    borderBottomColor: palette.inputFill,
   },
   headerCell: {
-    color: '#94A3B8',
+    color: palette.labelMuted,
     fontSize: 11,
     fontWeight: '700',
     textAlign: 'center',
@@ -613,7 +619,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.25,
   },
   valueCell: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 13,
     fontWeight: '700',
     textAlign: 'center',

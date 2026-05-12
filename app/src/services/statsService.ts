@@ -3,7 +3,7 @@ import { getAuthenticatedUserOrThrow } from '@/services/workoutService';
 import { EXERCISE_MUSCLE_LABELS, resolveExerciseMuscleKey } from '@/constants/exerciseCatalog';
 import type { Tables } from '@/types/database';
 
-export type ProgressMetric = 'duration' | 'volume' | 'reps';
+export type ProgressMetric = 'duration' | 'volume' | 'reps' | 'weight';
 
 export type StatsExerciseOption = {
   id: string;
@@ -18,6 +18,7 @@ export type ExerciseProgressPoint = {
   repsTotal: number;
   durationMinutes: number;
   estimated1RMMax: number;
+  maxWeight: number;
 };
 
 export type ExercisePersonalRecords = {
@@ -151,13 +152,6 @@ function getWeekStartKey(dateValue: Date): string {
   return utcDate.toISOString().slice(0, 10);
 }
 
-function getPreviousWeekStartKey(weekStartKey: string): string {
-  const weekStartDate = new Date(`${weekStartKey}T00:00:00.000Z`);
-  weekStartDate.setUTCDate(weekStartDate.getUTCDate() - 7);
-
-  return getWeekStartKey(weekStartDate);
-}
-
 async function getExerciseSetRowsForUser(exerciseId: string): Promise<RawSetWithWorkout[]> {
   const user = await getAuthenticatedUserOrThrow();
   const normalizedExerciseId = exerciseId.trim();
@@ -229,6 +223,7 @@ export async function getExerciseProgress(
       repsTotal: number;
       durationMinutes: number;
       estimated1RMMax: number;
+      maxWeight: number;
       timestamp: number;
       trackedWorkoutKeys: Set<string>;
     }
@@ -253,6 +248,7 @@ export async function getExerciseProgress(
       repsTotal: 0,
       durationMinutes: 0,
       estimated1RMMax: 0,
+      maxWeight: 0,
       timestamp,
       trackedWorkoutKeys: new Set<string>(),
     };
@@ -260,6 +256,7 @@ export async function getExerciseProgress(
     current.volumeTotal += volume;
     current.repsTotal += reps;
     current.estimated1RMMax = Math.max(current.estimated1RMMax, estimated1RM);
+    current.maxWeight = Math.max(current.maxWeight, weight);
 
     const workoutKey = `${workout.start_time}|${workout.end_time ?? ''}`;
 
@@ -279,11 +276,15 @@ export async function getExerciseProgress(
       const durationMinutes = Math.round(aggregate.durationMinutes);
       const estimated1RMMax = Number(aggregate.estimated1RMMax.toFixed(1));
 
+      const maxWeight = Number(aggregate.maxWeight.toFixed(1));
+
       const value = metric === 'duration'
         ? durationMinutes
         : metric === 'reps'
           ? repsTotal
-          : volumeTotal;
+          : metric === 'weight'
+            ? maxWeight
+            : volumeTotal;
 
       return {
         date,
@@ -293,6 +294,7 @@ export async function getExerciseProgress(
         repsTotal,
         durationMinutes,
         estimated1RMMax,
+        maxWeight,
       };
     });
 }
@@ -444,61 +446,116 @@ export async function getWeeklyVolumeByMuscle(localeTag?: string): Promise<Weekl
     });
 }
 
-export async function getCurrentWorkoutStreak(): Promise<number> {
+export type ExerciseWorkoutHistoryEntry = {
+  workoutId: string;
+  workoutName: string;
+  date: string;
+  sets: number;
+  bestWeight: number;
+  bestReps: number;
+};
+
+export async function getExerciseWorkoutHistory(exerciseId: string): Promise<ExerciseWorkoutHistoryEntry[]> {
   const user = await getAuthenticatedUserOrThrow();
+  const normalizedId = exerciseId.trim();
+
+  if (!normalizedId) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('workout_exercises')
+    .select('workout_id, workouts!inner(id, name, start_time, end_time, user_id), sets!sets_workout_exercise_id_fkey(weight, reps)')
+    .eq('exercise_id', normalizedId)
+    .eq('workouts.user_id', user.id)
+    .not('workouts.end_time', 'is', null)
+    .order('workouts(start_time)', { ascending: false });
+
+  if (error) {
+    throw new Error(`Unable to load exercise history: ${error.message}`);
+  }
+
+  type HistoryRow = {
+    workout_id: string;
+    workouts: { id: string; name: string; start_time: string; end_time: string | null; user_id: string }
+      | { id: string; name: string; start_time: string; end_time: string | null; user_id: string }[]
+      | null;
+    sets: { weight: number | null; reps: number | null }[] | null;
+  };
+
+  const rows = (data as HistoryRow[] | null) ?? [];
+  const entriesByWorkout = new Map<string, ExerciseWorkoutHistoryEntry>();
+
+  for (const row of rows) {
+    const workout = Array.isArray(row.workouts) ? row.workouts[0] : row.workouts;
+    if (!workout?.id || !workout.start_time || !workout.end_time) continue;
+
+    const existing = entriesByWorkout.get(workout.id);
+    const setsList = row.sets ?? [];
+
+    let bestWeight = existing?.bestWeight ?? 0;
+    let bestReps = existing?.bestReps ?? 0;
+    let setsCount = existing?.sets ?? 0;
+
+    for (const s of setsList) {
+      setsCount += 1;
+      const w = toNonNegativeNumber(s.weight);
+      const r = toNonNegativeNumber(s.reps);
+      if (w > bestWeight) bestWeight = w;
+      if (r > bestReps) bestReps = r;
+    }
+
+    entriesByWorkout.set(workout.id, {
+      workoutId: workout.id,
+      workoutName: workout.name,
+      date: workout.start_time.slice(0, 10),
+      sets: setsCount,
+      bestWeight: Number(bestWeight.toFixed(1)),
+      bestReps,
+    });
+  }
+
+  return [...entriesByWorkout.values()];
+}
+
+export async function getWeeklyTrainingHours(localeTag?: string): Promise<{ weekLabel: string; hours: number; workouts: number }[]> {
+  const user = await getAuthenticatedUserOrThrow();
+  const weeksBack = 12;
+  const sinceIso = new Date(Date.now() - weeksBack * 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const { data, error } = await supabase
     .from('workouts')
-    .select('start_time, end_time, user_id')
+    .select('start_time, end_time')
     .eq('user_id', user.id)
     .not('end_time', 'is', null)
-    .order('start_time', { ascending: false });
+    .gte('start_time', sinceIso)
+    .order('start_time', { ascending: true });
 
   if (error) {
-    throw new Error(`Unable to load workout streak: ${error.message}`);
+    throw new Error(`Unable to load weekly training hours: ${error.message}`);
   }
 
   const rows = (data as WorkoutRef[] | null) ?? [];
-
-  if (rows.length === 0) {
-    return 0;
-  }
-
-  const weekKeys = new Set<string>();
+  const weekMap = new Map<string, { hours: number; workouts: number }>();
 
   for (const row of rows) {
-    if (!row.start_time) {
-      continue;
-    }
-
-    const workoutDate = new Date(row.start_time);
-
-    if (!Number.isFinite(workoutDate.getTime())) {
-      continue;
-    }
-
-    weekKeys.add(getWeekStartKey(workoutDate));
+    if (!row.start_time || !row.end_time) continue;
+    const d = new Date(row.start_time);
+    if (!Number.isFinite(d.getTime())) continue;
+    const weekKey = getWeekStartKey(d);
+    const minutes = getWorkoutDurationMinutes(row.start_time, row.end_time);
+    const cur = weekMap.get(weekKey) ?? { hours: 0, workouts: 0 };
+    cur.hours += minutes / 60;
+    cur.workouts += 1;
+    weekMap.set(weekKey, cur);
   }
 
-  if (weekKeys.size === 0) {
-    return 0;
-  }
-
-  const now = new Date();
-  const currentWeekKey = getWeekStartKey(now);
-  const previousWeekKey = getPreviousWeekStartKey(currentWeekKey);
-
-  if (!weekKeys.has(currentWeekKey) && !weekKeys.has(previousWeekKey)) {
-    return 0;
-  }
-
-  let streak = 0;
-  let cursorWeekKey = weekKeys.has(currentWeekKey) ? currentWeekKey : previousWeekKey;
-
-  while (weekKeys.has(cursorWeekKey)) {
-    streak += 1;
-    cursorWeekKey = getPreviousWeekStartKey(cursorWeekKey);
-  }
-
-  return streak;
+  return [...weekMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([weekKey, val]) => ({
+      weekLabel: formatProgressLabel(weekKey, localeTag),
+      hours: Number(val.hours.toFixed(1)),
+      workouts: val.workouts,
+    }));
 }
+

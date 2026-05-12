@@ -3,11 +3,12 @@ import { router } from 'expo-router';
 import { ActivityIndicator, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
+import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import type { WorkoutFeedItem } from '@/services/workoutService';
 import { formatRelativeTime } from '@/utils/dateUtils';
 
 const palette = Colors.dark;
-const CARD_BG = '#0A0A0A';
+const CARD_BG = palette.surface;
 
 type WorkoutFeedCardProps = {
   workout: WorkoutFeedItem;
@@ -17,6 +18,7 @@ type WorkoutFeedCardProps = {
   isLikePending?: boolean;
   onToggleLike?: () => void;
   onOpenComments?: () => void;
+  onCopyWorkout?: () => void;
   disableInteractions?: boolean;
 };
 
@@ -69,6 +71,7 @@ export function WorkoutFeedCard({
   isLikePending,
   onToggleLike,
   onOpenComments,
+  onCopyWorkout,
   disableInteractions = false,
 }: WorkoutFeedCardProps) {
   const { t } = useTranslation();
@@ -86,7 +89,7 @@ export function WorkoutFeedCard({
 
   return (
     <View style={styles.card}>
-      <TouchableOpacity style={styles.mainTouchArea} activeOpacity={0.9} onPress={openWorkoutDetails}>
+      <TouchableOpacity style={styles.mainTouchArea} activeOpacity={ACTIVE_OPACITY} onPress={openWorkoutDetails}>
         <View style={styles.cardHeader}>
           <View style={styles.authorWrap}>
             {workout.profile?.avatar_url ? (
@@ -141,7 +144,7 @@ export function WorkoutFeedCard({
       <View style={styles.interactionRow}>
         <TouchableOpacity
           style={[styles.interactionButton, resolvedHasLiked && styles.likeButtonActive]}
-          activeOpacity={0.85}
+          activeOpacity={ACTIVE_OPACITY}
           onPress={onToggleLike}
           disabled={interactionsDisabled || resolvedIsLikePending}
         >
@@ -159,17 +162,27 @@ export function WorkoutFeedCard({
 
         <TouchableOpacity
           style={styles.interactionButtonStatic}
-          activeOpacity={0.85}
+          activeOpacity={ACTIVE_OPACITY}
           onPress={onOpenComments}
           disabled={!onOpenComments}
         >
           <Ionicons name="chatbubble-outline" size={17} color={palette.textMuted} />
           <Text style={styles.interactionText}>{resolvedCommentsCount}</Text>
         </TouchableOpacity>
+
+        {onCopyWorkout ? (
+          <TouchableOpacity
+            style={styles.interactionButtonStatic}
+            activeOpacity={ACTIVE_OPACITY}
+            onPress={onCopyWorkout}
+          >
+            <Ionicons name="copy-outline" size={17} color={palette.textMuted} />
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {('latest_comment' in workout && (workout as any).latest_comment) ? (
-        <TouchableOpacity style={styles.latestCommentWrap} activeOpacity={0.85} onPress={onOpenComments}>
+        <TouchableOpacity style={styles.latestCommentWrap} activeOpacity={ACTIVE_OPACITY} onPress={onOpenComments}>
           <Text style={styles.latestCommentAuthor}>{(workout as any).latest_comment.author}</Text>
           <Text style={styles.latestCommentContent} numberOfLines={1}>{(workout as any).latest_comment.content}</Text>
         </TouchableOpacity>
@@ -181,9 +194,9 @@ export function WorkoutFeedCard({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: CARD_BG,
-    borderRadius: 8,
+    borderRadius: Radius.card,
     borderWidth: 1,
-    borderColor: '#1C1C1E',
+    borderColor: palette.border,
     paddingHorizontal: 8,
     paddingVertical: 8,
     marginBottom: 6,
@@ -216,12 +229,12 @@ const styles = StyleSheet.create({
     marginRight: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0A0A0A',
+    backgroundColor: palette.bgPrimary,
     borderWidth: 1,
-    borderColor: '#1C1C1E',
+    borderColor: palette.border,
   },
   avatarFallbackText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -245,18 +258,18 @@ const styles = StyleSheet.create({
     columnGap: 3,
     borderRadius: 0,
     borderWidth: 1,
-    borderColor: '#1C1C1E',
-    backgroundColor: '#0A0A0A',
+    borderColor: palette.border,
+    backgroundColor: palette.bgPrimary,
     paddingHorizontal: 5,
     paddingVertical: 2,
   },
   durationText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 10,
     fontWeight: '700',
   },
   workoutName: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 16,
     fontWeight: '700',
     marginBottom: 2,
@@ -271,9 +284,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 0,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: palette.bgPrimary,
     borderWidth: 1,
-    borderColor: '#1C1C1E',
+    borderColor: palette.border,
     paddingHorizontal: 4,
     paddingVertical: 3,
     marginBottom: 4,
@@ -283,7 +296,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   metricValue: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 12,
     fontWeight: '600',
     marginBottom: 1,
@@ -298,7 +311,7 @@ const styles = StyleSheet.create({
   metricDivider: {
     width: 1,
     height: 18,
-    backgroundColor: '#1C1C1E',
+    backgroundColor: palette.border,
     marginHorizontal: 4,
   },
   exerciseGroupsWrap: {
@@ -312,7 +325,7 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
   exerciseGroupName: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 16,
     fontWeight: 'bold',
     marginBottom: 2,
@@ -322,7 +335,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: '#1C1C1E',
+    borderBottomColor: palette.border,
     minHeight: 24,
   },
   setHeaderText: {
@@ -354,28 +367,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: '#1C1C1E',
+    borderBottomColor: palette.border,
     paddingVertical: 0,
   },
   setCellNumber: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 13,
     fontWeight: '600',
   },
   setCellWeight: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 14,
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
   },
   setCellReps: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 14,
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
   },
   setCellRir: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 13,
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
@@ -383,8 +396,8 @@ const styles = StyleSheet.create({
   noSetsWrap: {
     borderRadius: 0,
     borderWidth: 1,
-    borderColor: '#1C1C1E',
-    backgroundColor: '#0A0A0A',
+    borderColor: palette.border,
+    backgroundColor: palette.bgPrimary,
     minHeight: 28,
     alignItems: 'center',
     justifyContent: 'center',
@@ -400,7 +413,7 @@ const styles = StyleSheet.create({
   interactionRow: {
     marginTop: 5,
     borderTopWidth: 1,
-    borderTopColor: '#1C1C1E',
+    borderTopColor: palette.border,
     paddingTop: 4,
     flexDirection: 'row',
     alignItems: 'center',
@@ -409,9 +422,9 @@ const styles = StyleSheet.create({
   interactionButton: {
     minHeight: 26,
     borderRadius: 0,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: palette.bgPrimary,
     borderWidth: 1,
-    borderColor: '#1C1C1E',
+    borderColor: palette.border,
     paddingHorizontal: 8,
     flexDirection: 'row',
     alignItems: 'center',
@@ -421,9 +434,9 @@ const styles = StyleSheet.create({
   interactionButtonStatic: {
     minHeight: 26,
     borderRadius: 0,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: palette.bgPrimary,
     borderWidth: 1,
-    borderColor: '#1C1C1E',
+    borderColor: palette.border,
     paddingHorizontal: 8,
     flexDirection: 'row',
     alignItems: 'center',
@@ -455,7 +468,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#1C1C1E',
+    borderTopColor: palette.border,
     flexDirection: 'row',
     alignItems: 'center',
     columnGap: 6,

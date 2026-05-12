@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
-import { Spacing } from '@/constants/Styles';
+import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
 import { addWeight, parseBodyWeightInput } from '@/services/measurementService';
 import { updateProfile } from '@/services/profileService';
@@ -147,7 +147,7 @@ export default function OnboardingScreen() {
                 <Ionicons 
                   name={feedback.type === 'error' ? 'alert-circle' : 'checkmark-circle'} 
                   size={16} 
-                  color={feedback.type === 'error' ? '#EF4444' : '#10B981'} 
+                  color={feedback.type === 'error' ? palette.error : palette.success} 
                 />
                 <Text style={styles.feedbackText}>{feedback.message}</Text>
               </View>
@@ -179,7 +179,7 @@ export default function OnboardingScreen() {
 
             <TouchableOpacity style={styles.primaryButton} onPress={() => void handleComplete()} disabled={loading}>
               {loading ? (
-                <ActivityIndicator color="#FFFFFF" />
+                <ActivityIndicator color={palette.textPrimary} />
               ) : (
                 <Text style={styles.primaryButtonText}>{t('auth.onboarding.completeSetup')}</Text>
               )}
@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
     rowGap: Spacing.xs,
   },
   title: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 30,
     lineHeight: 34,
     fontWeight: '900',
@@ -228,8 +228,8 @@ const styles = StyleSheet.create({
   formCard: {
     backgroundColor: 'rgba(17, 17, 17, 0.64)',
     borderWidth: 1,
-    borderColor: '#1C1C1E',
-    borderRadius: 12,
+    borderColor: palette.border,
+    borderRadius: Radius.button,
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.lg,
     paddingBottom: Spacing.xl,
@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
   inputLine: {
     minHeight: 46,
     borderBottomWidth: 1,
-    borderBottomColor: '#27272A',
+    borderBottomColor: palette.border,
     backgroundColor: 'rgba(17, 17, 17, 0.55)',
     paddingHorizontal: Spacing.sm,
     flexDirection: 'row',
@@ -255,7 +255,7 @@ const styles = StyleSheet.create({
   },
   inputField: {
     flex: 1,
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 15,
     fontWeight: '600',
     paddingVertical: Spacing.md,
@@ -263,13 +263,13 @@ const styles = StyleSheet.create({
   primaryButton: {
     marginTop: Spacing.lg,
     backgroundColor: palette.accent,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     minHeight: 54,
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 16,
     fontWeight: '900',
     letterSpacing: 0.4,
@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    borderRadius: 8,
+    borderRadius: Radius.sm,
     borderWidth: 1,
     columnGap: 8,
     marginBottom: 4,
@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
     borderColor: '#10B98130',
   },
   feedbackText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 13,
     fontWeight: '600',
     flex: 1,

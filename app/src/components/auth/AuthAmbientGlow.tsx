@@ -13,7 +13,11 @@ type AuthAmbientGlowProps = {
   children: ReactNode;
 };
 
-const ROOT_SCREEN_BG = '#000000';
+import { Colors } from '@/constants/Colors';
+import { Radius } from '@/constants/Styles';
+
+const palette = Colors.dark;
+const ROOT_SCREEN_BG = palette.bgPrimary;
 
 export function AuthAmbientGlow({ children }: AuthAmbientGlowProps) {
   const orbOneScale = useSharedValue(1);
@@ -76,8 +80,8 @@ const styles = StyleSheet.create({
   },
   orbBase: {
     position: 'absolute',
-    borderRadius: 999,
-    backgroundColor: '#3B82F6',
+    borderRadius: Radius.pill,
+    backgroundColor: palette.accent,
   },
   orbOne: {
     width: 340,

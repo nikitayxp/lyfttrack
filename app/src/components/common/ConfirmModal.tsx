@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Colors } from '@/constants/Colors';
+import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 
 const palette = Colors.dark;
 
@@ -52,21 +53,21 @@ export function ConfirmModal({
           iconColor: palette.accent,
           iconBg: 'rgba(59,130,246,0.14)',
           confirmBg: palette.accent,
-          confirmText: '#fff',
+          confirmText: palette.textPrimary,
         };
       case 'warning':
         return {
-          iconColor: '#FBBF24',
+          iconColor: palette.warning,
           iconBg: 'rgba(251,191,36,0.14)',
-          confirmBg: '#F59E0B',
+          confirmBg: palette.warning,
           confirmText: '#0F172A',
         };
       default:
         return {
           iconColor: '#FCA5A5',
           iconBg: 'rgba(248,113,113,0.14)',
-          confirmBg: '#DC2626',
-          confirmText: '#fff',
+          confirmBg: palette.error,
+          confirmText: palette.textPrimary,
         };
     }
   }, [tone]);
@@ -89,20 +90,20 @@ export function ConfirmModal({
           <View style={styles.actions}>
             <TouchableOpacity
               style={[styles.button, styles.cancelButton, busy && styles.buttonDisabled]}
-              activeOpacity={0.85}
-              onPress={onCancel}
-              disabled={busy}
-            >
-              <Text style={styles.cancelText}>{cancelLabel}</Text>
-            </TouchableOpacity>
+            activeOpacity={ACTIVE_OPACITY}
+            onPress={onCancel}
+            disabled={busy}
+          >
+            <Text style={styles.cancelText}>{cancelLabel}</Text>
+          </TouchableOpacity>
 
-            <TouchableOpacity
+          <TouchableOpacity
               style={[
                 styles.button,
                 { backgroundColor: toneStyles.confirmBg },
                 busy && styles.buttonDisabled,
               ]}
-              activeOpacity={0.85}
+              activeOpacity={ACTIVE_OPACITY}
               onPress={onConfirm}
               disabled={busy}
             >
@@ -133,7 +134,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 420,
     backgroundColor: palette.surface,
-    borderRadius: 20,
+    borderRadius: Radius.sheet,
     paddingHorizontal: 22,
     paddingTop: 22,
     paddingBottom: 18,
@@ -170,7 +171,7 @@ const styles = StyleSheet.create({
   button: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: Radius.button,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { BarChart } from 'react-native-gifted-charts';
 import {
   ActivityIndicator,
   Alert,
   Animated,
+  Image,
   Modal,
   Platform,
   Pressable,
@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/theme';
+import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import {
   EXERCISE_EQUIPMENT_OPTIONS,
   EXERCISE_EQUIPMENT_TRANSLATION_KEY,
@@ -39,12 +40,12 @@ import {
   getExercisesByIds,
   getExercisesCatalog,
   getLastExerciseRestTimes,
+  getRecentExerciseIds,
   getRoutineById,
   getWorkoutDetails,
 } from '@/services/workoutService';
 import { finishWorkout } from '@/services/sessionRepository';
 import { getTemplateById } from '@/services/templateService';
-import { getExerciseProgress, type ExerciseProgressPoint } from '@/services/statsService';
 import {
   WorkoutSaveValidationError,
   type FinishWorkoutResult,
@@ -71,15 +72,14 @@ import {
   toSafeNumber,
 } from '@/utils/inputValidation';
 import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/exerciseLocalization';
+import { getExerciseImageUrl } from '@/utils/exerciseImage';
 
 const palette = Colors.dark;
 const DESKTOP_WEB_MIN_WIDTH = 768;
-const LIVE_CHART_COLOR = '#3B82F6';
 const ROOT_SCREEN_BG = palette.bgPrimary;
-const LIVE_CHART_DEFAULT_WINDOW = 12;
-const LIVE_STATS_MODAL_ENABLED = false;
-const MUSCLE_FILTER_CHIP_KEYS: readonly ExerciseLibraryMuscleFilter[] = [
+const MUSCLE_FILTER_CHIP_KEYS: readonly (ExerciseLibraryMuscleFilter | 'recent')[] = [
   'all',
+  'recent',
   ...EXERCISE_MUSCLE_OPTIONS,
 ];
 const EQUIPMENT_FILTER_CHIP_KEYS: readonly ExerciseLibraryEquipmentFilter[] = [
@@ -148,36 +148,6 @@ function buildCatalogCacheKey(filters: ExerciseCatalogFilters): string {
   const equipment = filters.equipment ?? 'all';
 
   return `${muscle}::${equipment}`;
-}
-
-function formatCompactAxisNumber(value: number | string): string {
-  const parsedValue =
-    typeof value === 'number'
-      ? value
-      : Number(String(value).replace(/[^0-9+-.]/g, ''));
-  const safeValue = Number.isFinite(parsedValue) ? Math.max(0, parsedValue) : 0;
-
-  if (safeValue >= 1_000_000) {
-    const scaled = safeValue / 1_000_000;
-    const rounded = scaled >= 100 ? scaled.toFixed(0) : scaled.toFixed(1);
-    return `${rounded.replace(/\.0$/, '')}m`;
-  }
-
-  if (safeValue >= 1_000) {
-    const scaled = safeValue / 1_000;
-    const rounded = scaled >= 100 ? scaled.toFixed(0) : scaled.toFixed(1);
-    return `${rounded.replace(/\.0$/, '')}k`;
-  }
-
-  if (safeValue >= 100) {
-    return `${Math.round(safeValue)}`;
-  }
-
-  return Number.isInteger(safeValue) ? `${safeValue}` : safeValue.toFixed(1);
-}
-
-function formatVolumeAxisLabel(value: number | string): string {
-  return `${formatCompactAxisNumber(value)} kg`;
 }
 
 export default function ActiveWorkout() {
@@ -252,10 +222,14 @@ export default function ActiveWorkout() {
     toggleExerciseStopwatch,
     removeExercise,
     moveExercise,
+    updateSetType,
+    isTimerPaused,
+    toggleTimerPause,
   } = useWorkoutContext();
 
   const [exercisePickerVisible, setExercisePickerVisible] = useState(false);
-  const [selectedMuscleFilter, setSelectedMuscleFilter] = useState<ExerciseLibraryMuscleFilter>('all');
+  const [selectedMuscleFilter, setSelectedMuscleFilter] = useState<ExerciseLibraryMuscleFilter | 'recent'>('all');
+  const [recentExerciseIds, setRecentExerciseIds] = useState<string[]>([]);
   const [selectedEquipmentFilter, setSelectedEquipmentFilter] = useState<ExerciseLibraryEquipmentFilter>('all');
   const [createExerciseVisible, setCreateExerciseVisible] = useState(false);
   const [catalogExercises, setCatalogExercises] = useState<ExerciseRow[]>([]);
@@ -281,82 +255,9 @@ export default function ActiveWorkout() {
   const [finishSummary, setFinishSummary] = useState<FinishWorkoutResult | null>(null);
   const [summaryExerciseNames, setSummaryExerciseNames] = useState<string[]>([]);
   const [isSummaryVisible, setIsSummaryVisible] = useState(false);
-  const [isExerciseStatsVisible, setIsExerciseStatsVisible] = useState(false);
-  const [statsExercise, setStatsExercise] = useState<ExerciseRow | null>(null);
-  const [statsExerciseProgress, setStatsExerciseProgress] = useState<ExerciseProgressPoint[]>([]);
-  const [showAllLivePoints, setShowAllLivePoints] = useState(false);
-  const [selectedLivePointIndex, setSelectedLivePointIndex] = useState<number | null>(null);
-  const [isLoadingExerciseStats, setIsLoadingExerciseStats] = useState(false);
-  const [exerciseStatsError, setExerciseStatsError] = useState<string | null>(null);
   const exerciseCatalogByFilterRef = useRef<Map<string, ExerciseRow[]>>(new Map());
-  const exerciseProgressCacheRef = useRef<Map<string, ExerciseProgressPoint[]>>(new Map());
-  const requestedProgressExerciseIdsRef = useRef<Set<string>>(new Set());
-  const statsRequestVersionRef = useRef(0);
 
   const timerLabel = useMemo(() => formatElapsedTime(elapsedSeconds), [elapsedSeconds]);
-  const visibleLivePoints = useMemo(
-    () =>
-      showAllLivePoints
-        ? statsExerciseProgress
-        : statsExerciseProgress.slice(-LIVE_CHART_DEFAULT_WINDOW),
-    [showAllLivePoints, statsExerciseProgress]
-  );
-
-  const liveStatsChartData = useMemo(
-    () =>
-      visibleLivePoints.map((point, index) => ({
-        value: Math.max(0, Number(point.value.toFixed(1))),
-        label: point.label,
-        frontColor: index === selectedLivePointIndex ? '#60A5FA' : LIVE_CHART_COLOR,
-        onPress: () => setSelectedLivePointIndex(index),
-      })),
-    [selectedLivePointIndex, visibleLivePoints]
-  );
-
-  const liveChartWidth = useMemo(() => {
-    const availableWidth = Math.max(260, windowWidth - 40);
-    if (!isDesktopWeb) {
-      return availableWidth;
-    }
-
-    return Math.min(availableWidth, 332);
-  }, [isDesktopWeb, windowWidth]);
-  const liveChartMaxValue = useMemo(() => {
-    if (liveStatsChartData.length === 0) {
-      return 20;
-    }
-
-    const highestValue = liveStatsChartData.reduce((currentMax, point) => Math.max(currentMax, point.value), 0);
-
-    if (highestValue <= 0) {
-      return 20;
-    }
-
-    return Math.max(20, Math.ceil(highestValue * 1.25));
-  }, [liveStatsChartData]);
-
-  useEffect(() => {
-    if (liveStatsChartData.length === 0) {
-      setSelectedLivePointIndex(null);
-      return;
-    }
-
-    setSelectedLivePointIndex((currentValue) => {
-      if (currentValue === null || currentValue >= liveStatsChartData.length) {
-        return liveStatsChartData.length - 1;
-      }
-
-      return currentValue;
-    });
-  }, [liveStatsChartData.length]);
-
-  const selectedLivePoint = useMemo(() => {
-    if (selectedLivePointIndex === null) {
-      return null;
-    }
-
-    return visibleLivePoints[selectedLivePointIndex] ?? null;
-  }, [selectedLivePointIndex, visibleLivePoints]);
 
   const loadExercises = useCallback(async (filters: ExerciseCatalogFilters, forceRefresh = false) => {
     const cacheKey = buildCatalogCacheKey(filters);
@@ -401,6 +302,23 @@ export default function ActiveWorkout() {
 
   useEffect(() => {
     if (!exercisePickerVisible) {
+      return;
+    }
+
+    if (selectedMuscleFilter === 'recent') {
+      void (async () => {
+        setIsLoadingExercises(true);
+        try {
+          const [catalog, ids] = await Promise.all([getExercisesCatalog(), getRecentExerciseIds()]);
+          setRecentExerciseIds(ids);
+          const idSet = new Set(ids);
+          setCatalogExercises(catalog.filter((e) => idSet.has(e.id)));
+        } catch (err) {
+          setExerciseLoadError(getErrorMessage(err));
+        } finally {
+          setIsLoadingExercises(false);
+        }
+      })();
       return;
     }
 
@@ -549,106 +467,12 @@ export default function ActiveWorkout() {
     }
   }, [preloadFromPastWorkout, preloadRoutine, preloadTemplate, routeCopyFromWorkoutId, routeRoutineId, routeTemplateId]);
 
-  const loadExerciseProgressForModal = useCallback(async (exercise: ExerciseRow, forceRefresh = false) => {
-    const normalizedExerciseId = exercise.id.trim();
-
-    if (!normalizedExerciseId) {
-      setStatsExerciseProgress([]);
-      setExerciseStatsError('Invalid exercise id.');
-      setIsLoadingExerciseStats(false);
-      return;
-    }
-
-    const cachedPoints = !forceRefresh ? exerciseProgressCacheRef.current.get(normalizedExerciseId) : null;
-
-    if (cachedPoints) {
-      setStatsExerciseProgress(cachedPoints);
-      setExerciseStatsError(null);
-      setIsLoadingExerciseStats(false);
-      return;
-    }
-
-    const requestVersion = statsRequestVersionRef.current + 1;
-    statsRequestVersionRef.current = requestVersion;
-
-    setIsLoadingExerciseStats(true);
-    setExerciseStatsError(null);
-
-    try {
-      const progressPoints = await getExerciseProgress(normalizedExerciseId, 'volume', language);
-      exerciseProgressCacheRef.current.set(normalizedExerciseId, progressPoints);
-
-      if (statsRequestVersionRef.current !== requestVersion) {
-        return;
-      }
-
-      setStatsExerciseProgress(progressPoints);
-    } catch (error) {
-      if (statsRequestVersionRef.current !== requestVersion) {
-        return;
-      }
-
-      setStatsExerciseProgress([]);
-      setExerciseStatsError(getErrorMessage(error));
-    } finally {
-      if (statsRequestVersionRef.current === requestVersion) {
-        setIsLoadingExerciseStats(false);
-      }
-    }
-  }, [language]);
-
   const openExerciseStatsModal = useCallback(
     (exercise: ExerciseRow) => {
-      if (!LIVE_STATS_MODAL_ENABLED) {
-        router.push('/(tabs)/stats' as any);
-        return;
-      }
-
-      setStatsExercise(exercise);
-      setIsExerciseStatsVisible(true);
-      void loadExerciseProgressForModal(exercise);
+      router.push(`/exercise/${exercise.id}` as any);
     },
-    [loadExerciseProgressForModal]
+    []
   );
-
-  const closeExerciseStatsModal = useCallback(() => {
-    setIsExerciseStatsVisible(false);
-    setShowAllLivePoints(false);
-    setSelectedLivePointIndex(null);
-    setExerciseStatsError(null);
-    setIsLoadingExerciseStats(false);
-  }, []);
-
-  useEffect(() => {
-    if (!LIVE_STATS_MODAL_ENABLED) {
-      return;
-    }
-
-    const exerciseIdsToPrefetch = [...new Set(activeExercises.map((entry) => entry.exercise.id.trim()).filter(Boolean))].filter(
-      (exerciseId) =>
-        !requestedProgressExerciseIdsRef.current.has(exerciseId) &&
-        !exerciseProgressCacheRef.current.has(exerciseId)
-    );
-
-    if (exerciseIdsToPrefetch.length === 0) {
-      return;
-    }
-
-    for (const exerciseId of exerciseIdsToPrefetch) {
-      requestedProgressExerciseIdsRef.current.add(exerciseId);
-    }
-
-    void Promise.all(
-      exerciseIdsToPrefetch.map(async (exerciseId) => {
-        try {
-          const progressPoints = await getExerciseProgress(exerciseId, 'volume', language);
-          exerciseProgressCacheRef.current.set(exerciseId, progressPoints);
-        } catch {
-          // Silent prefetch failure; modal load will show actionable errors.
-        }
-      })
-    );
-  }, [activeExercises, language]);
 
   async function handleCreateExercise() {
     const normalizedName = sanitizeText(newExerciseName, {
@@ -686,7 +510,8 @@ export default function ActiveWorkout() {
       setCreateExerciseVisible(false);
 
       exerciseCatalogByFilterRef.current.clear();
-      await loadExercises({ muscle: selectedMuscleFilter, equipment: selectedEquipmentFilter }, true);
+      const muscleParam = selectedMuscleFilter === 'recent' ? 'all' : selectedMuscleFilter;
+      await loadExercises({ muscle: muscleParam, equipment: selectedEquipmentFilter }, true);
       addExercise(createdExercise);
       setExercisePickerVisible(false);
     } catch (error) {
@@ -873,9 +698,12 @@ export default function ActiveWorkout() {
     return equipmentKey ? t(equipmentKey) : exercise.equipment ?? t('exercise.equipment.bodyweight');
   };
 
-  const getMuscleFilterLabel = (filterKey: ExerciseLibraryMuscleFilter): string => {
+  const getMuscleFilterLabel = (filterKey: ExerciseLibraryMuscleFilter | 'recent'): string => {
     if (filterKey === 'all') {
       return language === 'pt' ? 'Todos' : 'All';
+    }
+    if (filterKey === 'recent') {
+      return language === 'pt' ? 'Recentes' : 'Recent';
     }
 
     return t(EXERCISE_MUSCLE_TRANSLATION_KEY[filterKey]);
@@ -919,15 +747,18 @@ export default function ActiveWorkout() {
 
       <View style={[styles.container, isWeb && styles.containerWeb]}>
         <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.iconButton} onPress={() => void handleCancelWorkout()} activeOpacity={0.85}>
-            <Ionicons name="close" size={26} color={palette.textPrimary} />
+          <TouchableOpacity style={styles.iconButton} onPress={() => router.back()} activeOpacity={ACTIVE_OPACITY}>
+            <Ionicons name="chevron-down" size={26} color={palette.textPrimary} />
           </TouchableOpacity>
 
-          <Text style={styles.timerText}>{timerLabel}</Text>
+          <TouchableOpacity onPress={toggleTimerPause} activeOpacity={ACTIVE_OPACITY} style={styles.timerWrap}>
+            <Ionicons name={isTimerPaused ? 'play' : 'pause'} size={16} color={isTimerPaused ? '#FBBF24' : palette.textSecondary} />
+            <Text style={[styles.timerText, isTimerPaused && styles.timerTextPaused]}>{timerLabel}</Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.finishButton, isSubmitting && styles.finishButtonDisabled]}
-            activeOpacity={0.85}
+            activeOpacity={ACTIVE_OPACITY}
             onPress={openFinishModal}
             disabled={isSubmitting}
           >
@@ -957,7 +788,7 @@ export default function ActiveWorkout() {
               {(routeTemplateId || routeRoutineId) ? (
                 <TouchableOpacity
                   style={styles.statusRetryButton}
-                  activeOpacity={0.88}
+                  activeOpacity={ACTIVE_OPACITY}
                   onPress={() => {
                     if (routeTemplateId) {
                       void preloadTemplate(routeTemplateId, true);
@@ -996,37 +827,28 @@ export default function ActiveWorkout() {
                   />
 
                   <View style={styles.exerciseHeaderRow}>
-                    <View style={styles.exerciseHeaderTextWrap}>
+                    <TouchableOpacity
+                      style={styles.exerciseHeaderTextWrap}
+                      activeOpacity={ACTIVE_OPACITY}
+                      onPress={() => router.push(`/exercise/${exercise.exercise.id}` as any)}
+                    >
+                      {(() => {
+                        const imgUrl = getExerciseImageUrl(exercise.exercise);
+                        return imgUrl ? (
+                          <Image source={{ uri: imgUrl }} style={styles.exerciseThumbnail} />
+                        ) : (
+                          <View style={styles.exerciseThumbnailPlaceholder}>
+                            <Ionicons name="barbell-outline" size={16} color="#475569" />
+                          </View>
+                        );
+                      })()}
                       <Text style={styles.exerciseTitle}>{getLocalizedExerciseName(exercise.exercise, language)}</Text>
-                    </View>
+                    </TouchableOpacity>
 
                     <View style={styles.exerciseHeaderActions}>
                       <TouchableOpacity
-                        style={[
-                          styles.exerciseStopwatchButton,
-                          isExerciseStopwatchActive && styles.exerciseStopwatchButtonActive,
-                        ]}
-                        activeOpacity={0.86}
-                        onPress={() => toggleExerciseStopwatch(exercise.id)}
-                      >
-                        <Ionicons
-                          name={isExerciseStopwatchActive ? 'stopwatch' : 'stopwatch-outline'}
-                          size={15}
-                          color={isExerciseStopwatchActive ? '#7DD3FC' : palette.textSecondary}
-                        />
-                        <Text
-                          style={[
-                            styles.exerciseStopwatchText,
-                            isExerciseStopwatchActive && styles.exerciseStopwatchTextActive,
-                          ]}
-                        >
-                          {formatElapsedTime(exerciseStopwatchSeconds)}
-                        </Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
                         style={[styles.exerciseActionButton, exerciseIndex === 0 && styles.exerciseActionButtonDisabled]}
-                        activeOpacity={0.86}
+                        activeOpacity={ACTIVE_OPACITY}
                         onPress={() => moveExercise(exerciseIndex, 'up')}
                         disabled={exerciseIndex === 0}
                       >
@@ -1038,7 +860,7 @@ export default function ActiveWorkout() {
                           styles.exerciseActionButton,
                           exerciseIndex === activeExercises.length - 1 && styles.exerciseActionButtonDisabled,
                         ]}
-                        activeOpacity={0.86}
+                        activeOpacity={ACTIVE_OPACITY}
                         onPress={() => moveExercise(exerciseIndex, 'down')}
                         disabled={exerciseIndex === activeExercises.length - 1}
                       >
@@ -1047,15 +869,31 @@ export default function ActiveWorkout() {
 
                       <TouchableOpacity
                         style={[styles.exerciseActionButton, styles.exerciseActionButtonDanger]}
-                        activeOpacity={0.86}
-                        onPress={() => removeExercise(exerciseIndex)}
+                        activeOpacity={ACTIVE_OPACITY}
+                        onPress={() => {
+                          const name = getLocalizedExerciseName(exercise.exercise, language);
+                          if (Platform.OS === 'web') {
+                            if (globalThis.confirm(t('exercise.removeConfirmDescription', { name }))) {
+                              removeExercise(exerciseIndex);
+                            }
+                          } else {
+                            Alert.alert(
+                              t('exercise.removeConfirmTitle'),
+                              t('exercise.removeConfirmDescription', { name }),
+                              [
+                                { text: t('exercise.removeConfirmKeep'), style: 'cancel' },
+                                { text: t('exercise.removeConfirmRemove'), style: 'destructive', onPress: () => removeExercise(exerciseIndex) },
+                              ]
+                            );
+                          }
+                        }}
                       >
                         <Ionicons name="trash-outline" size={16} color="#FCA5A5" />
                       </TouchableOpacity>
 
                       <TouchableOpacity
                         style={styles.exerciseStatsButton}
-                        activeOpacity={0.86}
+                        activeOpacity={ACTIVE_OPACITY}
                         onPress={() => openExerciseStatsModal(exercise.exercise)}
                       >
                         <Ionicons name="stats-chart-outline" size={18} color={palette.textSecondary} />
@@ -1084,12 +922,21 @@ export default function ActiveWorkout() {
                   </View>
 
                   {exercise.sets.map((setItem) => {
-                    const nextSide: 'both' | 'left' | 'right' =
-                      setItem.side === 'both' ? 'left' : setItem.side === 'left' ? 'right' : 'both';
-                    const sideLabel =
-                      setItem.side === 'left' ? 'L' : setItem.side === 'right' ? 'R' : 'LR';
-                    const sideColor =
-                      setItem.side === 'both' ? palette.textMuted : palette.accent;
+                    const setTypeLabel =
+                      setItem.set_type === 'warmup' ? 'W'
+                      : setItem.set_type === 'drop' ? 'D'
+                      : setItem.set_type === 'failure' ? 'F'
+                      : '';
+                    const setTypeColor =
+                      setItem.set_type === 'warmup' ? '#FBBF24'
+                      : setItem.set_type === 'drop' ? '#F97316'
+                      : setItem.set_type === 'failure' ? '#EF4444'
+                      : palette.textMuted;
+                    const nextSetType: 'normal' | 'warmup' | 'drop' | 'failure' =
+                      setItem.set_type === 'normal' ? 'warmup'
+                      : setItem.set_type === 'warmup' ? 'drop'
+                      : setItem.set_type === 'drop' ? 'failure'
+                      : 'normal';
 
                     return (
                       <View key={setItem.id} style={styles.setRowWrapper}>
@@ -1097,10 +944,12 @@ export default function ActiveWorkout() {
                           <TouchableOpacity
                             style={styles.cellSet}
                             activeOpacity={0.7}
-                            onPress={() => updateSetSide(exercise.id, setItem.id, nextSide)}
+                            onPress={() => updateSetType(exercise.id, setItem.id, nextSetType)}
                           >
                             <Text style={styles.setNumberText}>{setItem.set_number ?? '-'}</Text>
-                            <Text style={[styles.setSideBadge, { color: sideColor }]}>{sideLabel}</Text>
+                            {setTypeLabel ? (
+                              <Text style={[styles.setSideBadge, { color: setTypeColor }]}>{setTypeLabel}</Text>
+                            ) : null}
                           </TouchableOpacity>
 
                           <TextInput
@@ -1133,7 +982,7 @@ export default function ActiveWorkout() {
                           <View style={styles.cellCheck}>
                             <TouchableOpacity
                               style={[styles.checkButton, setItem.completed && styles.checkButtonCompleted]}
-                              activeOpacity={0.85}
+                              activeOpacity={ACTIVE_OPACITY}
                               onPress={() => handleSetCompletionToggle(exercise.id, setItem.id)}
                             >
                               <Ionicons
@@ -1148,7 +997,7 @@ export default function ActiveWorkout() {
                     );
                   })}
 
-                  <TouchableOpacity style={styles.addSetButton} activeOpacity={0.88} onPress={() => addSet(exercise.id)}>
+                  <TouchableOpacity style={styles.addSetButton} activeOpacity={ACTIVE_OPACITY} onPress={() => addSet(exercise.id)}>
                     <Ionicons name="add" size={16} color={palette.textSecondary} />
                     <Text style={styles.addSetText}>{t('workout.addSetAction')}</Text>
                   </TouchableOpacity>
@@ -1161,7 +1010,7 @@ export default function ActiveWorkout() {
         <View style={[styles.bottomActionArea, { bottom: insets.bottom + 12 }]}> 
           <TouchableOpacity
             style={styles.addExerciseTrigger}
-            activeOpacity={0.9}
+            activeOpacity={ACTIVE_OPACITY}
             onPress={() => setExercisePickerVisible(true)}
           >
             <View style={styles.addExerciseTriggerIconWrap}>
@@ -1208,7 +1057,7 @@ export default function ActiveWorkout() {
               <TouchableOpacity
                 style={styles.modalCancelButton}
                 onPress={() => setIsFinishModalVisible(false)}
-                activeOpacity={0.88}
+                activeOpacity={ACTIVE_OPACITY}
               >
                 <Text style={styles.modalCancelButtonText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
@@ -1216,7 +1065,7 @@ export default function ActiveWorkout() {
               <TouchableOpacity
                 style={[styles.modalCreateButton, isSubmitting && styles.modalCreateButtonDisabled]}
                 onPress={() => void handleFinishWorkout()}
-                activeOpacity={0.88}
+                activeOpacity={ACTIVE_OPACITY}
                 disabled={isSubmitting}
               >
                 {isSubmitting ? (
@@ -1245,7 +1094,7 @@ export default function ActiveWorkout() {
                 <Text style={styles.modalTitle}>{t('workout.selectExercise')}</Text>
                 <TouchableOpacity
                   style={styles.modalCustomButton}
-                  activeOpacity={0.88}
+                  activeOpacity={ACTIVE_OPACITY}
                   onPress={() => {
                     setExercisePickerVisible(false);
                     setCreateExerciseVisible(true);
@@ -1271,7 +1120,7 @@ export default function ActiveWorkout() {
                     <TouchableOpacity
                       key={filterKey}
                       style={[styles.filterChip, isSelected && styles.filterChipSelected]}
-                      activeOpacity={0.88}
+                      activeOpacity={ACTIVE_OPACITY}
                       onPress={() => setSelectedMuscleFilter(filterKey)}
                     >
                       <Text style={[styles.filterChipText, isSelected && styles.filterChipTextSelected]}>
@@ -1296,7 +1145,7 @@ export default function ActiveWorkout() {
                     <TouchableOpacity
                       key={filterKey}
                       style={[styles.filterChip, isSelected && styles.filterChipSelected]}
-                      activeOpacity={0.88}
+                      activeOpacity={ACTIVE_OPACITY}
                       onPress={() => setSelectedEquipmentFilter(filterKey)}
                     >
                       <Text style={[styles.filterChipText, isSelected && styles.filterChipTextSelected]}>
@@ -1323,10 +1172,11 @@ export default function ActiveWorkout() {
                     <Text style={styles.modalStatusText}>{exerciseLoadError}</Text>
                     <TouchableOpacity
                       style={styles.modalRetryButton}
-                      onPress={() =>
-                        void loadExercises({ muscle: selectedMuscleFilter, equipment: selectedEquipmentFilter }, true)
-                      }
-                      activeOpacity={0.88}
+                      onPress={() => {
+                        const mp = selectedMuscleFilter === 'recent' ? 'all' : selectedMuscleFilter;
+                        void loadExercises({ muscle: mp, equipment: selectedEquipmentFilter }, true);
+                      }}
+                      activeOpacity={ACTIVE_OPACITY}
                     >
                       <Text style={styles.modalRetryButtonText}>{t('common.retry')}</Text>
                     </TouchableOpacity>
@@ -1337,25 +1187,35 @@ export default function ActiveWorkout() {
                     <Text style={styles.modalStatusText}>{t('workout.createExercisesHint')}</Text>
                   </View>
                 ) : (
-                  catalogExercises.map((exercise) => (
-                    <TouchableOpacity
-                      key={exercise.id}
-                      style={styles.modalExerciseRow}
-                      activeOpacity={0.88}
-                      onPress={() => {
-                        addExercise(exercise);
-                        setExercisePickerVisible(false);
-                      }}
-                    >
-                      <View style={styles.modalExerciseTextWrap}>
-                        <Text style={styles.modalExerciseName}>{getLocalizedExerciseName(exercise, language)}</Text>
-                        <Text style={styles.modalExerciseMeta}>
-                          {getExerciseMuscleLabel(exercise)} - {getExerciseEquipmentLabel(exercise)}
-                        </Text>
-                      </View>
-                      <Ionicons name="add-circle-outline" size={22} color={palette.accent} />
-                    </TouchableOpacity>
-                  ))
+                  catalogExercises.map((exercise) => {
+                    const pickerImgUrl = getExerciseImageUrl(exercise);
+                    return (
+                      <TouchableOpacity
+                        key={exercise.id}
+                        style={styles.modalExerciseRow}
+                        activeOpacity={ACTIVE_OPACITY}
+                        onPress={() => {
+                          addExercise(exercise);
+                          setExercisePickerVisible(false);
+                        }}
+                      >
+                        {pickerImgUrl ? (
+                          <Image source={{ uri: pickerImgUrl }} style={styles.exerciseThumbnail} />
+                        ) : (
+                          <View style={styles.exerciseThumbnailPlaceholder}>
+                            <Ionicons name="barbell-outline" size={16} color="#475569" />
+                          </View>
+                        )}
+                        <View style={styles.modalExerciseTextWrap}>
+                          <Text style={styles.modalExerciseName}>{getLocalizedExerciseName(exercise, language)}</Text>
+                          <Text style={styles.modalExerciseMeta}>
+                            {getExerciseMuscleLabel(exercise)} - {getExerciseEquipmentLabel(exercise)}
+                          </Text>
+                        </View>
+                        <Ionicons name="add-circle-outline" size={22} color={palette.accent} />
+                      </TouchableOpacity>
+                    );
+                  })
                 )}
               </ScrollView>
             </SafeAreaView>
@@ -1395,7 +1255,7 @@ export default function ActiveWorkout() {
                   <TouchableOpacity
                     key={muscleKey}
                     style={[styles.modalOptionChip, isSelected && styles.modalOptionChipSelected]}
-                    activeOpacity={0.88}
+                    activeOpacity={ACTIVE_OPACITY}
                     onPress={() => setNewExerciseMuscleGroup(muscleKey)}
                   >
                     <Text style={[styles.modalOptionChipText, isSelected && styles.modalOptionChipTextSelected]}>
@@ -1415,7 +1275,7 @@ export default function ActiveWorkout() {
                   <TouchableOpacity
                     key={equipmentKey}
                     style={[styles.modalOptionChip, isSelected && styles.modalOptionChipSelected]}
-                    activeOpacity={0.88}
+                    activeOpacity={ACTIVE_OPACITY}
                     onPress={() => setNewExerciseEquipment(equipmentKey)}
                   >
                     <Text style={[styles.modalOptionChipText, isSelected && styles.modalOptionChipTextSelected]}>
@@ -1430,7 +1290,7 @@ export default function ActiveWorkout() {
               <TouchableOpacity
                 style={styles.modalCancelButton}
                 onPress={() => setCreateExerciseVisible(false)}
-                activeOpacity={0.88}
+                activeOpacity={ACTIVE_OPACITY}
               >
                 <Text style={styles.modalCancelButtonText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
@@ -1438,7 +1298,7 @@ export default function ActiveWorkout() {
               <TouchableOpacity
                 style={[styles.modalCreateButton, isCreatingExercise && styles.modalCreateButtonDisabled]}
                 onPress={() => void handleCreateExercise()}
-                activeOpacity={0.88}
+                activeOpacity={ACTIVE_OPACITY}
                 disabled={isCreatingExercise}
               >
                 {isCreatingExercise ? (
@@ -1451,127 +1311,6 @@ export default function ActiveWorkout() {
           </View>
         </View>
       </Modal>
-
-      {LIVE_STATS_MODAL_ENABLED ? (
-        <Modal
-          visible={isExerciseStatsVisible}
-          transparent
-          animationType={modalAnimationType}
-          onRequestClose={closeExerciseStatsModal}
-        >
-          <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
-            <Pressable style={styles.modalDismissArea} onPress={closeExerciseStatsModal} />
-
-            <View style={[styles.liveStatsSheet, isWeb && styles.liveStatsSheetWeb]}>
-              <View style={styles.modalHandle} />
-
-              <View style={styles.liveStatsHeaderRow}>
-                <View style={styles.liveStatsHeaderTextWrap}>
-                  <Text style={styles.liveStatsTitle}>
-                    {statsExercise ? getLocalizedExerciseName(statsExercise, language) : t('workout.liveStatsTitle')}
-                  </Text>
-                  <Text style={styles.liveStatsSubtitle}>
-                    {t('workout.liveStatsSubtitle', {
-                      name: statsExercise ? getLocalizedExerciseName(statsExercise, language) : '',
-                    })}
-                  </Text>
-                </View>
-
-                <TouchableOpacity style={styles.liveStatsCloseButton} activeOpacity={0.88} onPress={closeExerciseStatsModal}>
-                  <Ionicons name="close" size={18} color={palette.textPrimary} />
-                </TouchableOpacity>
-              </View>
-
-              {isLoadingExerciseStats ? (
-                <View style={styles.liveStatsStatusWrap}>
-                  <ActivityIndicator size="small" color={LIVE_CHART_COLOR} />
-                  <Text style={styles.liveStatsStatusText}>{t('workout.liveStatsLoading')}</Text>
-                </View>
-              ) : exerciseStatsError ? (
-                <View style={styles.liveStatsStatusWrap}>
-                  <Text style={styles.liveStatsStatusTitle}>{t('workout.liveStatsUnableTitle')}</Text>
-                  <Text style={styles.liveStatsStatusText}>{exerciseStatsError}</Text>
-                  <TouchableOpacity
-                    style={styles.liveStatsRetryButton}
-                    activeOpacity={0.88}
-                    onPress={() => {
-                      if (statsExercise) {
-                        void loadExerciseProgressForModal(statsExercise, true);
-                      }
-                    }}
-                  >
-                    <Text style={styles.liveStatsRetryText}>{t('workout.liveStatsRetry')}</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : liveStatsChartData.length === 0 ? (
-                <View style={styles.liveStatsStatusWrap}>
-                  <Text style={styles.liveStatsStatusText}>{t('workout.liveStatsEmpty')}</Text>
-                </View>
-              ) : (
-                <View style={styles.liveChartCard}>
-                  {statsExerciseProgress.length > LIVE_CHART_DEFAULT_WINDOW ? (
-                    <TouchableOpacity
-                      style={styles.liveStatsWindowToggle}
-                      activeOpacity={0.88}
-                      onPress={() => setShowAllLivePoints((currentValue) => !currentValue)}
-                    >
-                      <Text style={styles.liveStatsWindowToggleText}>
-                        {showAllLivePoints
-                          ? t('workout.liveStatsShowLast', { count: LIVE_CHART_DEFAULT_WINDOW })
-                          : t('workout.liveStatsShowAll', { count: statsExerciseProgress.length })}
-                      </Text>
-                    </TouchableOpacity>
-                  ) : null}
-
-                  <BarChart
-                    data={liveStatsChartData}
-                    width={liveChartWidth}
-                    height={220}
-                    maxValue={liveChartMaxValue}
-                    barWidth={Math.max(14, Math.min(26, Math.floor(liveChartWidth / Math.max(liveStatsChartData.length, 1)) - 8))}
-                    spacing={10}
-                    initialSpacing={10}
-                    endSpacing={6}
-                    roundedTop
-                    frontColor={LIVE_CHART_COLOR}
-                    gradientColor="#60A5FA"
-                    showGradient
-                    yAxisColor="#253041"
-                    xAxisColor="#253041"
-                    yAxisLabelWidth={62}
-                    xAxisLabelsHeight={56}
-                    xAxisLabelsVerticalShift={26}
-                    labelsExtraHeight={32}
-                    overflowTop={24}
-                    yAxisTextStyle={styles.liveStatsAxisText}
-                    xAxisLabelTextStyle={styles.liveStatsXAxisLabel}
-                    formatYLabel={(label) => formatVolumeAxisLabel(label)}
-                    rulesColor="#1F2937"
-                    noOfSections={4}
-                    isAnimated
-                    adjustToWidth
-                  />
-
-                  {selectedLivePoint ? (
-                    <View style={styles.liveStatsSelectedPointCard}>
-                      <Text style={styles.liveStatsSelectedPointLabel}>{selectedLivePoint.label}</Text>
-                      <Text style={styles.liveStatsSelectedPointValue}>{formatVolumeAxisLabel(selectedLivePoint.value)}</Text>
-                      <Text style={styles.liveStatsSelectedPointMeta}>{t('workout.liveStatsTapHint')}</Text>
-                    </View>
-                  ) : null}
-
-                  <Text style={styles.liveStatsFootnote}>
-                    {t('workout.liveStatsFootnote', {
-                      visible: liveStatsChartData.length,
-                      total: statsExerciseProgress.length,
-                    })}
-                  </Text>
-                </View>
-              )}
-            </View>
-          </View>
-        </Modal>
-      ) : null}
 
       <WorkoutSummary
         visible={isSummaryVisible && finishSummary !== null}
@@ -1626,6 +1365,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: palette.surface,
   },
+  timerWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 6,
+  },
   timerText: {
     color: palette.textPrimary,
     fontSize: 24,
@@ -1633,11 +1377,14 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     fontVariant: ['tabular-nums'],
   },
+  timerTextPaused: {
+    color: '#FBBF24',
+  },
   finishButton: {
     backgroundColor: palette.accent,
     minHeight: 38,
     minWidth: 78,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 14,
@@ -1660,7 +1407,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   emptyWorkoutCard: {
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: palette.surface,
@@ -1682,7 +1429,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   statusCard: {
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: palette.surface,
@@ -1708,19 +1455,19 @@ const styles = StyleSheet.create({
   statusRetryButton: {
     marginTop: 14,
     backgroundColor: palette.accent,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     paddingVertical: 10,
     paddingHorizontal: 18,
   },
   statusRetryButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 14,
     fontWeight: '700',
   },
   exerciseCard: {
     position: 'relative',
     overflow: 'hidden',
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: palette.surface,
@@ -1746,6 +1493,26 @@ const styles = StyleSheet.create({
   exerciseHeaderTextWrap: {
     flex: 1,
     minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  exerciseThumbnail: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    marginRight: 10,
+    backgroundColor: palette.surfaceAlt,
+  },
+  exerciseThumbnailPlaceholder: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    marginRight: 10,
+    backgroundColor: palette.surfaceAlt,
+    borderWidth: 1,
+    borderColor: palette.rowSeparator,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   exerciseHeaderActions: {
     flexDirection: 'row',
@@ -1758,7 +1525,7 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 9,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: palette.inputStroke,
     backgroundColor: '#0E2238',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1784,8 +1551,8 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 9,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#1F2937',
+    borderColor: palette.inputStroke,
+    backgroundColor: palette.inputFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1804,10 +1571,10 @@ const styles = StyleSheet.create({
   exerciseStatsButton: {
     width: 34,
     height: 34,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#1F2937',
+    borderColor: palette.inputStroke,
+    backgroundColor: palette.inputFill,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -1819,7 +1586,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     columnGap: 6,
     borderBottomWidth: 1,
-    borderBottomColor: '#1F2937',
+    borderBottomColor: palette.rowSeparator,
     minWidth: 0,
     overflow: 'hidden',
   },
@@ -1827,10 +1594,10 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   tableHeaderRow: {
-    backgroundColor: '#0D1624',
-    borderRadius: 12,
+    backgroundColor: palette.surfaceAlt,
+    borderRadius: Radius.button,
     borderBottomWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: palette.rowSeparator,
     marginBottom: 4,
   },
   headerLabel: {
@@ -1842,7 +1609,7 @@ const styles = StyleSheet.create({
   },
   completedRow: {
     backgroundColor: '#13273F',
-    borderRadius: 10,
+    borderRadius: Radius.md,
   },
   cellSet: {
     width: 38,
@@ -1866,7 +1633,7 @@ const styles = StyleSheet.create({
   },
   exerciseNotesInput: {
     minHeight: 40,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     paddingHorizontal: 12,
     paddingVertical: 8,
     marginBottom: 10,
@@ -1896,10 +1663,10 @@ const styles = StyleSheet.create({
   numericInput: {
     flex: 1,
     height: 36,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#1F2937',
+    borderColor: palette.inputStroke,
+    backgroundColor: palette.inputFill,
     color: palette.textPrimary,
     textAlign: 'center',
     fontSize: 14,
@@ -1910,8 +1677,8 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   numericInputCompleted: {
-    borderColor: '#3B82F6',
-    backgroundColor: '#1D3550',
+    borderColor: palette.accent,
+    backgroundColor: palette.completedFill,
   },
   cellCheck: {
     width: 36,
@@ -1927,18 +1694,18 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#1F2937',
+    borderColor: palette.inputStroke,
+    backgroundColor: palette.inputFill,
   },
   checkButtonCompleted: {
-    backgroundColor: '#17345C',
+    backgroundColor: palette.completedFill,
   },
   addSetButton: {
     marginTop: 12,
     minHeight: 40,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.inputBorder,
     backgroundColor: palette.surfaceAlt,
@@ -1959,10 +1726,10 @@ const styles = StyleSheet.create({
   },
   addExerciseTrigger: {
     minHeight: 62,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#0D1624',
+    borderColor: palette.inputStroke,
+    backgroundColor: palette.surfaceAlt,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
@@ -1971,10 +1738,10 @@ const styles = StyleSheet.create({
   addExerciseTriggerIconWrap: {
     width: 34,
     height: 34,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: '#1E3A5F',
-    backgroundColor: '#0A1A2D',
+    borderColor: palette.accentSoft,
+    backgroundColor: palette.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2014,8 +1781,8 @@ const styles = StyleSheet.create({
   modalSheet: {
     maxHeight: '76%',
     backgroundColor: palette.surface,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderTopLeftRadius: Radius.card,
+    borderTopRightRadius: Radius.card,
     borderTopWidth: 1,
     borderColor: palette.border,
     paddingTop: 10,
@@ -2037,164 +1804,6 @@ const styles = StyleSheet.create({
     marginRight: 'auto',
     backgroundColor: palette.surface,
   },
-  liveStatsSheet: {
-    maxHeight: '72%',
-    backgroundColor: palette.surface,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    borderTopWidth: 1,
-    borderColor: palette.border,
-    paddingTop: 10,
-    paddingHorizontal: 16,
-    paddingBottom: 18,
-  },
-  liveStatsSheetWeb: {
-    width: 393,
-    maxWidth: '100%',
-    marginLeft: 'auto',
-    marginRight: 'auto',
-    backgroundColor: palette.surface,
-  },
-  liveStatsHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  liveStatsHeaderTextWrap: {
-    flex: 1,
-    paddingRight: 10,
-  },
-  liveStatsTitle: {
-    color: palette.textPrimary,
-    fontSize: 20,
-    fontWeight: '800',
-    marginBottom: 3,
-  },
-  liveStatsSubtitle: {
-    color: palette.textSecondary,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  liveStatsCloseButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#1F2937',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  liveStatsStatusWrap: {
-    borderWidth: 1,
-    borderColor: '#1F2937',
-    borderRadius: 14,
-    backgroundColor: '#0D1624',
-    minHeight: 190,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 14,
-  },
-  liveStatsStatusTitle: {
-    color: '#F87171',
-    fontSize: 15,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 6,
-  },
-  liveStatsStatusText: {
-    color: palette.textSecondary,
-    fontSize: 13,
-    lineHeight: 19,
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  liveStatsRetryButton: {
-    marginTop: 12,
-    backgroundColor: palette.accent,
-    borderRadius: 12,
-    minHeight: 38,
-    paddingHorizontal: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  liveStatsRetryText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  liveChartCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#1F2937',
-    backgroundColor: '#0D1624',
-    minHeight: 318,
-    paddingTop: 12,
-    paddingBottom: 8,
-    paddingHorizontal: 8,
-  },
-  liveStatsWindowToggle: {
-    alignSelf: 'flex-end',
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#122744',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    marginBottom: 8,
-  },
-  liveStatsWindowToggleText: {
-    color: '#DCE8FF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  liveStatsAxisText: {
-    color: '#8FA2BA',
-    fontSize: 11,
-  },
-  liveStatsXAxisLabel: {
-    color: '#8FA2BA',
-    fontSize: 11,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  liveStatsSelectedPointCard: {
-    marginTop: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#233247',
-    backgroundColor: '#0B1320',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  liveStatsSelectedPointLabel: {
-    color: '#94A3B8',
-    fontSize: 11,
-    fontWeight: '700',
-    marginBottom: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 0.35,
-  },
-  liveStatsSelectedPointValue: {
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: '900',
-    marginBottom: 2,
-    fontVariant: ['tabular-nums'],
-  },
-  liveStatsSelectedPointMeta: {
-    color: '#8FA2BA',
-    fontSize: 11,
-    lineHeight: 16,
-  },
-  liveStatsFootnote: {
-    color: '#94A3B8',
-    fontSize: 11,
-    textAlign: 'center',
-    marginTop: 6,
-    marginBottom: 2,
-  },
   modalHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -2205,7 +1814,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     width: 40,
     height: 5,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     backgroundColor: palette.borderStrong,
     marginBottom: 12,
   },
@@ -2217,7 +1826,7 @@ const styles = StyleSheet.create({
   },
   modalCustomButton: {
     minHeight: 34,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     backgroundColor: palette.accent,
     paddingHorizontal: 12,
     alignItems: 'center',
@@ -2239,7 +1848,7 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
   },
   filterChipsSectionLabel: {
-    color: '#94A3B8',
+    color: palette.labelMuted,
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -2259,30 +1868,30 @@ const styles = StyleSheet.create({
   },
   filterChip: {
     minHeight: 34,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#1F2937',
+    borderColor: palette.chipBorder,
+    backgroundColor: palette.inputFill,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
   },
   filterChipSelected: {
-    borderColor: '#3B82F6',
-    backgroundColor: '#122744',
+    borderColor: palette.accent,
+    backgroundColor: palette.chipFillSelected,
   },
   filterChipText: {
-    color: '#CBD5E1',
+    color: palette.chipText,
     fontSize: 12,
     fontWeight: '700',
   },
   filterChipTextSelected: {
-    color: '#EAF1FF',
+    color: palette.chipTextSelected,
   },
   modalStatusContainer: {
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 14,
+    borderRadius: Radius.card,
     backgroundColor: palette.surfaceAlt,
     paddingHorizontal: 16,
     paddingVertical: 18,
@@ -2305,7 +1914,7 @@ const styles = StyleSheet.create({
   modalRetryButton: {
     marginTop: 12,
     backgroundColor: palette.accent,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     paddingVertical: 10,
     paddingHorizontal: 18,
   },
@@ -2317,7 +1926,7 @@ const styles = StyleSheet.create({
   modalExerciseRow: {
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     backgroundColor: palette.surfaceAlt,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -2346,7 +1955,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.inputBorder,
     color: palette.textPrimary,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     paddingHorizontal: 14,
     paddingVertical: 12,
     marginBottom: 10,
@@ -2354,7 +1963,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   modalOptionLabel: {
-    color: '#94A3B8',
+    color: palette.labelMuted,
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -2371,25 +1980,25 @@ const styles = StyleSheet.create({
   },
   modalOptionChip: {
     minHeight: 34,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#1F2937',
+    borderColor: palette.chipBorder,
+    backgroundColor: palette.inputFill,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
   },
   modalOptionChipSelected: {
-    borderColor: '#3B82F6',
-    backgroundColor: '#122744',
+    borderColor: palette.accent,
+    backgroundColor: palette.chipFillSelected,
   },
   modalOptionChipText: {
-    color: '#CBD5E1',
+    color: palette.chipText,
     fontSize: 12,
     fontWeight: '700',
   },
   modalOptionChipTextSelected: {
-    color: '#EAF1FF',
+    color: palette.chipTextSelected,
   },
   modalButtonRow: {
     flexDirection: 'row',
@@ -2400,7 +2009,7 @@ const styles = StyleSheet.create({
   modalCancelButton: {
     flex: 1,
     minHeight: 46,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.inputBorder,
     alignItems: 'center',
@@ -2415,7 +2024,7 @@ const styles = StyleSheet.create({
   modalCreateButton: {
     flex: 1,
     minHeight: 46,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: palette.accent,

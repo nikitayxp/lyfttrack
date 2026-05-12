@@ -102,7 +102,7 @@ export default function VerifyScreen() {
 
           <TouchableOpacity style={styles.primaryButton} onPress={() => void handleVerify()} disabled={loading}>
             {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
+              <ActivityIndicator color={palette.textPrimary} />
             ) : (
               <Text style={styles.primaryButtonText}>{t('auth.verify.confirmAction')}</Text>
             )}
@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   primaryButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 18,
     fontWeight: '900',
     letterSpacing: 0.3,

@@ -3,7 +3,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors } from '@/constants/theme';
+import { Colors } from '@/constants/Colors';
+import { Radius } from '@/constants/Styles';
 import { useWorkoutContext } from '@/context/WorkoutContext';
 
 const palette = Colors.dark;
@@ -74,7 +75,7 @@ export function MinimizedWorkoutBar({ visible }: MinimizedWorkoutBarProps) {
         onPress={() => router.push('/workout/active' as any)}
       >
         <View style={styles.leadingIconWrap}>
-          <Ionicons name="barbell-outline" size={18} color="#E2E8F0" />
+          <Ionicons name="barbell-outline" size={18} color={palette.textSecondary} />
         </View>
 
         <View style={styles.textWrap}>
@@ -84,7 +85,7 @@ export function MinimizedWorkoutBar({ visible }: MinimizedWorkoutBarProps) {
 
         <View style={styles.rightWrap}>
           <Text style={styles.duration}>{durationLabel}</Text>
-          <Ionicons name="chevron-up" size={16} color="#E2E8F0" />
+          <Ionicons name="chevron-up" size={16} color={palette.textSecondary} />
         </View>
       </Pressable>
     </View>
@@ -100,10 +101,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 12,
     right: 12,
-    borderRadius: 18,
+    borderRadius: Radius.card,
     borderWidth: 1,
-    borderColor: '#234A7A',
-    backgroundColor: '#0B1A2D',
+    borderColor: palette.accentSoft,
+    backgroundColor: palette.surfaceAlt,
     minHeight: 64,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -119,12 +120,12 @@ const styles = StyleSheet.create({
   leadingIconWrap: {
     width: 38,
     height: 38,
-    borderRadius: 12,
+    borderRadius: Radius.button,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#12345A',
+    backgroundColor: palette.accentSoft,
     borderWidth: 1,
-    borderColor: '#345E93',
+    borderColor: palette.borderStrong,
     flexShrink: 0,
   },
   textWrap: {
@@ -138,7 +139,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   subtitle: {
-    color: '#A8BED8',
+    color: palette.textSecondary,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -149,7 +150,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   duration: {
-    color: '#DBEAFE',
+    color: palette.textPrimary,
     fontSize: 13,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],

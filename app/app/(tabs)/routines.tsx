@@ -16,7 +16,8 @@ import {
 } from 'react-native';
 import Animated, { FadeInDown, FadeInUp, LinearTransition } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
-import { Colors } from '@/constants/theme';
+import { Colors } from '@/constants/Colors';
+import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import { getEquipmentTranslationKey, getExerciseMuscleTranslationKey } from '@/constants/exerciseCatalog';
 import {
   createRoutine,
@@ -188,10 +189,10 @@ export default function RoutinesScreen() {
       >
         <TouchableOpacity
           style={styles.newRoutineButton}
-          activeOpacity={0.9}
+          activeOpacity={ACTIVE_OPACITY}
           onPress={() => setIsCreateModalVisible(true)}
         >
-          <Ionicons name="add" size={24} color="#FFFFFF" />
+          <Ionicons name="add" size={24} color={palette.textPrimary} />
           <Text style={styles.newRoutineButtonText}>{t('routines.newRoutine')}</Text>
         </TouchableOpacity>
       </Animated.View>
@@ -206,7 +207,7 @@ export default function RoutinesScreen() {
         <View style={styles.statusContainer}>
           <Text style={styles.statusTitle}>{t('routines.unableToLoadRoutines')}</Text>
           <Text style={styles.statusText}>{routinesError}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={() => void loadRoutines()} activeOpacity={0.88}>
+          <TouchableOpacity style={styles.retryButton} onPress={() => void loadRoutines()} activeOpacity={ACTIVE_OPACITY}>
             <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
@@ -232,10 +233,10 @@ export default function RoutinesScreen() {
 
               <TouchableOpacity
                 style={styles.startRoutineButton}
-                activeOpacity={0.88}
+                activeOpacity={ACTIVE_OPACITY}
                 onPress={() => handleStartRoutine(routine.id)}
               >
-                <Ionicons name="play" size={15} color="#FFFFFF" />
+                <Ionicons name="play" size={15} color={palette.textPrimary} />
                 <Text style={styles.startRoutineButtonText}>{t('routines.startRoutine')}</Text>
               </TouchableOpacity>
             </View>
@@ -291,7 +292,7 @@ export default function RoutinesScreen() {
                 <TouchableOpacity
                   style={styles.modalRetryButton}
                   onPress={() => void loadCatalogExercises()}
-                  activeOpacity={0.88}
+                  activeOpacity={ACTIVE_OPACITY}
                 >
                   <Text style={styles.modalRetryButtonText}>{t('common.retry')}</Text>
                 </TouchableOpacity>
@@ -315,7 +316,7 @@ export default function RoutinesScreen() {
                     >
                       <TouchableOpacity
                         style={[styles.modalExerciseRow, isSelected && styles.modalExerciseRowSelected]}
-                        activeOpacity={0.88}
+                        activeOpacity={ACTIVE_OPACITY}
                         onPress={() => toggleExerciseSelection(exercise.id)}
                       >
                         <View style={styles.modalExerciseTextWrap}>
@@ -343,7 +344,7 @@ export default function RoutinesScreen() {
               <TouchableOpacity
                 style={styles.modalCancelButton}
                 onPress={() => setIsCreateModalVisible(false)}
-                activeOpacity={0.88}
+                activeOpacity={ACTIVE_OPACITY}
               >
                 <Text style={styles.modalCancelButtonText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
@@ -351,7 +352,7 @@ export default function RoutinesScreen() {
               <TouchableOpacity
                 style={[styles.modalCreateButton, isCreatingRoutine && styles.modalCreateButtonDisabled]}
                 onPress={() => void handleCreateRoutine()}
-                activeOpacity={0.88}
+                activeOpacity={ACTIVE_OPACITY}
                 disabled={isCreatingRoutine}
               >
                 {isCreatingRoutine ? (
@@ -380,7 +381,7 @@ const styles = StyleSheet.create({
   },
   newRoutineButton: {
     minHeight: 74,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     backgroundColor: palette.accent,
     flexDirection: 'row',
     alignItems: 'center',
@@ -389,7 +390,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   newRoutineButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 20,
     fontWeight: '800',
   },
@@ -400,7 +401,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   statusContainer: {
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: palette.surface,
@@ -429,10 +430,10 @@ const styles = StyleSheet.create({
     backgroundColor: palette.accent,
     paddingVertical: 10,
     paddingHorizontal: 18,
-    borderRadius: 16,
+    borderRadius: Radius.card,
   },
   retryButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -440,7 +441,7 @@ const styles = StyleSheet.create({
     backgroundColor: palette.surface,
     borderColor: palette.border,
     borderWidth: 1,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginBottom: 10,
@@ -470,7 +471,7 @@ const styles = StyleSheet.create({
   startRoutineButton: {
     marginTop: 12,
     minHeight: 38,
-    borderRadius: 12,
+    borderRadius: Radius.button,
     backgroundColor: palette.accent,
     alignItems: 'center',
     justifyContent: 'center',
@@ -480,7 +481,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   startRoutineButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 13,
     fontWeight: '800',
   },
@@ -505,8 +506,8 @@ const styles = StyleSheet.create({
   modalSheet: {
     maxHeight: '82%',
     backgroundColor: palette.surface,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderTopLeftRadius: Radius.card,
+    borderTopRightRadius: Radius.card,
     borderTopWidth: 1,
     borderColor: palette.border,
     paddingTop: 10,
@@ -524,7 +525,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     width: 40,
     height: 5,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     backgroundColor: palette.borderStrong,
     marginBottom: 12,
   },
@@ -539,7 +540,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.inputBorder,
     color: palette.textPrimary,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     paddingHorizontal: 14,
     paddingVertical: 12,
     marginBottom: 10,
@@ -562,7 +563,7 @@ const styles = StyleSheet.create({
   modalStatusContainer: {
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 14,
+    borderRadius: Radius.card,
     backgroundColor: palette.surfaceAlt,
     paddingHorizontal: 16,
     paddingVertical: 18,
@@ -585,7 +586,7 @@ const styles = StyleSheet.create({
   modalRetryButton: {
     marginTop: 12,
     backgroundColor: palette.accent,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     paddingVertical: 10,
     paddingHorizontal: 18,
   },
@@ -597,7 +598,7 @@ const styles = StyleSheet.create({
   modalExerciseRow: {
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     backgroundColor: palette.surfaceAlt,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -648,7 +649,7 @@ const styles = StyleSheet.create({
   modalCancelButton: {
     flex: 1,
     minHeight: 46,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.inputBorder,
     alignItems: 'center',
@@ -663,7 +664,7 @@ const styles = StyleSheet.create({
   modalCreateButton: {
     flex: 1,
     minHeight: 46,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: palette.accent,

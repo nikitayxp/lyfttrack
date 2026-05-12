@@ -5,7 +5,7 @@ import * as Linking from 'expo-linking';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
-import { Spacing } from '@/constants/Styles';
+import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
 import { supabase } from '@/services/supabase';
 
@@ -118,7 +118,7 @@ export default function OAuthCallbackScreen() {
           <Text style={styles.subtitle}>{message}</Text>
 
           {isError ? (
-            <TouchableOpacity style={styles.primaryButton} activeOpacity={0.88} onPress={() => router.replace('/(auth)/sign-in' as any)}>
+            <TouchableOpacity style={styles.primaryButton} activeOpacity={ACTIVE_OPACITY} onPress={() => router.replace('/(auth)/sign-in' as any)}>
               <Text style={styles.primaryButtonText}>{t('auth.callback.backAction')}</Text>
             </TouchableOpacity>
           ) : null}
@@ -140,8 +140,8 @@ const styles = StyleSheet.create({
     maxWidth: 360,
     backgroundColor: 'rgba(17, 17, 17, 0.72)',
     borderWidth: 1,
-    borderColor: '#1C1C1E',
-    borderRadius: 14,
+    borderColor: palette.border,
+    borderRadius: Radius.card,
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.xl,
     rowGap: Spacing.md,
@@ -152,13 +152,13 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: 26,
     borderWidth: 1,
-    borderColor: '#2A2A2E',
+    borderColor: palette.border,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.03)',
   },
   title: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 24,
     lineHeight: 28,
     fontWeight: '900',
@@ -178,11 +178,11 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 10,
+    borderRadius: Radius.md,
     backgroundColor: palette.accent,
   },
   primaryButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 15,
     fontWeight: '900',
   },

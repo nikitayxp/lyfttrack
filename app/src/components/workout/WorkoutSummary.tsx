@@ -11,6 +11,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/Colors';
+import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 
 const palette = Colors.dark;
 
@@ -100,8 +101,8 @@ export function WorkoutSummary({
           </ScrollView>
 
           <View style={styles.ctaWrap}>
-            <TouchableOpacity style={styles.ctaButton} activeOpacity={0.9} onPress={onShareAndFinish}>
-              <Ionicons name="share-social-outline" size={16} color="#FFFFFF" />
+            <TouchableOpacity style={styles.ctaButton} activeOpacity={ACTIVE_OPACITY} onPress={onShareAndFinish}>
+              <Ionicons name="share-social-outline" size={16} color={palette.textPrimary} />
               <Text style={styles.ctaText}>{t('workout.summaryShareAction')}</Text>
             </TouchableOpacity>
           </View>
@@ -160,14 +161,14 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   heroTitle: {
-    color: '#F8FAFC',
+    color: palette.textPrimary,
     fontSize: 32,
     fontWeight: '900',
     letterSpacing: 0.3,
     marginBottom: 6,
   },
   heroSubtitle: {
-    color: '#CBD5F5',
+    color: palette.textSecondary,
     fontSize: 15,
     lineHeight: 22,
     fontWeight: '600',
@@ -180,44 +181,44 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     flex: 1,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.18)',
-    backgroundColor: 'rgba(30,41,59,0.55)',
+    borderColor: palette.border,
+    backgroundColor: palette.surface,
     paddingHorizontal: 12,
     paddingVertical: 14,
     minHeight: 94,
     justifyContent: 'space-between',
   },
   metricLabel: {
-    color: '#94A3B8',
+    color: palette.labelMuted,
     fontSize: 11,
     fontWeight: '800',
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
   metricValue: {
-    color: '#F8FAFC',
+    color: palette.textPrimary,
     fontSize: 22,
     fontWeight: '900',
     fontVariant: ['tabular-nums'],
   },
   exercisesCard: {
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.18)',
-    backgroundColor: 'rgba(30,41,59,0.55)',
+    borderColor: palette.border,
+    backgroundColor: palette.surface,
     paddingHorizontal: 14,
     paddingVertical: 14,
   },
   exercisesTitle: {
-    color: '#F8FAFC',
+    color: palette.textPrimary,
     fontSize: 17,
     fontWeight: '800',
     marginBottom: 10,
   },
   emptyText: {
-    color: '#94A3B8',
+    color: palette.labelMuted,
     fontSize: 13,
     lineHeight: 19,
   },
@@ -225,17 +226,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     columnGap: 10,
-    borderRadius: 12,
+    borderRadius: Radius.button,
     borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.12)',
-    backgroundColor: 'rgba(15,23,42,0.8)',
+    borderColor: palette.border,
+    backgroundColor: palette.surfaceAlt,
     paddingHorizontal: 12,
     paddingVertical: 11,
     marginBottom: 8,
   },
   exerciseName: {
     flex: 1,
-    color: '#E2E8F0',
+    color: palette.textSecondary,
     fontSize: 14.5,
     fontWeight: '700',
   },
@@ -249,7 +250,7 @@ const styles = StyleSheet.create({
   },
   ctaButton: {
     minHeight: 50,
-    borderRadius: 12,
+    borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.accent,
     alignItems: 'center',
@@ -259,7 +260,7 @@ const styles = StyleSheet.create({
     backgroundColor: palette.accent,
   },
   ctaText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: 0.2,

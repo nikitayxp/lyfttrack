@@ -10,6 +10,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Colors } from '@/constants/Colors';
+import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 
 const palette = Colors.dark;
 
@@ -52,7 +53,7 @@ export function EmptyState({
       <Text style={[styles.description, descriptionStyle]}>{description}</Text>
 
       {shouldRenderAction ? (
-        <TouchableOpacity style={[styles.actionButton, actionButtonStyle]} activeOpacity={0.88} onPress={onActionPress}>
+        <TouchableOpacity style={[styles.actionButton, actionButtonStyle]} activeOpacity={ACTIVE_OPACITY} onPress={onActionPress}>
           <Text style={[styles.actionLabel, actionLabelStyle]}>{actionLabel}</Text>
         </TouchableOpacity>
       ) : null}
@@ -62,10 +63,10 @@ export function EmptyState({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 6,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#111111',
+    backgroundColor: palette.surface,
     paddingHorizontal: 10,
     paddingVertical: 10,
     alignItems: 'center',
@@ -74,10 +75,10 @@ const styles = StyleSheet.create({
   iconWrap: {
     width: 34,
     height: 34,
-    borderRadius: 4,
+    borderRadius: Radius.xs,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#000000',
+    backgroundColor: palette.bgPrimary,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
@@ -98,14 +99,14 @@ const styles = StyleSheet.create({
   actionButton: {
     marginTop: 12,
     minHeight: 34,
-    borderRadius: 4,
+    borderRadius: Radius.xs,
     backgroundColor: palette.accent,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 14,
   },
   actionLabel: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 13,
     fontWeight: '800',
   },

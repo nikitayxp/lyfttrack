@@ -14,6 +14,7 @@ import {
 import Animated, { FadeInDown, FadeInUp, LinearTransition } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
+import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import {
   addComment,
   getCurrentCommentAuthorProfile,
@@ -28,8 +29,8 @@ import { FeedCommentsModal } from '@/components/feed/FeedCommentsModal';
 import { WorkoutFeedCard } from '@/components/feed/WorkoutFeedCard';
 
 const palette = Colors.dark;
-const SCREEN_BG = '#000000';
-const CARD_BG = '#111111';
+const SCREEN_BG = palette.bgPrimary;
+const CARD_BG = palette.surface;
 const FEED_PAGE_SIZE = 20;
 const feedCardLayoutTransition = LinearTransition.springify().damping(16).stiffness(180);
 
@@ -433,9 +434,9 @@ export default function FeedScreen() {
             </View>
           </View>
 
-          <TouchableOpacity style={styles.athletesHubActionButton} activeOpacity={0.88} onPress={openAthletesExplorer}>
+          <TouchableOpacity style={styles.athletesHubActionButton} activeOpacity={ACTIVE_OPACITY} onPress={openAthletesExplorer}>
             <Text style={styles.athletesHubActionText}>{t('feed.exploreAthletes')}</Text>
-            <Ionicons name="arrow-forward" size={15} color="#EAF1FF" />
+            <Ionicons name="arrow-forward" size={15} color={palette.chipTextSelected} />
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -585,10 +586,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   athletesHubCard: {
-    borderRadius: 14,
+    borderRadius: Radius.card,
     borderWidth: 1,
-    borderColor: '#223247',
-    backgroundColor: '#0B1422',
+    borderColor: palette.borderStrong,
+    backgroundColor: palette.surfaceAlt,
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
@@ -601,9 +602,9 @@ const styles = StyleSheet.create({
   athletesHubIconWrap: {
     width: 34,
     height: 34,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: '#1E3A5F',
+    borderColor: palette.accentSoft,
     backgroundColor: '#0A1A2D',
     alignItems: 'center',
     justifyContent: 'center',
@@ -613,23 +614,23 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   athletesHubTitle: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 14,
     fontWeight: '800',
     marginBottom: 2,
   },
   athletesHubDescription: {
-    color: '#94A3B8',
+    color: palette.labelMuted,
     fontSize: 12,
     fontWeight: '500',
     lineHeight: 17,
   },
   athletesHubActionButton: {
     minHeight: 38,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: '#3B82F6',
-    backgroundColor: '#153056',
+    borderColor: palette.accent,
+    backgroundColor: palette.accentSoft,
     paddingHorizontal: 12,
     alignItems: 'center',
     justifyContent: 'center',
@@ -637,7 +638,7 @@ const styles = StyleSheet.create({
     columnGap: 8,
   },
   athletesHubActionText: {
-    color: '#EAF1FF',
+    color: palette.chipTextSelected,
     fontSize: 12,
     fontWeight: '800',
     textTransform: 'uppercase',
@@ -645,7 +646,7 @@ const styles = StyleSheet.create({
   },
   statusCard: {
     backgroundColor: CARD_BG,
-    borderRadius: 12,
+    borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.border,
     paddingHorizontal: 14,

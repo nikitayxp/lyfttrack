@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
-import { Spacing } from '@/constants/Styles';
+import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
 import { startGoogleOAuth } from '@/services/authService';
 import { supabase } from '@/services/supabase';
@@ -161,7 +161,7 @@ export default function SignUpScreen() {
                 <Ionicons 
                   name={feedback.type === 'error' ? 'alert-circle' : feedback.type === 'success' ? 'checkmark-circle' : 'information-circle'} 
                   size={16} 
-                  color={feedback.type === 'error' ? '#EF4444' : feedback.type === 'success' ? '#10B981' : '#3B82F6'} 
+                  color={feedback.type === 'error' ? palette.error : feedback.type === 'success' ? palette.success : palette.accent} 
                 />
                 <Text style={styles.feedbackText}>{feedback.message}</Text>
               </View>
@@ -246,7 +246,7 @@ export default function SignUpScreen() {
             <TouchableOpacity
               style={styles.termsRow}
               onPress={() => setTermsAccepted((prev) => !prev)}
-              activeOpacity={0.7}
+              activeOpacity={ACTIVE_OPACITY}
               disabled={loading}
               accessibilityRole="checkbox"
               accessibilityState={{ checked: termsAccepted }}
@@ -270,7 +270,7 @@ export default function SignUpScreen() {
               disabled={loading || !termsAccepted}
             >
               {loading ? (
-                <ActivityIndicator color="#FFFFFF" />
+                <ActivityIndicator color={palette.textPrimary} />
               ) : (
                 <Text style={styles.primaryButtonText}>{t('auth.signUp.createAccountAction')}</Text>
               )}
@@ -283,7 +283,7 @@ export default function SignUpScreen() {
             </View>
 
             <TouchableOpacity style={styles.googleButton} onPress={handleGooglePress} disabled={loading}>
-              <AntDesign name="google" size={16} color="#FFFFFF" />
+              <AntDesign name="google" size={16} color={palette.textPrimary} />
               <Text style={styles.googleButtonText}>{t('auth.signUp.continueWithGoogle')}</Text>
             </TouchableOpacity>
 
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
   },
   logoLyft: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 32,
     fontWeight: '900',
     letterSpacing: -1,
@@ -335,7 +335,7 @@ const styles = StyleSheet.create({
     letterSpacing: -1,
   },
   title: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 30,
     lineHeight: 34,
     fontWeight: '900',
@@ -350,8 +350,8 @@ const styles = StyleSheet.create({
   formCard: {
     backgroundColor: 'rgba(17, 17, 17, 0.64)',
     borderWidth: 1,
-    borderColor: '#1C1C1E',
-    borderRadius: 12,
+    borderColor: palette.border,
+    borderRadius: Radius.button,
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.lg,
     paddingBottom: Spacing.xl,
@@ -369,7 +369,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    borderRadius: 8,
+    borderRadius: Radius.sm,
     borderWidth: 1,
     columnGap: 8,
     marginBottom: 4,
@@ -387,7 +387,7 @@ const styles = StyleSheet.create({
     borderColor: '#3B82F630',
   },
   feedbackText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 13,
     fontWeight: '600',
     flex: 1,
@@ -395,7 +395,7 @@ const styles = StyleSheet.create({
   inputLine: {
     minHeight: 46,
     borderBottomWidth: 1,
-    borderBottomColor: '#27272A',
+    borderBottomColor: palette.border,
     backgroundColor: 'rgba(17, 17, 17, 0.55)',
     paddingHorizontal: Spacing.sm,
     flexDirection: 'row',
@@ -403,7 +403,7 @@ const styles = StyleSheet.create({
   },
   inputField: {
     flex: 1,
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 15,
     fontWeight: '600',
     paddingVertical: Spacing.md,
@@ -417,13 +417,13 @@ const styles = StyleSheet.create({
   primaryButton: {
     marginTop: Spacing.md,
     backgroundColor: palette.accent,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     minHeight: 54,
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 16,
     fontWeight: '900',
     letterSpacing: 0.4,
@@ -437,7 +437,7 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#27272A',
+    backgroundColor: palette.border,
   },
   dividerText: {
     color: palette.textSecondary,
@@ -447,17 +447,17 @@ const styles = StyleSheet.create({
   googleButton: {
     marginTop: Spacing.sm,
     minHeight: 50,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: '#27272A',
-    backgroundColor: '#111111',
+    borderColor: palette.border,
+    backgroundColor: palette.surface,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     columnGap: 10,
   },
   googleButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -482,7 +482,7 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: '#27272A',
+    borderColor: palette.border,
     backgroundColor: 'rgba(17,17,17,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -497,7 +497,7 @@ const styles = StyleSheet.create({
     height: 6,
     borderLeftWidth: 2,
     borderBottomWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: palette.textPrimary,
     transform: [{ rotate: '-45deg' }, { translateY: -1 }],
   },
   termsText: {

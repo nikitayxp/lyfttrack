@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/theme';
+import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import { usePreferences } from '@/context/PreferencesContext';
 import type { AppLanguage } from '@/i18n/resources';
 import { supabase } from '@/services/supabase';
@@ -114,7 +115,7 @@ export default function ProfileSettingsScreen() {
       <View style={styles.headerRow}>
         <TouchableOpacity
           style={styles.backButton}
-          activeOpacity={0.88}
+          activeOpacity={ACTIVE_OPACITY}
           onPress={() => router.replace('/(tabs)/profile' as any)}
         >
           <Ionicons name="chevron-back" size={18} color={palette.textPrimary} />
@@ -128,7 +129,7 @@ export default function ProfileSettingsScreen() {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t('settings.account')}</Text>
 
-        <TouchableOpacity style={styles.rowButton} activeOpacity={0.88} onPress={() => router.push('/(tabs)/profile/edit' as any)}>
+        <TouchableOpacity style={styles.rowButton} activeOpacity={ACTIVE_OPACITY} onPress={() => router.push('/(tabs)/profile/edit' as any)}>
           <View style={styles.rowIconWrap}>
             <Ionicons name="create-outline" size={17} color={palette.accent} />
           </View>
@@ -139,7 +140,7 @@ export default function ProfileSettingsScreen() {
           <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.rowButton} activeOpacity={0.88} onPress={() => router.push('/(tabs)/stats' as any)}>
+        <TouchableOpacity style={styles.rowButton} activeOpacity={ACTIVE_OPACITY} onPress={() => router.push('/(tabs)/stats' as any)}>
           <View style={styles.rowIconWrap}>
             <Ionicons name="stats-chart-outline" size={17} color={palette.accent} />
           </View>
@@ -150,7 +151,7 @@ export default function ProfileSettingsScreen() {
           <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.rowButton} activeOpacity={0.88} onPress={() => router.push('/(tabs)/social' as any)}>
+        <TouchableOpacity style={styles.rowButton} activeOpacity={ACTIVE_OPACITY} onPress={() => router.push('/(tabs)/social' as any)}>
           <View style={styles.rowIconWrap}>
             <Ionicons name="people-outline" size={17} color={palette.accent} />
           </View>
@@ -179,7 +180,7 @@ export default function ProfileSettingsScreen() {
                 <TouchableOpacity
                   key={option.key}
                   style={[styles.languageSegmentButton, isSelected && styles.languageSegmentButtonSelected]}
-                  activeOpacity={0.88}
+                  activeOpacity={ACTIVE_OPACITY}
                   onPress={() => void handleLanguageChange(option.key)}
                   disabled={isUpdatingLanguage}
                 >
@@ -197,15 +198,15 @@ export default function ProfileSettingsScreen() {
 
       <TouchableOpacity
         style={[styles.logoutButton, isSigningOut && styles.logoutButtonDisabled]}
-        activeOpacity={0.9}
+        activeOpacity={ACTIVE_OPACITY}
         onPress={() => void handleSignOut()}
         disabled={isSigningOut}
       >
         {isSigningOut ? (
-          <ActivityIndicator size="small" color="#FFFFFF" />
+          <ActivityIndicator size="small" color={palette.textPrimary} />
         ) : (
           <>
-            <Ionicons name="log-out-outline" size={18} color="#FFFFFF" />
+            <Ionicons name="log-out-outline" size={18} color={palette.textPrimary} />
             <Text style={styles.logoutButtonText}>{t('settings.signOut')}</Text>
           </>
         )}
@@ -230,10 +231,10 @@ const styles = StyleSheet.create({
   backButton: {
     alignSelf: 'flex-start',
     minHeight: 34,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#111111',
+    backgroundColor: palette.surface,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -259,10 +260,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   card: {
-    borderRadius: 12,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#111111',
+    backgroundColor: palette.surface,
     paddingHorizontal: 12,
     paddingVertical: 12,
     rowGap: 10,
@@ -274,10 +275,10 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   rowButton: {
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#000000',
+    backgroundColor: palette.bgPrimary,
     paddingHorizontal: 10,
     paddingVertical: 10,
     flexDirection: 'row',
@@ -287,7 +288,7 @@ const styles = StyleSheet.create({
   rowIconWrap: {
     width: 34,
     height: 34,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: palette.accent,
     backgroundColor: 'rgba(59,130,246,0.10)',
@@ -309,7 +310,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   languageSection: {
-    borderRadius: 12,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: '#060C15',
@@ -331,7 +332,7 @@ const styles = StyleSheet.create({
   },
   languageSegmentedControl: {
     flexDirection: 'row',
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     borderWidth: 1,
     borderColor: '#223247',
     backgroundColor: '#0B1422',
@@ -340,7 +341,7 @@ const styles = StyleSheet.create({
   languageSegmentButton: {
     flex: 1,
     minHeight: 38,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
@@ -349,7 +350,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#163153',
   },
   languageSegmentText: {
-    color: '#94A3B8',
+    color: palette.labelMuted,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -361,7 +362,7 @@ const styles = StyleSheet.create({
   },
   logoutButton: {
     minHeight: 48,
-    borderRadius: 12,
+    borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: '#B91C1C',
     backgroundColor: '#B91C1C',
@@ -374,7 +375,7 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   logoutButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 15,
     fontWeight: '800',
     textTransform: 'uppercase',

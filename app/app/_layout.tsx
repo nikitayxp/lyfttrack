@@ -307,6 +307,14 @@ export default function RootLayout() {
               }}
             />
             <Stack.Screen
+              name="exercise/[id]"
+              options={{
+                headerShown: false,
+                animation: 'slide_from_right',
+                statusBarStyle: 'light',
+              }}
+            />
+            <Stack.Screen
               name="athletes"
               options={{
                 headerShown: false,

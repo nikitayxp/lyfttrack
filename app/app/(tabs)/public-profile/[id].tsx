@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
+import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import { EmptyState } from '@/components/common/EmptyState';
 import { FeedCommentsModal } from '@/components/feed/FeedCommentsModal';
 import { WorkoutFeedCard } from '@/components/feed/WorkoutFeedCard';
@@ -29,8 +30,8 @@ import { getPublicProfileById, type PublicProfileView } from '@/services/profile
 import { getErrorMessage, getUserWorkouts, type WorkoutFeedItem } from '@/services/workoutService';
 
 const palette = Colors.dark;
-const SCREEN_BG = '#000000';
-const CARD_BG = '#111111';
+const SCREEN_BG = palette.bgPrimary;
+const CARD_BG = palette.surface;
 const FEED_PAGE_SIZE = 20;
 
 type FeedLikeInteractionState = {
@@ -419,7 +420,7 @@ export default function PublicProfileScreen() {
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void loadData('refresh')} tintColor={palette.accent} />}
       >
         <View style={styles.topRow}>
-          <TouchableOpacity style={styles.backButton} activeOpacity={0.86} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backButton} activeOpacity={ACTIVE_OPACITY} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={20} color={palette.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.title}>{t('publicProfile.title')}</Text>
@@ -434,7 +435,7 @@ export default function PublicProfileScreen() {
         ) : error ? (
           <View style={styles.statusCard}>
             <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} activeOpacity={0.86} onPress={() => void loadData('initial')}>
+            <TouchableOpacity style={styles.retryButton} activeOpacity={ACTIVE_OPACITY} onPress={() => void loadData('initial')}>
               <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
             </TouchableOpacity>
           </View>
@@ -536,10 +537,10 @@ const styles = StyleSheet.create({
   backButton: {
     width: 40,
     height: 40,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#111111',
+    backgroundColor: palette.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -554,7 +555,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   profileCard: {
-    borderRadius: 12,
+    borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: CARD_BG,
@@ -607,7 +608,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     columnGap: 6,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: palette.accent,
     backgroundColor: palette.accentSoft,
@@ -631,7 +632,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   statusCard: {
-    borderRadius: 12,
+    borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: CARD_BG,
@@ -653,14 +654,14 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     minHeight: 34,
-    borderRadius: 8,
+    borderRadius: Radius.sm,
     backgroundColor: palette.accent,
     paddingHorizontal: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   retryButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 13,
     fontWeight: '700',
   },

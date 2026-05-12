@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
+import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import {
   getProfile,
   pickAvatarFromLibrary,
@@ -422,7 +423,7 @@ export default function EditProfileScreen() {
         <View style={styles.headerRow}>
           <TouchableOpacity
             style={styles.backButton}
-            activeOpacity={0.88}
+            activeOpacity={ACTIVE_OPACITY}
             onPress={() => router.replace('/(tabs)/profile' as any)}
           >
             <Ionicons name="chevron-back" size={18} color={palette.textPrimary} />
@@ -448,7 +449,7 @@ export default function EditProfileScreen() {
           <View style={styles.errorCard}>
             <Text style={styles.errorTitle}>{t('profileEdit.loadProfileErrorTitle')}</Text>
             <Text style={styles.errorText}>{errorMessage}</Text>
-            <TouchableOpacity style={styles.retryButton} activeOpacity={0.88} onPress={() => void loadProfile()}>
+            <TouchableOpacity style={styles.retryButton} activeOpacity={ACTIVE_OPACITY} onPress={() => void loadProfile()}>
               <Text style={styles.retryButtonText}>{t('profileEdit.retry')}</Text>
             </TouchableOpacity>
           </View>
@@ -472,15 +473,15 @@ export default function EditProfileScreen() {
                 <View style={styles.avatarActionsColumn}>
                   <TouchableOpacity
                     style={[styles.avatarActionPrimary, isUploadingAvatar && styles.accountActionDisabled]}
-                    activeOpacity={0.9}
+                    activeOpacity={ACTIVE_OPACITY}
                     onPress={() => void handleChangeAvatar()}
                     disabled={isUploadingAvatar || isRemovingAvatar}
                   >
                     {isUploadingAvatar ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
+                      <ActivityIndicator size="small" color={palette.textPrimary} />
                     ) : (
                       <>
-                        <Ionicons name="camera-outline" size={16} color="#FFFFFF" />
+                        <Ionicons name="camera-outline" size={16} color={palette.textPrimary} />
                         <Text style={styles.avatarActionPrimaryText}>{t('profileEdit.changePhoto')}</Text>
                       </>
                     )}
@@ -491,15 +492,15 @@ export default function EditProfileScreen() {
                       styles.avatarActionSecondary,
                       (!avatarUrl || isRemovingAvatar) && styles.accountActionDisabled,
                     ]}
-                    activeOpacity={0.9}
+                    activeOpacity={ACTIVE_OPACITY}
                     onPress={() => void handleRemoveAvatar()}
                     disabled={!avatarUrl || isRemovingAvatar || isUploadingAvatar}
                   >
                     {isRemovingAvatar ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
+                      <ActivityIndicator size="small" color={palette.textPrimary} />
                     ) : (
                       <>
-                        <Ionicons name="trash-outline" size={16} color="#FFFFFF" />
+                        <Ionicons name="trash-outline" size={16} color={palette.textPrimary} />
                         <Text style={styles.avatarActionSecondaryText}>{t('profileEdit.removePhoto')}</Text>
                       </>
                     )}
@@ -546,12 +547,12 @@ export default function EditProfileScreen() {
 
               <TouchableOpacity
                 style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
-                activeOpacity={0.9}
+                activeOpacity={ACTIVE_OPACITY}
                 onPress={() => void handleSave()}
                 disabled={isSaving}
               >
                 {isSaving ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ActivityIndicator size="small" color={palette.textPrimary} />
                 ) : (
                   <Text style={styles.saveButtonText}>{t('profileEdit.saveChanges')}</Text>
                 )}
@@ -576,15 +577,15 @@ export default function EditProfileScreen() {
 
               <TouchableOpacity
                 style={[styles.accountPrimaryButton, isUpdatingEmail && styles.accountActionDisabled]}
-                activeOpacity={0.9}
+                activeOpacity={ACTIVE_OPACITY}
                 onPress={() => void handleUpdateEmail()}
                 disabled={isUpdatingEmail}
               >
                 {isUpdatingEmail ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ActivityIndicator size="small" color={palette.textPrimary} />
                 ) : (
                   <>
-                    <Ionicons name="mail-outline" size={16} color="#FFFFFF" />
+                    <Ionicons name="mail-outline" size={16} color={palette.textPrimary} />
                     <Text style={styles.accountPrimaryButtonText}>{t('profileEdit.updateEmail')}</Text>
                   </>
                 )}
@@ -592,15 +593,15 @@ export default function EditProfileScreen() {
 
               <TouchableOpacity
                 style={[styles.accountSecondaryButton, isSendingPasswordReset && styles.accountActionDisabled]}
-                activeOpacity={0.9}
+                activeOpacity={ACTIVE_OPACITY}
                 onPress={() => void handlePasswordReset()}
                 disabled={isSendingPasswordReset}
               >
                 {isSendingPasswordReset ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ActivityIndicator size="small" color={palette.textPrimary} />
                 ) : (
                   <>
-                    <Ionicons name="key-outline" size={16} color="#FFFFFF" />
+                    <Ionicons name="key-outline" size={16} color={palette.textPrimary} />
                     <Text style={styles.accountSecondaryButtonText}>{t('profileEdit.sendPasswordReset')}</Text>
                   </>
                 )}
@@ -610,7 +611,7 @@ export default function EditProfileScreen() {
             <View style={styles.logoutCard}>
               <TouchableOpacity
                 style={[styles.logoutButton, isLoggingOut && styles.logoutButtonDisabled]}
-                activeOpacity={0.85}
+                activeOpacity={ACTIVE_OPACITY}
                 onPress={handleLogoutRequest}
                 disabled={isLoggingOut}
               >
@@ -661,10 +662,10 @@ const styles = StyleSheet.create({
   backButton: {
     alignSelf: 'flex-start',
     minHeight: 34,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#111111',
+    backgroundColor: palette.surface,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -689,7 +690,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   statusCard: {
-    borderRadius: 12,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: palette.surface,
@@ -704,7 +705,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   errorCard: {
-    borderRadius: 12,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: '#7F1D1D',
     backgroundColor: '#2A1118',
@@ -725,7 +726,7 @@ const styles = StyleSheet.create({
   retryButton: {
     marginTop: 12,
     minHeight: 38,
-    borderRadius: 10,
+    borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: '#DC2626',
     backgroundColor: '#B91C1C',
@@ -733,21 +734,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   retryButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 14,
     fontWeight: '700',
   },
   formCard: {
     marginTop: 14,
-    borderRadius: 12,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#111111',
+    backgroundColor: palette.surface,
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
   feedbackBanner: {
-    borderRadius: 10,
+    borderRadius: Radius.md,
     paddingHorizontal: 10,
     paddingVertical: 8,
     marginBottom: 10,
@@ -792,10 +793,10 @@ const styles = StyleSheet.create({
   },
   input: {
     minHeight: 44,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#000000',
+    backgroundColor: palette.bgPrimary,
     color: palette.textPrimary,
     paddingHorizontal: 12,
     fontSize: 15,
@@ -808,7 +809,7 @@ const styles = StyleSheet.create({
   saveButton: {
     marginTop: 14,
     minHeight: 44,
-    borderRadius: 10,
+    borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.accent,
     backgroundColor: palette.accent,
@@ -819,16 +820,16 @@ const styles = StyleSheet.create({
     opacity: 0.75,
   },
   saveButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 15,
     fontWeight: '800',
   },
   accountCard: {
     marginTop: 14,
-    borderRadius: 12,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#111111',
+    backgroundColor: palette.surface,
     paddingHorizontal: 12,
     paddingVertical: 12,
     rowGap: 8,
@@ -847,7 +848,7 @@ const styles = StyleSheet.create({
   accountPrimaryButton: {
     marginTop: 8,
     minHeight: 42,
-    borderRadius: 10,
+    borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.accent,
     backgroundColor: palette.accent,
@@ -857,23 +858,23 @@ const styles = StyleSheet.create({
     columnGap: 8,
   },
   accountPrimaryButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 14,
     fontWeight: '800',
   },
   accountSecondaryButton: {
     minHeight: 42,
-    borderRadius: 10,
+    borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#000000',
+    backgroundColor: palette.bgPrimary,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     columnGap: 8,
   },
   accountSecondaryButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 14,
     fontWeight: '800',
   },
@@ -881,10 +882,10 @@ const styles = StyleSheet.create({
     opacity: 0.75,
   },
   avatarCard: {
-    borderRadius: 12,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#111111',
+    backgroundColor: palette.surface,
     paddingHorizontal: 12,
     paddingVertical: 12,
     rowGap: 10,
@@ -897,7 +898,7 @@ const styles = StyleSheet.create({
   avatarFrame: {
     width: 88,
     height: 88,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     borderWidth: 1,
     borderColor: '#2D3B52',
     backgroundColor: '#0B1320',
@@ -912,7 +913,7 @@ const styles = StyleSheet.create({
   avatarFallback: {
     width: '100%',
     height: '100%',
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#162034',
@@ -929,7 +930,7 @@ const styles = StyleSheet.create({
   },
   avatarActionPrimary: {
     minHeight: 40,
-    borderRadius: 10,
+    borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.accent,
     backgroundColor: palette.accent,
@@ -939,23 +940,23 @@ const styles = StyleSheet.create({
     columnGap: 8,
   },
   avatarActionPrimaryText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 14,
     fontWeight: '800',
   },
   avatarActionSecondary: {
     minHeight: 40,
-    borderRadius: 10,
+    borderRadius: Radius.button,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#000000',
+    borderColor: palette.inputStroke,
+    backgroundColor: palette.bgPrimary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     columnGap: 8,
   },
   avatarActionSecondaryText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 14,
     fontWeight: '800',
   },
@@ -965,7 +966,7 @@ const styles = StyleSheet.create({
   },
   logoutButton: {
     minHeight: 48,
-    borderRadius: 12,
+    borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: '#7F1D1D',
     backgroundColor: '#1C0A0A',

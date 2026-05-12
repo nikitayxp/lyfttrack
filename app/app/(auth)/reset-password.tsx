@@ -14,7 +14,7 @@ import {
 import * as Linking from 'expo-linking';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
-import { Spacing } from '@/constants/Styles';
+import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
 import { supabase } from '@/services/supabase';
 
@@ -270,14 +270,14 @@ export default function ResetPasswordScreen() {
               ) : prepareError ? (
                 <View style={styles.statusWrap}>
                   <Text style={styles.errorText}>{prepareError}</Text>
-                  <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.88} onPress={() => router.replace('/(auth)/sign-in' as any)}>
+                  <TouchableOpacity style={styles.secondaryButton} activeOpacity={ACTIVE_OPACITY} onPress={() => router.replace('/(auth)/sign-in' as any)}>
                     <Text style={styles.secondaryButtonText}>{t('auth.resetPassword.backToSignIn')}</Text>
                   </TouchableOpacity>
                 </View>
               ) : isDone ? (
                 <View style={styles.statusWrap}>
                   <Text style={styles.successText}>{t('auth.resetPassword.passwordUpdated')}</Text>
-                  <TouchableOpacity style={styles.primaryButton} activeOpacity={0.88} onPress={() => router.replace('/(auth)/sign-in' as any)}>
+                  <TouchableOpacity style={styles.primaryButton} activeOpacity={ACTIVE_OPACITY} onPress={() => router.replace('/(auth)/sign-in' as any)}>
                     <Text style={styles.primaryButtonText}>{t('auth.resetPassword.backToSignIn')}</Text>
                   </TouchableOpacity>
                 </View>
@@ -311,7 +311,7 @@ export default function ResetPasswordScreen() {
 
                   <TouchableOpacity style={styles.primaryButton} onPress={() => void handleUpdatePassword()} disabled={isSubmitting}>
                     {isSubmitting ? (
-                      <ActivityIndicator color="#FFFFFF" />
+                      <ActivityIndicator color={palette.textPrimary} />
                     ) : (
                       <Text style={styles.primaryButtonText}>{t('auth.resetPassword.updateAction')}</Text>
                     )}
@@ -347,7 +347,7 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
   },
   logoLyft: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 32,
     fontWeight: '900',
     letterSpacing: -1,
@@ -359,7 +359,7 @@ const styles = StyleSheet.create({
     letterSpacing: -1,
   },
   title: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 30,
     lineHeight: 34,
     fontWeight: '900',
@@ -374,8 +374,8 @@ const styles = StyleSheet.create({
   formCard: {
     backgroundColor: 'rgba(17, 17, 17, 0.64)',
     borderWidth: 1,
-    borderColor: '#1C1C1E',
-    borderRadius: 12,
+    borderColor: palette.border,
+    borderRadius: Radius.button,
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.lg,
     paddingBottom: Spacing.xl,
@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
   feedbackBanner: {
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 8,
+    borderRadius: Radius.sm,
     borderWidth: 1,
     marginBottom: 4,
   },
@@ -409,14 +409,14 @@ const styles = StyleSheet.create({
     borderColor: '#3B82F630',
   },
   feedbackText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 13,
     fontWeight: '600',
   },
   inputLine: {
     minHeight: 46,
     borderBottomWidth: 1,
-    borderBottomColor: '#27272A',
+    borderBottomColor: palette.border,
     backgroundColor: 'rgba(17, 17, 17, 0.55)',
     paddingHorizontal: Spacing.sm,
     flexDirection: 'row',
@@ -424,7 +424,7 @@ const styles = StyleSheet.create({
   },
   inputField: {
     flex: 1,
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 15,
     fontWeight: '600',
     paddingVertical: Spacing.md,
@@ -432,13 +432,13 @@ const styles = StyleSheet.create({
   primaryButton: {
     marginTop: Spacing.md,
     backgroundColor: palette.accent,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     minHeight: 54,
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 16,
     fontWeight: '900',
     letterSpacing: 0.4,
@@ -446,16 +446,16 @@ const styles = StyleSheet.create({
   secondaryButton: {
     marginTop: Spacing.sm,
     minHeight: 48,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: '#27272A',
-    backgroundColor: '#111111',
+    borderColor: palette.border,
+    backgroundColor: palette.surface,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
   },
   secondaryButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 14,
     fontWeight: '700',
   },

@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/theme';
+import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import { EmptyState } from '@/components/common/EmptyState';
 import { FeedCommentsModal } from '@/components/feed/FeedCommentsModal';
 import { WorkoutFeedCard } from '@/components/feed/WorkoutFeedCard';
@@ -38,6 +39,7 @@ import { addWeight, getWeightHistory, parseBodyWeightInput, type BodyMeasurement
 import { getAllTimePRs, type AllTimePR } from '@/services/statsService';
 import { supabase } from '@/services/supabase';
 import { getErrorMessage, getUserWorkouts, type WorkoutFeedItem } from '@/services/workoutService';
+import { useWorkoutContext } from '@/context/WorkoutContext';
 import { sanitizeDecimalText } from '@/utils/inputValidation';
 
 const palette = Colors.dark;
@@ -201,6 +203,7 @@ function SkeletonCard({ compact = false, lines = 3 }: SkeletonCardProps) {
 
 export default function ProfileScreen() {
   const { t, i18n } = useTranslation();
+  const { activeExercises } = useWorkoutContext();
   const isWeb = Platform.OS === 'web';
   const migrationPath = 'supabase/migrations/20260407_fix_body_measurements_rls.sql';
   const [profile, setProfile] = useState<ProfileRow | null>(null);
@@ -896,7 +899,7 @@ export default function ProfileScreen() {
           <View style={styles.errorCard}>
             <Text style={styles.errorTitle}>{t('profile.loadProfileErrorTitle')}</Text>
             <Text style={styles.errorText}>{profileError}</Text>
-            <TouchableOpacity style={styles.retryButton} activeOpacity={0.88} onPress={() => void bootstrap()}>
+            <TouchableOpacity style={styles.retryButton} activeOpacity={ACTIVE_OPACITY} onPress={() => void bootstrap()}>
               <Text style={styles.retryButtonText}>{t('profile.retryAction')}</Text>
             </TouchableOpacity>
           </View>
@@ -904,7 +907,7 @@ export default function ProfileScreen() {
 
         <View style={styles.heroCard}>
           <View style={styles.heroTopBar}>
-            <TouchableOpacity style={styles.settingsButton} activeOpacity={0.88} onPress={handleOpenSettings}>
+            <TouchableOpacity style={styles.settingsButton} activeOpacity={ACTIVE_OPACITY} onPress={handleOpenSettings}>
               <Ionicons name="settings-outline" size={18} color={palette.textPrimary} />
             </TouchableOpacity>
           </View>
@@ -925,7 +928,7 @@ export default function ProfileScreen() {
           <View style={styles.quickActionsGrid}>
             <TouchableOpacity
               style={styles.quickActionTile}
-              activeOpacity={0.9}
+              activeOpacity={ACTIVE_OPACITY}
               onPress={handleOpenStats}
             >
               <View style={styles.quickActionIconWrap}>
@@ -936,7 +939,7 @@ export default function ProfileScreen() {
 
             <TouchableOpacity
               style={styles.quickActionTile}
-              activeOpacity={0.9}
+              activeOpacity={ACTIVE_OPACITY}
               onPress={handleOpenFriends}
             >
               <View style={styles.quickActionIconWrap}>
@@ -947,7 +950,7 @@ export default function ProfileScreen() {
 
             <TouchableOpacity
               style={styles.quickActionTile}
-              activeOpacity={0.9}
+              activeOpacity={ACTIVE_OPACITY}
               onPress={handleEditProfile}
             >
               <View style={styles.quickActionIconWrap}>
@@ -967,8 +970,8 @@ export default function ProfileScreen() {
               <Text style={styles.bodyProgressSubtitle}>{t('profile.bodyProgressSubtitle')}</Text>
             </View>
 
-            <TouchableOpacity style={styles.weightAddButton} activeOpacity={0.88} onPress={openWeightModal}>
-              <Ionicons name="add" size={18} color="#FFFFFF" />
+            <TouchableOpacity style={styles.weightAddButton} activeOpacity={ACTIVE_OPACITY} onPress={openWeightModal}>
+              <Ionicons name="add" size={18} color={palette.textPrimary} />
             </TouchableOpacity>
           </View>
 
@@ -1033,7 +1036,7 @@ export default function ProfileScreen() {
                   >
                     <View style={styles.trophyCard}>
                       <View style={styles.trophyBadge}>
-                        <Ionicons name="trophy" size={14} color="#FFFFFF" />
+                        <Ionicons name="trophy" size={14} color={palette.textPrimary} />
                       </View>
 
                       <Text style={styles.trophyExerciseName} numberOfLines={2}>
@@ -1046,14 +1049,14 @@ export default function ProfileScreen() {
 
                   <TouchableOpacity
                     style={styles.trophyShareButton}
-                    activeOpacity={0.88}
+                    activeOpacity={ACTIVE_OPACITY}
                     onPress={() => void handleShareTrophyCard(pr)}
                     disabled={sharingExerciseId !== null}
                   >
                     {sharingExerciseId === pr.exerciseId ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
+                      <ActivityIndicator size="small" color={palette.textPrimary} />
                     ) : (
-                      <Ionicons name="share-social-outline" size={15} color="#FFFFFF" />
+                      <Ionicons name="share-social-outline" size={15} color={palette.textPrimary} />
                     )}
                   </TouchableOpacity>
                 </View>
@@ -1156,6 +1159,18 @@ export default function ProfileScreen() {
               isLikePending={interactionState?.isPending ?? false}
               onToggleLike={() => void handleToggleLike(item)}
               onOpenComments={() => openCommentsModal(item)}
+              onCopyWorkout={() => {
+                if (activeExercises.length > 0) {
+                  Alert.alert(
+                    uiLanguage.startsWith('pt') ? 'Treino em progresso' : 'Workout in progress',
+                    uiLanguage.startsWith('pt')
+                      ? 'Termina ou cancela o treino atual antes de copiar outro.'
+                      : 'Finish or cancel the current workout before copying another.',
+                  );
+                  return;
+                }
+                router.push(`/workout/active?copyFromWorkoutId=${item.id}` as any);
+              }}
             />
           );
         }}
@@ -1205,7 +1220,7 @@ export default function ProfileScreen() {
             <View style={styles.quickLogActionsRow}>
               <TouchableOpacity
                 style={styles.quickLogCancelButton}
-                activeOpacity={0.88}
+                activeOpacity={ACTIVE_OPACITY}
                 onPress={closeWeightModal}
                 disabled={isSavingWeight}
               >
@@ -1214,12 +1229,12 @@ export default function ProfileScreen() {
 
               <TouchableOpacity
                 style={[styles.quickLogSaveButton, isSavingWeight && styles.quickLogSaveButtonDisabled]}
-                activeOpacity={0.88}
+                activeOpacity={ACTIVE_OPACITY}
                 onPress={() => void handleSaveWeight()}
                 disabled={isSavingWeight}
               >
                 {isSavingWeight ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ActivityIndicator size="small" color={palette.textPrimary} />
                 ) : (
                   <Text style={styles.quickLogSaveText}>{t('profile.logWeightSave')}</Text>
                 )}
@@ -1267,7 +1282,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   errorCard: {
-    borderRadius: 6,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: CARD_BG,
@@ -1289,10 +1304,10 @@ const styles = StyleSheet.create({
   retryButton: {
     marginTop: 8,
     minHeight: 32,
-    borderRadius: 6,
+    borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#000000',
+    backgroundColor: palette.bgPrimary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1303,7 +1318,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   heroCard: {
-    borderRadius: 10,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: CARD_BG,
@@ -1321,15 +1336,15 @@ const styles = StyleSheet.create({
   settingsButton: {
     width: 34,
     height: 34,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#000000',
+    backgroundColor: palette.bgPrimary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   streakHeroCard: {
-    borderRadius: 10,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: CARD_BG,
@@ -1367,10 +1382,10 @@ const styles = StyleSheet.create({
   avatarFrame: {
     width: 90,
     height: 90,
-    borderRadius: 8,
+    borderRadius: Radius.sm,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#000000',
+    backgroundColor: palette.bgPrimary,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
@@ -1378,15 +1393,15 @@ const styles = StyleSheet.create({
   avatarImage: {
     width: 84,
     height: 84,
-    borderRadius: 4,
+    borderRadius: Radius.xs,
   },
   avatarFallback: {
     width: 84,
     height: 84,
-    borderRadius: 4,
+    borderRadius: Radius.xs,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#000000',
+    backgroundColor: palette.bgPrimary,
   },
   avatarFallbackText: {
     color: palette.textPrimary,
@@ -1414,10 +1429,10 @@ const styles = StyleSheet.create({
   quickActionTile: {
     flex: 1,
     minHeight: 74,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#000000',
+    backgroundColor: palette.bgPrimary,
     alignItems: 'center',
     justifyContent: 'center',
     rowGap: 8,
@@ -1427,7 +1442,7 @@ const styles = StyleSheet.create({
   quickActionIconWrap: {
     width: 34,
     height: 34,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: palette.accent,
     backgroundColor: 'rgba(59,130,246,0.10)',
@@ -1443,7 +1458,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.35,
   },
   bodyProgressCard: {
-    borderRadius: 10,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: CARD_BG,
@@ -1475,10 +1490,10 @@ const styles = StyleSheet.create({
   weightAddButton: {
     width: 30,
     height: 30,
-    borderRadius: 4,
+    borderRadius: Radius.xs,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#000000',
+    backgroundColor: palette.bgPrimary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1504,10 +1519,10 @@ const styles = StyleSheet.create({
   bodyTrendBadge: {
     marginTop: 6,
     alignSelf: 'flex-start',
-    borderRadius: 6,
+    borderRadius: Radius.xs,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#000000',
+    backgroundColor: palette.bgPrimary,
     paddingHorizontal: 8,
     paddingVertical: 4,
     flexDirection: 'row',
@@ -1523,7 +1538,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   statusCardCompact: {
-    borderRadius: 6,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: CARD_BG,
@@ -1534,7 +1549,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   skeletonCard: {
-    borderRadius: 6,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: CARD_BG,
@@ -1569,7 +1584,7 @@ const styles = StyleSheet.create({
   },
   trophyCard: {
     width: 138,
-    borderRadius: 6,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: CARD_BG,
@@ -1578,10 +1593,10 @@ const styles = StyleSheet.create({
   },
   trophyBadge: {
     alignSelf: 'flex-start',
-    borderRadius: 4,
+    borderRadius: Radius.xs,
     borderWidth: 1,
     borderColor: palette.accent,
-    backgroundColor: '#000000',
+    backgroundColor: palette.bgPrimary,
     paddingHorizontal: 5,
     paddingVertical: 2,
     marginBottom: 6,
@@ -1613,10 +1628,10 @@ const styles = StyleSheet.create({
     right: 4,
     width: 24,
     height: 24,
-    borderRadius: 4,
+    borderRadius: Radius.xs,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#000000',
+    backgroundColor: palette.bgPrimary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1633,10 +1648,10 @@ const styles = StyleSheet.create({
     letterSpacing: -0.8,
   },
   sectionPill: {
-    borderRadius: 6,
+    borderRadius: Radius.sm,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#000000',
+    backgroundColor: palette.bgPrimary,
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
@@ -1647,7 +1662,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   historyErrorCard: {
-    borderRadius: 10,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: CARD_BG,
@@ -1667,7 +1682,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   statusCard: {
-    borderRadius: 6,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: CARD_BG,
@@ -1716,7 +1731,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   quickLogCard: {
-    borderRadius: 6,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: CARD_BG,
@@ -1745,10 +1760,10 @@ const styles = StyleSheet.create({
   },
   quickLogInput: {
     minHeight: 40,
-    borderRadius: 4,
+    borderRadius: Radius.xs,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#000000',
+    backgroundColor: palette.bgPrimary,
     color: palette.textPrimary,
     paddingHorizontal: 10,
     fontSize: 20,
@@ -1762,10 +1777,10 @@ const styles = StyleSheet.create({
   quickLogCancelButton: {
     flex: 1,
     minHeight: 34,
-    borderRadius: 4,
+    borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.border,
-    backgroundColor: '#000000',
+    backgroundColor: palette.bgPrimary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1777,7 +1792,7 @@ const styles = StyleSheet.create({
   quickLogSaveButton: {
     flex: 1,
     minHeight: 34,
-    borderRadius: 4,
+    borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.accent,
     backgroundColor: palette.accent,
@@ -1788,7 +1803,7 @@ const styles = StyleSheet.create({
     opacity: 0.75,
   },
   quickLogSaveText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 12,
     fontWeight: '900',
     textTransform: 'uppercase',

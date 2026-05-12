@@ -477,10 +477,28 @@ export function useActiveWorkoutState({
     [setActiveExercisesWithRef]
   );
 
+  const updateSetType = useCallback(
+    (exerciseId: string, setId: string, setType: SetTypeOption) => {
+      setActiveExercisesWithRef((currentValue) =>
+        currentValue.map((exercise) => {
+          if (exercise.id !== exerciseId) return exercise;
+
+          return {
+            ...exercise,
+            sets: exercise.sets.map((setItem) =>
+              setItem.id === setId ? { ...setItem, set_type: setType } : setItem
+            ),
+          };
+        })
+      );
+    },
+    [setActiveExercisesWithRef]
+  );
+
   const updateExerciseNotes = useCallback(
     (exerciseId: string, notes: string | null) => {
-      const trimmed = (notes ?? '').trim();
-      const next = trimmed.length === 0 ? null : trimmed.slice(0, 1000);
+      const raw = notes ?? '';
+      const next = raw.length === 0 ? null : raw.slice(0, 1000);
       setActiveExercisesWithRef((currentValue) =>
         currentValue.map((exercise) =>
           exercise.id === exerciseId ? { ...exercise, notes: next } : exercise
@@ -542,12 +560,12 @@ export function useActiveWorkoutState({
     handleSetCompletionToggle,
     updateSetInput,
     updateSetSide,
+    updateSetType,
     updateExerciseNotes,
     addSet,
     addExercise,
     clearExercises,
     getExerciseCompletionGlowValue,
-    // Offline draft API
     recoveredDraft,
     clearDraft,
     acceptRecoveredDraft,

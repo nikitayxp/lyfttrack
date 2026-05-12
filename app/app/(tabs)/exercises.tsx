@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Modal,
   Platform,
   Pressable,
@@ -16,7 +17,8 @@ import {
 } from 'react-native';
 import Animated, { FadeInDown, FadeInUp, LinearTransition } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
-import { Colors } from '@/constants/theme';
+import { Colors } from '@/constants/Colors';
+import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import {
   EXERCISE_EQUIPMENT_OPTIONS,
   EXERCISE_EQUIPMENT_TRANSLATION_KEY,
@@ -32,6 +34,7 @@ import type { Tables } from '@/types/database';
 import { createExercise, getErrorMessage, getExercisesCatalog } from '@/services/workoutService';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/exerciseLocalization';
+import { getExerciseImageUrl } from '@/utils/exerciseImage';
 
 type ExerciseRow = Tables<'exercises'>;
 const palette = Colors.dark;
@@ -209,7 +212,7 @@ export default function ExercisesScreen() {
             />
           </View>
 
-          <TouchableOpacity style={styles.customButton} onPress={() => setIsCreateModalVisible(true)} activeOpacity={0.88}>
+          <TouchableOpacity style={styles.customButton} onPress={() => setIsCreateModalVisible(true)} activeOpacity={ACTIVE_OPACITY}>
             <Ionicons name="add-circle-outline" size={16} color={palette.accent} />
             <Text style={styles.customButtonText}>{t('exercise.createTrigger')}</Text>
           </TouchableOpacity>
@@ -225,7 +228,7 @@ export default function ExercisesScreen() {
         <View style={styles.statusContainer}>
           <Text style={styles.statusTitle}>{t('exercise.errors.loadCatalog')}</Text>
           <Text style={styles.statusText}>{errorMessage}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={() => void loadExercises()} activeOpacity={0.88}>
+          <TouchableOpacity style={styles.retryButton} onPress={() => void loadExercises()} activeOpacity={ACTIVE_OPACITY}>
             <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
@@ -249,13 +252,27 @@ export default function ExercisesScreen() {
                   entering={FadeInDown.delay(Math.min(exerciseIndex * 28, 180)).duration(280)}
                   layout={cardLayoutTransition}
                 >
-                  <View style={styles.exerciseRow}>
+                  <TouchableOpacity
+                    style={styles.exerciseRow}
+                    activeOpacity={ACTIVE_OPACITY}
+                    onPress={() => router.push(`/exercise/${exercise.id}` as any)}
+                  >
+                    {(() => {
+                      const imgUrl = getExerciseImageUrl(exercise);
+                      return imgUrl ? (
+                        <Image source={{ uri: imgUrl }} style={styles.exerciseThumbnail} />
+                      ) : (
+                        <View style={styles.exerciseThumbnailPlaceholder}>
+                          <Ionicons name="barbell-outline" size={18} color="#475569" />
+                        </View>
+                      );
+                    })()}
                     <View style={styles.exerciseTextWrap}>
                       <Text style={styles.exerciseName}>{getLocalizedExerciseName(exercise, language)}</Text>
                       <Text style={styles.exerciseMeta}>{getExerciseEquipmentLabel(exercise)}</Text>
                     </View>
                     <Text style={styles.exerciseMuscle}>{getExerciseMuscleLabel(exercise)}</Text>
-                  </View>
+                  </TouchableOpacity>
                 </Animated.View>
               ))}
             </View>
@@ -290,7 +307,7 @@ export default function ExercisesScreen() {
                     key={muscleKey}
                     style={[styles.muscleChip, isSelected && styles.muscleChipSelected]}
                     onPress={() => setSelectedMuscleKey(muscleKey)}
-                    activeOpacity={0.8}
+                    activeOpacity={ACTIVE_OPACITY}
                   >
                     <Text style={[styles.muscleChipText, isSelected && styles.muscleChipTextSelected]}>
                       {t(EXERCISE_MUSCLE_TRANSLATION_KEY[muscleKey])}
@@ -308,7 +325,7 @@ export default function ExercisesScreen() {
                     key={equipmentKey}
                     style={[styles.muscleChip, isSelected && styles.muscleChipSelected]}
                     onPress={() => setSelectedEquipmentKey(equipmentKey)}
-                    activeOpacity={0.8}
+                    activeOpacity={ACTIVE_OPACITY}
                   >
                     <Text style={[styles.muscleChipText, isSelected && styles.muscleChipTextSelected]}>
                       {t(EXERCISE_EQUIPMENT_TRANSLATION_KEY[equipmentKey])}
@@ -322,7 +339,7 @@ export default function ExercisesScreen() {
               <TouchableOpacity
                 style={styles.modalCancelButton}
                 onPress={() => setIsCreateModalVisible(false)}
-                activeOpacity={0.88}
+                activeOpacity={ACTIVE_OPACITY}
               >
                 <Text style={styles.modalCancelButtonText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
@@ -330,7 +347,7 @@ export default function ExercisesScreen() {
               <TouchableOpacity
                 style={[styles.modalCreateButton, isCreatingExercise && styles.modalCreateButtonDisabled]}
                 onPress={() => void handleCreateExercise()}
-                activeOpacity={0.88}
+                activeOpacity={ACTIVE_OPACITY}
                 disabled={isCreatingExercise}
               >
                 {isCreatingExercise ? (
@@ -369,7 +386,7 @@ const styles = StyleSheet.create({
     backgroundColor: palette.inputBackground,
     borderWidth: 1,
     borderColor: palette.inputBorder,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -377,10 +394,10 @@ const styles = StyleSheet.create({
   },
   customButton: {
     minHeight: 48,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#0D1624',
+    borderColor: palette.inputStroke,
+    backgroundColor: palette.surfaceAlt,
     paddingHorizontal: 14,
     alignItems: 'center',
     justifyContent: 'center',
@@ -400,7 +417,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   statusContainer: {
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: palette.surface,
@@ -429,15 +446,15 @@ const styles = StyleSheet.create({
     backgroundColor: palette.accent,
     paddingVertical: 10,
     paddingHorizontal: 18,
-    borderRadius: 16,
+    borderRadius: Radius.card,
   },
   retryButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 14,
     fontWeight: '700',
   },
   emptyState: {
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: palette.surface,
@@ -469,13 +486,30 @@ const styles = StyleSheet.create({
     backgroundColor: palette.surface,
     borderColor: palette.border,
     borderWidth: 1,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     paddingHorizontal: 14,
     paddingVertical: 12,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
+  },
+  exerciseThumbnail: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
+    marginRight: 12,
+    backgroundColor: palette.surfaceAlt,
+  },
+  exerciseThumbnailPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
+    marginRight: 12,
+    backgroundColor: palette.surfaceAlt,
+    borderWidth: 1,
+    borderColor: palette.inputFill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   exerciseTextWrap: {
     flex: 1,
@@ -515,8 +549,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalSheet: {
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderTopLeftRadius: Radius.card,
+    borderTopRightRadius: Radius.card,
     backgroundColor: palette.surface,
     borderTopWidth: 1,
     borderColor: palette.border,
@@ -535,7 +569,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     width: 42,
     height: 5,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     backgroundColor: palette.borderStrong,
     marginBottom: 12,
   },
@@ -566,7 +600,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.inputBorder,
     backgroundColor: palette.inputBackground,
@@ -595,7 +629,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.inputBorder,
     color: palette.textPrimary,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     paddingHorizontal: 14,
     paddingVertical: 12,
     marginBottom: 10,
@@ -611,7 +645,7 @@ const styles = StyleSheet.create({
   modalCancelButton: {
     flex: 1,
     minHeight: 46,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.inputBorder,
     alignItems: 'center',
@@ -626,7 +660,7 @@ const styles = StyleSheet.create({
   modalCreateButton: {
     flex: 1,
     minHeight: 46,
-    borderRadius: 16,
+    borderRadius: Radius.card,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: palette.accent,

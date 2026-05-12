@@ -14,6 +14,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
+import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import {
   getErrorMessage,
   getWorkoutDetails,
@@ -32,8 +33,8 @@ import {
 } from '@/utils/inputValidation';
 
 const palette = Colors.dark;
-const SCREEN_BG = '#050A12';
-const CARD_BG = '#111827';
+const SCREEN_BG = palette.bgPrimary;
+const CARD_BG = palette.surface;
 const INPUT_BG = '#0F172A';
 
 function resolveRouteWorkoutId(rawValue: string | string[] | undefined): string | null {
@@ -223,7 +224,7 @@ export default function WorkoutEditScreen() {
       <StatusBar style="light" />
 
       <View style={styles.headerRow}>
-        <TouchableOpacity style={styles.backButton} activeOpacity={0.86} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backButton} activeOpacity={ACTIVE_OPACITY} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={21} color={palette.textPrimary} />
         </TouchableOpacity>
 
@@ -231,7 +232,7 @@ export default function WorkoutEditScreen() {
 
         <TouchableOpacity
           style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
-          activeOpacity={0.88}
+          activeOpacity={ACTIVE_OPACITY}
           onPress={() => void handleSave()}
           disabled={isSaving || isLoading || !details}
         >
@@ -252,7 +253,7 @@ export default function WorkoutEditScreen() {
         <View style={styles.statusWrap}>
           <Text style={styles.statusTitle}>{t('workoutDetails.loadErrorTitle')}</Text>
           <Text style={styles.statusText}>{loadError}</Text>
-          <TouchableOpacity style={styles.retryButton} activeOpacity={0.88} onPress={() => void loadDetails()}>
+          <TouchableOpacity style={styles.retryButton} activeOpacity={ACTIVE_OPACITY} onPress={() => void loadDetails()}>
             <Text style={styles.retryButtonText}>{t('workoutDetails.retryAction')}</Text>
           </TouchableOpacity>
         </View>
@@ -375,30 +376,30 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#1F2937',
+    borderBottomColor: palette.inputFill,
     backgroundColor: SCREEN_BG,
     gap: 10,
   },
   backButton: {
     width: 36,
     height: 36,
-    borderRadius: 12,
+    borderRadius: Radius.button,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#111827',
+    borderColor: palette.inputStroke,
+    backgroundColor: palette.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
     flex: 1,
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 17,
     fontWeight: '800',
     textAlign: 'center',
   },
   saveButton: {
     minHeight: 36,
-    borderRadius: 12,
+    borderRadius: Radius.button,
     paddingHorizontal: 14,
     backgroundColor: palette.accent,
     alignItems: 'center',
@@ -408,7 +409,7 @@ const styles = StyleSheet.create({
     opacity: 0.72,
   },
   saveButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 13,
     fontWeight: '800',
   },
@@ -422,25 +423,25 @@ const styles = StyleSheet.create({
     rowGap: 12,
   },
   heroCard: {
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
-    borderColor: '#253041',
+    borderColor: palette.borderStrong,
     backgroundColor: CARD_BG,
     padding: 14,
     rowGap: 10,
   },
   sectionTitle: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 18,
     fontWeight: '800',
   },
   sectionMeta: {
-    color: '#94A3B8',
+    color: palette.labelMuted,
     fontSize: 12,
     fontWeight: '600',
   },
   inputLabel: {
-    color: '#94A3B8',
+    color: palette.labelMuted,
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -449,11 +450,11 @@ const styles = StyleSheet.create({
   },
   textInput: {
     minHeight: 46,
-    borderRadius: 12,
+    borderRadius: Radius.button,
     borderWidth: 1,
-    borderColor: '#253041',
+    borderColor: palette.borderStrong,
     backgroundColor: INPUT_BG,
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 15,
     fontWeight: '600',
     paddingHorizontal: 12,
@@ -467,7 +468,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    borderRadius: 12,
+    borderRadius: Radius.button,
     borderWidth: 1,
     columnGap: 8,
   },
@@ -480,26 +481,26 @@ const styles = StyleSheet.create({
     borderColor: '#10B98130',
   },
   feedbackText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 13,
     fontWeight: '600',
     flex: 1,
   },
   exerciseCard: {
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
-    borderColor: '#253041',
+    borderColor: palette.borderStrong,
     backgroundColor: CARD_BG,
     padding: 14,
     rowGap: 10,
   },
   exerciseName: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 16,
     fontWeight: '800',
   },
   exerciseMeta: {
-    color: '#94A3B8',
+    color: palette.labelMuted,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -511,27 +512,27 @@ const styles = StyleSheet.create({
   tableHeaderRow: {
     paddingTop: 4,
     borderTopWidth: 1,
-    borderTopColor: '#253041',
+    borderTopColor: palette.borderStrong,
     marginTop: 2,
   },
   headerCell: {
-    color: '#94A3B8',
+    color: palette.labelMuted,
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
   },
   valueCell: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 14,
     fontWeight: '700',
   },
   numericInput: {
     minHeight: 40,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: palette.inputStroke,
     backgroundColor: INPUT_BG,
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 14,
     fontWeight: '700',
     textAlign: 'center',
@@ -560,20 +561,20 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   emptyCard: {
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
-    borderColor: '#253041',
+    borderColor: palette.borderStrong,
     backgroundColor: CARD_BG,
     padding: 14,
     rowGap: 6,
   },
   emptyTitle: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 16,
     fontWeight: '800',
   },
   emptyText: {
-    color: '#94A3B8',
+    color: palette.labelMuted,
     fontSize: 13,
     lineHeight: 19,
     fontWeight: '600',
@@ -586,13 +587,13 @@ const styles = StyleSheet.create({
     rowGap: 10,
   },
   statusTitle: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 18,
     fontWeight: '800',
     textAlign: 'center',
   },
   statusText: {
-    color: '#94A3B8',
+    color: palette.labelMuted,
     fontSize: 14,
     lineHeight: 20,
     textAlign: 'center',
@@ -600,15 +601,15 @@ const styles = StyleSheet.create({
   retryButton: {
     minHeight: 42,
     paddingHorizontal: 14,
-    borderRadius: 12,
+    borderRadius: Radius.button,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#111827',
+    borderColor: palette.inputStroke,
+    backgroundColor: palette.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   retryButtonText: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
     fontSize: 13,
     fontWeight: '700',
   },

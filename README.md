@@ -57,3 +57,7 @@ site/
 ## Notas
 
 Projeto pessoal de portfolio. Foco em prática de full-stack: mobile, web e backend as a service.
+
+## Base de dados
+
+As migrations SQL estão em `supabase/migrations/`.

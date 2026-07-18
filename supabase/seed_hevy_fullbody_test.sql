@@ -145,7 +145,7 @@ begin
     where ex.name = any (s.lookup_names)
        or ex.name_pt = any (s.lookup_names)
        or ex.name_en = any (s.lookup_names)
-    order by ex.is_custom asc, ex.created_at asc nulls last
+    order by ex.is_custom asc, ex.name asc
     limit 1
   );
 
@@ -163,7 +163,7 @@ begin
     select ex.id
     from public.exercises ex
     where ex.name = s.create_name or ex.name_pt = s.create_name_pt
-    order by ex.created_at desc nulls last
+    order by ex.is_custom desc, ex.name asc
     limit 1
   )
   where s.exercise_id is null;

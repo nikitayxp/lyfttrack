@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useDeferredValue, useTransition } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import {
@@ -7,7 +7,7 @@ import {
   Modal,
   Platform,
   Pressable,
-  ScrollView,
+  SectionList,
   StyleSheet,
   Text,
   TextInput,
@@ -36,6 +36,7 @@ import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/ex
 import { ExerciseThumbnail } from '@/components/common/ExerciseThumbnail';
 
 type ExerciseRow = Tables<'exercises'>;
+type ExerciseSection = { title: string; data: ExerciseRow[] };
 const palette = Colors.dark;
 const cardLayoutTransition = LinearTransition.springify().damping(16).stiffness(180);
 
@@ -46,6 +47,9 @@ export default function ExercisesScreen() {
   const [exercises, setExercises] = useState<ExerciseRow[]>([]);
   const [query, setQuery] = useState('');
   const [showRecentOnly, setShowRecentOnly] = useState(false);
+  const [, startFilterTransition] = useTransition();
+  const deferredShowRecentOnly = useDeferredValue(showRecentOnly);
+  const deferredQuery = useDeferredValue(query);
   const [recentExerciseIds, setRecentExerciseIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -125,7 +129,7 @@ export default function ExercisesScreen() {
   }
 
   const groupedExercises = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+    const normalizedQuery = deferredQuery.trim().toLowerCase();
     const recentSet = new Set(recentExerciseIds);
 
     const getDisplayName = (exercise: ExerciseRow) => getLocalizedExerciseName(exercise, language);
@@ -147,7 +151,7 @@ export default function ExercisesScreen() {
     };
 
     const filtered = exercises.filter((exercise) => {
-      if (showRecentOnly && !recentSet.has(exercise.id)) {
+      if (deferredShowRecentOnly && !recentSet.has(exercise.id)) {
         return false;
       }
 
@@ -169,8 +173,10 @@ export default function ExercisesScreen() {
       return acc;
     }, {});
 
-    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
-  }, [language, query, exercises, recentExerciseIds, showRecentOnly, t]);
+    return Object.entries(groups)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([title, data]) => ({ title, data }));
+  }, [language, deferredQuery, exercises, recentExerciseIds, deferredShowRecentOnly, t]);
 
   const ModalWrapper = isWeb ? View : Modal;
   const modalProps = isWeb 
@@ -200,115 +206,127 @@ export default function ExercisesScreen() {
     return muscleKey ? t(muscleKey) : getLocalizedExerciseMuscle(exercise, language) ?? t('exercise.general');
   };
 
+  const visibleSections = useMemo(() => groupedExercises as ExerciseSection[], [groupedExercises]);
+
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Animated.View
-        key={`toolbar-${animationEpoch}`}
-        entering={FadeInUp.duration(320)}
-        layout={cardLayoutTransition}
-      >
-        <View style={styles.toolbarRow}>
-          <View style={styles.searchBar}>
-            <Ionicons name="search" size={18} color={palette.textMuted} />
-            <TextInput
-              accessibilityLabel={t('accessibility.searchExercises', { defaultValue: 'Search exercises' })}
-              value={query}
-              onChangeText={setQuery}
-              placeholder={t('exercise.searchPlaceholder')}
-              placeholderTextColor={palette.textMuted}
-              style={styles.searchInput}
-              autoCorrect={false}
-              autoCapitalize="none"
-            />
-          </View>
+    <View style={styles.screen}>
+      <SectionList
+        style={styles.screen}
+        sections={isLoading || errorMessage || visibleSections.length === 0 ? [] : visibleSections}
+        keyExtractor={(item) => item.id}
+        stickySectionHeadersEnabled={false}
+        initialNumToRender={12}
+        maxToRenderPerBatch={8}
+        updateCellsBatchingPeriod={40}
+        windowSize={6}
+        removeClippedSubviews={Platform.OS !== 'web'}
+        contentContainerStyle={styles.content}
+        ListHeaderComponent={
+          <>
+            <Animated.View
+              key={`toolbar-${animationEpoch}`}
+              entering={FadeInUp.duration(320)}
+              layout={cardLayoutTransition}
+            >
+              <View style={styles.toolbarRow}>
+                <View style={styles.searchBar}>
+                  <Ionicons name="search" size={18} color={palette.textMuted} />
+                  <TextInput
+                    accessibilityLabel={t('accessibility.searchExercises', { defaultValue: 'Search exercises' })}
+                    value={query}
+                    onChangeText={setQuery}
+                    placeholder={t('exercise.searchPlaceholder')}
+                    placeholderTextColor={palette.textMuted}
+                    style={styles.searchInput}
+                    autoCorrect={false}
+                    autoCapitalize="none"
+                  />
+                </View>
 
-          <TouchableOpacity 
-            style={styles.customButton} 
-            onPress={() => setIsCreateModalVisible(true)} 
-            activeOpacity={ACTIVE_OPACITY}
-            accessibilityRole="button"
-            accessibilityLabel={t('exercise.createTrigger')}
-          >
-            <Ionicons name="add-circle-outline" size={16} color={palette.accent} />
-            <Text style={styles.customButtonText}>{t('exercise.createTrigger')}</Text>
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
-
-      <View style={styles.filterChipRow}>
-        <TouchableOpacity
-          style={[styles.filterChip, !showRecentOnly && styles.filterChipActive]}
-          activeOpacity={ACTIVE_OPACITY}
-          onPress={() => setShowRecentOnly(false)}
-        >
-          <Text style={[styles.filterChipText, !showRecentOnly && styles.filterChipTextActive]}>
-            {t('exercise.filterAll')}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterChip, showRecentOnly && styles.filterChipActive]}
-          activeOpacity={ACTIVE_OPACITY}
-          onPress={() => setShowRecentOnly(true)}
-        >
-          <Text style={[styles.filterChipText, showRecentOnly && styles.filterChipTextActive]}>
-            {t('exercise.filterRecent')}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {isLoading ? (
-        <View style={styles.statusContainer}>
-          <ActivityIndicator size="small" color={palette.accent} />
-          <Text style={styles.statusText}>{t('exercise.loadingCatalog')}</Text>
-        </View>
-      ) : errorMessage ? (
-        <View style={styles.statusContainer}>
-          <Text style={styles.statusTitle}>{t('exercise.errors.loadCatalog')}</Text>
-          <Text style={styles.statusText}>{errorMessage}</Text>
-          <TouchableOpacity 
-            style={styles.retryButton} 
-            onPress={() => void loadExercises()} 
-            activeOpacity={ACTIVE_OPACITY}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.retry')}
-          >
-            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
-          </TouchableOpacity>
-        </View>
-      ) : groupedExercises.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyTitle}>{t('exercise.emptySearchTitle')}</Text>
-          <Text style={styles.emptySubtitle}>{t('exercise.emptySearchSubtitle')}</Text>
-        </View>
-      ) : (
-        <Animated.View
-          key={`exercise-list-${showRecentOnly ? 'recent' : 'all'}-${query.trim() ? 'q' : 'allq'}`}
-          entering={FadeInUp.duration(180)}
-        >
-          {groupedExercises.map(([muscle, groupedItems]) => (
-            <View key={muscle} style={styles.groupSection}>
-              <Text style={styles.groupTitle}>{muscle}</Text>
-              {groupedItems.map((exercise) => (
                 <TouchableOpacity
-                  key={exercise.id}
-                  style={styles.exerciseRow}
+                  style={styles.customButton}
+                  onPress={() => setIsCreateModalVisible(true)}
                   activeOpacity={ACTIVE_OPACITY}
-                  onPress={() => router.push(`/exercise/${exercise.id}` as any)}
                   accessibilityRole="button"
-                  accessibilityLabel={t('accessibility.viewExerciseDetails', { name: getLocalizedExerciseName(exercise, language), defaultValue: 'View exercise details' })}
+                  accessibilityLabel={t('exercise.createTrigger')}
                 >
-                  <ExerciseThumbnail exercise={exercise} size={40} />
-                  <View style={styles.exerciseTextWrap}>
-                    <Text style={styles.exerciseName}>{getLocalizedExerciseName(exercise, language)}</Text>
-                    <Text style={styles.exerciseMeta}>{getExerciseEquipmentLabel(exercise)}</Text>
-                  </View>
-                  <Text style={styles.exerciseMuscle}>{getExerciseMuscleLabel(exercise)}</Text>
+                  <Ionicons name="add-circle-outline" size={16} color={palette.accent} />
+                  <Text style={styles.customButtonText}>{t('exercise.createTrigger')}</Text>
                 </TouchableOpacity>
-              ))}
+              </View>
+            </Animated.View>
+
+            <View style={styles.filterChipRow}>
+              <TouchableOpacity
+                style={[styles.filterChip, !showRecentOnly && styles.filterChipActive]}
+                activeOpacity={ACTIVE_OPACITY}
+                onPress={() => startFilterTransition(() => setShowRecentOnly(false))}
+              >
+                <Text style={[styles.filterChipText, !showRecentOnly && styles.filterChipTextActive]}>
+                  {t('exercise.filterAll')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.filterChip, showRecentOnly && styles.filterChipActive]}
+                activeOpacity={ACTIVE_OPACITY}
+                onPress={() => startFilterTransition(() => setShowRecentOnly(true))}
+              >
+                <Text style={[styles.filterChipText, showRecentOnly && styles.filterChipTextActive]}>
+                  {t('exercise.filterRecent')}
+                </Text>
+              </TouchableOpacity>
             </View>
-          ))}
-        </Animated.View>
-      )}
+
+            {isLoading ? (
+              <View style={styles.statusContainer}>
+                <ActivityIndicator size="small" color={palette.accent} />
+                <Text style={styles.statusText}>{t('exercise.loadingCatalog')}</Text>
+              </View>
+            ) : errorMessage ? (
+              <View style={styles.statusContainer}>
+                <Text style={styles.statusTitle}>{t('exercise.errors.loadCatalog')}</Text>
+                <Text style={styles.statusText}>{errorMessage}</Text>
+                <TouchableOpacity
+                  style={styles.retryButton}
+                  onPress={() => void loadExercises()}
+                  activeOpacity={ACTIVE_OPACITY}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('common.retry')}
+                >
+                  <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
+                </TouchableOpacity>
+              </View>
+            ) : visibleSections.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyTitle}>{t('exercise.emptySearchTitle')}</Text>
+                <Text style={styles.emptySubtitle}>{t('exercise.emptySearchSubtitle')}</Text>
+              </View>
+            ) : null}
+          </>
+        }
+        renderSectionHeader={({ section }) => (
+          <Text style={styles.groupTitle}>{section.title}</Text>
+        )}
+        renderItem={({ item: exercise }) => (
+          <TouchableOpacity
+            style={styles.exerciseRow}
+            activeOpacity={ACTIVE_OPACITY}
+            onPress={() => router.push(`/exercise/${exercise.id}` as any)}
+            accessibilityRole="button"
+            accessibilityLabel={t('accessibility.viewExerciseDetails', {
+              name: getLocalizedExerciseName(exercise, language),
+              defaultValue: 'View exercise details',
+            })}
+          >
+            <ExerciseThumbnail exercise={exercise} size={40} />
+            <View style={styles.exerciseTextWrap}>
+              <Text style={styles.exerciseName}>{getLocalizedExerciseName(exercise, language)}</Text>
+              <Text style={styles.exerciseMeta}>{getExerciseEquipmentLabel(exercise)}</Text>
+            </View>
+            <Text style={styles.exerciseMuscle}>{getExerciseMuscleLabel(exercise)}</Text>
+          </TouchableOpacity>
+        )}
+      />
 
       {(!isCreateModalVisible && isWeb) ? null : (
       <ModalWrapper {...modalProps}>
@@ -405,7 +423,7 @@ export default function ExercisesScreen() {
         </View>
       </ModalWrapper>
       )}
-    </ScrollView>
+    </View>
   );
 }
 

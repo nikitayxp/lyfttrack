@@ -86,9 +86,16 @@ function findBestMatch(name: string): string | null {
   return null;
 }
 
+const urlCache = new Map<string, string | null>();
+
 export function getExerciseImageUrl(exercise: ExerciseImageSource): string | null {
   if (exercise.image_url) {
     return exercise.image_url;
+  }
+
+  const cacheKey = `${exercise.name_en ?? ''}|${exercise.name ?? ''}|${exercise.name_pt ?? ''}`;
+  if (urlCache.has(cacheKey)) {
+    return urlCache.get(cacheKey) ?? null;
   }
 
   const candidates = [exercise.name_en, exercise.name, exercise.name_pt].filter(
@@ -98,9 +105,12 @@ export function getExerciseImageUrl(exercise: ExerciseImageSource): string | nul
   for (const candidate of candidates) {
     const matchId = findBestMatch(candidate);
     if (matchId) {
-      return `${FREE_EXERCISE_DB_BASE}/${matchId}/0.jpg`;
+      const url = `${FREE_EXERCISE_DB_BASE}/${matchId}/0.jpg`;
+      urlCache.set(cacheKey, url);
+      return url;
     }
   }
 
+  urlCache.set(cacheKey, null);
   return null;
 }

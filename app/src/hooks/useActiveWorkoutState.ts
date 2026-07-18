@@ -531,6 +531,27 @@ export function useActiveWorkoutState({
     );
   }, [setActiveExercisesWithRef]);
 
+  const removeSet = useCallback((exerciseId: string, setId: string) => {
+    setActiveExercisesWithRef((currentValue) =>
+      currentValue.map((exercise) => {
+        if (exercise.id !== exerciseId) return exercise;
+        if (exercise.sets.length <= 1) return exercise;
+
+        const nextSets = exercise.sets
+          .filter((setItem) => setItem.id !== setId)
+          .map((setItem, index) => ({
+            ...setItem,
+            set_number: index + 1,
+          }));
+
+        return {
+          ...exercise,
+          sets: nextSets,
+        };
+      })
+    );
+  }, [setActiveExercisesWithRef]);
+
   const addExercise = useCallback((exercise: ExerciseRow) => {
     setActiveExercisesWithRef((currentValue) => [...currentValue, createExerciseBlock(exercise)]);
   }, [setActiveExercisesWithRef]);
@@ -572,6 +593,7 @@ export function useActiveWorkoutState({
     updateSetType,
     updateExerciseNotes,
     addSet,
+    removeSet,
     addExercise,
     clearExercises,
     getExerciseCompletionGlowValue,

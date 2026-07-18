@@ -38,6 +38,7 @@ type WorkoutContextValue = {
   updateSetType: (exerciseId: string, setId: string, setType: 'normal' | 'warmup' | 'drop' | 'failure') => void;
   updateExerciseNotes: (exerciseId: string, notes: string | null) => void;
   addSet: (exerciseId: string) => void;
+  removeSet: (exerciseId: string, setId: string) => void;
   addExercise: (exercise: ExerciseRow) => void;
   clearExercises: () => void;
   removeExercise: (exerciseIndex: number) => void;
@@ -119,6 +120,7 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
     updateSetType,
     updateExerciseNotes,
     addSet,
+    removeSet,
     addExercise,
     clearExercises,
     getExerciseCompletionGlowValue,
@@ -497,6 +499,7 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
     updateSetType,
     updateExerciseNotes,
     addSet,
+    removeSet,
     addExercise: addExerciseToWorkout,
     clearExercises: clearWorkout,
     removeExercise,
@@ -525,6 +528,7 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
     activeExercisesRef,
     addExerciseToWorkout,
     addSet,
+    removeSet,
     clearDraft,
     clearWorkout,
     currentUserId,

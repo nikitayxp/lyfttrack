@@ -190,9 +190,11 @@ export default function StatsScreen() {
 
   const weeksAgoLabel = useMemo(() => {
     if (!selectedDashboardPoint) return null;
+    // Use floor so a week only counts as "N weeks ago" after it has fully elapsed.
+    // Math.round made Fri–Sun of the current week show "1 weeks ago".
     const weeks = Math.max(
       0,
-      Math.round((Date.now() - new Date(`${selectedDashboardPoint.weekKey}T12:00:00.000Z`).getTime()) / (7 * 24 * 60 * 60 * 1000))
+      Math.floor((Date.now() - new Date(`${selectedDashboardPoint.weekKey}T12:00:00.000Z`).getTime()) / (7 * 24 * 60 * 60 * 1000))
     );
     return t('stats.weeksAgo', { count: weeks });
   }, [selectedDashboardPoint, t]);

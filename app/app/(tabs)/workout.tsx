@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useDeferredValue, useTransition } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import {
@@ -101,7 +101,11 @@ export default function WorkoutScreen() {
 
   const [exerciseQuery, setExerciseQuery] = useState('');
   const [showRecentOnly, setShowRecentOnly] = useState(false);
+  const [, startFilterTransition] = useTransition();
+  const deferredShowRecentOnly = useDeferredValue(showRecentOnly);
+  const deferredExerciseQuery = useDeferredValue(exerciseQuery);
   const [recentExerciseIds, setRecentExerciseIds] = useState<string[]>([]);
+  const [visibleGroupCount, setVisibleGroupCount] = useState(Number.POSITIVE_INFINITY);
   const [isCreateExerciseModalVisible, setIsCreateExerciseModalVisible] = useState(false);
   const [isCreatingExercise, setIsCreatingExercise] = useState(false);
   const [exerciseNameInput, setExerciseNameInput] = useState('');
@@ -155,11 +159,11 @@ export default function WorkoutScreen() {
   }, [t]);
 
   const groupedExercises = useMemo(() => {
-    const normalizedQuery = exerciseQuery.trim().toLowerCase();
+    const normalizedQuery = deferredExerciseQuery.trim().toLowerCase();
     const recentSet = new Set(recentExerciseIds);
 
     const filtered = catalogExercises.filter((exercise) => {
-      if (showRecentOnly && !recentSet.has(exercise.id)) {
+      if (deferredShowRecentOnly && !recentSet.has(exercise.id)) {
         return false;
       }
 
@@ -186,12 +190,42 @@ export default function WorkoutScreen() {
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
   }, [
     catalogExercises,
-    exerciseQuery,
+    deferredExerciseQuery,
     getDisplayExerciseName,
     getDisplayMuscle,
     recentExerciseIds,
-    showRecentOnly,
+    deferredShowRecentOnly,
   ]);
+
+  useEffect(() => {
+    if (activeMode !== 'exercises' || deferredShowRecentOnly) {
+      setVisibleGroupCount(Number.POSITIVE_INFINITY);
+      return;
+    }
+
+    // Reveal "All" groups in small batches so Recents → All does not mount every image at once.
+    setVisibleGroupCount(2);
+    let shown = 2;
+    const timer = setInterval(() => {
+      shown += 3;
+      if (shown >= groupedExercises.length) {
+        setVisibleGroupCount(Number.POSITIVE_INFINITY);
+        clearInterval(timer);
+        return;
+      }
+      setVisibleGroupCount(shown);
+    }, 24);
+
+    return () => clearInterval(timer);
+  }, [activeMode, deferredShowRecentOnly, groupedExercises.length]);
+
+  const visibleGroupedExercises = useMemo(
+    () =>
+      Number.isFinite(visibleGroupCount)
+        ? groupedExercises.slice(0, visibleGroupCount)
+        : groupedExercises,
+    [groupedExercises, visibleGroupCount]
+  );
 
   const shouldLoadCatalog = useMemo(() => {
     return (
@@ -774,7 +808,7 @@ export default function WorkoutScreen() {
             <TouchableOpacity
               style={[styles.filterChip, !showRecentOnly && styles.filterChipActive]}
               activeOpacity={ACTIVE_OPACITY}
-              onPress={() => setShowRecentOnly(false)}
+              onPress={() => startFilterTransition(() => setShowRecentOnly(false))}
             >
               <Text style={[styles.filterChipText, !showRecentOnly && styles.filterChipTextActive]}>
                 {t('exercise.filterAll')}
@@ -783,7 +817,7 @@ export default function WorkoutScreen() {
             <TouchableOpacity
               style={[styles.filterChip, showRecentOnly && styles.filterChipActive]}
               activeOpacity={ACTIVE_OPACITY}
-              onPress={() => setShowRecentOnly(true)}
+              onPress={() => startFilterTransition(() => setShowRecentOnly(true))}
             >
               <Text style={[styles.filterChipText, showRecentOnly && styles.filterChipTextActive]}>
                 {t('exercise.filterRecent')}
@@ -819,11 +853,8 @@ export default function WorkoutScreen() {
               <Text style={styles.emptySubtitle}>{t('exercise.emptySearchSubtitle')}</Text>
             </View>
           ) : (
-            <Animated.View
-              key={`workout-exercise-list-${showRecentOnly ? 'recent' : 'all'}-${exerciseQuery.trim() ? 'q' : 'allq'}`}
-              entering={FadeInUp.duration(180)}
-            >
-              {groupedExercises.map(([muscle, groupedItems]) => (
+            <View>
+              {visibleGroupedExercises.map(([muscle, groupedItems]) => (
                 <View key={muscle} style={styles.groupSection}>
                   <Text style={styles.groupTitle}>{muscle}</Text>
                   {groupedItems.map((exercise) => (
@@ -848,7 +879,7 @@ export default function WorkoutScreen() {
                   ))}
                 </View>
               ))}
-            </Animated.View>
+            </View>
           )}
         </>
       ) : null}

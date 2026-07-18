@@ -29,15 +29,24 @@ function stripHtmlTags(value: string): string {
 }
 
 export function sanitizeDecimalText(value: string): string {
+  // Accept comma as decimal separator (PT keyboards) and keep a single ".".
   const normalized = value.replace(/,/g, '.');
-  const digitsAndDot = normalized.replace(/[^0-9.]/g, '');
-  const [head, ...tail] = digitsAndDot.split('.');
+  const cleaned = normalized.replace(/[^0-9.]/g, '');
+  const firstDot = cleaned.indexOf('.');
 
-  if (tail.length === 0) {
-    return head;
+  if (firstDot === -1) {
+    return cleaned;
   }
 
-  return `${head}.${tail.join('')}`;
+  const intPart = cleaned.slice(0, firstDot).replace(/\./g, '');
+  const fracPart = cleaned.slice(firstDot + 1).replace(/\./g, '').slice(0, 2);
+
+  // Keep trailing "." while the user is still typing (e.g. "7." -> "7.5").
+  if (cleaned.endsWith('.') && fracPart.length === 0) {
+    return `${intPart}.`;
+  }
+
+  return fracPart.length > 0 ? `${intPart}.${fracPart}` : intPart;
 }
 
 export function sanitizeIntegerText(value: string): string {

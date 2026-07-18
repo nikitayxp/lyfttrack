@@ -176,13 +176,35 @@ export default function AthletesScreen() {
             value={query}
             onChangeText={setQuery}
             style={styles.searchInput}
-            placeholder={t('social.search.placeholder')}
+            placeholder={t('feed.searchPlaceholder')}
             placeholderTextColor={palette.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="search"
           />
+          {query.length > 0 ? (
+            <TouchableOpacity
+              activeOpacity={ACTIVE_OPACITY}
+              onPress={() => setQuery('')}
+              accessibilityRole="button"
+              accessibilityLabel={t('social.search.viewAll')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="close-circle" size={18} color={palette.textMuted} />
+            </TouchableOpacity>
+          ) : null}
         </View>
+
+        <TouchableOpacity
+          style={styles.viewAllButton}
+          activeOpacity={ACTIVE_OPACITY}
+          onPress={() => {
+            setQuery('');
+            void loadAthletes('');
+          }}
+        >
+          <Text style={styles.viewAllButtonText}>{t('social.search.viewAll')}</Text>
+        </TouchableOpacity>
 
         <Text style={styles.searchModeText}>
           {hasSearchQuery ? t('social.search.title') : t('social.search.viewAll')}
@@ -318,6 +340,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     paddingVertical: 8,
+  },
+  viewAllButton: {
+    marginTop: 10,
+    minHeight: 36,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: palette.accent,
+    backgroundColor: 'rgba(59,130,246,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  viewAllButtonText: {
+    color: palette.accentLight,
+    fontSize: 13,
+    fontWeight: '800',
   },
   searchModeText: {
     marginTop: 8,

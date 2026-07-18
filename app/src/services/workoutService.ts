@@ -129,6 +129,10 @@ export type WorkoutDetailsExercise = {
   rest_time: number | null;
   exercise_id: string;
   exercise_name: string;
+  name_en: string | null;
+  name_pt: string | null;
+  is_custom: boolean;
+  image_url: string | null;
   muscle_group: string | null;
   equipment: string | null;
   notes: string | null;
@@ -249,7 +253,10 @@ type RawWorkoutFeedRow = Tables<'workouts'> & {
   workout_comments?: RelationCountRow[] | null;
 };
 
-type ExerciseSummary = Pick<ExerciseCatalogItem, 'id' | 'name' | 'muscle_group' | 'equipment'>;
+type ExerciseSummary = Pick<
+  ExerciseCatalogItem,
+  'id' | 'name' | 'name_en' | 'name_pt' | 'muscle_group' | 'equipment' | 'is_custom' | 'image_url'
+>;
 
 type RawWorkoutExerciseDetailsRow = Pick<WorkoutExerciseRow, 'id' | 'order' | 'rest_time' | 'exercise_id' | 'notes'> & {
   exercises?: ExerciseSummary | ExerciseSummary[] | null;
@@ -1518,7 +1525,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
 
   const { data: rawWorkoutExercisesData, error: workoutExercisesError } = await supabase
     .from('workout_exercises')
-    .select('id, order, rest_time, exercise_id, notes, exercises(id, name, muscle_group, equipment)')
+    .select('id, order, rest_time, exercise_id, notes, exercises(id, name, name_en, name_pt, muscle_group, equipment, is_custom, image_url)')
     .eq('workout_id', normalizedWorkoutId)
     .order('order', { ascending: true });
 
@@ -1534,7 +1541,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
     if (isNotesMissing) {
       const fallback = await supabase
         .from('workout_exercises')
-        .select('id, order, rest_time, exercise_id, exercises(id, name, muscle_group, equipment)')
+        .select('id, order, rest_time, exercise_id, exercises(id, name, name_en, name_pt, muscle_group, equipment, is_custom, image_url)')
         .eq('workout_id', normalizedWorkoutId)
         .order('order', { ascending: true });
 
@@ -1652,7 +1659,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
   if (missingExerciseIds.length > 0) {
     const { data: missingExercises, error: missingExercisesError } = await supabase
       .from('exercises')
-      .select('id, name, muscle_group, equipment')
+      .select('id, name, name_en, name_pt, muscle_group, equipment, is_custom, image_url')
       .in('id', missingExerciseIds);
 
     if (missingExercisesError) {
@@ -1711,6 +1718,10 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
       rest_time: relation.rest_time,
       exercise_id: relation.exercise_id,
       exercise_name: exerciseInfo?.name ?? 'Unknown exercise',
+      name_en: exerciseInfo?.name_en ?? null,
+      name_pt: exerciseInfo?.name_pt ?? null,
+      is_custom: exerciseInfo?.is_custom ?? false,
+      image_url: exerciseInfo?.image_url ?? null,
       muscle_group: exerciseInfo?.muscle_group ?? null,
       equipment: exerciseInfo?.equipment ?? null,
       notes: relation.notes ?? null,
@@ -1743,6 +1754,10 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
       rest_time: null,
       exercise_id: exerciseId,
       exercise_name: exerciseInfo?.name ?? 'Unknown exercise',
+      name_en: exerciseInfo?.name_en ?? null,
+      name_pt: exerciseInfo?.name_pt ?? null,
+      is_custom: exerciseInfo?.is_custom ?? false,
+      image_url: exerciseInfo?.image_url ?? null,
       muscle_group: exerciseInfo?.muscle_group ?? null,
       equipment: exerciseInfo?.equipment ?? null,
       notes: null,
@@ -1767,6 +1782,10 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
       rest_time: null,
       exercise_id: exerciseId,
       exercise_name: exerciseInfo?.name ?? 'Unknown exercise',
+      name_en: exerciseInfo?.name_en ?? null,
+      name_pt: exerciseInfo?.name_pt ?? null,
+      is_custom: exerciseInfo?.is_custom ?? false,
+      image_url: exerciseInfo?.image_url ?? null,
       muscle_group: exerciseInfo?.muscle_group ?? null,
       equipment: exerciseInfo?.equipment ?? null,
       notes: null,

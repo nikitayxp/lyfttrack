@@ -35,18 +35,20 @@ import {
   startWorkoutFromTemplate,
   type TemplateSummary,
 } from '@/services/templateService';
+import { EmptyState } from '@/components/common/EmptyState';
+import { ExerciseThumbnail } from '@/components/common/ExerciseThumbnail';
+import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
+import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 import {
   createExercise,
   createRoutine,
   getErrorMessage,
   getExercisesCatalog,
+  getRecentExerciseIds,
   getRoutines,
   type RoutineSummary,
 } from '@/services/workoutService';
 import type { Tables } from '@/types/database';
-import { EmptyState } from '@/components/common/EmptyState';
-import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
-import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 
 const palette = Colors.dark;
 const CARD_BG = palette.surface;
@@ -98,6 +100,8 @@ export default function WorkoutScreen() {
   const [catalogError, setCatalogError] = useState<string | null>(null);
 
   const [exerciseQuery, setExerciseQuery] = useState('');
+  const [showRecentOnly, setShowRecentOnly] = useState(false);
+  const [recentExerciseIds, setRecentExerciseIds] = useState<string[]>([]);
   const [isCreateExerciseModalVisible, setIsCreateExerciseModalVisible] = useState(false);
   const [isCreatingExercise, setIsCreatingExercise] = useState(false);
   const [exerciseNameInput, setExerciseNameInput] = useState('');
@@ -152,14 +156,21 @@ export default function WorkoutScreen() {
 
   const groupedExercises = useMemo(() => {
     const normalizedQuery = exerciseQuery.trim().toLowerCase();
+    const recentSet = new Set(recentExerciseIds);
 
-    const filtered = normalizedQuery
-      ? catalogExercises.filter((exercise) => {
-          const byName = getDisplayExerciseName(exercise).toLowerCase().includes(normalizedQuery);
-          const byMuscle = getDisplayMuscle(exercise).toLowerCase().includes(normalizedQuery);
-          return byName || byMuscle;
-        })
-      : catalogExercises;
+    const filtered = catalogExercises.filter((exercise) => {
+      if (showRecentOnly && !recentSet.has(exercise.id)) {
+        return false;
+      }
+
+      if (!normalizedQuery) {
+        return true;
+      }
+
+      const byName = getDisplayExerciseName(exercise).toLowerCase().includes(normalizedQuery);
+      const byMuscle = getDisplayMuscle(exercise).toLowerCase().includes(normalizedQuery);
+      return byName || byMuscle;
+    });
 
     const groups = filtered.reduce<Record<string, ExerciseRow[]>>((acc, exercise) => {
       const groupKey = getDisplayMuscle(exercise);
@@ -173,7 +184,14 @@ export default function WorkoutScreen() {
     }, {});
 
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
-  }, [catalogExercises, exerciseQuery, getDisplayExerciseName, getDisplayMuscle]);
+  }, [
+    catalogExercises,
+    exerciseQuery,
+    getDisplayExerciseName,
+    getDisplayMuscle,
+    recentExerciseIds,
+    showRecentOnly,
+  ]);
 
   const shouldLoadCatalog = useMemo(() => {
     return (
@@ -218,8 +236,9 @@ export default function WorkoutScreen() {
     setCatalogError(null);
 
     try {
-      const exercises = await getExercisesCatalog();
+      const [exercises, recentIds] = await Promise.all([getExercisesCatalog(), getRecentExerciseIds()]);
       setCatalogExercises(exercises);
+      setRecentExerciseIds(recentIds);
       setHasLoadedCatalog(true);
     } catch (error) {
       setCatalogError(getErrorMessage(error));
@@ -751,6 +770,27 @@ export default function WorkoutScreen() {
             </View>
           </View>
 
+          <View style={styles.filterChipRow}>
+            <TouchableOpacity
+              style={[styles.filterChip, !showRecentOnly && styles.filterChipActive]}
+              activeOpacity={ACTIVE_OPACITY}
+              onPress={() => setShowRecentOnly(false)}
+            >
+              <Text style={[styles.filterChipText, !showRecentOnly && styles.filterChipTextActive]}>
+                {t('exercise.filterAll')}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterChip, showRecentOnly && styles.filterChipActive]}
+              activeOpacity={ACTIVE_OPACITY}
+              onPress={() => setShowRecentOnly(true)}
+            >
+              <Text style={[styles.filterChipText, showRecentOnly && styles.filterChipTextActive]}>
+                {t('exercise.filterRecent')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           {isLoadingCatalog ? (
             <View style={styles.statusContainer}>
               <ActivityIndicator size="small" color={palette.accent} />
@@ -793,13 +833,23 @@ export default function WorkoutScreen() {
                       entering={FadeInDown.delay(Math.min(exerciseIndex * 35, 180)).duration(280)}
                       layout={cardLayoutTransition}
                     >
-                      <View style={styles.exerciseRow}>
+                      <TouchableOpacity
+                        style={styles.exerciseRow}
+                        activeOpacity={ACTIVE_OPACITY}
+                        onPress={() => router.push(`/exercise/${exercise.id}` as any)}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('accessibility.viewExerciseDetails', {
+                          name: getDisplayExerciseName(exercise),
+                          defaultValue: 'View exercise details',
+                        })}
+                      >
+                        <ExerciseThumbnail exercise={exercise} size={40} />
                         <View style={styles.exerciseTextWrap}>
                             <Text style={styles.exerciseName}>{getDisplayExerciseName(exercise)}</Text>
                             <Text style={styles.exerciseMeta}>{getDisplayEquipment(exercise)}</Text>
                         </View>
                           <Text style={styles.exerciseMuscle}>{getDisplayMuscle(exercise)}</Text>
-                      </View>
+                      </TouchableOpacity>
                     </Animated.View>
                   ))}
                 </View>
@@ -1523,6 +1573,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 8,
+  },
+  filterChipRow: {
+    flexDirection: 'row',
+    columnGap: 8,
+    marginBottom: 12,
+  },
+  filterChip: {
+    minHeight: 32,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: palette.borderStrong,
+    backgroundColor: palette.surfaceAlt,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterChipActive: {
+    borderColor: palette.accent,
+    backgroundColor: palette.accent,
+  },
+  filterChipText: {
+    color: palette.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  filterChipTextActive: {
+    color: '#FFFFFF',
   },
   exerciseTextWrap: {
     flex: 1,

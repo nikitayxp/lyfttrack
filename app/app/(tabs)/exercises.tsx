@@ -30,7 +30,7 @@ import {
 } from '@/constants/exerciseCatalog';
 import { usePreferences } from '@/context/PreferencesContext';
 import type { Tables } from '@/types/database';
-import { createExercise, getErrorMessage, getExercisesCatalog } from '@/services/workoutService';
+import { createExercise, getErrorMessage, getExercisesCatalog, getRecentExerciseIds } from '@/services/workoutService';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 import { ExerciseThumbnail } from '@/components/common/ExerciseThumbnail';
@@ -45,6 +45,8 @@ export default function ExercisesScreen() {
   const isWeb = Platform.OS === 'web';
   const [exercises, setExercises] = useState<ExerciseRow[]>([]);
   const [query, setQuery] = useState('');
+  const [showRecentOnly, setShowRecentOnly] = useState(false);
+  const [recentExerciseIds, setRecentExerciseIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
@@ -65,8 +67,9 @@ export default function ExercisesScreen() {
     setErrorMessage(null);
 
     try {
-      const catalog = await getExercisesCatalog();
+      const [catalog, recentIds] = await Promise.all([getExercisesCatalog(), getRecentExerciseIds()]);
       setExercises(catalog);
+      setRecentExerciseIds(recentIds);
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
     } finally {
@@ -123,6 +126,7 @@ export default function ExercisesScreen() {
 
   const groupedExercises = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
+    const recentSet = new Set(recentExerciseIds);
 
     const getDisplayName = (exercise: ExerciseRow) => getLocalizedExerciseName(exercise, language);
     const getDisplayMuscle = (exercise: ExerciseRow) => {
@@ -142,13 +146,19 @@ export default function ExercisesScreen() {
       return getLocalizedExerciseMuscle(exercise, language) ?? t('exercise.general');
     };
 
-    const filtered = normalizedQuery
-      ? exercises.filter((exercise) => {
-          const byName = getDisplayName(exercise).toLowerCase().includes(normalizedQuery);
-          const byMuscle = getDisplayMuscle(exercise).toLowerCase().includes(normalizedQuery);
-          return byName || byMuscle;
-        })
-      : exercises;
+    const filtered = exercises.filter((exercise) => {
+      if (showRecentOnly && !recentSet.has(exercise.id)) {
+        return false;
+      }
+
+      if (!normalizedQuery) {
+        return true;
+      }
+
+      const byName = getDisplayName(exercise).toLowerCase().includes(normalizedQuery);
+      const byMuscle = getDisplayMuscle(exercise).toLowerCase().includes(normalizedQuery);
+      return byName || byMuscle;
+    });
 
     const groups = filtered.reduce<Record<string, ExerciseRow[]>>((acc, exercise) => {
       const groupKey = getDisplayMuscle(exercise);
@@ -160,7 +170,7 @@ export default function ExercisesScreen() {
     }, {});
 
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
-  }, [language, query, exercises, t]);
+  }, [language, query, exercises, recentExerciseIds, showRecentOnly, t]);
 
   const ModalWrapper = isWeb ? View : Modal;
   const modalProps = isWeb 
@@ -224,6 +234,27 @@ export default function ExercisesScreen() {
           </TouchableOpacity>
         </View>
       </Animated.View>
+
+      <View style={styles.filterChipRow}>
+        <TouchableOpacity
+          style={[styles.filterChip, !showRecentOnly && styles.filterChipActive]}
+          activeOpacity={ACTIVE_OPACITY}
+          onPress={() => setShowRecentOnly(false)}
+        >
+          <Text style={[styles.filterChipText, !showRecentOnly && styles.filterChipTextActive]}>
+            {t('exercise.filterAll')}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterChip, showRecentOnly && styles.filterChipActive]}
+          activeOpacity={ACTIVE_OPACITY}
+          onPress={() => setShowRecentOnly(true)}
+        >
+          <Text style={[styles.filterChipText, showRecentOnly && styles.filterChipTextActive]}>
+            {t('exercise.filterRecent')}
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       {isLoading ? (
         <View style={styles.statusContainer}>
@@ -397,8 +428,35 @@ const styles = StyleSheet.create({
   toolbarRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 18,
+    marginBottom: 12,
     columnGap: 10,
+  },
+  filterChipRow: {
+    flexDirection: 'row',
+    columnGap: 8,
+    marginBottom: 16,
+  },
+  filterChip: {
+    minHeight: 32,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: palette.borderStrong,
+    backgroundColor: palette.surfaceAlt,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterChipActive: {
+    borderColor: palette.accent,
+    backgroundColor: palette.accent,
+  },
+  filterChipText: {
+    color: palette.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  filterChipTextActive: {
+    color: '#FFFFFF',
   },
   searchBar: {
     flex: 1,

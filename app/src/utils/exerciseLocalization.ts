@@ -12,10 +12,6 @@ function normalizeText(value: string | null | undefined): string | null {
 }
 
 export function getLocalizedExerciseName(exercise: ExerciseLocalizationSource, language: AppLanguage): string {
-  if (exercise.is_custom) {
-    return normalizeText(exercise.name) ?? 'Exercise';
-  }
-
   if (language === 'pt') {
     return (
       normalizeText(exercise.name_pt) ??
@@ -34,10 +30,6 @@ export function getLocalizedExerciseName(exercise: ExerciseLocalizationSource, l
 }
 
 export function getLocalizedExerciseMuscle(exercise: ExerciseLocalizationSource, language: AppLanguage): string | null {
-  if (exercise.is_custom) {
-    return normalizeText(exercise.muscle_group);
-  }
-
   if (language === 'pt') {
     return (
       normalizeText(exercise.muscle_pt) ??

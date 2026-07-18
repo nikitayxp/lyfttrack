@@ -52,6 +52,14 @@ function parseOptionalWeight(value: string): number | null {
   return toSafeNumber(value, { min: 0, max: INPUT_LIMITS.weightMax, decimals: 2 });
 }
 
+function trimWeightInput(weight: number): string {
+  const normalized = toSafeNumber(weight, { min: 0, max: INPUT_LIMITS.weightMax, decimals: 2 });
+  if (normalized === null) {
+    return '';
+  }
+  return Number.isInteger(normalized) ? String(normalized) : String(normalized);
+}
+
 function parseOptionalReps(value: string): number | null {
   return toSafeInteger(value, { min: 0, max: INPUT_LIMITS.repsMax });
 }
@@ -145,15 +153,16 @@ export function createExerciseBlockFromSets(
     defaultRestSeconds: normalizeExerciseRestSeconds(options.defaultRestSeconds ?? DEFAULT_REST_SECONDS),
     notes: options.notes ?? exercise.description ?? null,
     sets: safeSets.map((seed, index) => {
-      const weightInput = seed.weight != null && Number.isFinite(seed.weight) && seed.weight > 0
-        ? String(seed.weight)
-        : '';
-      const repsInput = seed.reps != null && Number.isFinite(seed.reps) && seed.reps > 0
-        ? String(Math.trunc(seed.reps))
-        : '';
-      const rirInput = seed.rir != null && Number.isFinite(seed.rir)
-        ? String(seed.rir)
-        : '';
+      const weightInput =
+        seed.weight != null && Number.isFinite(seed.weight) && seed.weight > 0
+          ? trimWeightInput(seed.weight)
+          : '';
+      const repsInput =
+        seed.reps != null && Number.isFinite(seed.reps) && seed.reps > 0
+          ? String(Math.trunc(seed.reps))
+          : '';
+      const rirInput =
+        seed.rir != null && Number.isFinite(seed.rir) ? String(seed.rir) : '';
 
       return createSet(exercise.id, index + 1, {
         setType: (seed.setType as SetTypeOption | undefined) ?? 'normal',
@@ -522,6 +531,27 @@ export function useActiveWorkoutState({
     );
   }, [setActiveExercisesWithRef]);
 
+  const removeSet = useCallback((exerciseId: string, setId: string) => {
+    setActiveExercisesWithRef((currentValue) =>
+      currentValue.map((exercise) => {
+        if (exercise.id !== exerciseId) return exercise;
+        if (exercise.sets.length <= 1) return exercise;
+
+        const nextSets = exercise.sets
+          .filter((setItem) => setItem.id !== setId)
+          .map((setItem, index) => ({
+            ...setItem,
+            set_number: index + 1,
+          }));
+
+        return {
+          ...exercise,
+          sets: nextSets,
+        };
+      })
+    );
+  }, [setActiveExercisesWithRef]);
+
   const addExercise = useCallback((exercise: ExerciseRow) => {
     setActiveExercisesWithRef((currentValue) => [...currentValue, createExerciseBlock(exercise)]);
   }, [setActiveExercisesWithRef]);
@@ -563,6 +593,7 @@ export function useActiveWorkoutState({
     updateSetType,
     updateExerciseNotes,
     addSet,
+    removeSet,
     addExercise,
     clearExercises,
     getExerciseCompletionGlowValue,

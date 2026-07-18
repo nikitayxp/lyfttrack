@@ -559,3 +559,92 @@ export async function getWeeklyTrainingHours(localeTag?: string): Promise<{ week
     }));
 }
 
+export type WeeklyDashboardMetric = 'duration' | 'volume' | 'reps';
+
+export type WeeklyDashboardPoint = {
+  weekKey: string;
+  weekLabel: string;
+  volumeKg: number;
+  durationMinutes: number;
+  repsTotal: number;
+  workouts: number;
+};
+
+export async function getWeeklyDashboardMetrics(
+  localeTag?: string,
+  weeksBack = 12
+): Promise<WeeklyDashboardPoint[]> {
+  const user = await getAuthenticatedUserOrThrow();
+  const sinceIso = new Date(Date.now() - weeksBack * 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: workouts, error: workoutsError } = await supabase
+    .from('workouts')
+    .select('id, start_time, end_time')
+    .eq('user_id', user.id)
+    .not('end_time', 'is', null)
+    .gte('start_time', sinceIso)
+    .order('start_time', { ascending: true });
+
+  if (workoutsError) {
+    throw new Error(`Unable to load dashboard workouts: ${workoutsError.message}`);
+  }
+
+  const workoutRows = (workouts as Array<{ id: string; start_time: string; end_time: string | null }> | null) ?? [];
+  if (workoutRows.length === 0) {
+    return [];
+  }
+
+  const workoutIds = workoutRows.map((row) => row.id);
+  const { data: setRows, error: setsError } = await supabase
+    .from('sets')
+    .select('workout_id, weight, reps')
+    .in('workout_id', workoutIds);
+
+  if (setsError) {
+    throw new Error(`Unable to load dashboard sets: ${setsError.message}`);
+  }
+
+  const volumeByWorkout = new Map<string, { volumeKg: number; repsTotal: number }>();
+  for (const row of (setRows as Array<{ workout_id: string | null; weight: number | null; reps: number | null }> | null) ?? []) {
+    if (!row.workout_id) continue;
+    const weight = toNonNegativeNumber(row.weight);
+    const reps = toNonNegativeNumber(row.reps);
+    const current = volumeByWorkout.get(row.workout_id) ?? { volumeKg: 0, repsTotal: 0 };
+    current.volumeKg += weight * reps;
+    current.repsTotal += reps;
+    volumeByWorkout.set(row.workout_id, current);
+  }
+
+  const weekMap = new Map<string, WeeklyDashboardPoint>();
+
+  for (const workout of workoutRows) {
+    const start = new Date(workout.start_time);
+    if (!Number.isFinite(start.getTime())) continue;
+    const weekKey = getWeekStartKey(start);
+    const setsAgg = volumeByWorkout.get(workout.id) ?? { volumeKg: 0, repsTotal: 0 };
+    const current = weekMap.get(weekKey) ?? {
+      weekKey,
+      weekLabel: formatProgressLabel(weekKey, localeTag),
+      volumeKg: 0,
+      durationMinutes: 0,
+      repsTotal: 0,
+      workouts: 0,
+    };
+
+    current.volumeKg += setsAgg.volumeKg;
+    current.repsTotal += setsAgg.repsTotal;
+    current.durationMinutes += getWorkoutDurationMinutes(workout.start_time, workout.end_time);
+    current.workouts += 1;
+    weekMap.set(weekKey, current);
+  }
+
+  return [...weekMap.values()]
+    .sort((a, b) => a.weekKey.localeCompare(b.weekKey))
+    .map((point) => ({
+      ...point,
+      volumeKg: Math.round(point.volumeKg),
+      durationMinutes: Math.round(point.durationMinutes),
+      repsTotal: Math.round(point.repsTotal),
+    }));
+}
+

@@ -431,11 +431,13 @@ export default function ActiveWorkout() {
               weight: setItem.weight,
               reps: setItem.reps,
               rir: setItem.rir,
+              side: setItem.side,
             }));
 
             return createExerciseBlockFromSets(exerciseRow, seeds, {
               defaultRestSeconds: entry.rest_time ?? undefined,
-              notes: null,
+              // Keep notes from that past session (equipment settings, unilateral notes, etc.).
+              notes: entry.notes ?? exerciseRow.description ?? null,
             });
           });
 
@@ -1033,6 +1035,30 @@ export default function ActiveWorkout() {
                               />
                             </TouchableOpacity>
                           </View>
+                        </View>
+
+                        <View style={styles.sideToggleRow}>
+                          {([
+                            { key: 'both' as const, label: t('workout.sideBoth') },
+                            { key: 'left' as const, label: t('workout.sideLeft') },
+                            { key: 'right' as const, label: t('workout.sideRight') },
+                          ]).map((option) => {
+                            const isActive = setItem.side === option.key;
+                            return (
+                              <TouchableOpacity
+                                key={`${setItem.id}-${option.key}`}
+                                style={[styles.sideToggleChip, isActive && styles.sideToggleChipActive]}
+                                activeOpacity={ACTIVE_OPACITY}
+                                onPress={() => updateSetSide(exercise.id, setItem.id, option.key)}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected: isActive }}
+                              >
+                                <Text style={[styles.sideToggleText, isActive && styles.sideToggleTextActive]}>
+                                  {option.label}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
                         </View>
                       </View>
                     );
@@ -1680,6 +1706,35 @@ const styles = StyleSheet.create({
   },
   setRowWrapper: {
     marginBottom: 2,
+  },
+  sideToggleRow: {
+    flexDirection: 'row',
+    columnGap: 6,
+    paddingLeft: 38,
+    paddingBottom: 6,
+    paddingTop: 2,
+  },
+  sideToggleChip: {
+    minHeight: 24,
+    paddingHorizontal: 8,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: palette.borderStrong,
+    backgroundColor: palette.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sideToggleChipActive: {
+    borderColor: palette.accent,
+    backgroundColor: palette.chipFillSelected,
+  },
+  sideToggleText: {
+    color: palette.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  sideToggleTextActive: {
+    color: palette.textPrimary,
   },
   tableHeaderRow: {
     backgroundColor: palette.surfaceAlt,

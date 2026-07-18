@@ -39,12 +39,6 @@ const SCREEN_BG = palette.bgPrimary;
 const CARD_BG = palette.cardBg;
 const CHART_NEON = '#3B82F6';
 
-const METRIC_FILTERS: readonly { key: ProgressMetric; label: string }[] = [
-  { key: 'weight', label: 'kg' },
-  { key: 'volume', label: 'Vol.' },
-  { key: 'reps', label: 'Reps' },
-];
-
 function formatNumericValue(value: number): string {
   const safe = Number.isFinite(value) ? value : 0;
   if (safe >= 1000) return safe.toLocaleString();
@@ -66,6 +60,16 @@ export default function ExerciseDetailScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
 
+  const metricFilters = useMemo(
+    () =>
+      [
+        { key: 'volume' as const, label: t('workout.liveStatsMetricVolume') },
+        { key: 'reps' as const, label: t('workout.liveStatsMetricReps') },
+        { key: 'weight' as const, label: t('workout.liveStatsMetricKg') },
+      ] as const,
+    [t]
+  );
+
   const exerciseId = useMemo(() => {
     const raw = params.id;
     if (!raw) return null;
@@ -76,7 +80,7 @@ export default function ExerciseDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [metric, setMetric] = useState<ProgressMetric>('weight');
+  const [metric, setMetric] = useState<ProgressMetric>('volume');
   const [progress, setProgress] = useState<ExerciseProgressPoint[]>([]);
   const [records, setRecords] = useState<ExercisePersonalRecords | null>(null);
   const [history, setHistory] = useState<ExerciseWorkoutHistoryEntry[]>([]);
@@ -249,9 +253,10 @@ export default function ExerciseDetailScreen() {
         {/* Progression chart */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>{t('exercise.detail.progressTitle')}</Text>
+          <Text style={styles.cardSubtitle}>{t('exercise.detail.progressSubtitle')}</Text>
 
           <View style={styles.metricToggleRow}>
-            {METRIC_FILTERS.map((opt) => {
+            {metricFilters.map((opt) => {
               const isActive = metric === opt.key;
               return (
                 <TouchableOpacity
@@ -281,12 +286,12 @@ export default function ExerciseDetailScreen() {
               <BarChart
                 data={barData}
                 width={chartWidth}
-                height={200}
+                height={220}
                 maxValue={chartMaxValue}
                 barWidth={Math.max(14, Math.min(28, Math.floor(chartWidth / Math.max(barData.length, 1)) - 8))}
-                spacing={10}
-                initialSpacing={10}
-                endSpacing={6}
+                spacing={12}
+                initialSpacing={12}
+                endSpacing={10}
                 roundedTop
                 frontColor={CHART_NEON}
                 gradientColor="#60A5FA"
@@ -294,10 +299,10 @@ export default function ExerciseDetailScreen() {
                 yAxisColor={palette.borderStrong}
                 xAxisColor={palette.borderStrong}
                 yAxisLabelWidth={50}
-                xAxisLabelsHeight={44}
-                xAxisLabelsVerticalShift={20}
-                labelsExtraHeight={24}
-                overflowTop={16}
+                xAxisLabelsHeight={52}
+                xAxisLabelsVerticalShift={8}
+                labelsExtraHeight={36}
+                overflowTop={12}
                 yAxisTextStyle={styles.axisText}
                 xAxisLabelTextStyle={styles.xAxisLabelText}
                 formatYLabel={(label) => formatCompactNumber(label)}
@@ -456,7 +461,13 @@ const styles = StyleSheet.create({
     color: palette.textPrimary,
     fontSize: 17,
     fontWeight: '800',
-    marginBottom: 8,
+    marginBottom: 4,
+  },
+  cardSubtitle: {
+    color: palette.labelMuted,
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 10,
   },
   metricToggleRow: {
     flexDirection: 'row',
@@ -500,19 +511,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.inputFill,
     backgroundColor: palette.surfaceAlt,
-    minHeight: 260,
-    paddingTop: 10,
-    paddingBottom: 8,
+    minHeight: 300,
+    paddingTop: 12,
+    paddingBottom: 28,
     paddingHorizontal: 8,
+    overflow: 'visible',
   },
   axisText: {
     color: '#8FA2BA',
     fontSize: 11,
   },
   xAxisLabelText: {
-    color: '#8FA2BA',
+    color: '#94A3B8',
     fontSize: 10,
-    marginTop: 6,
+    width: 48,
     textAlign: 'center',
   },
   placeholderText: {

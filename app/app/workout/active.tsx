@@ -5,7 +5,6 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
-  Image,
   Modal,
   Platform,
   Pressable,
@@ -65,6 +64,8 @@ import { useWorkoutContext } from '@/context/WorkoutContext';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { WorkoutSummary } from '@/components/workout/WorkoutSummary';
+import { ConfirmModal } from '@/components/common/ConfirmModal';
+import { ExerciseThumbnail } from '@/components/common/ExerciseThumbnail';
 import {
   INPUT_LIMITS,
   sanitizeText,
@@ -72,7 +73,6 @@ import {
   toSafeNumber,
 } from '@/utils/inputValidation';
 import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/exerciseLocalization';
-import { getExerciseImageUrl } from '@/utils/exerciseImage';
 
 const palette = Colors.dark;
 const DESKTOP_WEB_MIN_WIDTH = 768;
@@ -209,6 +209,7 @@ export default function ActiveWorkout() {
     updateSetSide,
     updateExerciseNotes,
     addSet,
+    removeSet,
     addExercise,
     clearExercises,
     getExerciseCompletionGlowValue,
@@ -255,6 +256,7 @@ export default function ActiveWorkout() {
   const [finishSummary, setFinishSummary] = useState<FinishWorkoutResult | null>(null);
   const [summaryExerciseNames, setSummaryExerciseNames] = useState<string[]>([]);
   const [isSummaryVisible, setIsSummaryVisible] = useState(false);
+  const [pendingDeleteSet, setPendingDeleteSet] = useState<{ exerciseId: string; setId: string; setNumber: number } | null>(null);
   const exerciseCatalogByFilterRef = useRef<Map<string, ExerciseRow[]>>(new Map());
 
   const timerLabel = useMemo(() => formatElapsedTime(elapsedSeconds), [elapsedSeconds]);
@@ -431,11 +433,13 @@ export default function ActiveWorkout() {
               weight: setItem.weight,
               reps: setItem.reps,
               rir: setItem.rir,
+              side: setItem.side,
             }));
 
             return createExerciseBlockFromSets(exerciseRow, seeds, {
               defaultRestSeconds: entry.rest_time ?? undefined,
-              notes: null,
+              // Keep notes from that past session (equipment settings, unilateral notes, etc.).
+              notes: entry.notes ?? exerciseRow.description ?? null,
             });
           });
 
@@ -851,16 +855,7 @@ export default function ActiveWorkout() {
                       accessibilityRole="link"
                       accessibilityLabel={t('accessibility.viewExerciseDetails', { defaultValue: 'View exercise details' })}
                     >
-                      {(() => {
-                        const imgUrl = getExerciseImageUrl(exercise.exercise);
-                        return imgUrl ? (
-                          <Image source={{ uri: imgUrl }} style={styles.exerciseThumbnail} />
-                        ) : (
-                          <View style={styles.exerciseThumbnailPlaceholder}>
-                            <Ionicons name="barbell-outline" size={16} color="#475569" />
-                          </View>
-                        );
-                      })()}
+                      <ExerciseThumbnail exercise={exercise.exercise} size={34} />
                       <Text style={styles.exerciseTitle}>{getLocalizedExerciseName(exercise.exercise, language)}</Text>
                     </TouchableOpacity>
 
@@ -972,11 +967,38 @@ export default function ActiveWorkout() {
 
                     return (
                       <View key={setItem.id} style={styles.setRowWrapper}>
-                        <View style={[styles.tableRow, setItem.completed && styles.completedRow]}>
+                        <Pressable
+                          style={[styles.tableRow, setItem.completed && styles.completedRow]}
+                          onLongPress={() => {
+                            if (exercise.sets.length <= 1) {
+                              Alert.alert(t('workout.deleteSetTitle'), t('workout.deleteSetKeepOne'));
+                              return;
+                            }
+                            setPendingDeleteSet({
+                              exerciseId: exercise.id,
+                              setId: setItem.id,
+                              setNumber: setItem.set_number ?? 0,
+                            });
+                          }}
+                          delayLongPress={280}
+                          accessibilityHint={t('workout.deleteSetHint')}
+                        >
                           <TouchableOpacity
                             style={styles.cellSet}
                             activeOpacity={ACTIVE_OPACITY}
                             onPress={() => updateSetType(exercise.id, setItem.id, nextSetType)}
+                            onLongPress={() => {
+                              if (exercise.sets.length <= 1) {
+                                Alert.alert(t('workout.deleteSetTitle'), t('workout.deleteSetKeepOne'));
+                                return;
+                              }
+                              setPendingDeleteSet({
+                                exerciseId: exercise.id,
+                                setId: setItem.id,
+                                setNumber: setItem.set_number ?? 0,
+                              });
+                            }}
+                            delayLongPress={280}
                             accessibilityRole="button"
                             accessibilityLabel={t('accessibility.changeSetType', { defaultValue: 'Change set type' })}
                             hitSlop={HIT_SLOP}
@@ -1033,6 +1055,30 @@ export default function ActiveWorkout() {
                               />
                             </TouchableOpacity>
                           </View>
+                        </Pressable>
+
+                        <View style={styles.sideToggleRow}>
+                          {([
+                            { key: 'both' as const, label: t('workout.sideBoth') },
+                            { key: 'left' as const, label: t('workout.sideLeft') },
+                            { key: 'right' as const, label: t('workout.sideRight') },
+                          ]).map((option) => {
+                            const isActive = setItem.side === option.key;
+                            return (
+                              <TouchableOpacity
+                                key={`${setItem.id}-${option.key}`}
+                                style={[styles.sideToggleChip, isActive && styles.sideToggleChipActive]}
+                                activeOpacity={ACTIVE_OPACITY}
+                                onPress={() => updateSetSide(exercise.id, setItem.id, option.key)}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected: isActive }}
+                              >
+                                <Text style={[styles.sideToggleText, isActive && styles.sideToggleTextActive]}>
+                                  {option.label}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
                         </View>
                       </View>
                     );
@@ -1260,7 +1306,6 @@ export default function ActiveWorkout() {
                   </View>
                 ) : (
                   catalogExercises.map((exercise) => {
-                    const pickerImgUrl = getExerciseImageUrl(exercise);
                     return (
                       <TouchableOpacity
                         key={exercise.id}
@@ -1273,13 +1318,7 @@ export default function ActiveWorkout() {
                           setExercisePickerVisible(false);
                         }}
                       >
-                        {pickerImgUrl ? (
-                          <Image source={{ uri: pickerImgUrl }} style={styles.exerciseThumbnail} />
-                        ) : (
-                          <View style={styles.exerciseThumbnailPlaceholder}>
-                            <Ionicons name="barbell-outline" size={16} color="#475569" />
-                          </View>
-                        )}
+                        <ExerciseThumbnail exercise={exercise} size={34} />
                         <View style={styles.modalExerciseTextWrap}>
                           <Text style={styles.modalExerciseName}>{getLocalizedExerciseName(exercise, language)}</Text>
                           <Text style={styles.modalExerciseMeta}>
@@ -1407,6 +1446,27 @@ export default function ActiveWorkout() {
         completedSetCount={finishSummary?.completedSetCount ?? 0}
         exerciseNames={summaryExerciseNames}
         onShareAndFinish={handleShareAndFinish}
+      />
+
+      <ConfirmModal
+        visible={pendingDeleteSet !== null}
+        title={t('workout.deleteSetTitle')}
+        description={
+          pendingDeleteSet
+            ? t('workout.deleteSetDescription', { number: pendingDeleteSet.setNumber })
+            : undefined
+        }
+        confirmLabel={t('workout.deleteSetConfirm')}
+        cancelLabel={t('common.cancel')}
+        tone="danger"
+        icon="trash-outline"
+        onCancel={() => setPendingDeleteSet(null)}
+        onConfirm={() => {
+          if (pendingDeleteSet) {
+            removeSet(pendingDeleteSet.exerciseId, pendingDeleteSet.setId);
+          }
+          setPendingDeleteSet(null);
+        }}
       />
     </SafeAreaView>
   );
@@ -1680,6 +1740,35 @@ const styles = StyleSheet.create({
   },
   setRowWrapper: {
     marginBottom: 2,
+  },
+  sideToggleRow: {
+    flexDirection: 'row',
+    columnGap: 6,
+    paddingLeft: 38,
+    paddingBottom: 6,
+    paddingTop: 2,
+  },
+  sideToggleChip: {
+    minHeight: 24,
+    paddingHorizontal: 8,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: palette.borderStrong,
+    backgroundColor: palette.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sideToggleChipActive: {
+    borderColor: palette.accent,
+    backgroundColor: palette.chipFillSelected,
+  },
+  sideToggleText: {
+    color: palette.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  sideToggleTextActive: {
+    color: palette.textPrimary,
   },
   tableHeaderRow: {
     backgroundColor: palette.surfaceAlt,

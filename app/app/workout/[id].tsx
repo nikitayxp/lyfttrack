@@ -15,6 +15,8 @@ import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
+import { ExerciseThumbnail } from '@/components/common/ExerciseThumbnail';
+import { usePreferences } from '@/context/PreferencesContext';
 import {
   getAuthenticatedUserOrThrow,
   getErrorMessage,
@@ -23,6 +25,7 @@ import {
   type WorkoutSetType,
 } from '@/services/workoutService';
 import { formatRelativeTime } from '@/utils/dateUtils';
+import { getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 
 const palette = Colors.dark;
 const SCREEN_BG = palette.bgPrimary;
@@ -56,7 +59,7 @@ function formatDurationFromSeconds(totalSeconds: number): string {
 
 function formatNumericValue(value: number | null, mode: 'decimal' | 'integer'): string {
   if (value === null || !Number.isFinite(value)) {
-    return '-';
+    return '—';
   }
 
   if (mode === 'integer') {
@@ -68,6 +71,14 @@ function formatNumericValue(value: number | null, mode: 'decimal' | 'integer'): 
   }
 
   return value.toFixed(1);
+}
+
+function formatRirValue(rir: number | null, setType: WorkoutSetType): string {
+  if (setType === 'warmup') {
+    return '—';
+  }
+
+  return formatNumericValue(rir, 'decimal');
 }
 
 function formatSetType(setType: WorkoutSetType, t: (key: string) => unknown): string {
@@ -96,6 +107,7 @@ function initialsFromName(value: string): string {
 
 export default function WorkoutDetailsScreen() {
   const { t } = useTranslation();
+  const { language } = usePreferences();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
 
   const workoutId = useMemo(() => resolveRouteWorkoutId(params.id), [params.id]);
@@ -294,17 +306,44 @@ export default function WorkoutDetailsScreen() {
               <Text style={styles.emptyText}>{t('workoutDetails.noSetsDescription')}</Text>
             </View>
           ) : (
-            details.exercises.map((exercise) => (
+            details.exercises.map((exercise) => {
+              const localizedName = getLocalizedExerciseName(
+                {
+                  name: exercise.exercise_name,
+                  name_en: exercise.name_en,
+                  name_pt: exercise.name_pt,
+                  is_custom: exercise.is_custom,
+                  muscle_group: exercise.muscle_group,
+                  muscle_en: null,
+                  muscle_pt: null,
+                  equipment: exercise.equipment,
+                },
+                language
+              );
+
+              return (
               <View key={`${exercise.id ?? exercise.exercise_id}-${exercise.order}`} style={styles.exerciseCard}>
                 <TouchableOpacity
+                  style={styles.exerciseHeaderRow}
                   activeOpacity={ACTIVE_OPACITY}
                   onPress={() => router.push(`/exercise/${exercise.exercise_id}` as any)}
                 >
-                  <Text style={styles.exerciseName}>{exercise.exercise_name}</Text>
+                  <ExerciseThumbnail
+                    exercise={{
+                      name: exercise.exercise_name,
+                      name_en: exercise.name_en,
+                      name_pt: exercise.name_pt,
+                      image_url: exercise.image_url,
+                    }}
+                    size={40}
+                  />
+                  <View style={styles.exerciseHeaderText}>
+                    <Text style={styles.exerciseName}>{localizedName}</Text>
+                    <Text style={styles.exerciseMeta}>
+                      {(exercise.muscle_group ?? t('exercise.general')) + ' - ' + (exercise.equipment ?? t('exercise.bodyweight'))}
+                    </Text>
+                  </View>
                 </TouchableOpacity>
-                <Text style={styles.exerciseMeta}>
-                  {(exercise.muscle_group ?? t('exercise.general')) + ' - ' + (exercise.equipment ?? t('exercise.bodyweight'))}
-                </Text>
 
                 <View style={[styles.tableRow, styles.tableHeaderRow]}>
                   <Text style={[styles.headerCell, styles.cellSet]}>{t('workoutDetails.tableSet')}</Text>
@@ -316,15 +355,16 @@ export default function WorkoutDetailsScreen() {
 
                 {exercise.sets.map((setItem) => (
                   <View key={setItem.id} style={styles.tableRow}>
-                    <Text style={[styles.valueCell, styles.cellSet]}>{setItem.set_number ?? '-'}</Text>
+                    <Text style={[styles.valueCell, styles.cellSet]}>{setItem.set_number ?? '—'}</Text>
                     <Text style={[styles.valueCell, styles.cellKg]}>{formatNumericValue(setItem.weight, 'decimal')}</Text>
                     <Text style={[styles.valueCell, styles.cellReps]}>{formatNumericValue(setItem.reps, 'integer')}</Text>
-                    <Text style={[styles.valueCell, styles.cellRir]}>{formatNumericValue(setItem.rir, 'decimal')}</Text>
+                    <Text style={[styles.valueCell, styles.cellRir]}>{formatRirValue(setItem.rir, setItem.set_type)}</Text>
                     <Text style={[styles.valueCell, styles.cellType]}>{formatSetType(setItem.set_type, t)}</Text>
                   </View>
                 ))}
               </View>
-            ))
+              );
+            })
           )}
         </ScrollView>
       )}
@@ -582,6 +622,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginBottom: 10,
   },
+  exerciseHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  exerciseHeaderText: {
+    flex: 1,
+    minWidth: 0,
+  },
   exerciseName: {
     color: palette.textPrimary,
     fontSize: 17,
@@ -592,7 +641,6 @@ const styles = StyleSheet.create({
     color: palette.labelMuted,
     fontSize: 12,
     fontWeight: '600',
-    marginBottom: 10,
   },
   tableHeaderRow: {
     borderRadius: 11,
@@ -604,9 +652,8 @@ const styles = StyleSheet.create({
   tableRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
     paddingVertical: 8,
-    columnGap: 6,
     borderBottomWidth: 1,
     borderBottomColor: palette.inputFill,
   },
@@ -626,19 +673,19 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   cellSet: {
-    width: 34,
+    flex: 0.7,
+    minWidth: 36,
   },
   cellKg: {
-    width: 64,
+    flex: 1,
   },
   cellReps: {
-    width: 64,
+    flex: 1,
   },
   cellRir: {
-    width: 64,
+    flex: 0.85,
   },
   cellType: {
-    flex: 1,
-    textAlign: 'right',
+    flex: 1.45,
   },
 });

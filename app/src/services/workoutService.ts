@@ -118,7 +118,7 @@ export type PreviousExercisePerformanceSet = {
 
 export type WorkoutDetailsSet = Pick<
   Tables<'sets'>,
-  'id' | 'set_number' | 'weight' | 'reps' | 'rir' | 'workout_exercise_id' | 'exercise_id'
+  'id' | 'set_number' | 'weight' | 'reps' | 'rir' | 'workout_exercise_id' | 'exercise_id' | 'side'
 > & {
   set_type: WorkoutSetType;
 };
@@ -129,8 +129,13 @@ export type WorkoutDetailsExercise = {
   rest_time: number | null;
   exercise_id: string;
   exercise_name: string;
+  name_en: string | null;
+  name_pt: string | null;
+  is_custom: boolean;
+  image_url: string | null;
   muscle_group: string | null;
   equipment: string | null;
+  notes: string | null;
   sets: WorkoutDetailsSet[];
 };
 
@@ -248,15 +253,18 @@ type RawWorkoutFeedRow = Tables<'workouts'> & {
   workout_comments?: RelationCountRow[] | null;
 };
 
-type ExerciseSummary = Pick<ExerciseCatalogItem, 'id' | 'name' | 'muscle_group' | 'equipment'>;
+type ExerciseSummary = Pick<
+  ExerciseCatalogItem,
+  'id' | 'name' | 'name_en' | 'name_pt' | 'muscle_group' | 'equipment' | 'is_custom' | 'image_url'
+>;
 
-type RawWorkoutExerciseDetailsRow = Pick<WorkoutExerciseRow, 'id' | 'order' | 'rest_time' | 'exercise_id'> & {
+type RawWorkoutExerciseDetailsRow = Pick<WorkoutExerciseRow, 'id' | 'order' | 'rest_time' | 'exercise_id' | 'notes'> & {
   exercises?: ExerciseSummary | ExerciseSummary[] | null;
 };
 
 type RawWorkoutDetailsSetRow = Pick<
   Tables<'sets'>,
-  'id' | 'set_number' | 'weight' | 'reps' | 'rir' | 'set_type' | 'workout_exercise_id' | 'exercise_id'
+  'id' | 'set_number' | 'weight' | 'reps' | 'rir' | 'set_type' | 'workout_exercise_id' | 'exercise_id' | 'side'
 >;
 
 type RawWorkoutFeedSetRow = Pick<
@@ -369,6 +377,7 @@ function mapWorkoutDetailsSet(raw: RawWorkoutDetailsSetRow): WorkoutDetailsSet {
     reps: raw.reps,
     rir: raw.rir,
     set_type: normalizeSetType(raw.set_type),
+    side: normalizeSetSide(raw.side),
     workout_exercise_id: raw.workout_exercise_id,
     exercise_id: raw.exercise_id,
   };
@@ -1516,18 +1525,39 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
 
   const { data: rawWorkoutExercisesData, error: workoutExercisesError } = await supabase
     .from('workout_exercises')
-    .select('id, order, rest_time, exercise_id, exercises(id, name, muscle_group, equipment)')
+    .select('id, order, rest_time, exercise_id, notes, exercises(id, name, name_en, name_pt, muscle_group, equipment, is_custom, image_url)')
     .eq('workout_id', normalizedWorkoutId)
     .order('order', { ascending: true });
 
-  if (workoutExercisesError && !isWorkoutExercisesTableMissing(workoutExercisesError)) {
-    throw new Error(`Unable to load workout exercises: ${workoutExercisesError.message}`);
+  let workoutExercisesRows = rawWorkoutExercisesData;
+  let workoutExercisesLoadError = workoutExercisesError;
+
+  if (workoutExercisesError) {
+    const notesMissingMessage = (workoutExercisesError.message ?? '').toLowerCase();
+    const isNotesMissing =
+      notesMissingMessage.includes('notes') &&
+      (notesMissingMessage.includes('column') || notesMissingMessage.includes('schema cache'));
+
+    if (isNotesMissing) {
+      const fallback = await supabase
+        .from('workout_exercises')
+        .select('id, order, rest_time, exercise_id, exercises(id, name, name_en, name_pt, muscle_group, equipment, is_custom, image_url)')
+        .eq('workout_id', normalizedWorkoutId)
+        .order('order', { ascending: true });
+
+      workoutExercisesRows = (fallback.data as typeof rawWorkoutExercisesData) ?? null;
+      workoutExercisesLoadError = fallback.error;
+    }
   }
 
-  if (workoutExercisesError && isWorkoutExercisesTableMissing(workoutExercisesError)) {
+  if (workoutExercisesLoadError && !isWorkoutExercisesTableMissing(workoutExercisesLoadError)) {
+    throw new Error(`Unable to load workout exercises: ${workoutExercisesLoadError.message}`);
+  }
+
+  if (workoutExercisesLoadError && isWorkoutExercisesTableMissing(workoutExercisesLoadError)) {
     console.warn('[getWorkoutDetails] workout_exercises table missing, using sets fallback grouping', {
       workoutId: normalizedWorkoutId,
-      error: extractSupabaseErrorMeta(workoutExercisesError),
+      error: extractSupabaseErrorMeta(workoutExercisesLoadError),
     });
   }
 
@@ -1537,7 +1567,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
   {
     const result = await supabase
       .from('sets')
-      .select('id, set_number, weight, reps, rir, set_type, workout_exercise_id, exercise_id')
+      .select('id, set_number, weight, reps, rir, set_type, side, workout_exercise_id, exercise_id')
       .eq('workout_id', normalizedWorkoutId)
       .order('set_number', { ascending: true })
       .order('id', { ascending: true });
@@ -1549,7 +1579,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
   if (setRowsError && isWorkoutExerciseIdColumnMissing(setRowsError)) {
     const legacyResult = await supabase
       .from('sets')
-      .select('id, set_number, weight, reps, rir, set_type, exercise_id')
+      .select('id, set_number, weight, reps, rir, set_type, side, exercise_id')
       .eq('workout_id', normalizedWorkoutId)
       .order('set_number', { ascending: true })
       .order('id', { ascending: true });
@@ -1559,6 +1589,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
     } else {
       rawSetRows = ((legacyResult.data ?? []) as Omit<RawWorkoutDetailsSetRow, 'workout_exercise_id'>[]).map((row) => ({
         ...row,
+        side: normalizeSetSide((row as { side?: unknown }).side),
         workout_exercise_id: null,
       }));
       setRowsError = null;
@@ -1569,11 +1600,39 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
     }
   }
 
+  // If `side` column is missing on older schemas, retry without it.
+  if (setRowsError) {
+    const sideMissingMessage = String((setRowsError as { message?: string })?.message ?? '').toLowerCase();
+    const isSideMissing =
+      sideMissingMessage.includes('side') &&
+      (sideMissingMessage.includes('column') || sideMissingMessage.includes('schema cache'));
+
+    if (isSideMissing) {
+      const fallbackResult = await supabase
+        .from('sets')
+        .select('id, set_number, weight, reps, rir, set_type, workout_exercise_id, exercise_id')
+        .eq('workout_id', normalizedWorkoutId)
+        .order('set_number', { ascending: true })
+        .order('id', { ascending: true });
+
+      if (!fallbackResult.error) {
+        rawSetRows = ((fallbackResult.data ?? []) as Omit<RawWorkoutDetailsSetRow, 'side'>[]).map((row) => ({
+          ...row,
+          side: 'both' as const,
+        }));
+        setRowsError = null;
+      }
+    }
+  }
+
   if (setRowsError) {
     throw new Error(`Unable to load workout sets: ${toErrorMessage(setRowsError)}`);
   }
 
-  const workoutExercises = (rawWorkoutExercisesData ?? []) as RawWorkoutExerciseDetailsRow[];
+  const workoutExercises = ((workoutExercisesRows ?? []) as RawWorkoutExerciseDetailsRow[]).map((row) => ({
+    ...row,
+    notes: row.notes ?? null,
+  }));
   const setRows = rawSetRows ?? [];
 
   const exerciseInfoById = new Map<string, ExerciseSummary>();
@@ -1600,7 +1659,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
   if (missingExerciseIds.length > 0) {
     const { data: missingExercises, error: missingExercisesError } = await supabase
       .from('exercises')
-      .select('id, name, muscle_group, equipment')
+      .select('id, name, name_en, name_pt, muscle_group, equipment, is_custom, image_url')
       .in('id', missingExerciseIds);
 
     if (missingExercisesError) {
@@ -1659,8 +1718,13 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
       rest_time: relation.rest_time,
       exercise_id: relation.exercise_id,
       exercise_name: exerciseInfo?.name ?? 'Unknown exercise',
+      name_en: exerciseInfo?.name_en ?? null,
+      name_pt: exerciseInfo?.name_pt ?? null,
+      is_custom: exerciseInfo?.is_custom ?? false,
+      image_url: exerciseInfo?.image_url ?? null,
       muscle_group: exerciseInfo?.muscle_group ?? null,
       equipment: exerciseInfo?.equipment ?? null,
+      notes: relation.notes ?? null,
       sets: relationSets,
     });
   }
@@ -1690,8 +1754,13 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
       rest_time: null,
       exercise_id: exerciseId,
       exercise_name: exerciseInfo?.name ?? 'Unknown exercise',
+      name_en: exerciseInfo?.name_en ?? null,
+      name_pt: exerciseInfo?.name_pt ?? null,
+      is_custom: exerciseInfo?.is_custom ?? false,
+      image_url: exerciseInfo?.image_url ?? null,
       muscle_group: exerciseInfo?.muscle_group ?? null,
       equipment: exerciseInfo?.equipment ?? null,
+      notes: null,
       sets: groupedSets,
     });
 
@@ -1713,8 +1782,13 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
       rest_time: null,
       exercise_id: exerciseId,
       exercise_name: exerciseInfo?.name ?? 'Unknown exercise',
+      name_en: exerciseInfo?.name_en ?? null,
+      name_pt: exerciseInfo?.name_pt ?? null,
+      is_custom: exerciseInfo?.is_custom ?? false,
+      image_url: exerciseInfo?.image_url ?? null,
       muscle_group: exerciseInfo?.muscle_group ?? null,
       equipment: exerciseInfo?.equipment ?? null,
+      notes: null,
       sets: groupedSets,
     });
 

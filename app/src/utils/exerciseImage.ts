@@ -52,22 +52,35 @@ function normalize(text: string): string {
 }
 
 function findBestMatch(name: string): string | null {
-  const lower = name.toLowerCase().trim();
-  const direct = normalizedMap.get(lower);
-  if (direct) return direct;
-
-  const norm = normalize(name);
-  const alias = normalizedMap.get(norm);
-  if (alias) return alias;
-
-  for (const [key, id] of normalizedMap) {
-    if (normalize(key) === norm) return id;
+  const variants = [name];
+  const withoutParens = name.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+  if (withoutParens && withoutParens !== name) {
+    variants.push(withoutParens);
   }
 
-  for (const [key, id] of normalizedMap) {
-    const normKey = normalize(key);
-    if (normKey.length < 4 || norm.length < 4) continue;
-    if (normKey.includes(norm) || norm.includes(normKey)) return id;
+  for (const variant of variants) {
+    const lower = variant.toLowerCase().trim();
+    const direct = normalizedMap.get(lower);
+    if (direct) return direct;
+
+    const norm = normalize(variant);
+    const alias = normalizedMap.get(norm);
+    if (alias) return alias;
+
+    for (const [key, id] of normalizedMap) {
+      if (normalize(key) === norm) return id;
+    }
+  }
+
+  for (const variant of variants) {
+    const norm = normalize(variant);
+    if (norm.length < 4) continue;
+
+    for (const [key, id] of normalizedMap) {
+      const normKey = normalize(key);
+      if (normKey.length < 4) continue;
+      if (normKey.includes(norm) || norm.includes(normKey)) return id;
+    }
   }
 
   return null;

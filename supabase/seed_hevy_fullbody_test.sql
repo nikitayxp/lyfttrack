@@ -202,7 +202,7 @@ begin
   insert into public.workout_exercises (workout_id, exercise_id, "order", notes)
   values (v_workout_id, v_ex_id, 1, '0 rir') returning id into v_we_id;
   insert into public.sets (workout_id, workout_exercise_id, exercise_id, set_number, set_type, side, weight, reps, rir) values
-    (v_workout_id, v_we_id, v_ex_id, 1, 'warmup', 'both', 13, 5, 0),
+    (v_workout_id, v_we_id, v_ex_id, 1, 'warmup', 'both', 13, 5, null),
     (v_workout_id, v_we_id, v_ex_id, 2, 'normal', 'both', 32.5, 5, 0);
 
   -- 2 Desenvolvimento Ombros
@@ -219,7 +219,7 @@ begin
   insert into public.workout_exercises (workout_id, exercise_id, "order", notes)
   values (v_workout_id, v_ex_id, 3, '0 rir') returning id into v_we_id;
   insert into public.sets (workout_id, workout_exercise_id, exercise_id, set_number, set_type, side, weight, reps, rir) values
-    (v_workout_id, v_we_id, v_ex_id, 1, 'warmup', 'both', 15, 8, 0),
+    (v_workout_id, v_we_id, v_ex_id, 1, 'warmup', 'both', 15, 8, null),
     (v_workout_id, v_we_id, v_ex_id, 2, 'normal', 'both', 27.5, 6, 0);
 
   -- 4 Rosca Scott
@@ -227,7 +227,7 @@ begin
   insert into public.workout_exercises (workout_id, exercise_id, "order", notes)
   values (v_workout_id, v_ex_id, 4, 'E 1 rir / D 1 rir') returning id into v_we_id;
   insert into public.sets (workout_id, workout_exercise_id, exercise_id, set_number, set_type, side, weight, reps, rir) values
-    (v_workout_id, v_we_id, v_ex_id, 1, 'warmup', 'both', 7.5, 6, 1),
+    (v_workout_id, v_we_id, v_ex_id, 1, 'warmup', 'both', 7.5, 6, null),
     (v_workout_id, v_we_id, v_ex_id, 2, 'normal', 'both', 12.5, 6, 1);
 
   -- 5 Triceps unilateral
@@ -235,7 +235,7 @@ begin
   insert into public.workout_exercises (workout_id, exercise_id, "order", notes)
   values (v_workout_id, v_ex_id, 5, 'D 4 0 rir / E 5 0 rir') returning id into v_we_id;
   insert into public.sets (workout_id, workout_exercise_id, exercise_id, set_number, set_type, side, weight, reps, rir) values
-    (v_workout_id, v_we_id, v_ex_id, 1, 'warmup', 'both', 15, 7, 0),
+    (v_workout_id, v_we_id, v_ex_id, 1, 'warmup', 'both', 15, 7, null),
     (v_workout_id, v_we_id, v_ex_id, 2, 'normal', 'both', 30, 4, 0);
 
   -- 6 Triceps overhead
@@ -243,7 +243,7 @@ begin
   insert into public.workout_exercises (workout_id, exercise_id, "order", notes)
   values (v_workout_id, v_ex_id, 6, 'Baixo 9 / 1 rir') returning id into v_we_id;
   insert into public.sets (workout_id, workout_exercise_id, exercise_id, set_number, set_type, side, weight, reps, rir) values
-    (v_workout_id, v_we_id, v_ex_id, 1, 'warmup', 'both', 15, 8, 1),
+    (v_workout_id, v_we_id, v_ex_id, 1, 'warmup', 'both', 15, 8, null),
     (v_workout_id, v_we_id, v_ex_id, 2, 'normal', 'both', 30, 7, 1);
 
   -- 7 Crucifixo voador
@@ -251,7 +251,7 @@ begin
   insert into public.workout_exercises (workout_id, exercise_id, "order", notes)
   values (v_workout_id, v_ex_id, 7, '5 0 rir') returning id into v_we_id;
   insert into public.sets (workout_id, workout_exercise_id, exercise_id, set_number, set_type, side, weight, reps, rir) values
-    (v_workout_id, v_we_id, v_ex_id, 1, 'warmup', 'both', 45.5, 7, 0),
+    (v_workout_id, v_we_id, v_ex_id, 1, 'warmup', 'both', 45.5, 7, null),
     (v_workout_id, v_we_id, v_ex_id, 2, 'normal', 'both', 84.5, 5, 0);
 
   raise notice 'OK — user_id=% workout_id=% | login % / %',

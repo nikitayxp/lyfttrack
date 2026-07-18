@@ -819,42 +819,36 @@ export default function WorkoutScreen() {
               <Text style={styles.emptySubtitle}>{t('exercise.emptySearchSubtitle')}</Text>
             </View>
           ) : (
-            groupedExercises.map(([muscle, groupedItems], muscleIndex) => (
-              <Animated.View
-                key={`${muscle}-${animationEpoch}`}
-                entering={FadeInUp.delay(Math.min(muscleIndex * 55, 260)).duration(340)}
-                layout={cardLayoutTransition}
-              >
-                <View style={styles.groupSection}>
+            <Animated.View
+              key={`workout-exercise-list-${showRecentOnly ? 'recent' : 'all'}-${exerciseQuery.trim() ? 'q' : 'allq'}`}
+              entering={FadeInUp.duration(180)}
+            >
+              {groupedExercises.map(([muscle, groupedItems]) => (
+                <View key={muscle} style={styles.groupSection}>
                   <Text style={styles.groupTitle}>{muscle}</Text>
-                  {groupedItems.map((exercise, exerciseIndex) => (
-                    <Animated.View
-                      key={`${exercise.id}-${animationEpoch}`}
-                      entering={FadeInDown.delay(Math.min(exerciseIndex * 35, 180)).duration(280)}
-                      layout={cardLayoutTransition}
+                  {groupedItems.map((exercise) => (
+                    <TouchableOpacity
+                      key={exercise.id}
+                      style={styles.exerciseRow}
+                      activeOpacity={ACTIVE_OPACITY}
+                      onPress={() => router.push(`/exercise/${exercise.id}` as any)}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('accessibility.viewExerciseDetails', {
+                        name: getDisplayExerciseName(exercise),
+                        defaultValue: 'View exercise details',
+                      })}
                     >
-                      <TouchableOpacity
-                        style={styles.exerciseRow}
-                        activeOpacity={ACTIVE_OPACITY}
-                        onPress={() => router.push(`/exercise/${exercise.id}` as any)}
-                        accessibilityRole="button"
-                        accessibilityLabel={t('accessibility.viewExerciseDetails', {
-                          name: getDisplayExerciseName(exercise),
-                          defaultValue: 'View exercise details',
-                        })}
-                      >
-                        <ExerciseThumbnail exercise={exercise} size={40} />
-                        <View style={styles.exerciseTextWrap}>
-                            <Text style={styles.exerciseName}>{getDisplayExerciseName(exercise)}</Text>
-                            <Text style={styles.exerciseMeta}>{getDisplayEquipment(exercise)}</Text>
-                        </View>
-                          <Text style={styles.exerciseMuscle}>{getDisplayMuscle(exercise)}</Text>
-                      </TouchableOpacity>
-                    </Animated.View>
+                      <ExerciseThumbnail exercise={exercise} size={40} />
+                      <View style={styles.exerciseTextWrap}>
+                        <Text style={styles.exerciseName}>{getDisplayExerciseName(exercise)}</Text>
+                        <Text style={styles.exerciseMeta}>{getDisplayEquipment(exercise)}</Text>
+                      </View>
+                      <Text style={styles.exerciseMuscle}>{getDisplayMuscle(exercise)}</Text>
+                    </TouchableOpacity>
                   ))}
                 </View>
-              </Animated.View>
-            ))
+              ))}
+            </Animated.View>
           )}
         </>
       ) : null}

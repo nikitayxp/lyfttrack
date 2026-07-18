@@ -14,7 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Animated, { FadeInDown, FadeInUp, LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeInUp, LinearTransition } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
@@ -281,39 +281,33 @@ export default function ExercisesScreen() {
           <Text style={styles.emptySubtitle}>{t('exercise.emptySearchSubtitle')}</Text>
         </View>
       ) : (
-        groupedExercises.map(([muscle, groupedItems], groupIndex) => (
-          <Animated.View
-            key={`${muscle}-${animationEpoch}`}
-            entering={FadeInUp.delay(Math.min(groupIndex * 50, 260)).duration(340)}
-            layout={cardLayoutTransition}
-          >
-            <View style={styles.groupSection}>
+        <Animated.View
+          key={`exercise-list-${showRecentOnly ? 'recent' : 'all'}-${query.trim() ? 'q' : 'allq'}`}
+          entering={FadeInUp.duration(180)}
+        >
+          {groupedExercises.map(([muscle, groupedItems]) => (
+            <View key={muscle} style={styles.groupSection}>
               <Text style={styles.groupTitle}>{muscle}</Text>
-              {groupedItems.map((exercise, exerciseIndex) => (
-                <Animated.View
-                  key={`${exercise.id}-${animationEpoch}`}
-                  entering={FadeInDown.delay(Math.min(exerciseIndex * 28, 180)).duration(280)}
-                  layout={cardLayoutTransition}
+              {groupedItems.map((exercise) => (
+                <TouchableOpacity
+                  key={exercise.id}
+                  style={styles.exerciseRow}
+                  activeOpacity={ACTIVE_OPACITY}
+                  onPress={() => router.push(`/exercise/${exercise.id}` as any)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('accessibility.viewExerciseDetails', { name: getLocalizedExerciseName(exercise, language), defaultValue: 'View exercise details' })}
                 >
-                  <TouchableOpacity
-                    style={styles.exerciseRow}
-                    activeOpacity={ACTIVE_OPACITY}
-                    onPress={() => router.push(`/exercise/${exercise.id}` as any)}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('accessibility.viewExerciseDetails', { name: getLocalizedExerciseName(exercise, language), defaultValue: 'View exercise details' })}
-                  >
-                    <ExerciseThumbnail exercise={exercise} size={40} />
-                    <View style={styles.exerciseTextWrap}>
-                      <Text style={styles.exerciseName}>{getLocalizedExerciseName(exercise, language)}</Text>
-                      <Text style={styles.exerciseMeta}>{getExerciseEquipmentLabel(exercise)}</Text>
-                    </View>
-                    <Text style={styles.exerciseMuscle}>{getExerciseMuscleLabel(exercise)}</Text>
-                  </TouchableOpacity>
-                </Animated.View>
+                  <ExerciseThumbnail exercise={exercise} size={40} />
+                  <View style={styles.exerciseTextWrap}>
+                    <Text style={styles.exerciseName}>{getLocalizedExerciseName(exercise, language)}</Text>
+                    <Text style={styles.exerciseMeta}>{getExerciseEquipmentLabel(exercise)}</Text>
+                  </View>
+                  <Text style={styles.exerciseMuscle}>{getExerciseMuscleLabel(exercise)}</Text>
+                </TouchableOpacity>
               ))}
             </View>
-          </Animated.View>
-        ))
+          ))}
+        </Animated.View>
       )}
 
       {(!isCreateModalVisible && isWeb) ? null : (

@@ -4,7 +4,6 @@ import { router, useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Modal,
   Platform,
   Pressable,
@@ -34,7 +33,7 @@ import type { Tables } from '@/types/database';
 import { createExercise, getErrorMessage, getExercisesCatalog } from '@/services/workoutService';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/exerciseLocalization';
-import { getExerciseImageUrl } from '@/utils/exerciseImage';
+import { ExerciseThumbnail } from '@/components/common/ExerciseThumbnail';
 
 type ExerciseRow = Tables<'exercises'>;
 const palette = Colors.dark;
@@ -272,16 +271,7 @@ export default function ExercisesScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={t('accessibility.viewExerciseDetails', { name: getLocalizedExerciseName(exercise, language), defaultValue: 'View exercise details' })}
                   >
-                    {(() => {
-                      const imgUrl = getExerciseImageUrl(exercise);
-                      return imgUrl ? (
-                        <Image source={{ uri: imgUrl }} style={styles.exerciseThumbnail} />
-                      ) : (
-                        <View style={styles.exerciseThumbnailPlaceholder}>
-                          <Ionicons name="barbell-outline" size={18} color="#475569" />
-                        </View>
-                      );
-                    })()}
+                    <ExerciseThumbnail exercise={exercise} size={40} />
                     <View style={styles.exerciseTextWrap}>
                       <Text style={styles.exerciseName}>{getLocalizedExerciseName(exercise, language)}</Text>
                       <Text style={styles.exerciseMeta}>{getExerciseEquipmentLabel(exercise)}</Text>

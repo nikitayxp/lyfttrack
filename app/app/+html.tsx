@@ -53,6 +53,9 @@ export default function Root({ children }: PropsWithChildren) {
           name="viewport"
           content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"
         />
+        <link rel="icon" href="/logo.jpg" type="image/jpeg" />
+        <link rel="shortcut icon" href="/logo.jpg" type="image/jpeg" />
+        <link rel="apple-touch-icon" href="/logo.jpg" />
         <ScrollViewStyleReset />
         <style dangerouslySetInnerHTML={{ __html: BASE_WEB_BG_STYLE }} />
       </head>

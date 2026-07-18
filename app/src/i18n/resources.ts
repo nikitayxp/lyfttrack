@@ -372,6 +372,8 @@ export const resources = {
       },
       exercise: {
         searchPlaceholder: 'Search exercises',
+        filterAll: 'All',
+        filterRecent: 'Recent',
         bodyweight: 'Bodyweight',
         general: 'General',
         createTrigger: 'Create custom',
@@ -1009,6 +1011,8 @@ export const resources = {
       },
       exercise: {
         searchPlaceholder: 'Pesquisar exercicios',
+        filterAll: 'Todos',
+        filterRecent: 'Recentes',
         bodyweight: 'Peso corporal',
         general: 'Geral',
         createTrigger: 'Criar personalizado',

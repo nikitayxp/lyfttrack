@@ -2,10 +2,13 @@ import { useMemo } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/Colors';
 import { Radius } from '@/constants/Styles';
+import { usePreferences } from '@/context/PreferencesContext';
 import { useWorkoutContext } from '@/context/WorkoutContext';
+import { getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 
 const palette = Colors.dark;
 const WEB_MOBILE_TAB_BAR_HEIGHT = 74;
@@ -28,12 +31,13 @@ function formatElapsedTime(totalSeconds: number): string {
 }
 
 export function MinimizedWorkoutBar({ visible }: MinimizedWorkoutBarProps) {
+  const { t } = useTranslation();
+  const { language } = usePreferences();
   const insets = useSafeAreaInsets();
   const {
     hasActiveWorkout,
     elapsedSeconds,
     activeExercises,
-    latestExerciseName,
   } = useWorkoutContext();
 
   const isWeb = Platform.OS === 'web';
@@ -46,21 +50,23 @@ export function MinimizedWorkoutBar({ visible }: MinimizedWorkoutBarProps) {
   const durationLabel = useMemo(() => formatElapsedTime(elapsedSeconds), [elapsedSeconds]);
   const sessionSummary = useMemo(() => {
     const exerciseCount = activeExercises.length;
+    const latest = activeExercises[activeExercises.length - 1]?.exercise;
+    const latestName = latest ? getLocalizedExerciseName(latest, language) : null;
 
     if (exerciseCount === 0) {
-      return 'Workout in progress';
+      return t('workout.minimizedInProgress');
     }
 
     if (exerciseCount === 1) {
-      return latestExerciseName ? latestExerciseName : '1 exercise';
+      return latestName ?? t('workout.minimizedOneExercise');
     }
 
-    if (latestExerciseName) {
-      return `${exerciseCount} exercises · Latest: ${latestExerciseName}`;
+    if (latestName) {
+      return t('workout.minimizedCountLatest', { count: exerciseCount, name: latestName });
     }
 
-    return `${exerciseCount} exercises`;
-  }, [activeExercises.length, latestExerciseName]);
+    return t('workout.minimizedCount', { count: exerciseCount });
+  }, [activeExercises, language, t]);
 
   if (!visible || !hasActiveWorkout) {
     return null;
@@ -70,7 +76,7 @@ export function MinimizedWorkoutBar({ visible }: MinimizedWorkoutBarProps) {
     <View pointerEvents="box-none" style={styles.overlay}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Resume active workout"
+        accessibilityLabel={t('workout.minimizedResumeA11y')}
         style={[styles.bar, { bottom: bottomOffset }]}
         onPress={() => router.push('/workout/active' as any)}
       >
@@ -79,7 +85,7 @@ export function MinimizedWorkoutBar({ visible }: MinimizedWorkoutBarProps) {
         </View>
 
         <View style={styles.textWrap}>
-          <Text style={styles.title}>Workout running</Text>
+          <Text style={styles.title}>{t('workout.minimizedTitle')}</Text>
           <Text numberOfLines={1} style={styles.subtitle}>{sessionSummary}</Text>
         </View>
 

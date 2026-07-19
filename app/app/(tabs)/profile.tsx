@@ -1093,9 +1093,6 @@ export default function ProfileScreen() {
 
         <View style={styles.sectionTitleRow}>
           <Text style={styles.sectionTitle}>{t('profile.workoutsTitle')}</Text>
-          <View style={styles.sectionPill}>
-            <Text style={styles.sectionPillText}>{t('profile.historyPill')}</Text>
-          </View>
         </View>
 
         {historyError ? (

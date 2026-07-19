@@ -442,13 +442,14 @@ export const resources = {
       },
       social: {
         title: 'NETWORK',
-        subtitle: 'Search athletes, manage requests and strengthen your team.',
+        subtitle: 'Manage friend requests and grow your network.',
         unknownUser: 'Unknown user',
         profileUnavailable: 'Profile unavailable',
         search: {
-          title: 'Search athletes',
+          title: 'Find people',
           placeholder: 'Type at least 2 characters',
           viewAll: 'View all athletes',
+          clear: 'Clear search',
           searching: 'Searching...',
           searchingAll: 'Loading athletes...',
           startTyping: 'Start typing to find profiles.',
@@ -502,6 +503,7 @@ export const resources = {
         emptyTitle: 'Feed is empty for now',
         emptyDescription: 'Follow athletes and friends to discover workouts and keep daily motivation high.',
         exploreAthletes: 'Explore athletes',
+        browseAthletes: 'Browse',
         commentPublishError: 'Unable to publish comment',
         likeUpdateError: 'Unable to update like',
         metrics: {
@@ -1089,13 +1091,14 @@ export const resources = {
       },
       social: {
         title: 'REDE',
-        subtitle: 'Pesquisa atletas, gere pedidos e fortalece a tua equipa.',
+        subtitle: 'Gere pedidos de amizade e cresce a tua rede.',
         unknownUser: 'Utilizador desconhecido',
         profileUnavailable: 'Perfil indisponivel',
         search: {
-          title: 'Pesquisar atletas',
+          title: 'Encontrar pessoas',
           placeholder: 'Escreve pelo menos 2 caracteres',
           viewAll: 'Ver todos atletas',
+          clear: 'Limpar pesquisa',
           searching: 'A pesquisar...',
           searchingAll: 'A carregar atletas...',
           startTyping: 'Comeca a escrever para encontrares perfis.',
@@ -1149,6 +1152,7 @@ export const resources = {
         emptyTitle: 'Feed vazio por enquanto',
         emptyDescription: 'Segue atletas e amigos para encontrares novos treinos e manteres a motivacao diaria.',
         exploreAthletes: 'Explorar atletas',
+        browseAthletes: 'Ver lista',
         commentPublishError: 'Nao foi possivel publicar o comentario',
         likeUpdateError: 'Nao foi possivel atualizar o gosto',
         metrics: {

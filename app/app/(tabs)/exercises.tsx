@@ -33,6 +33,7 @@ import type { Tables } from '@/types/database';
 import { createExercise, getErrorMessage, getExercisesCatalog, getRecentExerciseIds } from '@/services/workoutService';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/exerciseLocalization';
+import { matchesExerciseSearch } from '@/utils/exerciseSearch';
 import { ExerciseThumbnail } from '@/components/common/ExerciseThumbnail';
 
 type ExerciseRow = Tables<'exercises'>;
@@ -129,7 +130,6 @@ export default function ExercisesScreen() {
   }
 
   const groupedExercises = useMemo(() => {
-    const normalizedQuery = deferredQuery.trim().toLowerCase();
     const recentSet = new Set(recentExerciseIds);
 
     const getDisplayName = (exercise: ExerciseRow) => getLocalizedExerciseName(exercise, language);
@@ -155,13 +155,12 @@ export default function ExercisesScreen() {
         return false;
       }
 
-      if (!normalizedQuery) {
-        return true;
-      }
-
-      const byName = getDisplayName(exercise).toLowerCase().includes(normalizedQuery);
-      const byMuscle = getDisplayMuscle(exercise).toLowerCase().includes(normalizedQuery);
-      return byName || byMuscle;
+      return matchesExerciseSearch(
+        exercise,
+        deferredQuery,
+        getDisplayName(exercise),
+        getDisplayMuscle(exercise)
+      );
     });
 
     const groups = filtered.reduce<Record<string, ExerciseRow[]>>((acc, exercise) => {

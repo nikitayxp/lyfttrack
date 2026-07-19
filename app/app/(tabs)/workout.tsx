@@ -39,6 +39,7 @@ import { EmptyState } from '@/components/common/EmptyState';
 import { ExerciseThumbnail } from '@/components/common/ExerciseThumbnail';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/exerciseLocalization';
+import { matchesExerciseSearch } from '@/utils/exerciseSearch';
 import {
   createExercise,
   createRoutine,
@@ -159,7 +160,6 @@ export default function WorkoutScreen() {
   }, [t]);
 
   const groupedExercises = useMemo(() => {
-    const normalizedQuery = deferredExerciseQuery.trim().toLowerCase();
     const recentSet = new Set(recentExerciseIds);
 
     const filtered = catalogExercises.filter((exercise) => {
@@ -167,13 +167,12 @@ export default function WorkoutScreen() {
         return false;
       }
 
-      if (!normalizedQuery) {
-        return true;
-      }
-
-      const byName = getDisplayExerciseName(exercise).toLowerCase().includes(normalizedQuery);
-      const byMuscle = getDisplayMuscle(exercise).toLowerCase().includes(normalizedQuery);
-      return byName || byMuscle;
+      return matchesExerciseSearch(
+        exercise,
+        deferredExerciseQuery,
+        getDisplayExerciseName(exercise),
+        getDisplayMuscle(exercise)
+      );
     });
 
     const groups = filtered.reduce<Record<string, ExerciseRow[]>>((acc, exercise) => {

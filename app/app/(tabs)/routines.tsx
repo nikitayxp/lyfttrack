@@ -28,6 +28,10 @@ import {
 } from '@/services/workoutService';
 import type { Tables } from '@/types/database';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
+import { getLocalizedExerciseName } from '@/utils/exerciseLocalization';
+import { matchesExerciseSearch } from '@/utils/exerciseSearch';
+import { ExerciseThumbnail } from '@/components/common/ExerciseThumbnail';
+import { usePreferences } from '@/context/PreferencesContext';
 
 const palette = Colors.dark;
 const cardLayoutTransition = LinearTransition.springify().damping(16).stiffness(180);
@@ -36,6 +40,7 @@ type ExerciseRow = Tables<'exercises'>;
 
 export default function RoutinesScreen() {
   const { t } = useTranslation();
+  const { language } = usePreferences();
   const isWeb = Platform.OS === 'web';
   const modalAnimationType: 'fade' | 'slide' = isWeb ? 'fade' : 'slide';
   const [routines, setRoutines] = useState<RoutineSummary[]>([]);
@@ -47,6 +52,7 @@ export default function RoutinesScreen() {
   const [routineNameInput, setRoutineNameInput] = useState('');
   const [routineNotesInput, setRoutineNotesInput] = useState('');
   const [selectedExerciseIds, setSelectedExerciseIds] = useState<string[]>([]);
+  const [catalogQuery, setCatalogQuery] = useState('');
 
   const [catalogExercises, setCatalogExercises] = useState<ExerciseRow[]>([]);
   const [isLoadingCatalog, setIsLoadingCatalog] = useState(true);
@@ -125,6 +131,17 @@ export default function RoutinesScreen() {
     return equipmentKey ? t(equipmentKey) : t('exercise.equipment.bodyweight');
   }, [t]);
 
+  const filteredCatalogExercises = useMemo(() => {
+    return catalogExercises.filter((exercise) =>
+      matchesExerciseSearch(
+        exercise,
+        catalogQuery,
+        getLocalizedExerciseName(exercise, language),
+        getExerciseMuscleLabel(exercise)
+      )
+    );
+  }, [catalogExercises, catalogQuery, getExerciseMuscleLabel, language]);
+
   function handleStartRoutine(routineId: string) {
     router.push({ pathname: '/workout/active', params: { routineId } } as any);
   }
@@ -143,6 +160,7 @@ export default function RoutinesScreen() {
     setRoutineNameInput('');
     setRoutineNotesInput('');
     setSelectedExerciseIds([]);
+    setCatalogQuery('');
   }
 
   async function handleCreateRoutine() {
@@ -322,43 +340,68 @@ export default function RoutinesScreen() {
                 <Text style={styles.modalStatusText}>{t('routines.noExercisesHint')}</Text>
               </View>
             ) : (
-              <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
-                {catalogExercises.map((exercise, index) => {
-                  const selectedOrder = selectionOrder.get(exercise.id);
-                  const isSelected = selectedOrder !== undefined;
+              <>
+                <View style={styles.catalogSearchBar}>
+                  <Ionicons name="search" size={18} color={palette.textMuted} />
+                  <TextInput
+                    accessibilityLabel={t('accessibility.searchExercises', { defaultValue: 'Search exercises' })}
+                    value={catalogQuery}
+                    onChangeText={setCatalogQuery}
+                    placeholder={t('workout.searchExercisesPlaceholder')}
+                    placeholderTextColor={palette.textMuted}
+                    style={styles.catalogSearchInput}
+                    autoCorrect={false}
+                    autoCapitalize="none"
+                  />
+                </View>
 
-                  return (
-                    <Animated.View
-                      key={`${exercise.id}-${animationEpoch}`}
-                      entering={FadeInDown.delay(Math.min(index * 25, 180)).duration(260)}
-                      layout={cardLayoutTransition}
-                    >
-                      <TouchableOpacity
-                        style={[styles.modalExerciseRow, isSelected && styles.modalExerciseRowSelected]}
-                        activeOpacity={ACTIVE_OPACITY}
-                        onPress={() => toggleExerciseSelection(exercise.id)}
-                        accessibilityRole="button"
-                        accessibilityLabel={t('accessibility.toggleSpecificExercise', { name: exercise.name, defaultValue: 'Toggle exercise' })}
-                      >
-                        <View style={styles.modalExerciseTextWrap}>
-                          <Text style={styles.modalExerciseName}>{exercise.name}</Text>
-                          <Text style={styles.modalExerciseMeta}>
-                            {getExerciseMuscleLabel(exercise)} - {getExerciseEquipmentLabel(exercise)}
-                          </Text>
-                        </View>
+                {filteredCatalogExercises.length === 0 ? (
+                  <View style={styles.modalStatusContainer}>
+                    <Text style={styles.modalStatusTitle}>{t('exercise.emptySearchTitle')}</Text>
+                    <Text style={styles.modalStatusText}>{t('exercise.emptySearchSubtitle')}</Text>
+                  </View>
+                ) : (
+                  <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
+                    {filteredCatalogExercises.map((exercise, index) => {
+                      const selectedOrder = selectionOrder.get(exercise.id);
+                      const isSelected = selectedOrder !== undefined;
+                      const displayName = getLocalizedExerciseName(exercise, language);
 
-                        {isSelected ? (
-                          <View style={styles.orderBadge}>
-                            <Text style={styles.orderBadgeText}>{selectedOrder}</Text>
-                          </View>
-                        ) : (
-                          <Ionicons name="add-circle-outline" size={22} color={palette.accent} />
-                        )}
-                      </TouchableOpacity>
-                    </Animated.View>
-                  );
-                })}
-              </ScrollView>
+                      return (
+                        <Animated.View
+                          key={`${exercise.id}-${animationEpoch}`}
+                          entering={FadeInDown.delay(Math.min(index * 25, 180)).duration(260)}
+                          layout={cardLayoutTransition}
+                        >
+                          <TouchableOpacity
+                            style={[styles.modalExerciseRow, isSelected && styles.modalExerciseRowSelected]}
+                            activeOpacity={ACTIVE_OPACITY}
+                            onPress={() => toggleExerciseSelection(exercise.id)}
+                            accessibilityRole="button"
+                            accessibilityLabel={t('accessibility.toggleSpecificExercise', { name: displayName, defaultValue: 'Toggle exercise' })}
+                          >
+                            <ExerciseThumbnail exercise={exercise} size={34} />
+                            <View style={styles.modalExerciseTextWrap}>
+                              <Text style={styles.modalExerciseName}>{displayName}</Text>
+                              <Text style={styles.modalExerciseMeta}>
+                                {getExerciseMuscleLabel(exercise)} - {getExerciseEquipmentLabel(exercise)}
+                              </Text>
+                            </View>
+
+                            {isSelected ? (
+                              <View style={styles.orderBadge}>
+                                <Text style={styles.orderBadgeText}>{selectedOrder}</Text>
+                              </View>
+                            ) : (
+                              <Ionicons name="add-circle-outline" size={22} color={palette.accent} />
+                            )}
+                          </TouchableOpacity>
+                        </Animated.View>
+                      );
+                    })}
+                  </ScrollView>
+                )}
+              </>
             )}
 
             <View style={styles.modalButtonRow}>
@@ -582,6 +625,24 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: 2,
   },
+  catalogSearchBar: {
+    backgroundColor: palette.inputBackground,
+    borderWidth: 1,
+    borderColor: palette.inputBorder,
+    borderRadius: Radius.card,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 44,
+    marginBottom: 10,
+  },
+  catalogSearchInput: {
+    flex: 1,
+    marginLeft: 8,
+    color: palette.textPrimary,
+    fontSize: 15,
+    fontWeight: '500',
+  },
   modalList: {
     maxHeight: 260,
   },
@@ -630,7 +691,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    columnGap: 10,
   },
   modalExerciseRowSelected: {
     borderColor: palette.accent,
@@ -638,6 +699,7 @@ const styles = StyleSheet.create({
   },
   modalExerciseTextWrap: {
     flex: 1,
+    minWidth: 0,
     paddingRight: 12,
   },
   modalExerciseName: {

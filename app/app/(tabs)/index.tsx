@@ -434,8 +434,14 @@ export default function FeedScreen() {
             </View>
           </View>
 
-          <TouchableOpacity style={styles.athletesHubActionButton} activeOpacity={ACTIVE_OPACITY} onPress={openAthletesExplorer}>
-            <Text style={styles.athletesHubActionText}>{t('feed.exploreAthletes')}</Text>
+          <TouchableOpacity
+            style={styles.athletesHubActionButton}
+            activeOpacity={ACTIVE_OPACITY}
+            onPress={openAthletesExplorer}
+            accessibilityRole="button"
+            accessibilityLabel={t('feed.browseAthletes')}
+          >
+            <Text style={styles.athletesHubActionText}>{t('feed.browseAthletes')}</Text>
             <Ionicons name="arrow-forward" size={15} color={palette.chipTextSelected} />
           </TouchableOpacity>
         </View>
@@ -474,13 +480,11 @@ export default function FeedScreen() {
         icon="trophy-outline"
         title={t('feed.emptyTitle')}
         description={t('feed.emptyDescription')}
-        actionLabel={t('feed.exploreAthletes')}
-        onActionPress={openAthletesExplorer}
         containerStyle={styles.statusCard}
         descriptionStyle={styles.statusText}
       />
     );
-  }, [feedError, isLoading, loadFeedPage, openAthletesExplorer, t]);
+  }, [feedError, isLoading, loadFeedPage, t]);
 
   const selectedWorkoutComments = selectedWorkoutForComments
     ? commentsByWorkoutId[selectedWorkoutForComments.id] ?? []

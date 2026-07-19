@@ -73,6 +73,7 @@ import {
   toSafeNumber,
 } from '@/utils/inputValidation';
 import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/exerciseLocalization';
+import { matchesExerciseSearch } from '@/utils/exerciseSearch';
 
 const palette = Colors.dark;
 const DESKTOP_WEB_MIN_WIDTH = 768;
@@ -229,8 +230,8 @@ export default function ActiveWorkout() {
   } = useWorkoutContext();
 
   const [exercisePickerVisible, setExercisePickerVisible] = useState(false);
+  const [exercisePickerQuery, setExercisePickerQuery] = useState('');
   const [selectedMuscleFilter, setSelectedMuscleFilter] = useState<ExerciseLibraryMuscleFilter | 'recent'>('all');
-  const [recentExerciseIds, setRecentExerciseIds] = useState<string[]>([]);
   const [selectedEquipmentFilter, setSelectedEquipmentFilter] = useState<ExerciseLibraryEquipmentFilter>('all');
   const [createExerciseVisible, setCreateExerciseVisible] = useState(false);
   const [catalogExercises, setCatalogExercises] = useState<ExerciseRow[]>([]);
@@ -302,30 +303,41 @@ export default function ActiveWorkout() {
     setWorkoutTitleInput(normalizedValue ?? t('workout.defaultActiveWorkoutName'));
   }, [hasManualWorkoutTitle, t]);
 
+  const loadRecentExercises = useCallback(async () => {
+    setIsLoadingExercises(true);
+    setExerciseLoadError(null);
+
+    try {
+      const [catalog, ids] = await Promise.all([
+        getExercisesCatalog({ equipment: selectedEquipmentFilter }),
+        getRecentExerciseIds(),
+      ]);
+      const idSet = new Set(ids);
+      setCatalogExercises(catalog.filter((exercise) => idSet.has(exercise.id)));
+    } catch (err) {
+      setExerciseLoadError(getErrorMessage(err));
+    } finally {
+      setIsLoadingExercises(false);
+    }
+  }, [selectedEquipmentFilter]);
+
   useEffect(() => {
     if (!exercisePickerVisible) {
       return;
     }
 
     if (selectedMuscleFilter === 'recent') {
-      void (async () => {
-        setIsLoadingExercises(true);
-        try {
-          const [catalog, ids] = await Promise.all([getExercisesCatalog(), getRecentExerciseIds()]);
-          setRecentExerciseIds(ids);
-          const idSet = new Set(ids);
-          setCatalogExercises(catalog.filter((e) => idSet.has(e.id)));
-        } catch (err) {
-          setExerciseLoadError(getErrorMessage(err));
-        } finally {
-          setIsLoadingExercises(false);
-        }
-      })();
+      void loadRecentExercises();
       return;
     }
 
     void loadExercises({ muscle: selectedMuscleFilter, equipment: selectedEquipmentFilter });
-  }, [exercisePickerVisible, loadExercises, selectedEquipmentFilter, selectedMuscleFilter]);
+  }, [exercisePickerVisible, loadExercises, loadRecentExercises, selectedEquipmentFilter, selectedMuscleFilter]);
+
+  const closeExercisePicker = useCallback(() => {
+    setExercisePickerVisible(false);
+    setExercisePickerQuery('');
+  }, []);
 
   const preloadRoutine = useCallback(
     async (routineId: string, force = false) => {
@@ -701,6 +713,17 @@ export default function ActiveWorkout() {
     const equipmentKey = getEquipmentTranslationKey(exercise.equipment);
     return equipmentKey ? t(equipmentKey) : exercise.equipment ?? t('exercise.equipment.bodyweight');
   };
+
+  const filteredCatalogExercises = useMemo(() => {
+    return catalogExercises.filter((exercise) =>
+      matchesExerciseSearch(
+        exercise,
+        exercisePickerQuery,
+        getLocalizedExerciseName(exercise, language),
+        getExerciseMuscleLabel(exercise)
+      )
+    );
+  }, [catalogExercises, exercisePickerQuery, language, t]);
 
   const getMuscleFilterLabel = (filterKey: ExerciseLibraryMuscleFilter | 'recent'): string => {
     if (filterKey === 'all') {
@@ -1188,12 +1211,12 @@ export default function ActiveWorkout() {
         visible={exercisePickerVisible}
         transparent
         animationType={modalAnimationType}
-        onRequestClose={() => setExercisePickerVisible(false)}
+        onRequestClose={closeExercisePicker}
       >
         <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
           <Pressable 
             style={styles.modalDismissArea} 
-            onPress={() => setExercisePickerVisible(false)} 
+            onPress={closeExercisePicker} 
             accessibilityRole="button"
             accessibilityLabel={t('accessibility.closeModal', { defaultValue: 'Close modal' })}
           />
@@ -1208,7 +1231,7 @@ export default function ActiveWorkout() {
                   accessibilityRole="button"
                   accessibilityLabel={t('workout.customLabel')}
                   onPress={() => {
-                    setExercisePickerVisible(false);
+                    closeExercisePicker();
                     setCreateExerciseVisible(true);
                   }}
                 >
@@ -1217,6 +1240,20 @@ export default function ActiveWorkout() {
               </View>
 
               <View style={styles.modalHandle} />
+
+              <View style={styles.pickerSearchBar}>
+                <Ionicons name="search" size={18} color={palette.textMuted} />
+                <TextInput
+                  accessibilityLabel={t('accessibility.searchExercises', { defaultValue: 'Search exercises' })}
+                  value={exercisePickerQuery}
+                  onChangeText={setExercisePickerQuery}
+                  placeholder={t('workout.searchExercisesPlaceholder')}
+                  placeholderTextColor={palette.textMuted}
+                  style={styles.pickerSearchInput}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                />
+              </View>
 
               <Text style={styles.filterChipsSectionLabel}>{t('workout.muscleGroup')}</Text>
               <ScrollView
@@ -1289,8 +1326,15 @@ export default function ActiveWorkout() {
                     <TouchableOpacity
                       style={styles.modalRetryButton}
                       onPress={() => {
-                        const mp = selectedMuscleFilter === 'recent' ? 'all' : selectedMuscleFilter;
-                        void loadExercises({ muscle: mp, equipment: selectedEquipmentFilter }, true);
+                        if (selectedMuscleFilter === 'recent') {
+                          void loadRecentExercises();
+                          return;
+                        }
+
+                        void loadExercises(
+                          { muscle: selectedMuscleFilter, equipment: selectedEquipmentFilter },
+                          true
+                        );
                       }}
                       activeOpacity={ACTIVE_OPACITY}
                       accessibilityRole="button"
@@ -1301,11 +1345,24 @@ export default function ActiveWorkout() {
                   </View>
                 ) : catalogExercises.length === 0 ? (
                   <View style={styles.modalStatusContainer}>
-                    <Text style={styles.modalStatusTitle}>{t('workout.noExercisesAvailable')}</Text>
-                    <Text style={styles.modalStatusText}>{t('workout.createExercisesHint')}</Text>
+                    <Text style={styles.modalStatusTitle}>
+                      {selectedMuscleFilter === 'recent'
+                        ? t('workout.noRecentExercises')
+                        : t('workout.noExercisesAvailable')}
+                    </Text>
+                    <Text style={styles.modalStatusText}>
+                      {selectedMuscleFilter === 'recent'
+                        ? t('workout.noRecentExercisesHint')
+                        : t('workout.createExercisesHint')}
+                    </Text>
+                  </View>
+                ) : filteredCatalogExercises.length === 0 ? (
+                  <View style={styles.modalStatusContainer}>
+                    <Text style={styles.modalStatusTitle}>{t('exercise.emptySearchTitle')}</Text>
+                    <Text style={styles.modalStatusText}>{t('exercise.emptySearchSubtitle')}</Text>
                   </View>
                 ) : (
-                  catalogExercises.map((exercise) => {
+                  filteredCatalogExercises.map((exercise) => {
                     return (
                       <TouchableOpacity
                         key={exercise.id}
@@ -1315,7 +1372,7 @@ export default function ActiveWorkout() {
                         accessibilityLabel={t('accessibility.addSpecificExercise', { name: getLocalizedExerciseName(exercise, language), defaultValue: 'Add exercise' })}
                         onPress={() => {
                           addExercise(exercise);
-                          setExercisePickerVisible(false);
+                          closeExercisePicker();
                         }}
                       >
                         <ExerciseThumbnail exercise={exercise} size={34} />
@@ -2023,6 +2080,24 @@ const styles = StyleSheet.create({
   },
   modalListContent: {
     paddingBottom: 6,
+  },
+  pickerSearchBar: {
+    backgroundColor: palette.inputBackground,
+    borderWidth: 1,
+    borderColor: palette.inputBorder,
+    borderRadius: Radius.card,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 44,
+    marginBottom: 12,
+  },
+  pickerSearchInput: {
+    flex: 1,
+    marginLeft: 8,
+    color: palette.textPrimary,
+    fontSize: 15,
+    fontWeight: '500',
   },
   filterChipsSectionLabel: {
     color: palette.labelMuted,

@@ -1259,9 +1259,9 @@ export default function ActiveWorkout() {
               <ScrollView
                 horizontal
                 nestedScrollEnabled
-                showsHorizontalScrollIndicator
+                showsHorizontalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
-                style={styles.filterChipsScroll}
+                style={[styles.filterChipsScroll, isWeb && styles.filterChipsScrollWeb]}
                 contentContainerStyle={styles.filterChipsContent}
               >
                 {MUSCLE_FILTER_CHIP_KEYS.map((filterKey) => {
@@ -1288,9 +1288,9 @@ export default function ActiveWorkout() {
               <ScrollView
                 horizontal
                 nestedScrollEnabled
-                showsHorizontalScrollIndicator
+                showsHorizontalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
-                style={styles.filterChipsScroll}
+                style={[styles.filterChipsScroll, isWeb && styles.filterChipsScrollWeb]}
                 contentContainerStyle={styles.filterChipsContent}
               >
                 {EQUIPMENT_FILTER_CHIP_KEYS.map((filterKey) => {
@@ -2115,6 +2115,11 @@ const styles = StyleSheet.create({
     flexGrow: 0,
     marginBottom: 10,
   },
+  filterChipsScrollWeb: {
+    // Hide desktop-style scrollbar; users swipe/drag chips like on mobile.
+    scrollbarWidth: 'none',
+    msOverflowStyle: 'none',
+  } as object,
   filterChipsContent: {
     flexDirection: 'row',
     alignItems: 'center',

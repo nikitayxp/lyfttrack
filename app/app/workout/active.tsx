@@ -1258,7 +1258,9 @@ export default function ActiveWorkout() {
               <Text style={styles.filterChipsSectionLabel}>{t('workout.muscleGroup')}</Text>
               <ScrollView
                 horizontal
-                showsHorizontalScrollIndicator={false}
+                nestedScrollEnabled
+                showsHorizontalScrollIndicator
+                keyboardShouldPersistTaps="handled"
                 style={styles.filterChipsScroll}
                 contentContainerStyle={styles.filterChipsContent}
               >
@@ -1285,7 +1287,9 @@ export default function ActiveWorkout() {
               <Text style={styles.filterChipsSectionLabel}>{t('workout.equipment')}</Text>
               <ScrollView
                 horizontal
-                showsHorizontalScrollIndicator={false}
+                nestedScrollEnabled
+                showsHorizontalScrollIndicator
+                keyboardShouldPersistTaps="handled"
                 style={styles.filterChipsScroll}
                 contentContainerStyle={styles.filterChipsContent}
               >
@@ -2108,17 +2112,18 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   filterChipsScroll: {
-    minHeight: 40,
-    maxHeight: 52,
+    flexGrow: 0,
     marginBottom: 10,
   },
   filterChipsContent: {
-    columnGap: 8,
-    paddingRight: 4,
-    paddingVertical: 2,
+    flexDirection: 'row',
     alignItems: 'center',
+    columnGap: 8,
+    paddingRight: 16,
+    paddingVertical: 2,
   },
   filterChip: {
+    flexShrink: 0,
     minHeight: 34,
     borderRadius: Radius.pill,
     borderWidth: 1,

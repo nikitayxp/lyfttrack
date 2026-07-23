@@ -10,6 +10,7 @@ import {
 import type { Tables, TablesInsert } from '@/types/database';
 import { INPUT_LIMITS, sanitizeText, toSafeInteger, toSafeNumber } from '@/utils/inputValidation';
 import type { WorkoutSetDraft, WorkoutSetProgressDraft, WorkoutSetType } from './workoutSession.types';
+import { countPersonalRecords, type PersonalRecordSetSample } from '@/utils/personalRecords';
 
 export type ExerciseCatalogItem = Tables<'exercises'>;
 export type ExerciseLibraryMuscleFilter = 'all' | ExerciseMuscleKey;
@@ -480,6 +481,130 @@ function aggregateWorkoutFeedSets(rows: RawWorkoutFeedSetRow[]): Map<string, Wor
   }
 
   return aggregateByWorkout;
+}
+
+function samplesFromFeedAggregate(aggregate: WorkoutFeedAggregate | undefined): PersonalRecordSetSample[] {
+  if (!aggregate) {
+    return [];
+  }
+
+  const samples: PersonalRecordSetSample[] = [];
+
+  for (const group of aggregate.exerciseGroups) {
+    const exerciseId = (group.exercise_id ?? '').trim();
+    if (!exerciseId) {
+      continue;
+    }
+
+    for (const setItem of group.sets) {
+      samples.push({
+        exerciseId,
+        weight: setItem.weight,
+        reps: setItem.reps,
+      });
+    }
+  }
+
+  return samples;
+}
+
+async function resolvePrCountsByWorkoutId(
+  workouts: Array<Pick<Tables<'workouts'>, 'id' | 'user_id' | 'start_time'>>,
+  currentSetsByWorkoutId: Map<string, PersonalRecordSetSample[]>
+): Promise<Map<string, number>> {
+  const prCountByWorkoutId = new Map<string, number>();
+
+  for (const workout of workouts) {
+    prCountByWorkoutId.set(workout.id, 0);
+  }
+
+  const workoutsByUserId = new Map<string, typeof workouts>();
+
+  for (const workout of workouts) {
+    const list = workoutsByUserId.get(workout.user_id) ?? [];
+    list.push(workout);
+    workoutsByUserId.set(workout.user_id, list);
+  }
+
+  for (const [userId, userWorkouts] of workoutsByUserId) {
+    const exerciseIds = new Set<string>();
+
+    for (const workout of userWorkouts) {
+      for (const sample of currentSetsByWorkoutId.get(workout.id) ?? []) {
+        if (sample.exerciseId) {
+          exerciseIds.add(sample.exerciseId);
+        }
+      }
+    }
+
+    if (exerciseIds.size === 0) {
+      continue;
+    }
+
+    const { data: historyWorkouts, error: historyError } = await supabase
+      .from('workouts')
+      .select('id, start_time')
+      .eq('user_id', userId)
+      .not('end_time', 'is', null)
+      .order('start_time', { ascending: true });
+
+    if (historyError || !historyWorkouts || historyWorkouts.length === 0) {
+      continue;
+    }
+
+    const historyWorkoutIds = historyWorkouts.map((row) => row.id);
+
+    const { data: historySets, error: historySetsError } = await supabase
+      .from('sets')
+      .select('workout_id, exercise_id, weight, reps')
+      .in('workout_id', historyWorkoutIds)
+      .in('exercise_id', [...exerciseIds]);
+
+    if (historySetsError) {
+      continue;
+    }
+
+    const historySetsByWorkoutId = new Map<string, PersonalRecordSetSample[]>();
+
+    for (const row of historySets ?? []) {
+      const workoutId = normalizeOptionalId(row.workout_id);
+      const exerciseId = (row.exercise_id ?? '').trim();
+      if (!workoutId || !exerciseId) {
+        continue;
+      }
+
+      const list = historySetsByWorkoutId.get(workoutId) ?? [];
+      list.push({
+        exerciseId,
+        weight: row.weight,
+        reps: row.reps,
+      });
+      historySetsByWorkoutId.set(workoutId, list);
+    }
+
+    for (const workout of userWorkouts) {
+      const previousSamples: PersonalRecordSetSample[] = [];
+
+      for (const historyWorkout of historyWorkouts) {
+        if (historyWorkout.id === workout.id) {
+          continue;
+        }
+
+        if (historyWorkout.start_time >= workout.start_time) {
+          continue;
+        }
+
+        previousSamples.push(...(historySetsByWorkoutId.get(historyWorkout.id) ?? []));
+      }
+
+      prCountByWorkoutId.set(
+        workout.id,
+        countPersonalRecords(currentSetsByWorkoutId.get(workout.id) ?? [], previousSamples)
+      );
+    }
+  }
+
+  return prCountByWorkoutId;
 }
 
 function estimateOneRepMax(weight: number | null, reps: number | null): number | null {
@@ -1439,6 +1564,25 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
 
   const aggregateByWorkout = aggregateWorkoutFeedSets((allSets as RawWorkoutFeedSetRow[] | null) ?? []);
 
+  const currentSetsByWorkoutId = new Map<string, PersonalRecordSetSample[]>();
+  for (const workout of rawWorkouts) {
+    currentSetsByWorkoutId.set(workout.id, samplesFromFeedAggregate(aggregateByWorkout.get(workout.id)));
+  }
+
+  let prCountByWorkoutId = new Map<string, number>();
+  try {
+    prCountByWorkoutId = await resolvePrCountsByWorkoutId(
+      rawWorkouts.map((workout) => ({
+        id: workout.id,
+        user_id: workout.user_id,
+        start_time: workout.start_time,
+      })),
+      currentSetsByWorkoutId
+    );
+  } catch {
+    // Non-critical — feed still loads with 0 PRs
+  }
+
   const { data: latestCommentsData } = await supabase
     .from('workout_comments')
     .select('workout_id, content, profiles(username)')
@@ -1470,7 +1614,7 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
       profile: profileByUserId.get(workout.user_id) ?? null,
       totalVolume: Math.round(aggregate?.totalVolume ?? 0),
       totalSets: aggregate?.totalSets ?? 0,
-      prCount: null,
+      prCount: prCountByWorkoutId.get(workout.id) ?? 0,
       exerciseNames: aggregate?.exerciseNames ?? [],
       exerciseGroups: aggregate?.exerciseGroups ?? [],
       likes_count: extractRelationCount(workout.workout_likes),
@@ -1834,51 +1978,43 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
 
   let prCount = 0;
   try {
-    const exerciseMaxInWorkout = new Map<string, number>();
-    for (const ex of detailsExercises) {
-      for (const s of ex.sets) {
-        const w = s.weight ?? 0;
-        if (w > 0) {
-          const cur = exerciseMaxInWorkout.get(ex.exercise_id) ?? 0;
-          if (w > cur) exerciseMaxInWorkout.set(ex.exercise_id, w);
-        }
-      }
-    }
+    const currentSamples: PersonalRecordSetSample[] = detailsExercises.flatMap((exercise) =>
+      exercise.sets.map((setItem) => ({
+        exerciseId: exercise.exercise_id,
+        weight: setItem.weight,
+        reps: setItem.reps,
+      }))
+    );
 
-    if (exerciseMaxInWorkout.size > 0) {
-      const exerciseIds = [...exerciseMaxInWorkout.keys()];
+    const exerciseIds = [...new Set(currentSamples.map((sample) => sample.exerciseId).filter(Boolean))];
 
-      const { data: otherWorkoutIds } = await supabase
+    if (exerciseIds.length > 0) {
+      const { data: priorWorkouts } = await supabase
         .from('workouts')
         .select('id')
         .eq('user_id', workout.user_id)
-        .neq('id', workout.id);
+        .neq('id', workout.id)
+        .not('end_time', 'is', null)
+        .lt('start_time', workout.start_time);
 
-      if (otherWorkoutIds && otherWorkoutIds.length > 0) {
-        const wIds = otherWorkoutIds.map((w) => w.id);
-        const { data: prevSets } = await supabase
+      if (priorWorkouts && priorWorkouts.length > 0) {
+        const { data: previousSets } = await supabase
           .from('sets')
-          .select('exercise_id, weight')
-          .in('workout_id', wIds)
-          .in('exercise_id', exerciseIds)
-          .not('weight', 'is', null);
+          .select('exercise_id, weight, reps')
+          .in(
+            'workout_id',
+            priorWorkouts.map((row) => row.id)
+          )
+          .in('exercise_id', exerciseIds);
 
-        const prevMaxMap = new Map<string, number>();
-        if (prevSets) {
-          for (const row of prevSets) {
-            if (!row.exercise_id) continue;
-            const w = row.weight ?? 0;
-            const cur = prevMaxMap.get(row.exercise_id) ?? 0;
-            if (w > cur) prevMaxMap.set(row.exercise_id, w);
-          }
-        }
-
-        for (const [exId, newMax] of exerciseMaxInWorkout) {
-          const prevMax = prevMaxMap.get(exId) ?? 0;
-          if (newMax > prevMax) prCount++;
-        }
-      } else {
-        prCount = exerciseMaxInWorkout.size;
+        prCount = countPersonalRecords(
+          currentSamples,
+          (previousSets ?? []).map((row) => ({
+            exerciseId: row.exercise_id ?? '',
+            weight: row.weight,
+            reps: row.reps,
+          }))
+        );
       }
     }
   } catch {
@@ -1961,6 +2097,25 @@ export async function getUserWorkouts(userId: string, page = 0, limit = 20): Pro
 
   const aggregateByWorkout = aggregateWorkoutFeedSets((allSets as RawWorkoutFeedSetRow[] | null) ?? []);
 
+  const currentSetsByWorkoutId = new Map<string, PersonalRecordSetSample[]>();
+  for (const workout of rawWorkouts) {
+    currentSetsByWorkoutId.set(workout.id, samplesFromFeedAggregate(aggregateByWorkout.get(workout.id)));
+  }
+
+  let prCountByWorkoutId = new Map<string, number>();
+  try {
+    prCountByWorkoutId = await resolvePrCountsByWorkoutId(
+      rawWorkouts.map((workout) => ({
+        id: workout.id,
+        user_id: workout.user_id,
+        start_time: workout.start_time,
+      })),
+      currentSetsByWorkoutId
+    );
+  } catch {
+    // Non-critical
+  }
+
   return rawWorkouts.map((workout) => {
     const aggregate = aggregateByWorkout.get(workout.id);
 
@@ -1974,7 +2129,7 @@ export async function getUserWorkouts(userId: string, page = 0, limit = 20): Pro
       profile: profileByUserId.get(workout.user_id) ?? null,
       totalVolume: Math.round(aggregate?.totalVolume ?? 0),
       totalSets: aggregate?.totalSets ?? 0,
-      prCount: null,
+      prCount: prCountByWorkoutId.get(workout.id) ?? 0,
       exerciseNames: aggregate?.exerciseNames ?? [],
       exerciseGroups: aggregate?.exerciseGroups ?? [],
       likes_count: extractRelationCount(workout.workout_likes),

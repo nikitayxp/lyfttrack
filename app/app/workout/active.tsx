@@ -1262,8 +1262,10 @@ export default function ActiveWorkout() {
               <Text style={styles.filterChipsSectionLabel}>{t('workout.muscleGroup')}</Text>
               <ScrollView
                 horizontal
+                nestedScrollEnabled
                 showsHorizontalScrollIndicator={false}
-                style={styles.filterChipsScroll}
+                keyboardShouldPersistTaps="handled"
+                style={[styles.filterChipsScroll, isWeb && styles.filterChipsScrollWeb]}
                 contentContainerStyle={styles.filterChipsContent}
               >
                 {MUSCLE_FILTER_CHIP_KEYS.map((filterKey) => {
@@ -1289,8 +1291,10 @@ export default function ActiveWorkout() {
               <Text style={styles.filterChipsSectionLabel}>{t('workout.equipment')}</Text>
               <ScrollView
                 horizontal
+                nestedScrollEnabled
                 showsHorizontalScrollIndicator={false}
-                style={styles.filterChipsScroll}
+                keyboardShouldPersistTaps="handled"
+                style={[styles.filterChipsScroll, isWeb && styles.filterChipsScrollWeb]}
                 contentContainerStyle={styles.filterChipsContent}
               >
                 {EQUIPMENT_FILTER_CHIP_KEYS.map((filterKey) => {
@@ -2112,17 +2116,23 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   filterChipsScroll: {
-    minHeight: 40,
-    maxHeight: 52,
+    flexGrow: 0,
     marginBottom: 10,
   },
+  filterChipsScrollWeb: {
+    // Hide desktop-style scrollbar; users swipe/drag chips like on mobile.
+    scrollbarWidth: 'none',
+    msOverflowStyle: 'none',
+  } as object,
   filterChipsContent: {
-    columnGap: 8,
-    paddingRight: 4,
-    paddingVertical: 2,
+    flexDirection: 'row',
     alignItems: 'center',
+    columnGap: 8,
+    paddingRight: 16,
+    paddingVertical: 2,
   },
   filterChip: {
+    flexShrink: 0,
     minHeight: 34,
     borderRadius: Radius.pill,
     borderWidth: 1,

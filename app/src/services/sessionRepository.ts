@@ -23,6 +23,7 @@ import {
   type WorkoutSetDraft,
   WorkoutSaveValidationError,
 } from './workoutSession.types';
+import { countPersonalRecords, type PersonalRecordSetSample } from '@/utils/personalRecords';
 
 // ---------- Create Workout ----------
 
@@ -30,64 +31,62 @@ async function countNewPersonalRecords(
   currentWorkoutId: string,
   completedSetDrafts: WorkoutSetDraft[],
 ): Promise<number> {
-  const exerciseMaxWeights = new Map<string, number>();
+  const currentSamples: PersonalRecordSetSample[] = [];
 
   for (const draft of completedSetDrafts) {
     const exerciseId = (draft.exerciseId ?? '').trim();
     if (!exerciseId) continue;
 
-    const weight = toSafeNumber(draft.weight, { min: 0, max: INPUT_LIMITS.weightMax, decimals: 2 }) ?? 0;
-    if (weight <= 0) continue;
-
-    const current = exerciseMaxWeights.get(exerciseId) ?? 0;
-    if (weight > current) {
-      exerciseMaxWeights.set(exerciseId, weight);
-    }
+    currentSamples.push({
+      exerciseId,
+      weight: toSafeNumber(draft.weight, { min: 0, max: INPUT_LIMITS.weightMax, decimals: 2 }),
+      reps: toSafeInteger(draft.reps, { min: 0, max: INPUT_LIMITS.repsMax }),
+    });
   }
 
-  if (exerciseMaxWeights.size === 0) return 0;
+  if (currentSamples.length === 0) return 0;
 
-  const user = await getAuthenticatedUserOrThrow();
+  const { data: currentWorkout, error: currentWorkoutError } = await supabase
+    .from('workouts')
+    .select('id, user_id, start_time')
+    .eq('id', currentWorkoutId)
+    .maybeSingle();
 
-  const { data: userWorkoutIds } = await supabase
+  if (currentWorkoutError || !currentWorkout) {
+    return 0;
+  }
+
+  const exerciseIds = [...new Set(currentSamples.map((sample) => sample.exerciseId))];
+
+  const { data: priorWorkouts } = await supabase
     .from('workouts')
     .select('id')
-    .eq('user_id', user.id)
-    .neq('id', currentWorkoutId);
+    .eq('user_id', currentWorkout.user_id)
+    .neq('id', currentWorkoutId)
+    .not('end_time', 'is', null)
+    .lt('start_time', currentWorkout.start_time);
 
-  if (!userWorkoutIds || userWorkoutIds.length === 0) {
-    return exerciseMaxWeights.size;
+  if (!priorWorkouts || priorWorkouts.length === 0) {
+    return 0;
   }
-
-  const workoutIds = userWorkoutIds.map((w) => w.id);
-  const exerciseIds = [...exerciseMaxWeights.keys()];
 
   const { data: previousSets } = await supabase
     .from('sets')
-    .select('exercise_id, weight')
-    .in('workout_id', workoutIds)
-    .in('exercise_id', exerciseIds)
-    .not('weight', 'is', null);
+    .select('exercise_id, weight, reps')
+    .in(
+      'workout_id',
+      priorWorkouts.map((workout) => workout.id)
+    )
+    .in('exercise_id', exerciseIds);
 
-  const previousMaxMap = new Map<string, number>();
-  if (previousSets) {
-    for (const row of previousSets) {
-      if (!row.exercise_id) continue;
-      const weight = row.weight ?? 0;
-      const current = previousMaxMap.get(row.exercise_id) ?? 0;
-      if (weight > current) {
-        previousMaxMap.set(row.exercise_id, weight);
-      }
-    }
-  }
-
-  let prCount = 0;
-  for (const [exerciseId, newMax] of exerciseMaxWeights) {
-    const previousMax = previousMaxMap.get(exerciseId) ?? 0;
-    if (newMax > previousMax) prCount++;
-  }
-
-  return prCount;
+  return countPersonalRecords(
+    currentSamples,
+    (previousSets ?? []).map((row) => ({
+      exerciseId: row.exercise_id ?? '',
+      weight: row.weight,
+      reps: row.reps,
+    }))
+  );
 }
 
 export async function finishWorkout(input: FinishWorkoutInput): Promise<FinishWorkoutResult> {

@@ -42,7 +42,7 @@ function formatDuration(startIso: string, endIso: string | null): string {
 }
 
 function formatRecords(value: number | null | undefined): string {
-  if (value === null || value === undefined) return '--';
+  if (value === null || value === undefined) return '0';
   return `${value}`;
 }
 

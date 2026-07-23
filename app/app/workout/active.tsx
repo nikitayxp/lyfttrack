@@ -214,10 +214,11 @@ export default function ActiveWorkout() {
     addExercise,
     clearExercises,
     getExerciseCompletionGlowValue,
-    recoveredDraft,
     clearDraft,
-    acceptRecoveredDraft,
-    discardRecoveredDraft,
+    workoutName,
+    setWorkoutName,
+    isDraftRecoveryPending,
+    didRestoreDraft,
     isExerciseStopwatchRunning,
     getExerciseStopwatchSeconds,
     getExerciseRestSecondsByExerciseId,
@@ -249,7 +250,9 @@ export default function ActiveWorkout() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFinishModalVisible, setIsFinishModalVisible] = useState(false);
   const [hasManualWorkoutTitle, setHasManualWorkoutTitle] = useState(false);
-  const [workoutTitleInput, setWorkoutTitleInput] = useState(() => t('workout.defaultActiveWorkoutName'));
+  // Kept in the workout context so it survives a refresh through the draft.
+  const workoutTitleInput = workoutName ?? t('workout.defaultActiveWorkoutName');
+  const setWorkoutTitleInput = setWorkoutName;
   const [isCreatingExercise, setIsCreatingExercise] = useState(false);
   const [newExerciseName, setNewExerciseName] = useState('');
   const [newExerciseMuscleGroup, setNewExerciseMuscleGroup] = useState<ExerciseMuscleKey | null>(null);
@@ -301,7 +304,7 @@ export default function ActiveWorkout() {
     });
 
     setWorkoutTitleInput(normalizedValue ?? t('workout.defaultActiveWorkoutName'));
-  }, [hasManualWorkoutTitle, t]);
+  }, [hasManualWorkoutTitle, setWorkoutTitleInput, t]);
 
   const loadRecentExercises = useCallback(async () => {
     setIsLoadingExercises(true);
@@ -468,6 +471,13 @@ export default function ActiveWorkout() {
   );
 
   useEffect(() => {
+    // The query string survives a browser refresh, so preloading here would
+    // overwrite the draft that was just restored. Wait for recovery to settle
+    // and stand down whenever it produced a workout.
+    if (isDraftRecoveryPending || didRestoreDraft) {
+      return;
+    }
+
     if (routeCopyFromWorkoutId) {
       void preloadFromPastWorkout(routeCopyFromWorkoutId);
       return;
@@ -481,7 +491,16 @@ export default function ActiveWorkout() {
     if (routeRoutineId) {
       void preloadRoutine(routeRoutineId);
     }
-  }, [preloadFromPastWorkout, preloadRoutine, preloadTemplate, routeCopyFromWorkoutId, routeRoutineId, routeTemplateId]);
+  }, [
+    didRestoreDraft,
+    isDraftRecoveryPending,
+    preloadFromPastWorkout,
+    preloadRoutine,
+    preloadTemplate,
+    routeCopyFromWorkoutId,
+    routeRoutineId,
+    routeTemplateId,
+  ]);
 
   const openExerciseStatsModal = useCallback(
     (exercise: ExerciseRow) => {
@@ -547,7 +566,7 @@ export default function ActiveWorkout() {
     }
 
     setIsFinishModalVisible(true);
-  }, [isSubmitting, t, workoutTitleInput]);
+  }, [isSubmitting, setWorkoutTitleInput, t, workoutTitleInput]);
 
   async function handleFinishWorkout() {
     if (isSubmitting) {
@@ -744,29 +763,9 @@ export default function ActiveWorkout() {
     return t(EXERCISE_EQUIPMENT_TRANSLATION_KEY[filterKey]);
   };
 
-  // Show recovery dialog as soon as a draft is detected
-  useEffect(() => {
-    if (!recoveredDraft) return;
-
-    const savedAt = new Date(recoveredDraft.draft.savedAt).toLocaleTimeString();
-    Alert.alert(
-      t('workout.recoverTitle'),
-      t('workout.recoverDescription', { savedAt }),
-      [
-        {
-          text: t('workout.recoverDiscard'),
-          style: 'destructive',
-          onPress: () => { void discardRecoveredDraft(); },
-        },
-        {
-          text: t('workout.recoverAction'),
-          style: 'default',
-          onPress: () => { acceptRecoveredDraft(recoveredDraft); },
-        },
-      ],
-      { cancelable: false }
-    );
-  }, [recoveredDraft, acceptRecoveredDraft, discardRecoveredDraft, t]);
+  // Draft recovery is handled by WorkoutProvider, which restores it directly.
+  // The old confirm dialog lived here and was a no-op on web (react-native-web
+  // ignores Alert buttons), so a refresh dropped the whole workout.
 
   return (
     <SafeAreaView style={[styles.safeArea, isWeb && styles.safeAreaWeb]} edges={['top', 'left', 'right']}>

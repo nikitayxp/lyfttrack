@@ -776,10 +776,14 @@ export default function ActiveWorkout() {
         <View style={styles.headerRow}>
           <TouchableOpacity
             style={styles.iconButton}
-            onPress={() => router.back()}
+            onPress={() => {
+              // Minimize must work even when history is empty (web refresh / direct URL / Tailscale).
+              // router.back() is often a no-op in those cases.
+              router.replace('/(tabs)/workout' as any);
+            }}
             activeOpacity={ACTIVE_OPACITY}
             accessibilityRole="button"
-            accessibilityLabel={t('common.back')}
+            accessibilityLabel={t('workout.minimizeA11y', { defaultValue: 'Minimize workout' })}
             hitSlop={HIT_SLOP}
           >
             <Ionicons name="chevron-down" size={26} color={palette.textPrimary} />

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, type AppStateStatus, Animated, Vibration } from 'react-native';
+import { AppState, type AppStateStatus, Animated, Platform, Vibration } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import type { Tables } from '@/types/database';
 import {
@@ -16,6 +16,7 @@ import {
   clearWorkoutDraft,
   loadWorkoutDraft,
   saveWorkoutDraftNow,
+  saveWorkoutDraftSync,
   scheduleWorkoutDraftSave,
   SCHEMA_VERSION,
 } from '@/services/offlineSyncService';
@@ -280,8 +281,10 @@ export function useActiveWorkoutState({
   const activeExercisesRef = useRef<ActiveExercise[]>([]);
   const completionGlowByExerciseIdRef = useRef<Map<string, Animated.Value>>(new Map());
 
-  // Draft state exposed to the consumer so they can show a recovery dialog
+  // Draft state exposed to the consumer so they can restore it
   const [recoveredDraft, setRecoveredDraft] = useState<RecoveredDraftState | null>(null);
+  /** True until the stored draft has been read, so callers can wait before seeding state. */
+  const [isDraftRecoveryPending, setIsDraftRecoveryPending] = useState(true);
 
   // ── Draft auto-save: flush immediately on app-background ──────────────────
 
@@ -315,6 +318,37 @@ export function useActiveWorkoutState({
     return () => subscription.remove();
   }, [buildCurrentDraft]);
 
+  // Flush on browser refresh / tab close. AppState never reports 'background'
+  // for an unload, and AsyncStorage's promise would not settle in time anyway,
+  // so this writes synchronously to localStorage.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+
+    const flush = () => {
+      const draft = buildCurrentDraft();
+      if (draft && draft.exercises.length > 0) {
+        saveWorkoutDraftSync(draft);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        flush();
+      }
+    };
+
+    window.addEventListener('beforeunload', flush);
+    // Safari/iOS often skips beforeunload; pagehide + visibilitychange cover it.
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('beforeunload', flush);
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [buildCurrentDraft]);
+
   // ── Draft recovery on mount ───────────────────────────────────────────────
 
   useEffect(() => {
@@ -323,12 +357,18 @@ export function useActiveWorkoutState({
     let cancelled = false;
 
     const tryRecover = async () => {
-      const draft = await loadWorkoutDraft(userId);
+      try {
+        const draft = await loadWorkoutDraft(userId);
 
-      if (cancelled || !draft || draft.exercises.length === 0) return;
+        if (cancelled || !draft || draft.exercises.length === 0) return;
 
-      const exercises = draft.exercises.map(draftToActiveExercise);
-      setRecoveredDraft({ draft, exercises });
+        const exercises = draft.exercises.map(draftToActiveExercise);
+        setRecoveredDraft({ draft, exercises });
+      } finally {
+        if (!cancelled) {
+          setIsDraftRecoveryPending(false);
+        }
+      }
     };
 
     void tryRecover();
@@ -598,6 +638,7 @@ export function useActiveWorkoutState({
     clearExercises,
     getExerciseCompletionGlowValue,
     recoveredDraft,
+    isDraftRecoveryPending,
     clearDraft,
     acceptRecoveredDraft,
     discardRecoveredDraft,

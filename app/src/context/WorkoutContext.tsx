@@ -44,7 +44,13 @@ type WorkoutContextValue = {
   removeExercise: (exerciseIndex: number) => void;
   moveExercise: (exerciseIndex: number, direction: 'up' | 'down') => void;
   getExerciseCompletionGlowValue: (exerciseId: string) => Animated.Value;
+  workoutName: string | null;
+  setWorkoutName: (name: string | null) => void;
   recoveredDraft: RecoveredDraftState | null;
+  /** True while the persisted draft is still being read — wait before seeding exercises. */
+  isDraftRecoveryPending: boolean;
+  /** True once a persisted draft has been restored into this session. */
+  didRestoreDraft: boolean;
   clearDraft: () => Promise<void>;
   acceptRecoveredDraft: (recovered: RecoveredDraftState) => void;
   discardRecoveredDraft: () => Promise<void>;
@@ -67,7 +73,10 @@ const WorkoutContext = createContext<WorkoutContextValue | null>(null);
 
 export function WorkoutProvider({ children }: PropsWithChildren) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isAuthResolved, setIsAuthResolved] = useState(false);
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
+  const [workoutName, setWorkoutName] = useState<string | null>(null);
+  const [didRestoreDraft, setDidRestoreDraft] = useState(false);
   const [workoutStartedAtMs, setWorkoutStartedAtMs] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isTimerPaused, setIsTimerPaused] = useState(false);
@@ -89,6 +98,7 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
       }
 
       setCurrentUserId(session?.user?.id ?? null);
+      setIsAuthResolved(true);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -97,6 +107,7 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
       }
 
       setCurrentUserId(session?.user?.id ?? null);
+      setIsAuthResolved(true);
     });
 
     return () => {
@@ -125,6 +136,7 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
     clearExercises,
     getExerciseCompletionGlowValue,
     recoveredDraft,
+    isDraftRecoveryPending: isDraftReadPending,
     clearDraft,
     acceptRecoveredDraft,
     discardRecoveredDraft,
@@ -132,7 +144,12 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
     userId: currentUserId ?? undefined,
     startTime: workoutStartedAtIso,
     templateId: activeTemplateId,
+    workoutName: workoutName ?? undefined,
   });
+
+  // Recovery is only settled once we know who the user is *and* the stored
+  // draft has been read. Consumers must not seed exercises before that.
+  const isDraftRecoveryPending = !isAuthResolved || (currentUserId !== null && isDraftReadPending);
 
   const hasActiveWorkout = activeExercises.length > 0;
 
@@ -151,6 +168,8 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
     setWorkoutStartedAtMs(null);
     setElapsedSeconds(0);
     setActiveTemplateId(null);
+    setWorkoutName(null);
+    setDidRestoreDraft(false);
     setExerciseStopwatchById({});
     setExerciseRestSnapshotById({});
     setStopwatchNowMs(Date.now());
@@ -470,6 +489,11 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
 
       setActiveTemplateId(recovered.draft.templateId ?? null);
 
+      const restoredName = recovered.draft.workoutName?.trim();
+      if (restoredName) {
+        setWorkoutName(restoredName);
+      }
+
       if (Number.isFinite(parsedStartMs)) {
         setWorkoutStartedAtMs(parsedStartMs);
       } else {
@@ -480,6 +504,26 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
     },
     [acceptRecoveredDraft, ensureWorkoutStarted, setActiveTemplateId]
   );
+
+  // Restore the persisted draft automatically. The previous flow asked for
+  // confirmation through Alert.alert, which is a no-op on react-native-web, so
+  // a browser refresh silently dropped every exercise of the active workout.
+  const hasHandledDraftRecoveryRef = useRef(false);
+
+  useEffect(() => {
+    if (!recoveredDraft || hasHandledDraftRecoveryRef.current) {
+      return;
+    }
+
+    // Never clobber a workout the user has already started in this session.
+    if (activeExercisesRef.current.length > 0) {
+      return;
+    }
+
+    hasHandledDraftRecoveryRef.current = true;
+    setDidRestoreDraft(true);
+    acceptRecoveredDraftWithTimer(recoveredDraft);
+  }, [acceptRecoveredDraftWithTimer, activeExercisesRef, recoveredDraft]);
 
   const latestExerciseName = useMemo(() => {
     const latest = activeExercises[activeExercises.length - 1];
@@ -505,7 +549,11 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
     removeExercise,
     moveExercise,
     getExerciseCompletionGlowValue,
+    workoutName,
+    setWorkoutName,
     recoveredDraft,
+    isDraftRecoveryPending,
+    didRestoreDraft,
     clearDraft,
     acceptRecoveredDraft: acceptRecoveredDraftWithTimer,
     discardRecoveredDraft,
@@ -544,10 +592,14 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
     latestExerciseName,
     moveExercise,
     recoveredDraft,
+    isDraftRecoveryPending,
+    didRestoreDraft,
+    workoutName,
     removeExercise,
     resetWorkoutSession,
     safeDeactivateKeepAwake,
     setActiveTemplateId,
+    setWorkoutName,
     setActiveExercisesWithRef,
     toggleExerciseStopwatch,
     updateSetInput,

@@ -1153,18 +1153,6 @@ export default function ActiveWorkout() {
             </View>
             <Ionicons name="chevron-up" size={18} color={palette.textMuted} />
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.discardWorkoutButton}
-            onPress={openDiscardWorkoutConfirm}
-            disabled={isSubmitting || isDiscardingWorkout}
-            activeOpacity={ACTIVE_OPACITY}
-            accessibilityRole="button"
-            accessibilityLabel={t('workout.discardA11y')}
-          >
-            <Ionicons name="trash-outline" size={16} color={palette.errorText} />
-            <Text style={styles.discardWorkoutButtonText}>{t('workout.discardWorkout')}</Text>
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -2046,24 +2034,6 @@ const styles = StyleSheet.create({
     color: palette.textMuted,
     fontSize: 12,
     fontWeight: '500',
-  },
-  discardWorkoutButton: {
-    marginTop: 14,
-    minHeight: 44,
-    borderRadius: Radius.card,
-    borderWidth: 1,
-    borderColor: 'rgba(248,113,113,0.35)',
-    backgroundColor: 'rgba(248,113,113,0.08)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    columnGap: 8,
-    paddingHorizontal: 14,
-  },
-  discardWorkoutButtonText: {
-    color: palette.errorText,
-    fontSize: 14,
-    fontWeight: '700',
   },
   modalBackdrop: {
     flex: 1,

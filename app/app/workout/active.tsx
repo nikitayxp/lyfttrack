@@ -215,6 +215,7 @@ export default function ActiveWorkout() {
     clearExercises,
     getExerciseCompletionGlowValue,
     clearDraft,
+    resetWorkoutSession,
     workoutName,
     setWorkoutName,
     isDraftRecoveryPending,
@@ -261,6 +262,8 @@ export default function ActiveWorkout() {
   const [summaryExerciseNames, setSummaryExerciseNames] = useState<string[]>([]);
   const [isSummaryVisible, setIsSummaryVisible] = useState(false);
   const [pendingDeleteSet, setPendingDeleteSet] = useState<{ exerciseId: string; setId: string; setNumber: number } | null>(null);
+  const [isDiscardConfirmVisible, setIsDiscardConfirmVisible] = useState(false);
+  const [isDiscardingWorkout, setIsDiscardingWorkout] = useState(false);
   const exerciseCatalogByFilterRef = useRef<Map<string, ExerciseRow[]>>(new Map());
 
   const timerLabel = useMemo(() => formatElapsedTime(elapsedSeconds), [elapsedSeconds]);
@@ -635,55 +638,48 @@ export default function ActiveWorkout() {
     }
   }
 
-  const confirmCancelWorkout = useCallback(async (): Promise<boolean> => {
-    const title = t('workout.cancelConfirmTitle');
-    const message = t('workout.cancelConfirmDescription');
-
-    if (Platform.OS === 'web') {
-      const confirmFn = (globalThis as { confirm?: (value?: string) => boolean }).confirm;
-      return confirmFn ? confirmFn(`${title}\n\n${message}`) : true;
-    }
-
-    return await new Promise((resolve) => {
-      Alert.alert(title, message, [
-        {
-          text: t('workout.cancelKeepAction'),
-          style: 'cancel',
-          onPress: () => resolve(false),
-        },
-        {
-          text: t('workout.cancelDiscardAction'),
-          style: 'destructive',
-          onPress: () => resolve(true),
-        },
-      ], { cancelable: false });
-    });
-  }, [t]);
-
-  const handleCancelWorkout = useCallback(async () => {
-    if (isSubmitting) {
+  const openDiscardWorkoutConfirm = useCallback(() => {
+    if (isSubmitting || isDiscardingWorkout) {
       return;
     }
 
-    const shouldCancel = await confirmCancelWorkout();
+    setIsDiscardConfirmVisible(true);
+  }, [isDiscardingWorkout, isSubmitting]);
 
-    if (!shouldCancel) {
+  const handleDiscardWorkout = useCallback(async () => {
+    if (isSubmitting || isDiscardingWorkout) {
       return;
     }
 
-    clearExercises();
-    safeDeactivateKeepAwake();
-    setExercisePickerVisible(false);
-    setCreateExerciseVisible(false);
+    setIsDiscardingWorkout(true);
 
     try {
-      await clearDraft();
-    } catch (error) {
-      console.warn('Unable to clear workout draft during cancel:', error);
-    }
+      clearExercises();
+      resetWorkoutSession();
+      safeDeactivateKeepAwake();
+      setExercisePickerVisible(false);
+      setCreateExerciseVisible(false);
+      setIsFinishModalVisible(false);
+      setIsDiscardConfirmVisible(false);
 
-    router.replace('/(tabs)' as any);
-  }, [clearDraft, clearExercises, confirmCancelWorkout, isSubmitting, safeDeactivateKeepAwake]);
+      try {
+        await clearDraft();
+      } catch (error) {
+        console.warn('Unable to clear workout draft during cancel:', error);
+      }
+
+      router.replace('/(tabs)/workout' as any);
+    } finally {
+      setIsDiscardingWorkout(false);
+    }
+  }, [
+    clearDraft,
+    clearExercises,
+    isDiscardingWorkout,
+    isSubmitting,
+    resetWorkoutSession,
+    safeDeactivateKeepAwake,
+  ]);
 
   const handleShareAndFinish = useCallback(() => {
     safeDeactivateKeepAwake();
@@ -773,20 +769,34 @@ export default function ActiveWorkout() {
 
       <View style={[styles.container, isWeb && styles.containerWeb]}>
         <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={() => {
-              // Minimize must work even when history is empty (web refresh / direct URL / Tailscale).
-              // router.back() is often a no-op in those cases.
-              router.replace('/(tabs)/workout' as any);
-            }}
-            activeOpacity={ACTIVE_OPACITY}
-            accessibilityRole="button"
-            accessibilityLabel={t('workout.minimizeA11y', { defaultValue: 'Minimize workout' })}
-            hitSlop={HIT_SLOP}
-          >
-            <Ionicons name="chevron-down" size={26} color={palette.textPrimary} />
-          </TouchableOpacity>
+          <View style={styles.headerLeftCluster}>
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => {
+                // Minimize must work even when history is empty (web refresh / direct URL / Tailscale).
+                // router.back() is often a no-op in those cases.
+                router.replace('/(tabs)/workout' as any);
+              }}
+              activeOpacity={ACTIVE_OPACITY}
+              accessibilityRole="button"
+              accessibilityLabel={t('workout.minimizeA11y', { defaultValue: 'Minimize workout' })}
+              hitSlop={HIT_SLOP}
+            >
+              <Ionicons name="chevron-down" size={26} color={palette.textPrimary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={openDiscardWorkoutConfirm}
+              disabled={isSubmitting || isDiscardingWorkout}
+              activeOpacity={ACTIVE_OPACITY}
+              accessibilityRole="button"
+              accessibilityLabel={t('workout.discardA11y')}
+              hitSlop={HIT_SLOP}
+            >
+              <Ionicons name="trash-outline" size={20} color={palette.errorText} />
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity
             onPress={toggleTimerPause}
@@ -1532,6 +1542,25 @@ export default function ActiveWorkout() {
           setPendingDeleteSet(null);
         }}
       />
+
+      <ConfirmModal
+        visible={isDiscardConfirmVisible}
+        title={t('workout.cancelConfirmTitle')}
+        description={t('workout.cancelConfirmDescription')}
+        confirmLabel={t('workout.cancelDiscardAction')}
+        cancelLabel={t('workout.cancelKeepAction')}
+        tone="danger"
+        icon="trash-outline"
+        busy={isDiscardingWorkout}
+        onCancel={() => {
+          if (!isDiscardingWorkout) {
+            setIsDiscardConfirmVisible(false);
+          }
+        }}
+        onConfirm={() => {
+          void handleDiscardWorkout();
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -1568,6 +1597,11 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: palette.border,
+  },
+  headerLeftCluster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 8,
   },
   iconButton: {
     width: 38,

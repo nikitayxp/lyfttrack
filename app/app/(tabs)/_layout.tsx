@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { useMemo } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { Colors } from '@/constants/Colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -56,12 +56,7 @@ export default function TabLayout() {
         name="workout"
         options={{
           title: t('tabs.workout'),
-          tabBarLabelStyle: styles.workoutLabel,
-          tabBarIcon: ({ focused }) => (
-            <View style={[styles.workoutIconContainer, focused && styles.workoutIconContainerFocused]}>
-              <Ionicons name="add" size={28} color="#FFFFFF" />
-            </View>
-          ),
+          tabBarIcon: ({ color }) => <Ionicons name="barbell-outline" size={23} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -149,24 +144,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 1,
     marginBottom: 1,
-  },
-  workoutLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    marginTop: 1,
-    marginBottom: 1,
-  },
-  workoutIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: palette.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: -4,
-    marginBottom: 4,
-  },
-  workoutIconContainerFocused: {
-    transform: [{ scale: 1.03 }],
   },
 });

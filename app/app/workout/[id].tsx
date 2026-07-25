@@ -259,13 +259,6 @@ export default function WorkoutDetailsScreen() {
                 <Text style={styles.statLabel}>{t('workoutDetails.recordsLabel')}</Text>
                 <Text style={styles.statValue}>{details.prCount}</Text>
               </View>
-
-              <View style={styles.statCard}>
-                <Text style={styles.statLabel}>{t('workoutDetails.pr1rmLabel')}</Text>
-                <Text style={styles.statValue}>
-                  {details.bestEstimated1RM !== null ? `${formatNumericValue(details.bestEstimated1RM, 'decimal')} kg` : '--'}
-                </Text>
-              </View>
             </View>
 
             {details.heaviestWeight !== null ? (
@@ -512,32 +505,35 @@ const styles = StyleSheet.create({
   },
   statsGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    rowGap: 8,
+    alignItems: 'stretch',
+    columnGap: 8,
     marginTop: 4,
   },
   statCard: {
-    width: '48.5%',
+    flex: 1,
+    minWidth: 0,
     borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.inputStroke,
     backgroundColor: palette.surfaceAlt,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
   },
   statLabel: {
     color: palette.labelMuted,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.3,
     marginBottom: 4,
+    textAlign: 'center',
   },
   statValue: {
     color: palette.textPrimary,
     fontSize: 15,
     fontWeight: '800',
+    textAlign: 'center',
     fontVariant: ['tabular-nums'],
   },
   topSetPill: {

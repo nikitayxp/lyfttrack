@@ -3,31 +3,34 @@ import { Tabs } from 'expo-router';
 import { useMemo } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 import { Colors } from '@/constants/Colors';
+import {
+  TAB_BAR_TOP_PADDING,
+  TAB_ICON_SIZE,
+  getTabBarBottomPadding,
+  getTabBarHeight,
+} from '@/constants/tabBar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
 const palette = Colors.dark;
-const WEB_MOBILE_TAB_BAR_HEIGHT = 74;
 
 export default function TabLayout() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === 'web';
-  const nativeBottomInset = Math.max(insets.bottom, 10);
-  const tabBarHeight = isWeb
-    ? WEB_MOBILE_TAB_BAR_HEIGHT
-    : (Platform.OS === 'ios' ? 72 : 64) + nativeBottomInset;
+  const tabBarHeight = getTabBarHeight(isWeb, insets.bottom);
+  const tabBarBottomPadding = getTabBarBottomPadding(isWeb, insets.bottom);
 
   const tabBarStyle = useMemo(
     () => [
       styles.tabBar,
       {
         height: tabBarHeight,
-        paddingBottom: isWeb ? 12 : Math.max(nativeBottomInset - 2, 10),
-        paddingTop: isWeb ? 8 : 8,
+        paddingBottom: tabBarBottomPadding,
+        paddingTop: TAB_BAR_TOP_PADDING,
       },
     ],
-    [isWeb, nativeBottomInset, tabBarHeight]
+    [tabBarBottomPadding, tabBarHeight]
   );
 
   return (
@@ -49,21 +52,21 @@ export default function TabLayout() {
         name="index"
         options={{
           title: t('tabs.feed'),
-          tabBarIcon: ({ color }) => <Ionicons name="newspaper-outline" size={23} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="newspaper-outline" size={TAB_ICON_SIZE} color={color} />,
         }}
       />
       <Tabs.Screen
         name="workout"
         options={{
           title: t('tabs.workout'),
-          tabBarIcon: ({ color }) => <Ionicons name="barbell-outline" size={23} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="barbell-outline" size={TAB_ICON_SIZE} color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: t('tabs.profile'),
-          tabBarIcon: ({ color }) => <Ionicons name="person-circle-outline" size={24} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="person-outline" size={TAB_ICON_SIZE} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -142,7 +145,7 @@ const styles = StyleSheet.create({
   tabLabel: {
     fontSize: 11,
     fontWeight: '600',
-    marginTop: 1,
-    marginBottom: 1,
+    marginTop: 2,
+    marginBottom: 0,
   },
 });

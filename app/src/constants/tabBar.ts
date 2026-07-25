@@ -1,28 +1,14 @@
-import { Platform } from 'react-native';
-
-/** Keep tab bar + minimized workout bar in sync. */
-export const WEB_MOBILE_TAB_BAR_HEIGHT = 74;
+/**
+ * Keep MinimizedWorkoutBar offset aligned with React Navigation's default
+ * bottom tab bar: UIKit content height (49) + safe-area bottom inset.
+ *
+ * Do not also force height/paddingBottom in tabBarStyle — BottomTabBar already
+ * applies insets.bottom. Extra padding was leaving a dead strip under the icons.
+ */
 export const TAB_ICON_SIZE = 24;
-export const TAB_BAR_TOP_PADDING = 8;
+/** Matches @react-navigation/bottom-tabs TABBAR_HEIGHT_UIKIT */
+export const TAB_BAR_CONTENT_HEIGHT = 49;
 
-export function getNativeBottomInset(safeAreaBottom: number): number {
-  return Math.max(safeAreaBottom, 10);
-}
-
-export function getTabBarHeight(isWeb: boolean, safeAreaBottom: number): number {
-  if (isWeb) {
-    return WEB_MOBILE_TAB_BAR_HEIGHT;
-  }
-
-  const nativeBottomInset = getNativeBottomInset(safeAreaBottom);
-  const base = Platform.OS === 'ios' ? 72 : 64;
-  return base + nativeBottomInset;
-}
-
-export function getTabBarBottomPadding(isWeb: boolean, safeAreaBottom: number): number {
-  if (isWeb) {
-    return 12;
-  }
-
-  return Math.max(getNativeBottomInset(safeAreaBottom) - 2, 10);
+export function getTabBarHeight(_isWeb: boolean, safeAreaBottom: number): number {
+  return TAB_BAR_CONTENT_HEIGHT + Math.max(0, safeAreaBottom);
 }

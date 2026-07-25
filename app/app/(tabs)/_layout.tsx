@@ -1,37 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import { useMemo } from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { Colors } from '@/constants/Colors';
-import {
-  TAB_BAR_TOP_PADDING,
-  TAB_ICON_SIZE,
-  getTabBarBottomPadding,
-  getTabBarHeight,
-} from '@/constants/tabBar';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { TAB_ICON_SIZE } from '@/constants/tabBar';
 import { useTranslation } from 'react-i18next';
 
 const palette = Colors.dark;
 
 export default function TabLayout() {
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
-  const isWeb = Platform.OS === 'web';
-  const tabBarHeight = getTabBarHeight(isWeb, insets.bottom);
-  const tabBarBottomPadding = getTabBarBottomPadding(isWeb, insets.bottom);
-
-  const tabBarStyle = useMemo(
-    () => [
-      styles.tabBar,
-      {
-        height: tabBarHeight,
-        paddingBottom: tabBarBottomPadding,
-        paddingTop: TAB_BAR_TOP_PADDING,
-      },
-    ],
-    [tabBarBottomPadding, tabBarHeight]
-  );
 
   return (
     <Tabs
@@ -41,7 +18,7 @@ export default function TabLayout() {
         headerTintColor: palette.textPrimary,
         headerTitleStyle: styles.headerTitle,
         headerShadowVisible: false,
-        tabBarStyle,
+        tabBarStyle: styles.tabBar,
         tabBarActiveTintColor: palette.accent,
         tabBarInactiveTintColor: palette.tabIconDefault,
         tabBarLabelStyle: styles.tabLabel,
@@ -145,7 +122,5 @@ const styles = StyleSheet.create({
   tabLabel: {
     fontSize: 11,
     fontWeight: '600',
-    marginTop: 2,
-    marginBottom: 0,
   },
 });

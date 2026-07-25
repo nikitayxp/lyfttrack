@@ -141,11 +141,13 @@ const styles = StyleSheet.create({
   tabItem: {
     justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 0,
   },
   tabLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
-    marginTop: 2,
+    marginTop: 1,
     marginBottom: 0,
+    lineHeight: 12,
   },
 });

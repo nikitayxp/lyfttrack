@@ -108,7 +108,7 @@ export function WorkoutSummary({
               accessibilityRole="button"
               accessibilityLabel={t('workout.summaryShareAction')}
             >
-              <Ionicons name="share-social-outline" size={16} color={palette.textPrimary} />
+              <Ionicons name="checkmark-outline" size={16} color={palette.textPrimary} />
               <Text style={styles.ctaText}>{t('workout.summaryShareAction')}</Text>
             </TouchableOpacity>
           </View>

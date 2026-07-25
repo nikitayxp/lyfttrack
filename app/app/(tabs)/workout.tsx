@@ -521,7 +521,7 @@ export default function WorkoutScreen() {
             accessibilityRole="button"
             accessibilityLabel={t('workout.startEmptyWorkout')}
           >
-            <Ionicons name="play" size={22} color="#FFFFFF" />
+            <Ionicons name="play" size={22} color={palette.textPrimary} />
             <Text style={styles.primaryButtonText}>{t('workout.startEmptyWorkout')}</Text>
           </TouchableOpacity>
 
@@ -534,7 +534,7 @@ export default function WorkoutScreen() {
               accessibilityRole="button"
               accessibilityLabel={t('workout.openLibrary')}
             >
-              <Ionicons name="layers-outline" size={16} color="#FFFFFF" />
+              <Ionicons name="layers-outline" size={16} color={palette.textPrimary} />
               <Text style={styles.createTemplateButtonText}>{t('workout.openLibrary')}</Text>
             </TouchableOpacity>
           </View>
@@ -616,7 +616,7 @@ export default function WorkoutScreen() {
               accessibilityRole="button"
               accessibilityLabel={t('workout.createTemplate')}
             >
-              <Ionicons name="add" size={16} color="#FFFFFF" />
+              <Ionicons name="add" size={16} color={palette.textPrimary} />
               <Text style={styles.createTemplateButtonText}>{t('workout.createTemplate')}</Text>
             </TouchableOpacity>
           </View>
@@ -694,7 +694,7 @@ export default function WorkoutScreen() {
               accessibilityRole="button"
               accessibilityLabel={t('workout.newRoutine')}
             >
-              <Ionicons name="add" size={16} color="#FFFFFF" />
+              <Ionicons name="add" size={16} color={palette.textPrimary} />
               <Text style={styles.createTemplateButtonText}>{t('workout.newRoutine')}</Text>
             </TouchableOpacity>
           </View>
@@ -751,7 +751,7 @@ export default function WorkoutScreen() {
                       accessibilityRole="button"
                       accessibilityLabel={t('workout.startRoutine')}
                     >
-                      <Ionicons name="play" size={15} color="#FFFFFF" />
+                      <Ionicons name="play" size={15} color={palette.textPrimary} />
                       <Text style={styles.startRoutineButtonText}>{t('workout.startRoutine')}</Text>
                     </TouchableOpacity>
                   </View>
@@ -966,7 +966,7 @@ export default function WorkoutScreen() {
                             accessibilityRole="button"
                             accessibilityLabel={t('accessibility.removeSelectedExercise', { defaultValue: 'Remove exercise' })}
                           >
-                            <Ionicons name="remove" size={14} color="#FFFFFF" />
+                            <Ionicons name="remove" size={14} color={palette.textPrimary} />
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -1284,8 +1284,8 @@ const styles = StyleSheet.create({
   },
   content: {
     flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingTop: 24,
+    paddingHorizontal: 16,
+    paddingTop: 20,
     paddingBottom: 32,
   },
   title: {
@@ -1364,7 +1364,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   createTemplateButton: {
-    minHeight: 36,
+    minHeight: 40,
     borderRadius: Radius.button,
     backgroundColor: palette.accent,
     paddingHorizontal: 10,
@@ -1623,7 +1623,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   filterChipTextActive: {
-    color: '#FFFFFF',
+    color: palette.textPrimary,
   },
   exerciseTextWrap: {
     flex: 1,

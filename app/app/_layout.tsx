@@ -21,6 +21,46 @@ import { PreferencesProvider } from '@/context/PreferencesContext';
 import { WorkoutProvider } from '@/context/WorkoutContext';
 import type { Session } from '@supabase/supabase-js';
 
+/**
+ * Chrome (and similar) can cover the bottom of the layout viewport without
+ * updating CSS safe-area insets. Pad the web root by the visualViewport gap
+ * so the compact tab bar stays fully visible above browser chrome.
+ */
+function useWebVisualViewportBottomInset(enabled: boolean): number {
+  const [bottomInset, setBottomInset] = useState(0);
+
+  useEffect(() => {
+    if (!enabled || typeof window === 'undefined') {
+      return;
+    }
+
+    const visualViewport = window.visualViewport;
+
+    const update = () => {
+      if (!visualViewport) {
+        setBottomInset(0);
+        return;
+      }
+
+      const covered = Math.max(0, window.innerHeight - (visualViewport.height + visualViewport.offsetTop));
+      setBottomInset(Math.round(covered));
+    };
+
+    update();
+    visualViewport?.addEventListener('resize', update);
+    visualViewport?.addEventListener('scroll', update);
+    window.addEventListener('resize', update);
+
+    return () => {
+      visualViewport?.removeEventListener('resize', update);
+      visualViewport?.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, [enabled]);
+
+  return bottomInset;
+}
+
 const palette = Colors.dark;
 
 /** Largura mínima (px) para mostrar o mockup de telemóvel na Web; ≤ isto = app a fullscreen como no device. */
@@ -125,6 +165,7 @@ export default function RootLayout() {
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
   const isDesktopWeb = isWeb && width > DESKTOP_WEB_MOCKUP_MIN_WIDTH;
+  const webBrowserBottomInset = useWebVisualViewportBottomInset(isWeb && !isDesktopWeb);
   const segments = useSegments();
   const rootSegment = String(segments[0] ?? '');
   const childSegment = String(segments[1] ?? '');
@@ -333,8 +374,18 @@ export default function RootLayout() {
   );
 
   if (isWeb) {
+    const mobileWebBottomPad =
+      !isDesktopWeb && webBrowserBottomInset > 0
+        ? ({
+            paddingBottom: webBrowserBottomInset,
+            // Keep the shell inside the visible viewport (border-box) so the compact tab bar isn't pushed under browser chrome.
+            boxSizing: 'border-box',
+            maxHeight: '100dvh',
+          } as ViewStyle)
+        : null;
+
     return (
-      <View style={[styles.webRoot, isDesktopWeb && styles.webRootDesktop, webViewportFill]}>
+      <View style={[styles.webRoot, isDesktopWeb && styles.webRootDesktop, webViewportFill, mobileWebBottomPad]}>
         <View style={[styles.webFlowLayer, styles.pointerEventsNone]}>
           <NeuralBackground color="#3B82F6" trailOpacity={0.12} speed={0.35} />
         </View>

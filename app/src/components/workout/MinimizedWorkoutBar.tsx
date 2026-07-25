@@ -6,12 +6,12 @@ import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/Colors';
 import { Radius } from '@/constants/Styles';
+import { getTabBarHeight } from '@/constants/tabBar';
 import { usePreferences } from '@/context/PreferencesContext';
 import { useWorkoutContext } from '@/context/WorkoutContext';
 import { getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 
 const palette = Colors.dark;
-const WEB_MOBILE_TAB_BAR_HEIGHT = 74;
 
 type MinimizedWorkoutBarProps = {
   visible: boolean;
@@ -41,10 +41,7 @@ export function MinimizedWorkoutBar({ visible }: MinimizedWorkoutBarProps) {
   } = useWorkoutContext();
 
   const isWeb = Platform.OS === 'web';
-  const nativeBottomInset = Math.max(insets.bottom, 10);
-  const tabBarHeight = isWeb
-    ? WEB_MOBILE_TAB_BAR_HEIGHT
-    : (Platform.OS === 'ios' ? 72 : 64) + nativeBottomInset;
+  const tabBarHeight = getTabBarHeight(isWeb, insets.bottom);
 
   const bottomOffset = useMemo(() => tabBarHeight + 10, [tabBarHeight]);
   const durationLabel = useMemo(() => formatElapsedTime(elapsedSeconds), [elapsedSeconds]);

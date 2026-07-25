@@ -345,7 +345,7 @@ export const resources = {
         summaryPrsLabel: 'Records',
         summaryExercisesTitle: 'Exercises',
         summaryNoExercises: 'No exercises completed in this session.',
-        summaryShareAction: 'Share and finish',
+        summaryShareAction: 'Finish',
       },
       workoutDetails: {
         missingRouteId: 'Workout ID is missing in route.',
@@ -997,7 +997,7 @@ export const resources = {
         summaryPrsLabel: 'Recordes',
         summaryExercisesTitle: 'Exercicios',
         summaryNoExercises: 'Sem exercicios concluidos nesta sessao.',
-        summaryShareAction: 'Partilhar e terminar',
+        summaryShareAction: 'Terminar',
       },
       workoutDetails: {
         missingRouteId: 'ID do treino em falta na rota.',

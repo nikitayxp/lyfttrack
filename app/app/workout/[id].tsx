@@ -259,13 +259,6 @@ export default function WorkoutDetailsScreen() {
                 <Text style={styles.statLabel}>{t('workoutDetails.recordsLabel')}</Text>
                 <Text style={styles.statValue}>{details.prCount}</Text>
               </View>
-
-              <View style={styles.statCard}>
-                <Text style={styles.statLabel}>{t('workoutDetails.pr1rmLabel')}</Text>
-                <Text style={styles.statValue}>
-                  {details.bestEstimated1RM !== null ? `${formatNumericValue(details.bestEstimated1RM, 'decimal')} kg` : '--'}
-                </Text>
-              </View>
             </View>
 
             {details.heaviestWeight !== null ? (

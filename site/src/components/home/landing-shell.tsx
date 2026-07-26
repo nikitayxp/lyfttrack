@@ -108,6 +108,19 @@ export function LandingShell() {
       </div>
       <FeaturesSection language={language} />
 
+      <footer className="border-t border-white/10 bg-[#050505] px-5 py-10 md:px-8">
+        <div className="mx-auto flex max-w-5xl flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <p className="text-sm text-white/45">
+            © {new Date().getFullYear()} LyftTrack
+          </p>
+          <div className="flex flex-wrap gap-4 text-sm font-semibold">
+            <a href="/termos" className="text-white/70 no-underline transition hover:text-white">
+              {language === 'pt' ? 'Termos de Uso' : 'Terms of Service'}
+            </a>
+          </div>
+        </div>
+      </footer>
+
       <div
         className={`pointer-events-none fixed bottom-4 left-1/2 z-[130] -translate-x-1/2 transition-all duration-500 md:bottom-8 ${
           showScrollHint ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'

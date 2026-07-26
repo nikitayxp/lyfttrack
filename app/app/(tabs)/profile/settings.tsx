@@ -295,6 +295,43 @@ export default function ProfileSettingsScreen() {
         </View>
       </View>
 
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>{t('settings.legal')}</Text>
+        <TouchableOpacity
+          style={styles.rowButton}
+          activeOpacity={ACTIVE_OPACITY}
+          onPress={() => router.push('/legal/terms' as any)}
+          accessibilityRole="button"
+          accessibilityLabel={t('settings.termsOfService')}
+        >
+          <View style={styles.rowIconWrap}>
+            <Ionicons name="document-text-outline" size={17} color={palette.accent} />
+          </View>
+          <View style={styles.rowTextWrap}>
+            <Text style={styles.rowTitle}>{t('settings.termsOfService')}</Text>
+            <Text style={styles.rowSubtitle}>{t('settings.termsOfServiceSubtitle')}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.rowButton}
+          activeOpacity={ACTIVE_OPACITY}
+          onPress={() => router.push('/legal/privacy' as any)}
+          accessibilityRole="button"
+          accessibilityLabel={t('settings.privacyPolicy')}
+        >
+          <View style={styles.rowIconWrap}>
+            <Ionicons name="shield-checkmark-outline" size={17} color={palette.accent} />
+          </View>
+          <View style={styles.rowTextWrap}>
+            <Text style={styles.rowTitle}>{t('settings.privacyPolicy')}</Text>
+            <Text style={styles.rowSubtitle}>{t('settings.privacyPolicySubtitle')}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.footerSpacer} />
 
       <TouchableOpacity

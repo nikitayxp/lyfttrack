@@ -220,6 +220,11 @@ export const resources = {
         changePasswordNoEmail: 'No email address associated with your account.',
         changePasswordSentTitle: 'Code sent',
         changePasswordSentDescription: 'Check your email for the 6-digit recovery code.',
+        legal: 'Legal',
+        termsOfService: 'Terms of Service',
+        termsOfServiceSubtitle: 'Read the terms that apply to LyftTrack',
+        privacyPolicy: 'Privacy Policy',
+        privacyPolicySubtitle: 'How we handle your personal data',
       },
       workout: {
         title: 'Workout',
@@ -872,6 +877,11 @@ export const resources = {
         changePasswordNoEmail: 'Sem email associado a tua conta.',
         changePasswordSentTitle: 'Codigo enviado',
         changePasswordSentDescription: 'Verifica o teu email para o codigo de recuperacao de 6 digitos.',
+        legal: 'Legal',
+        termsOfService: 'Termos de Uso',
+        termsOfServiceSubtitle: 'Ler os termos que se aplicam ao LyftTrack',
+        privacyPolicy: 'Politica de Privacidade',
+        privacyPolicySubtitle: 'Como tratamos os teus dados pessoais',
       },
       workout: {
         title: 'Treino',

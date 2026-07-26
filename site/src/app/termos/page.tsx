@@ -8,10 +8,11 @@ export const metadata: Metadata = {
 };
 
 type PageProps = {
-  searchParams?: { lang?: string };
+  searchParams?: Promise<{ lang?: string }>;
 };
 
-export default function TermsPage({ searchParams }: PageProps) {
-  const initialLanguage = searchParams?.lang === 'en' ? 'en' : 'pt';
+export default async function TermsPage({ searchParams }: PageProps) {
+  const params = (await searchParams) ?? {};
+  const initialLanguage = params.lang === 'en' ? 'en' : 'pt';
   return <LegalDocumentView document={TERMS_OF_SERVICE} initialLanguage={initialLanguage} />;
 }

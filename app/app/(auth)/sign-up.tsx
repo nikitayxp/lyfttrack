@@ -311,7 +311,12 @@ export default function SignUpScreen() {
                   {t('auth.signUp.termsOfService')}
                 </Text>
                 {t('auth.signUp.termsConjunction')}
-                <Text style={styles.termsLink}>{t('auth.signUp.privacyPolicy')}</Text>
+                <Text
+                  style={styles.termsLink}
+                  onPress={() => router.push('/legal/privacy' as any)}
+                >
+                  {t('auth.signUp.privacyPolicy')}
+                </Text>
               </Text>
             </TouchableOpacity>
 

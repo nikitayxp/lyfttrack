@@ -223,6 +223,8 @@ export const resources = {
         legal: 'Legal',
         termsOfService: 'Terms of Service',
         termsOfServiceSubtitle: 'Read the terms that apply to LyftTrack',
+        privacyPolicy: 'Privacy Policy',
+        privacyPolicySubtitle: 'How we handle your personal data',
       },
       workout: {
         title: 'Workout',
@@ -878,6 +880,8 @@ export const resources = {
         legal: 'Legal',
         termsOfService: 'Termos de Uso',
         termsOfServiceSubtitle: 'Ler os termos que se aplicam ao LyftTrack',
+        privacyPolicy: 'Politica de Privacidade',
+        privacyPolicySubtitle: 'Como tratamos os teus dados pessoais',
       },
       workout: {
         title: 'Treino',

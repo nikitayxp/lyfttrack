@@ -382,6 +382,14 @@ export default function RootLayout() {
                 statusBarStyle: 'light',
               }}
             />
+            <Stack.Screen
+              name="legal/privacy"
+              options={{
+                headerShown: false,
+                animation: 'slide_from_right',
+                statusBarStyle: 'light',
+              }}
+            />
           </Stack>
           <MinimizedWorkoutBar visible={isTabsRoute} />
         </SafeAreaProvider>

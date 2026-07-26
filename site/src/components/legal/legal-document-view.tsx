@@ -32,6 +32,15 @@ export function LegalDocumentView({ document, initialLanguage = 'pt' }: LegalDoc
 
   const updatedLabel = language === 'pt' ? 'Última atualização' : 'Last updated';
   const backLabel = language === 'pt' ? 'Voltar ao início' : 'Back to home';
+  const otherDocLabel =
+    document.slug === 'terms'
+      ? language === 'pt'
+        ? 'Política de Privacidade'
+        : 'Privacy Policy'
+      : language === 'pt'
+        ? 'Termos de Uso'
+        : 'Terms of Service';
+  const otherDocHref = document.slug === 'terms' ? '/privacidade' : '/termos';
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-3xl px-5 pb-16 pt-8 md:px-8 md:pt-12">
@@ -43,21 +52,29 @@ export function LegalDocumentView({ document, initialLanguage = 'pt' }: LegalDoc
           {backLabel}
         </Link>
 
-        <div className="inline-flex overflow-hidden rounded-xl border border-white/10 bg-black/40">
-          <button
-            type="button"
-            className={`px-3 py-2 text-sm font-bold ${language === 'pt' ? 'bg-[#3B82F6] text-white' : 'text-white/60'}`}
-            onClick={() => setLanguage('pt')}
+        <div className="flex items-center gap-2">
+          <div className="inline-flex overflow-hidden rounded-xl border border-white/10 bg-black/40">
+            <button
+              type="button"
+              className={`px-3 py-2 text-sm font-bold ${language === 'pt' ? 'bg-[#3B82F6] text-white' : 'text-white/60'}`}
+              onClick={() => setLanguage('pt')}
+            >
+              PT
+            </button>
+            <button
+              type="button"
+              className={`px-3 py-2 text-sm font-bold ${language === 'en' ? 'bg-[#3B82F6] text-white' : 'text-white/60'}`}
+              onClick={() => setLanguage('en')}
+            >
+              EN
+            </button>
+          </div>
+          <Link
+            href={otherDocHref}
+            className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-[#60A5FA] no-underline transition hover:bg-white/10"
           >
-            PT
-          </button>
-          <button
-            type="button"
-            className={`px-3 py-2 text-sm font-bold ${language === 'en' ? 'bg-[#3B82F6] text-white' : 'text-white/60'}`}
-            onClick={() => setLanguage('en')}
-          >
-            EN
-          </button>
+            {otherDocLabel}
+          </Link>
         </div>
       </div>
 

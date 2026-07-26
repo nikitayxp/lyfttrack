@@ -117,6 +117,9 @@ export function LandingShell() {
             <a href="/termos" className="text-white/70 no-underline transition hover:text-white">
               {language === 'pt' ? 'Termos de Uso' : 'Terms of Service'}
             </a>
+            <a href="/privacidade" className="text-white/70 no-underline transition hover:text-white">
+              {language === 'pt' ? 'Política de Privacidade' : 'Privacy Policy'}
+            </a>
           </div>
         </div>
       </footer>

@@ -176,6 +176,7 @@ export default function RootLayout() {
   const isOAuthCallbackRoute = rootSegment === 'callback' || childSegment === 'callback';
   const isResetPasswordRoute = inAuthGroup && childSegment === 'reset-password';
   const isVerifyEmailChangeRoute = inAuthGroup && childSegment === 'verify-email-change';
+  const isLegalRoute = rootSegment === 'legal';
   const isAuthLikeRoute = inAuthGroup || isOAuthCallbackRoute;
   const safeAreaStyle = isWeb ? styles.safeAreaWeb : styles.safeArea;
 
@@ -297,10 +298,17 @@ export default function RootLayout() {
       return;
     }
 
-    if (!isAuthLikeRoute) {
+    if (!isAuthLikeRoute && !isLegalRoute) {
       router.replace(AUTH_SIGN_IN_ROUTE as any);
     }
-  }, [isAuthBootstrapPending, isAuthLikeRoute, isResetPasswordRoute, isVerifyEmailChangeRoute, session]);
+  }, [
+    isAuthBootstrapPending,
+    isAuthLikeRoute,
+    isLegalRoute,
+    isResetPasswordRoute,
+    isVerifyEmailChangeRoute,
+    session,
+  ]);
 
   if (isAuthBootstrapPending) {
     return (
@@ -360,6 +368,22 @@ export default function RootLayout() {
             />
             <Stack.Screen
               name="athletes"
+              options={{
+                headerShown: false,
+                animation: 'slide_from_right',
+                statusBarStyle: 'light',
+              }}
+            />
+            <Stack.Screen
+              name="legal/terms"
+              options={{
+                headerShown: false,
+                animation: 'slide_from_right',
+                statusBarStyle: 'light',
+              }}
+            />
+            <Stack.Screen
+              name="legal/privacy"
               options={{
                 headerShown: false,
                 animation: 'slide_from_right',

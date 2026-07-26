@@ -40,7 +40,7 @@ export function CookieConsentBanner() {
         <div className="flex-1">
           <p className="text-sm font-semibold leading-relaxed text-white/80">
             Utilizamos cookies para melhorar a tua experiência, analisar o tráfego e personalizar conteúdo.{' '}
-            <a href="#" className="text-[#3B82F6] underline underline-offset-2 transition-colors hover:text-[#60a5fa]">
+            <a href="/privacidade" className="text-[#3B82F6] underline underline-offset-2 transition-colors hover:text-[#60a5fa]">
               Política de Privacidade
             </a>
           </p>

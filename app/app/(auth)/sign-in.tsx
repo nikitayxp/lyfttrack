@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
+import { AuthLanguageToggle } from '@/components/auth/AuthLanguageToggle';
 import { startGoogleOAuth } from '@/services/authService';
 import { getPasswordResetRedirectTo, supabase } from '@/services/supabase';
 
@@ -114,9 +115,12 @@ export default function SignInScreen() {
         >
         <View style={styles.container}>
           <View style={styles.header}>
-            <View style={styles.logoRow}>
-              <Text style={styles.logoLyft}>Lyft</Text>
-              <Text style={styles.logoTrack}>Track</Text>
+            <View style={styles.topRow}>
+              <View style={styles.logoRow}>
+                <Text style={styles.logoLyft}>Lyft</Text>
+                <Text style={styles.logoTrack}>Track</Text>
+              </View>
+              <AuthLanguageToggle />
             </View>
             <Text style={styles.title}>{t('auth.signIn.title')}</Text>
             <Text style={styles.subtitle}>{t('auth.signIn.subtitle')}</Text>
@@ -248,6 +252,12 @@ const styles = StyleSheet.create({
   },
   header: {
     rowGap: Spacing.xs,
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    columnGap: Spacing.md,
   },
   logoRow: {
     flexDirection: 'row',

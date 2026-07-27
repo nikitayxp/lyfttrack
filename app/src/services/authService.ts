@@ -80,6 +80,15 @@ export async function startGoogleOAuth(): Promise<void> {
     throw new Error('oauth-start-failed');
   }
 
+  if (__DEV__) {
+    try {
+      const authorizeUrl = new URL(data.url);
+      console.info('[oauth] authorize redirect_to', authorizeUrl.searchParams.get('redirect_to'));
+    } catch {
+      console.info('[oauth] authorize url', data.url);
+    }
+  }
+
   if (Platform.OS === 'web') {
     if (typeof window === 'undefined') {
       throw new Error('oauth-start-failed');

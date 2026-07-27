@@ -86,13 +86,32 @@ export function getEmailChangeRedirectTo(): string {
 export function getGoogleOAuthRedirectTo(): string {
   if (Platform.OS === 'web') {
     if (typeof window !== 'undefined' && window.location?.origin) {
-      return `${removeTrailingSlashes(window.location.origin)}${GOOGLE_OAUTH_CALLBACK_PATH}`;
+      const redirectTo = `${removeTrailingSlashes(window.location.origin)}${GOOGLE_OAUTH_CALLBACK_PATH}`;
+
+      if (__DEV__) {
+        console.info('[oauth] Google redirectTo (web)', redirectTo);
+      }
+
+      return redirectTo;
+    }
+
+    // Never fall back to production Site URL while developing — that is #69.
+    if (__DEV__) {
+      const redirectTo = `http://localhost:8081${GOOGLE_OAUTH_CALLBACK_PATH}`;
+      console.info('[oauth] Google redirectTo (web fallback)', redirectTo);
+      return redirectTo;
     }
 
     return `${resolveAuthWebBaseUrl()}${GOOGLE_OAUTH_CALLBACK_PATH}`;
   }
 
-  return Linking.createURL('callback');
+  const redirectTo = Linking.createURL('callback');
+
+  if (__DEV__) {
+    console.info('[oauth] Google redirectTo (native)', redirectTo);
+  }
+
+  return redirectTo;
 }
 
 function createAuthStorage(): SupabaseStorage | undefined {

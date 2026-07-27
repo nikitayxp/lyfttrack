@@ -4,6 +4,7 @@ import { ChevronDown, Globe } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { CinematicHero, type HeroLanguage } from '@/components/ui/cinematic-hero';
 import { FeaturesSection } from '@/components/home/features-section';
+import { CookiePreferencesLink } from '@/components/ui/cookie-consent-banner';
 
 const LANGUAGE_STORAGE_KEY = 'lyfttrack.site.language';
 
@@ -120,6 +121,9 @@ export function LandingShell() {
             <a href="/privacidade" className="text-white/70 no-underline transition hover:text-white">
               {language === 'pt' ? 'Política de Privacidade' : 'Privacy Policy'}
             </a>
+            <CookiePreferencesLink
+              label={language === 'pt' ? 'Preferências de cookies' : 'Cookie preferences'}
+            />
           </div>
         </div>
       </footer>

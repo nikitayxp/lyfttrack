@@ -95,7 +95,7 @@ export default function SignUpScreen() {
     }
 
     if (usernameAvailable === false) {
-      setFeedback({ message: t('auth.signUp.usernameTaken', { defaultValue: 'Username is already taken' }), type: 'error' });
+      setFeedback({ message: t('auth.signUp.usernameTakenStatus', { defaultValue: 'Username is already taken' }), type: 'error' });
       return;
     }
 
@@ -223,17 +223,9 @@ export default function SignUpScreen() {
               />
             </View>
 
-            <View style={[styles.labelRow]}>
-              <Text style={styles.label}>{t('auth.signUp.usernameLabel')}</Text>
-              {usernameChecking ? (
-                <ActivityIndicator size="small" color={palette.accent} style={{ transform: [{ scale: 0.6 }] }} />
-              ) : usernameAvailable === true ? (
-                <Text style={styles.usernameAvailableText}>{t('auth.signUp.usernameAvailable', { defaultValue: 'Available' })}</Text>
-              ) : usernameAvailable === false ? (
-                <Text style={styles.usernameTakenText}>{t('auth.signUp.usernameTaken', { defaultValue: 'Taken' })}</Text>
-              ) : null}
-            </View>
+            <Text style={styles.label}>{t('auth.signUp.usernameLabel')}</Text>
             <View style={[styles.inputLine, usernameAvailable === false && styles.inputLineError]}>
+              <Text style={styles.usernamePrefix}>@</Text>
               <TextInput
                 accessibilityLabel={t('auth.signUp.usernameLabel')}
                 value={username}
@@ -245,6 +237,33 @@ export default function SignUpScreen() {
                 style={styles.inputField}
                 maxLength={USERNAME_MAX_LENGTH}
               />
+              {/* Inside the field, not above it: the status has to read as
+                  belonging to this input and no other. */}
+              <View style={styles.usernameStatus} accessibilityLiveRegion="polite">
+                {usernameChecking ? (
+                  <ActivityIndicator size="small" color={palette.accent} style={styles.usernameSpinner} />
+                ) : usernameAvailable === true ? (
+                  <>
+                    <Ionicons name="checkmark-circle" size={15} color={palette.success} />
+                    <Text
+                      style={styles.usernameAvailableText}
+                      accessibilityLabel={t('auth.signUp.usernameAvailableStatus', { defaultValue: 'Username available' })}
+                    >
+                      {t('auth.signUp.usernameAvailable', { defaultValue: 'Available' })}
+                    </Text>
+                  </>
+                ) : usernameAvailable === false ? (
+                  <>
+                    <Ionicons name="close-circle" size={15} color={palette.error} />
+                    <Text
+                      style={styles.usernameTakenText}
+                      accessibilityLabel={t('auth.signUp.usernameTakenStatus', { defaultValue: 'Username already taken' })}
+                    >
+                      {t('auth.signUp.usernameTaken', { defaultValue: 'Taken' })}
+                    </Text>
+                  </>
+                ) : null}
+              </View>
             </View>
 
             <Text style={styles.label}>{t('auth.signUp.emailLabel')}</Text>
@@ -596,10 +615,20 @@ const styles = StyleSheet.create({
   primaryButtonDisabled: {
     opacity: 0.45,
   },
-  labelRow: {
+  usernamePrefix: {
+    color: palette.textMuted,
+    fontSize: 15,
+    fontWeight: '700',
+    marginRight: 1,
+  },
+  usernameStatus: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    columnGap: 4,
+    paddingLeft: Spacing.sm,
+  },
+  usernameSpinner: {
+    transform: [{ scale: 0.7 }],
   },
   usernameAvailableText: {
     color: palette.success,

@@ -1,6 +1,8 @@
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/services/supabase';
 import {
+  EXERCISE_EQUIPMENT_FILTER_KEYWORDS,
+  EXERCISE_MUSCLE_FILTER_KEYWORDS,
   EXERCISE_MUSCLE_LABELS,
   normalizeEquipmentKey,
   normalizeMuscleKey,
@@ -763,29 +765,6 @@ export async function getAuthenticatedUserOrThrow(): Promise<User> {
 
 // ---------- Exercises CRUD ----------
 
-const MUSCLE_FILTER_KEYWORDS: Record<Exclude<ExerciseLibraryMuscleFilter, 'all'>, readonly string[]> = {
-  chest: ['chest', 'peito', 'peitoral', 'supino', 'bench_press', 'fly'],
-  back: ['back', 'costa', 'dorsal', 'lat', 'puxada', 'pulldown', 'remada', 'row'],
-  shoulders: ['shoulder', 'ombro', 'deltoid', 'delt', 'desenvolvimento', 'lateral_raise'],
-  biceps: ['bicep', 'biceps', 'curl', 'rosca'],
-  triceps: ['tricep', 'triceps', 'testa', 'pushdown', 'pulley', 'bench_dip'],
-  forearms: ['forearm', 'antebraco', 'wrist_curl', 'reverse_curl'],
-  quadriceps: ['quadriceps', 'quadricep', 'quad', 'squat', 'agachamento', 'leg_press', 'leg_extension'],
-  hamstrings: ['hamstring', 'posterior', 'romeno', 'stiff', 'leg_curl', 'mesa_flexora'],
-  glutes: ['glute', 'gluteo', 'hip_thrust', 'glute_bridge', 'ponte_de_gluteo'],
-  calves: ['calf', 'gemeo', 'panturrilha', 'calf_raise', 'elevacao_de_gemeos'],
-  core: ['core', 'abs', 'abdominal', 'prancha', 'plank', 'crunch'],
-};
-
-const EQUIPMENT_FILTER_KEYWORDS: Record<Exclude<ExerciseLibraryEquipmentFilter, 'all'>, readonly string[]> = {
-  barbell: ['barbell', 'barra'],
-  dumbbell: ['dumbbell', 'dumbell', 'halter'],
-  machine: ['machine', 'maquina', 'smith'],
-  cable: ['cable', 'polia'],
-  bodyweight: ['bodyweight', 'body_weight', 'peso_corporal', 'calistenia', 'sem_equipamento'],
-  kettlebell: ['kettlebell'],
-};
-
 function normalizeFilterLookup(value: string | null | undefined): string {
   if (!value) {
     return '';
@@ -979,7 +958,7 @@ function matchesMuscleFilter(exercise: ExerciseCatalogItem, filter: ExerciseLibr
     return inferredMuscleKey === filter;
   }
 
-  const keywords = MUSCLE_FILTER_KEYWORDS[filter];
+  const keywords = EXERCISE_MUSCLE_FILTER_KEYWORDS[filter];
   const candidates = [
     exercise.muscle_group,
     exercise.muscle_en,
@@ -1021,7 +1000,7 @@ function matchesEquipmentFilter(exercise: ExerciseCatalogItem, filter: ExerciseL
     return false;
   }
 
-  return matchesKeywords(normalizedCandidate, EQUIPMENT_FILTER_KEYWORDS[filter]);
+  return matchesKeywords(normalizedCandidate, EXERCISE_EQUIPMENT_FILTER_KEYWORDS[filter]);
 }
 
 export async function getRecentExerciseIds(limit = 20): Promise<string[]> {

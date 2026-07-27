@@ -11,7 +11,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
@@ -28,25 +27,16 @@ import {
   withAvatarCacheBuster,
 } from '@/services/profileService';
 import { sanitizeDecimalText } from '@/utils/inputValidation';
-import { supabase } from '@/services/supabase';
 
 const palette = Colors.dark;
 
-/** Metric defaults most apps/users expect globally (kg / cm), not imperial. */
-const DEFAULT_WEIGHT_KG = '70';
-const DEFAULT_HEIGHT_CM = '170';
-
-function initialsFromName(value: string): string {
-  const parts = value.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) {
+function initialsFromUsername(username: string): string {
+  const cleaned = username.trim().replace(/^@+/, '').replace(/[^a-zA-Z0-9]/g, '');
+  if (!cleaned) {
     return '?';
   }
 
-  if (parts.length === 1) {
-    return parts[0].slice(0, 2).toUpperCase();
-  }
-
-  return `${parts[0][0] ?? ''}${parts[1][0] ?? ''}`.toUpperCase();
+  return cleaned.slice(0, 1).toUpperCase();
 }
 
 function parseOptionalHeightCm(value: string): number | null {
@@ -65,9 +55,9 @@ function parseOptionalHeightCm(value: string): number | null {
 
 export default function OnboardingScreen() {
   const { t } = useTranslation();
-  const [displayName, setDisplayName] = useState('');
-  const [weight, setWeight] = useState(DEFAULT_WEIGHT_KG);
-  const [height, setHeight] = useState(DEFAULT_HEIGHT_CM);
+  const [username, setUsername] = useState('');
+  const [weight, setWeight] = useState('');
+  const [height, setHeight] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarVersion, setAvatarVersion] = useState(() => Date.now());
   const [pendingAvatar, setPendingAvatar] = useState<Awaited<ReturnType<typeof pickAvatarFromLibrary>>>(null);
@@ -79,32 +69,15 @@ export default function OnboardingScreen() {
 
     void (async () => {
       try {
-        const [{ data }, profile] = await Promise.all([
-          supabase.auth.getUser(),
-          getProfile(),
-        ]);
+        const profile = await getProfile();
 
         if (!mounted) {
           return;
         }
 
-        const picture =
-          typeof data.user?.user_metadata?.picture === 'string'
-            ? data.user.user_metadata.picture
-            : typeof data.user?.user_metadata?.avatar_url === 'string'
-              ? data.user.user_metadata.avatar_url
-              : null;
-
-        const name =
-          profile.full_name?.trim() ||
-          (typeof data.user?.user_metadata?.full_name === 'string'
-            ? data.user.user_metadata.full_name
-            : '') ||
-          profile.username ||
-          '';
-
-        setDisplayName(name);
-        setAvatarUrl(profile.avatar_url ?? picture);
+        setUsername(profile.username ?? '');
+        // Only show a real photo if one is already stored — otherwise initials.
+        setAvatarUrl(profile.avatar_url);
         if (profile.height_cm != null) {
           setHeight(String(profile.height_cm));
         }
@@ -144,7 +117,6 @@ export default function OnboardingScreen() {
         setAvatarUrl(updated.avatar_url);
         setPendingAvatar(null);
       } else if (avatarUrl && /^https?:\/\//i.test(avatarUrl)) {
-        // Keep Google (or other remote) picture if the user did not replace it.
         const profile = await getProfile();
         if (!profile.avatar_url) {
           await updateProfile({ avatarUrl });
@@ -216,10 +188,7 @@ export default function OnboardingScreen() {
                   <Image source={{ uri: previewUrl }} style={styles.avatarImage} />
                 ) : (
                   <View style={styles.avatarFallback}>
-                    <Text style={styles.avatarInitials}>{initialsFromName(displayName)}</Text>
-                    <View style={styles.avatarCameraBadge}>
-                      <Ionicons name="camera" size={14} color={palette.textPrimary} />
-                    </View>
+                    <Text style={styles.avatarInitials}>{initialsFromUsername(username)}</Text>
                   </View>
                 )}
                 <Text style={styles.avatarHint}>{t('auth.onboarding.photoHint')}</Text>
@@ -308,31 +277,15 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 48,
-    borderWidth: 1,
-    borderColor: palette.border,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(59,130,246,0.16)',
-    position: 'relative',
+    backgroundColor: '#0B1F3A',
   },
   avatarInitials: {
-    color: palette.textPrimary,
-    fontSize: 28,
-    fontWeight: '900',
+    color: '#93C5FD',
+    fontSize: 36,
+    fontWeight: '800',
     letterSpacing: 0.5,
-  },
-  avatarCameraBadge: {
-    position: 'absolute',
-    right: 2,
-    bottom: 2,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: palette.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: palette.bgPrimary,
   },
   avatarHint: { color: palette.textMuted, fontSize: 13, fontWeight: '600' },
   unitSuffix: {

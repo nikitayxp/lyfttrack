@@ -277,6 +277,40 @@ export async function getPublicProfileById(profileId: string): Promise<PublicPro
 }
 
 /**
+ * Avatars live in the `avatars` bucket under a folder named after the user id.
+ * They have to go before the RPC runs: once the auth row is gone the session is
+ * invalid and storage would reject the delete, leaving a publicly reachable
+ * photo behind.
+ *
+ * A failure here is logged but does not abort the deletion — refusing to delete
+ * an account because an image could not be removed is the worse outcome for a
+ * user exercising their right to erasure.
+ */
+async function deleteStoredAvatars(userId: string): Promise<void> {
+  try {
+    const { data: files, error: listError } = await supabase.storage.from('avatars').list(userId);
+
+    if (listError) {
+      throw listError;
+    }
+
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    const { error: removeError } = await supabase.storage
+      .from('avatars')
+      .remove(files.map((file) => `${userId}/${file.name}`));
+
+    if (removeError) {
+      throw removeError;
+    }
+  } catch (error) {
+    console.warn('[profileService] Unable to remove stored avatars before account deletion', error);
+  }
+}
+
+/**
  * Deletes the account and every row belonging to it, then ends the session.
  *
  * The heavy lifting is the `delete_own_account` RPC: removing the auth user
@@ -286,9 +320,11 @@ export async function getPublicProfileById(profileId: string): Promise<PublicPro
  * failure there must not be reported as a failed deletion.
  */
 export async function deleteOwnAccount(): Promise<void> {
-  await getAuthenticatedUserOrThrow();
+  const user = await getAuthenticatedUserOrThrow();
 
-  const { error } = await (supabase.rpc as any)('delete_own_account');
+  await deleteStoredAvatars(user.id);
+
+  const { error } = await supabase.rpc('delete_own_account');
 
   if (error) {
     throw new Error(`Unable to delete account: ${error.message}`);

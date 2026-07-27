@@ -68,12 +68,19 @@ begin
 
   -- Custom exercises only: the shared catalogue is not user-owned and must
   -- survive, or every other athlete loses their exercise references. Rows that
-  -- someone else's sets still point at are left in place, since removing them
-  -- would break another user's history rather than protect this one's privacy.
+  -- anything else still points at are left in place, since removing them would
+  -- break another user's history rather than protect this one's privacy.
+  --
+  -- All four referencing tables are checked, not just sets: a custom exercise
+  -- can still be referenced from a workout, a template or a routine belonging
+  -- to someone else, and the foreign key would abort the whole deletion.
   delete from public.exercises
   where created_by = target_user_id
     and is_custom = true
-    and not exists (select 1 from public.sets s where s.exercise_id = exercises.id);
+    and not exists (select 1 from public.sets s where s.exercise_id = exercises.id)
+    and not exists (select 1 from public.workout_exercises we where we.exercise_id = exercises.id)
+    and not exists (select 1 from public.template_exercises te where te.exercise_id = exercises.id)
+    and not exists (select 1 from public.routine_exercises re where re.exercise_id = exercises.id);
 
   delete from public.profiles where id = target_user_id;
 

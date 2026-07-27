@@ -314,7 +314,9 @@ export default function RootLayout() {
     }
 
     if (session) {
-      if (isOAuthCallbackRoute || isResetPasswordRoute || isVerifyEmailChangeRoute) {
+      // Stay on reset / email-change flows. Do NOT stay on /callback — after
+      // setSession the guard must send the user to complete-profile / onboarding / tabs.
+      if (isResetPasswordRoute || isVerifyEmailChangeRoute) {
         return;
       }
 

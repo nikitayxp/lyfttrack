@@ -33,6 +33,60 @@ function groupByExercise(sets: PersonalRecordSetSample[]): Map<string, PersonalR
   return grouped;
 }
 
+export type PersonalBest = {
+  bestWeight: number;
+  bestE1rm: number;
+};
+
+export const EMPTY_PERSONAL_BEST: PersonalBest = { bestWeight: 0, bestE1rm: 0 };
+
+/** The all-time numbers an exercise has to beat to count as a record. */
+export function summarizePersonalBest(sets: PersonalRecordSetSample[]): PersonalBest {
+  return {
+    bestWeight: bestWeightKg(sets),
+    bestE1rm: bestEstimatedOneRepMax(sets),
+  };
+}
+
+/**
+ * Whether one set beats a stored best, by the same rule the finish-screen count
+ * uses. Kept here so an in-workout hint and the final tally cannot disagree.
+ */
+export function isRecordSet(
+  set: Pick<PersonalRecordSetSample, 'weight' | 'reps'>,
+  best: PersonalBest
+): boolean {
+  // No history means no record: a first-ever performance is not a PR, matching
+  // findPersonalRecordExerciseIds.
+  if (best.bestWeight <= 0 && best.bestE1rm <= 0) {
+    return false;
+  }
+
+  const weight = set.weight ?? 0;
+
+  if (Number.isFinite(weight) && weight > best.bestWeight && weight > 0) {
+    return true;
+  }
+
+  const e1rm = estimateOneRepMax(set.weight, set.reps);
+
+  return e1rm != null && e1rm > best.bestE1rm && e1rm > 0;
+}
+
+/** Fold one more set into a best, so a later lighter set cannot re-claim it. */
+export function mergePersonalBest(
+  best: PersonalBest,
+  set: Pick<PersonalRecordSetSample, 'weight' | 'reps'>
+): PersonalBest {
+  const weight = set.weight ?? 0;
+  const e1rm = estimateOneRepMax(set.weight, set.reps) ?? 0;
+
+  return {
+    bestWeight: Math.max(best.bestWeight, Number.isFinite(weight) ? weight : 0),
+    bestE1rm: Math.max(best.bestE1rm, e1rm),
+  };
+}
+
 function bestWeightKg(sets: PersonalRecordSetSample[]): number {
   let max = 0;
 

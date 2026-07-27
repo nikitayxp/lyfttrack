@@ -53,6 +53,8 @@ export type FinishWorkoutResult = {
   startTime: string;
   endTime: string;
   prCount: number;
+  /** Exercises that set the records counted in prCount, so the summary can say which. */
+  prExerciseIds: string[];
 };
 
 export type WorkoutSaveValidationCode = 'no-completed-sets' | 'no-valid-set-rows';

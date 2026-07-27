@@ -20,6 +20,11 @@ update public.profiles
 set visibility = 'friends'
 where visibility is null;
 
+-- With no NULLs left, make the column NOT NULL so the policy predicate can
+-- never silently fall through on a missing value.
+alter table if exists public.profiles
+  alter column visibility set not null;
+
 -- ---------------------------------------------------------------------------
 -- Visibility helper
 --
@@ -60,6 +65,9 @@ as $$
     end;
 $$;
 
+-- security definer means the default PUBLIC grant would let anon call it too;
+-- revoke first, then grant only to authenticated.
+revoke all on function public.can_view_user_content(uuid) from public;
 grant execute on function public.can_view_user_content(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------

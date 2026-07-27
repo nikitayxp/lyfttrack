@@ -116,8 +116,8 @@ export const PRIVACY_POLICY: LegalDocument = {
           en: 'Where applicable, you may request: access to a copy of your data; rectification of inaccurate information; and deletion of your account and associated data.',
         },
         {
-          pt: 'Podes exercer estes direitos contactando nikitayxp@gmail.com. Também terás (ou terás em breve) uma opção na app para eliminar a conta nas definições (zona de perigo), que apaga a conta de autenticação e os dados de treino associados.',
-          en: 'You can exercise these rights by contacting nikitayxp@gmail.com. You also have (or will soon have) an in-app option to delete your account in settings (danger zone), which deletes the auth account and associated workout data.',
+          pt: 'Podes exercer estes direitos contactando nikitayxp@gmail.com. Tens também, nas definições da app (zona de perigo), a opção «Eliminar conta», que apaga de imediato e de forma definitiva a conta de autenticação e os dados associados: treinos, séries, rotinas, medições, perfil, gostos e comentários.',
+          en: 'You can exercise these rights by contacting nikitayxp@gmail.com. You also have a "Delete account" option in the app settings (danger zone), which immediately and permanently deletes your auth account and associated data: workouts, sets, routines, measurements, profile, likes and comments.',
         },
         {
           pt: 'Tens ainda o direito de apresentar reclamação junto da autoridade de controlo competente (em Portugal, a CNPD), se considerares que o tratamento viola a legislação de proteção de dados.',

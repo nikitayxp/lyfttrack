@@ -4,10 +4,12 @@ import { router } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -17,7 +19,7 @@ import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import { usePreferences } from '@/context/PreferencesContext';
 import type { AppLanguage } from '@/i18n/resources';
 import { supabase } from '@/services/supabase';
-import { getProfile, updateProfile } from '@/services/profileService';
+import { deleteOwnAccount, getProfile, updateProfile } from '@/services/profileService';
 
 const palette = Colors.dark;
 
@@ -54,6 +56,10 @@ export default function ProfileSettingsScreen() {
   const [visibility, setVisibility] = useState<'public' | 'friends' | 'private'>('public');
   const [isUpdatingPrivacy, setIsUpdatingPrivacy] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
+  const [deleteConfirmationInput, setDeleteConfirmationInput] = useState('');
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -88,6 +94,32 @@ export default function ProfileSettingsScreen() {
       setIsUpdatingPrivacy(false);
     }
   }, [isUpdatingPrivacy, visibility, t]);
+
+  // Typing the word is the guard the issue asks for: an irreversible action
+  // should not be one mis-tap away. The word follows the app language so the
+  // prompt is readable to whoever is typing it.
+  const deleteConfirmationWord = t('settings.deleteAccountConfirmWord');
+  const isDeleteConfirmed =
+    deleteConfirmationInput.trim().toLowerCase() === deleteConfirmationWord.trim().toLowerCase();
+
+  const handleDeleteAccount = useCallback(async () => {
+    if (isDeletingAccount) {
+      return;
+    }
+
+    setIsDeletingAccount(true);
+    setDeleteError(null);
+
+    try {
+      await deleteOwnAccount();
+      setIsDeleteModalVisible(false);
+      router.replace('/(auth)' as any);
+    } catch (error) {
+      setDeleteError(toErrorMessage(error, t('common.unknownError')));
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  }, [isDeletingAccount, t]);
 
   const confirmSignOut = useCallback(async (): Promise<boolean> => {
     const confirmDescription = t('settings.signOutConfirmDescription');
@@ -332,6 +364,91 @@ export default function ProfileSettingsScreen() {
         </TouchableOpacity>
       </View>
 
+      <View style={styles.dangerZoneCard}>
+        <Text style={styles.dangerZoneTitle}>{t('settings.dangerZoneTitle')}</Text>
+        <Text style={styles.dangerZoneDescription}>{t('settings.deleteAccountDescription')}</Text>
+
+        <TouchableOpacity
+          style={styles.deleteAccountButton}
+          activeOpacity={ACTIVE_OPACITY}
+          onPress={() => {
+            setDeleteConfirmationInput('');
+            setDeleteError(null);
+            setIsDeleteModalVisible(true);
+          }}
+          disabled={isDeletingAccount}
+          accessibilityRole="button"
+          accessibilityLabel={t('settings.deleteAccountAction')}
+        >
+          <Ionicons name="trash-outline" size={17} color={palette.dangerRemoveBorder} />
+          <Text style={styles.deleteAccountButtonText}>{t('settings.deleteAccountAction')}</Text>
+        </TouchableOpacity>
+      </View>
+
+      <Modal
+        visible={isDeleteModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!isDeletingAccount) {
+            setIsDeleteModalVisible(false);
+          }
+        }}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{t('settings.deleteAccountConfirmTitle')}</Text>
+            <Text style={styles.modalDescription}>{t('settings.deleteAccountConfirmDescription')}</Text>
+
+            <Text style={styles.modalPromptLabel}>
+              {t('settings.deleteAccountTypePrompt', { word: deleteConfirmationWord })}
+            </Text>
+
+            <TextInput
+              value={deleteConfirmationInput}
+              onChangeText={setDeleteConfirmationInput}
+              style={styles.modalInput}
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!isDeletingAccount}
+              placeholder={deleteConfirmationWord}
+              placeholderTextColor={palette.textMuted}
+              accessibilityLabel={t('settings.deleteAccountTypePrompt', { word: deleteConfirmationWord })}
+            />
+
+            {deleteError ? <Text style={styles.modalErrorText}>{deleteError}</Text> : null}
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                activeOpacity={ACTIVE_OPACITY}
+                onPress={() => setIsDeleteModalVisible(false)}
+                disabled={isDeletingAccount}
+                accessibilityRole="button"
+                accessibilityLabel={t('common.cancel')}
+              >
+                <Text style={styles.modalCancelText}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalConfirmButton, !isDeleteConfirmed && styles.modalConfirmButtonDisabled]}
+                activeOpacity={ACTIVE_OPACITY}
+                onPress={() => void handleDeleteAccount()}
+                disabled={!isDeleteConfirmed || isDeletingAccount}
+                accessibilityRole="button"
+                accessibilityLabel={t('settings.deleteAccountAction')}
+              >
+                {isDeletingAccount ? (
+                  <ActivityIndicator size="small" color={palette.textPrimary} />
+                ) : (
+                  <Text style={styles.modalConfirmText}>{t('settings.deleteAccountAction')}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <View style={styles.footerSpacer} />
 
       <TouchableOpacity
@@ -359,6 +476,131 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: palette.bgPrimary,
+  },
+  dangerZoneCard: {
+    marginTop: 20,
+    borderRadius: Radius.card,
+    borderWidth: 1,
+    borderColor: palette.dangerBorder,
+    backgroundColor: palette.dangerBg,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  dangerZoneTitle: {
+    color: palette.textPrimary,
+    fontSize: 13,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 6,
+  },
+  dangerZoneDescription: {
+    color: palette.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 12,
+  },
+  deleteAccountButton: {
+    minHeight: 46,
+    borderRadius: Radius.button,
+    borderWidth: 1,
+    borderColor: palette.dangerRemoveBorder,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    columnGap: 8,
+  },
+  deleteAccountButtonText: {
+    color: palette.dangerRemoveBorder,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: Radius.card,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.surface,
+    padding: 18,
+  },
+  modalTitle: {
+    color: palette.textPrimary,
+    fontSize: 17,
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+  modalDescription: {
+    color: palette.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 14,
+  },
+  modalPromptLabel: {
+    color: palette.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  modalInput: {
+    minHeight: 44,
+    borderRadius: Radius.button,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.bgPrimary,
+    paddingHorizontal: 12,
+    color: palette.textPrimary,
+    fontSize: 15,
+  },
+  modalErrorText: {
+    color: palette.dangerRemoveBorder,
+    fontSize: 13,
+    marginTop: 10,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    columnGap: 10,
+    marginTop: 16,
+  },
+  modalCancelButton: {
+    minHeight: 44,
+    paddingHorizontal: 16,
+    borderRadius: Radius.button,
+    borderWidth: 1,
+    borderColor: palette.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelText: {
+    color: palette.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  modalConfirmButton: {
+    minHeight: 44,
+    paddingHorizontal: 16,
+    borderRadius: Radius.button,
+    backgroundColor: palette.dangerRemoveBg,
+    borderWidth: 1,
+    borderColor: palette.dangerRemoveBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalConfirmButtonDisabled: {
+    opacity: 0.45,
+  },
+  modalConfirmText: {
+    color: palette.textPrimary,
+    fontSize: 14,
+    fontWeight: '800',
   },
   content: {
     paddingHorizontal: 16,

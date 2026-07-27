@@ -1,6 +1,8 @@
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/services/supabase';
 import {
+  EXERCISE_EQUIPMENT_FILTER_KEYWORDS,
+  EXERCISE_MUSCLE_FILTER_KEYWORDS,
   EXERCISE_MUSCLE_LABELS,
   normalizeEquipmentKey,
   normalizeMuscleKey,
@@ -763,29 +765,6 @@ export async function getAuthenticatedUserOrThrow(): Promise<User> {
 
 // ---------- Exercises CRUD ----------
 
-const MUSCLE_FILTER_KEYWORDS: Record<Exclude<ExerciseLibraryMuscleFilter, 'all'>, readonly string[]> = {
-  chest: ['chest', 'peito', 'peitoral', 'supino', 'bench_press', 'fly'],
-  back: ['back', 'costa', 'dorsal', 'lat', 'puxada', 'pulldown', 'remada', 'row'],
-  shoulders: ['shoulder', 'ombro', 'deltoid', 'delt', 'desenvolvimento', 'lateral_raise'],
-  biceps: ['bicep', 'biceps', 'curl', 'rosca'],
-  triceps: ['tricep', 'triceps', 'testa', 'pushdown', 'pulley', 'bench_dip'],
-  forearms: ['forearm', 'antebraco', 'wrist_curl', 'reverse_curl'],
-  quadriceps: ['quadriceps', 'quadricep', 'quad', 'squat', 'agachamento', 'leg_press', 'leg_extension'],
-  hamstrings: ['hamstring', 'posterior', 'romeno', 'stiff', 'leg_curl', 'mesa_flexora'],
-  glutes: ['glute', 'gluteo', 'hip_thrust', 'glute_bridge', 'ponte_de_gluteo'],
-  calves: ['calf', 'gemeo', 'panturrilha', 'calf_raise', 'elevacao_de_gemeos'],
-  core: ['core', 'abs', 'abdominal', 'prancha', 'plank', 'crunch'],
-};
-
-const EQUIPMENT_FILTER_KEYWORDS: Record<Exclude<ExerciseLibraryEquipmentFilter, 'all'>, readonly string[]> = {
-  barbell: ['barbell', 'barra'],
-  dumbbell: ['dumbbell', 'dumbell', 'halter'],
-  machine: ['machine', 'maquina', 'smith'],
-  cable: ['cable', 'polia'],
-  bodyweight: ['bodyweight', 'body_weight', 'peso_corporal', 'calistenia', 'sem_equipamento'],
-  kettlebell: ['kettlebell'],
-};
-
 function normalizeFilterLookup(value: string | null | undefined): string {
   if (!value) {
     return '';
@@ -979,7 +958,7 @@ function matchesMuscleFilter(exercise: ExerciseCatalogItem, filter: ExerciseLibr
     return inferredMuscleKey === filter;
   }
 
-  const keywords = MUSCLE_FILTER_KEYWORDS[filter];
+  const keywords = EXERCISE_MUSCLE_FILTER_KEYWORDS[filter];
   const candidates = [
     exercise.muscle_group,
     exercise.muscle_en,
@@ -1021,7 +1000,7 @@ function matchesEquipmentFilter(exercise: ExerciseCatalogItem, filter: ExerciseL
     return false;
   }
 
-  return matchesKeywords(normalizedCandidate, EQUIPMENT_FILTER_KEYWORDS[filter]);
+  return matchesKeywords(normalizedCandidate, EXERCISE_EQUIPMENT_FILTER_KEYWORDS[filter]);
 }
 
 export async function getRecentExerciseIds(limit = 20): Promise<string[]> {
@@ -1658,6 +1637,53 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
   });
 }
 
+/**
+ * Mirrors the `can_view_user_content` SQL helper. RLS is the real boundary —
+ * this only exists so the app can show an honest message instead of an empty
+ * workout. Keep the two in step: a profile is visible when it is your own,
+ * when it is public, or when it is friends-only and you are friends.
+ */
+async function canViewUserContent(targetUserId: string): Promise<boolean> {
+  const viewer = await getAuthenticatedUserOrThrow();
+
+  if (viewer.id === targetUserId) {
+    return true;
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('visibility')
+    .eq('id', targetUserId)
+    .maybeSingle();
+
+  if (profileError) {
+    throw new Error(`Unable to validate workout access: ${profileError.message}`);
+  }
+
+  const visibility = profile?.visibility ?? 'friends';
+
+  if (visibility === 'public') {
+    return true;
+  }
+
+  if (visibility === 'private') {
+    return false;
+  }
+
+  const { data: friendshipRows, error: friendshipError } = await supabase
+    .from('friends')
+    .select('id')
+    .eq('user_low_id', viewer.id < targetUserId ? viewer.id : targetUserId)
+    .eq('user_high_id', viewer.id < targetUserId ? targetUserId : viewer.id)
+    .limit(1);
+
+  if (friendshipError) {
+    throw new Error(`Unable to validate workout access: ${friendshipError.message}`);
+  }
+
+  return Boolean(friendshipRows && friendshipRows.length > 0);
+}
+
 export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetails> {
   const viewer = await getAuthenticatedUserOrThrow();
   const normalizedWorkoutId = normalizeOptionalId(workoutId);
@@ -1681,19 +1707,9 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
   }
 
   if (workout.user_id !== viewer.id) {
-    const { data: friendshipRows, error: friendshipError } = await supabase
-      .from('friends')
-      .select('id')
-      .or(
-        `and(user_low_id.eq.${viewer.id},user_high_id.eq.${workout.user_id}),and(user_high_id.eq.${viewer.id},user_low_id.eq.${workout.user_id})`
-      )
-      .limit(1);
+    const canView = await canViewUserContent(workout.user_id);
 
-    if (friendshipError) {
-      throw new Error(`Unable to validate workout access: ${friendshipError.message}`);
-    }
-
-    if (!friendshipRows || friendshipRows.length === 0) {
+    if (!canView) {
       throw new Error('You do not have permission to view this workout.');
     }
   }

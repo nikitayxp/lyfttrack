@@ -169,7 +169,7 @@ function normalizeNumber(value: number | null | undefined): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
-function normalizeSetType(value: string | null | undefined): WorkoutSetType {
+export function normalizeSetType(value: string | null | undefined): WorkoutSetType {
   if (!value) {
     return 'normal';
   }

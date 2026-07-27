@@ -20,7 +20,14 @@ This directory is now the SQL migration source tracked in git for LyftTrack.
    - Adds atomic RPC `respond_to_friend_request(uuid, text)` for accept/reject flow.
    - Adds profile trigger to keep profiles.updated_at synchronized on updates.
 
-4. 20260727091000_delete_own_account.sql
+4. 20260727090000_public_profile_visibility.sql
+   - Adds `can_view_user_content(uuid)` helper and rewrites the SELECT policies for
+     workouts, workout_exercises, sets, workout_likes and workout_comments to use it.
+   - Makes `profiles.visibility = 'public'` actually grant read access; previously the
+     column was never consulted by any policy, so public behaved like friends-only.
+   - Backfills NULL visibility to 'friends' and sets that as the column default.
+
+5. 20260727091000_delete_own_account.sql
    - Adds `delete_own_account()` RPC so a user can delete their own account.
    - Removes every row keyed to that user across workouts, sets, routines, templates,
      measurements, social graph and profile, then the auth.users row last.

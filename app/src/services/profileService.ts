@@ -7,7 +7,10 @@ import type { Tables, TablesInsert, TablesUpdate } from '@/types/database';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 
 export type ProfileRow = Tables<'profiles'>;
-export type PublicProfileView = Pick<ProfileRow, 'id' | 'username' | 'full_name' | 'avatar_url' | 'bio'>;
+export type PublicProfileView = Pick<
+  ProfileRow,
+  'id' | 'username' | 'full_name' | 'avatar_url' | 'bio' | 'visibility'
+>;
 
 export type UpdateProfileInput = {
   username?: string;
@@ -265,7 +268,7 @@ export async function getPublicProfileById(profileId: string): Promise<PublicPro
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, full_name, avatar_url, bio')
+    .select('id, username, full_name, avatar_url, bio, visibility')
     .eq('id', normalizedProfileId)
     .maybeSingle();
 

@@ -1,5 +1,9 @@
 import { supabase } from '@/services/supabase';
-import { getAuthenticatedUserOrThrow } from '@/services/workoutService';
+import {
+  getAuthenticatedUserOrThrow,
+  normalizeSetType,
+  type WorkoutSetType,
+} from '@/services/workoutService';
 import { EXERCISE_MUSCLE_LABELS, resolveExerciseMuscleKey } from '@/constants/exerciseCatalog';
 import type { Tables } from '@/types/database';
 
@@ -446,14 +450,46 @@ export async function getWeeklyVolumeByMuscle(localeTag?: string): Promise<Weekl
     });
 }
 
+export type ExerciseHistorySet = {
+  setNumber: number | null;
+  weight: number;
+  reps: number;
+  rir: number | null;
+  setType: WorkoutSetType;
+};
+
 export type ExerciseWorkoutHistoryEntry = {
   workoutId: string;
   workoutName: string;
   date: string;
-  sets: number;
-  bestWeight: number;
-  bestReps: number;
+  /** Every set logged for this exercise in this workout, warm-ups included. */
+  sets: ExerciseHistorySet[];
+  workingSetCount: number;
+  /**
+   * The single heaviest set actually performed. Weight and reps come from the
+   * same set — taking independent maxima reported pairs that never happened.
+   */
+  bestSet: ExerciseHistorySet | null;
 };
+
+function sortHistorySets(a: ExerciseHistorySet, b: ExerciseHistorySet): number {
+  const aNumber = a.setNumber ?? Number.MAX_SAFE_INTEGER;
+  const bNumber = b.setNumber ?? Number.MAX_SAFE_INTEGER;
+  return aNumber - bNumber;
+}
+
+/** Heavier wins; equal weight is broken by reps, so the harder set surfaces. */
+function isBetterSet(candidate: ExerciseHistorySet, current: ExerciseHistorySet | null): boolean {
+  if (!current) {
+    return true;
+  }
+
+  if (candidate.weight !== current.weight) {
+    return candidate.weight > current.weight;
+  }
+
+  return candidate.reps > current.reps;
+}
 
 export async function getExerciseWorkoutHistory(exerciseId: string): Promise<ExerciseWorkoutHistoryEntry[]> {
   const user = await getAuthenticatedUserOrThrow();
@@ -465,7 +501,9 @@ export async function getExerciseWorkoutHistory(exerciseId: string): Promise<Exe
 
   const { data, error } = await supabase
     .from('workout_exercises')
-    .select('workout_id, workouts!inner(id, name, start_time, end_time, user_id), sets!sets_workout_exercise_id_fkey(weight, reps)')
+    .select(
+      'workout_id, workouts!inner(id, name, start_time, end_time, user_id), sets!sets_workout_exercise_id_fkey(set_number, weight, reps, rir, set_type)'
+    )
     .eq('exercise_id', normalizedId)
     .eq('workouts.user_id', user.id)
     .not('workouts.end_time', 'is', null)
@@ -475,12 +513,20 @@ export async function getExerciseWorkoutHistory(exerciseId: string): Promise<Exe
     throw new Error(`Unable to load exercise history: ${error.message}`);
   }
 
+  type HistoryWorkout = { id: string; name: string; start_time: string; end_time: string | null; user_id: string };
+
   type HistoryRow = {
     workout_id: string;
-    workouts: { id: string; name: string; start_time: string; end_time: string | null; user_id: string }
-      | { id: string; name: string; start_time: string; end_time: string | null; user_id: string }[]
+    workouts: HistoryWorkout | HistoryWorkout[] | null;
+    sets:
+      | {
+          set_number: number | null;
+          weight: number | null;
+          reps: number | null;
+          rir: number | null;
+          set_type: string | null;
+        }[]
       | null;
-    sets: { weight: number | null; reps: number | null }[] | null;
   };
 
   const rows = (data as HistoryRow[] | null) ?? [];
@@ -491,27 +537,36 @@ export async function getExerciseWorkoutHistory(exerciseId: string): Promise<Exe
     if (!workout?.id || !workout.start_time || !workout.end_time) continue;
 
     const existing = entriesByWorkout.get(workout.id);
-    const setsList = row.sets ?? [];
+    const collectedSets = existing?.sets ?? [];
+    let bestSet = existing?.bestSet ?? null;
 
-    let bestWeight = existing?.bestWeight ?? 0;
-    let bestReps = existing?.bestReps ?? 0;
-    let setsCount = existing?.sets ?? 0;
+    for (const rawSet of row.sets ?? []) {
+      const historySet: ExerciseHistorySet = {
+        setNumber: rawSet.set_number,
+        weight: toNonNegativeNumber(rawSet.weight),
+        reps: toNonNegativeNumber(rawSet.reps),
+        rir: rawSet.rir,
+        setType: normalizeSetType(rawSet.set_type),
+      };
 
-    for (const s of setsList) {
-      setsCount += 1;
-      const w = toNonNegativeNumber(s.weight);
-      const r = toNonNegativeNumber(s.reps);
-      if (w > bestWeight) bestWeight = w;
-      if (r > bestReps) bestReps = r;
+      collectedSets.push(historySet);
+
+      // Warm-ups are logged light on purpose and would never win anyway, but
+      // excluding them keeps "best set" meaning the best working set.
+      if (historySet.setType !== 'warmup' && isBetterSet(historySet, bestSet)) {
+        bestSet = historySet;
+      }
     }
+
+    collectedSets.sort(sortHistorySets);
 
     entriesByWorkout.set(workout.id, {
       workoutId: workout.id,
       workoutName: workout.name,
       date: workout.start_time.slice(0, 10),
-      sets: setsCount,
-      bestWeight: Number(bestWeight.toFixed(1)),
-      bestReps,
+      sets: collectedSets,
+      workingSetCount: collectedSets.filter((setItem) => setItem.setType !== 'warmup').length,
+      bestSet,
     });
   }
 

@@ -17,6 +17,7 @@ export type UpdateProfileInput = {
   fullName?: string | null;
   bio?: string | null;
   avatarUrl?: string | null;
+  heightCm?: number | null;
   visibility?: 'public' | 'friends' | 'private';
 };
 
@@ -385,6 +386,10 @@ export async function updateProfile(input: UpdateProfileInput): Promise<ProfileR
 
   if (input.avatarUrl !== undefined) {
     updateRow.avatar_url = normalizeOptionalText(input.avatarUrl, 500, false);
+  }
+
+  if (input.heightCm !== undefined) {
+    updateRow.height_cm = input.heightCm;
   }
 
   if (input.visibility !== undefined) {

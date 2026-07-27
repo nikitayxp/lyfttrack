@@ -7,7 +7,6 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
-import { applyPendingTermsAcceptance } from '@/services/authService';
 import { supabase } from '@/services/supabase';
 
 const palette = Colors.dark;
@@ -108,28 +107,27 @@ export default function OAuthCallbackScreen() {
             return;
           }
 
-          await applyPendingTermsAcceptance();
-
-          if (cancelled) {
-            return;
-          }
-
-          if (typeof window !== 'undefined' && window.history?.replaceState && window.location?.pathname) {
-            // Drop tokens from the address bar so a refresh does not re-ingest them.
-            window.history.replaceState({}, '', window.location.pathname);
-          }
-
-          router.replace('/(tabs)/workout' as any);
+          // Do not router.replace here: the root auth guard redirects once
+          // `session` is set. Navigating early races a null session → sign-in.
           return;
         }
 
         const code = browser.code || readRouteValue(params.code);
 
         if (!code) {
-          if (!cancelled) {
-            setIsError(true);
-            setMessage(t('auth.callback.missingCode'));
+          const { data } = await supabase.auth.getSession();
+
+          if (cancelled) {
+            return;
           }
+
+          // Remount after hash clear / guard redirect — session already exists.
+          if (data.session) {
+            return;
+          }
+
+          setIsError(true);
+          setMessage(t('auth.callback.missingCode'));
           return;
         }
 
@@ -146,19 +144,7 @@ export default function OAuthCallbackScreen() {
           return;
         }
 
-        // Session exists now, so an acceptance parked before the OAuth
-        // redirect can finally be written to the user.
-        await applyPendingTermsAcceptance();
-
-        if (cancelled) {
-          return;
-        }
-
-        if (typeof window !== 'undefined' && window.history?.replaceState && window.location?.pathname) {
-          window.history.replaceState({}, '', window.location.pathname);
-        }
-
-        router.replace('/(tabs)/workout' as any);
+        // Auth guard redirects on session; terms apply on SIGNED_IN in _layout.
       } catch (exchangeError) {
         if (cancelled) {
           return;

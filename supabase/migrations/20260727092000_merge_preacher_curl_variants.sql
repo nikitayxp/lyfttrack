@@ -2,15 +2,22 @@
 -- Merge the Rosca Scott / Preacher Curl duplicates (issue #33)
 --
 -- The catalogue carried the same movement twice, once named in Portuguese and
--- once in English, with equipment folded into the name inconsistently. They
--- ranked as two different exercises, so history, PRs and previous-performance
--- lookups were split between them.
+-- once in English. They ranked as two different exercises, so history, PRs and
+-- previous-performance lookups were split between them.
 --
--- Rather than deleting one and losing its history, references are repointed to
--- a canonical row per equipment variant and only the emptied duplicates are
--- removed. The scope is deliberately an explicit list of names rather than a
--- fuzzy match: an automatic merge across the whole catalogue could silently
--- destroy someone's training history.
+-- References are repointed to a canonical row and only the emptied duplicates
+-- are removed, so no training history is lost in the merge.
+--
+-- Review feedback applied (PR #56):
+--   * the bare names no longer force an equipment value. "Rosca Scott" with no
+--     qualifier does not say whether it was barbell, dumbbell or machine, and
+--     overwriting it with a guess would corrupt correct data. Equipment is only
+--     set on rows whose name states it explicitly, and never overwrites a value
+--     that is already there.
+--   * 'preacher hammer dumbbell curl' was dropped from the alias list. A hammer
+--     grip preacher curl is a different movement, not a synonym.
+--
+-- RUN THE PREVIEW QUERIES AT THE END OF THIS FILE BEFORE APPLYING.
 -- ---------------------------------------------------------------------------
 
 -- Accent- and punctuation-insensitive comparison. unaccent is not guaranteed to
@@ -37,31 +44,33 @@ $$;
 do $$
 declare
   variant record;
-  alias_name text;
   canonical_id uuid;
   duplicate_id uuid;
 begin
-  -- One row per equipment variant. Every alias listed collapses into it.
+  -- equipment is null for the unqualified group: those rows keep whatever
+  -- equipment they already carry.
   for variant in
     select *
     from (
       values
         (
-          'barbell',
+          'Rosca Scott',
+          'Preacher Curl',
+          null::text,
+          array['rosca scott', 'preacher curl']
+        ),
+        (
           'Rosca Scott (Barra)',
           'Preacher Curl (Barbell)',
           'barbell',
           array[
-            'rosca scott',
             'rosca scott barra',
             'rosca scott com barra',
-            'preacher curl',
             'barbell preacher curl',
             'preacher curl barbell'
           ]
         ),
         (
-          'dumbbell',
           'Rosca Scott (Halter)',
           'Preacher Curl (Dumbbell)',
           'dumbbell',
@@ -70,12 +79,10 @@ begin
             'rosca scott com halter',
             'rosca scott halteres',
             'dumbbell preacher curl',
-            'preacher curl dumbbell',
-            'preacher hammer dumbbell curl'
+            'preacher curl dumbbell'
           ]
         ),
         (
-          'machine',
           'Rosca Scott (Máquina)',
           'Preacher Curl (Machine)',
           'machine',
@@ -86,7 +93,7 @@ begin
             'preacher curl machine'
           ]
         )
-    ) as v(variant_key, name_pt, name_en, equipment, aliases)
+    ) as v(name_pt, name_en, equipment, aliases)
   loop
     canonical_id := null;
 
@@ -112,7 +119,9 @@ begin
     set name = variant.name_pt,
         name_pt = variant.name_pt,
         name_en = variant.name_en,
-        equipment = variant.equipment,
+        -- coalesce, never overwrite: an existing value is real data, and a null
+        -- variant.equipment means the name does not tell us the equipment.
+        equipment = coalesce(equipment, variant.equipment),
         muscle_group = coalesce(muscle_group, 'biceps'),
         muscle_pt = coalesce(muscle_pt, 'Bíceps'),
         muscle_en = coalesce(muscle_en, 'Biceps')
@@ -141,11 +150,36 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- Finding the remaining duplicates
+-- PREVIEW QUERIES — run these in staging before applying the block above.
 --
--- This migration only fixes the pair that was reported. Run the query below to
--- list other exercises whose Portuguese and English names collide, so they can
--- be reviewed one at a time instead of merged blindly:
+-- 1. Everything the merge could touch, with real ids, equipment and reference
+--    counts. Confirm every row listed is genuinely the same movement.
+--
+--   select e.id, e.name, e.name_en, e.name_pt, e.equipment, e.is_custom,
+--          (select count(*) from public.sets s where s.exercise_id = e.id) as sets_count,
+--          (select count(*) from public.workout_exercises we where we.exercise_id = e.id) as workout_refs,
+--          (select count(*) from public.template_exercises te where te.exercise_id = e.id) as template_refs,
+--          (select count(*) from public.routine_exercises re where re.exercise_id = e.id) as routine_refs
+--   from public.exercises e
+--   where public.lyft_normalize_exercise_name(e.name)    like '%scott%'
+--      or public.lyft_normalize_exercise_name(e.name)    like '%preacher%'
+--      or public.lyft_normalize_exercise_name(e.name_en) like '%preacher%'
+--      or public.lyft_normalize_exercise_name(e.name_pt) like '%scott%'
+--   order by sets_count desc;
+--
+-- 2. Which row wins as canonical for the unqualified group. Confirm this is the
+--    one you expect to survive.
+--
+--   select e.id, e.name, e.equipment,
+--          (select count(*) from public.sets s where s.exercise_id = e.id) as sets_count
+--   from public.exercises e
+--   where public.lyft_normalize_exercise_name(e.name)    in ('rosca scott', 'preacher curl')
+--      or public.lyft_normalize_exercise_name(e.name_en) in ('rosca scott', 'preacher curl')
+--      or public.lyft_normalize_exercise_name(e.name_pt) in ('rosca scott', 'preacher curl')
+--   order by sets_count desc, e.created_at asc nulls last, e.id asc;
+--
+-- 3. Remaining PT/EN collisions elsewhere in the catalogue, to be reviewed one
+--    at a time rather than merged blindly.
 --
 --   select a.id, a.name, b.id, b.name
 --   from public.exercises a

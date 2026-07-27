@@ -20,12 +20,15 @@ This directory is now the SQL migration source tracked in git for LyftTrack.
    - Adds atomic RPC `respond_to_friend_request(uuid, text)` for accept/reject flow.
    - Adds profile trigger to keep profiles.updated_at synchronized on updates.
 
-4. 20260727_merge_preacher_curl_variants.sql
+4. 20260727092000_merge_preacher_curl_variants.sql
    - Adds `lyft_normalize_exercise_name(text)` for accent-insensitive name comparison.
-   - Merges the duplicated Rosca Scott / Preacher Curl rows into one canonical row per
-     equipment variant (barra / halter / máquina), repointing sets, workout_exercises,
-     template_exercises and routine_exercises before deleting the emptied duplicates.
-   - Scoped to an explicit alias list; includes a query for finding remaining duplicates.
+   - Merges the duplicated Rosca Scott / Preacher Curl rows into one canonical row,
+     repointing sets, workout_exercises, template_exercises and routine_exercises
+     before deleting the emptied duplicates.
+   - Equipment is only set when the name states it, and never overwrites an existing
+     value; unqualified rows keep the equipment they already have.
+   - Scoped to an explicit alias list. Run the preview queries at the end of the file
+     before applying.
 
 ## Rollout notes
 

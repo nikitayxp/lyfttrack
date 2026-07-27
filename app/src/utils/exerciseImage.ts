@@ -22,16 +22,21 @@ const aliasMap: Record<string, string> = {
   'supino halter': 'Dumbbell_Bench_Press',
   'supino com halter': 'Dumbbell_Bench_Press',
   'supino com halteres': 'Dumbbell_Bench_Press',
-  // Rosca Scott / Preacher Curl variants (#33). The machine variant reuses the
-  // barbell image because free-exercise-db has no machine-specific entry.
+  // Rosca Scott / Preacher Curl variants (#33). All point at Preacher_Curl:
+  // free-exercise-db has no barbell/dumbbell/machine specific preacher entries,
+  // and the generic image is right for the movement in every case.
+  //
+  // The dumbbell aliases previously resolved to Preacher_Hammer_Dumbbell_Curl.
+  // That is a hammer-grip variation, a different movement, so it showed the
+  // wrong picture for a plain dumbbell preacher curl.
   'rosca scott': 'Preacher_Curl',
   'rosca scott barra': 'Preacher_Curl',
   'rosca scott com barra': 'Preacher_Curl',
   'preacher curl barbell': 'Preacher_Curl',
-  'rosca scott halter': 'Preacher_Hammer_Dumbbell_Curl',
-  'rosca scott com halter': 'Preacher_Hammer_Dumbbell_Curl',
-  'preacher curl dumbbell': 'Preacher_Hammer_Dumbbell_Curl',
-  'dumbbell preacher curl': 'Preacher_Hammer_Dumbbell_Curl',
+  'rosca scott halter': 'Preacher_Curl',
+  'rosca scott com halter': 'Preacher_Curl',
+  'preacher curl dumbbell': 'Preacher_Curl',
+  'dumbbell preacher curl': 'Preacher_Curl',
   'rosca scott maquina': 'Preacher_Curl',
   'preacher curl machine': 'Preacher_Curl',
   'extensao de triceps unilateral': 'Cable_One_Arm_Tricep_Extension',

@@ -142,7 +142,7 @@ const muscleAliasMap: Record<string, ExerciseMuscleKey> = {
   abdominais: 'core',
 };
 
-const MUSCLE_INFERENCE_KEYWORDS: Record<ExerciseMuscleKey, readonly string[]> = {
+export const EXERCISE_MUSCLE_FILTER_KEYWORDS: Record<ExerciseMuscleKey, readonly string[]> = {
   chest: ['chest', 'peito', 'peitoral', 'pec', 'bench_press', 'supino', 'crossover', 'fly', 'push_up'],
   back: ['back', 'costa', 'dorsal', 'lat', 'row', 'remada', 'puxada', 'pulldown', 'pull_up', 'chin_up', 'deadlift', 'terra'],
   shoulders: ['shoulder', 'ombro', 'deltoid', 'delt', 'desenvolvimento', 'arnold_press', 'lateral_raise', 'front_raise', 'rear_delt', 'upright_row', 'face_pull'],
@@ -154,6 +154,17 @@ const MUSCLE_INFERENCE_KEYWORDS: Record<ExerciseMuscleKey, readonly string[]> = 
   glutes: ['glute', 'gluteo', 'gluteos', 'hip_thrust', 'glute_bridge', 'ponte_de_gluteo', 'kickback', 'abducao'],
   calves: ['calf', 'calves', 'gemeo', 'gemeos', 'panturrilha', 'panturrilhas', 'calf_raise', 'elevacao_de_gemeos'],
   core: ['core', 'abs', 'abdominal', 'abdominais', 'prancha', 'plank', 'crunch', 'ab_wheel', 'russian_twist', 'dead_bug', 'mountain_climber'],
+};
+
+const MUSCLE_INFERENCE_KEYWORDS = EXERCISE_MUSCLE_FILTER_KEYWORDS;
+
+export const EXERCISE_EQUIPMENT_FILTER_KEYWORDS: Record<ExerciseEquipmentKey, readonly string[]> = {
+  barbell: ['barbell', 'barra', 'olympic_barbell'],
+  dumbbell: ['dumbbell', 'dumbell', 'halter', 'halteres'],
+  machine: ['machine', 'maquina', 'smith', 'smith_machine'],
+  cable: ['cable', 'polia'],
+  bodyweight: ['bodyweight', 'body_weight', 'peso_corporal', 'peso corporal', 'calistenia', 'sem_equipamento'],
+  kettlebell: ['kettlebell'],
 };
 
 const MUSCLE_INFERENCE_PRIORITY: readonly ExerciseMuscleKey[] = [

@@ -44,6 +44,12 @@ This directory is now the SQL migration source tracked in git for LyftTrack.
    - SELECT: catalogue for all authenticated users; customs only for their owner.
    - UPDATE/DELETE limited to own custom rows.
 
+7. 20260727200000_exercises_schema_cleanup.sql
+   - Documents column contract via COMMENT.
+   - Normalises equipment / muscle_group casing and known aliases.
+   - Syncs catalogue `name` to `name_en`; fills missing muscle labels.
+   - CHECK ownership invariants + index `(is_custom, created_by)`.
+
 ## Rollout notes
 
 - Apply first in staging and validate app flows:

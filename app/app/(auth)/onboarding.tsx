@@ -32,6 +32,23 @@ import { supabase } from '@/services/supabase';
 
 const palette = Colors.dark;
 
+/** Metric defaults most apps/users expect globally (kg / cm), not imperial. */
+const DEFAULT_WEIGHT_KG = '70';
+const DEFAULT_HEIGHT_CM = '170';
+
+function initialsFromName(value: string): string {
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) {
+    return '?';
+  }
+
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+
+  return `${parts[0][0] ?? ''}${parts[1][0] ?? ''}`.toUpperCase();
+}
+
 function parseOptionalHeightCm(value: string): number | null {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -48,8 +65,9 @@ function parseOptionalHeightCm(value: string): number | null {
 
 export default function OnboardingScreen() {
   const { t } = useTranslation();
-  const [weight, setWeight] = useState('');
-  const [height, setHeight] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [weight, setWeight] = useState(DEFAULT_WEIGHT_KG);
+  const [height, setHeight] = useState(DEFAULT_HEIGHT_CM);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarVersion, setAvatarVersion] = useState(() => Date.now());
   const [pendingAvatar, setPendingAvatar] = useState<Awaited<ReturnType<typeof pickAvatarFromLibrary>>>(null);
@@ -77,6 +95,15 @@ export default function OnboardingScreen() {
               ? data.user.user_metadata.avatar_url
               : null;
 
+        const name =
+          profile.full_name?.trim() ||
+          (typeof data.user?.user_metadata?.full_name === 'string'
+            ? data.user.user_metadata.full_name
+            : '') ||
+          profile.username ||
+          '';
+
+        setDisplayName(name);
         setAvatarUrl(profile.avatar_url ?? picture);
         if (profile.height_cm != null) {
           setHeight(String(profile.height_cm));
@@ -189,7 +216,10 @@ export default function OnboardingScreen() {
                   <Image source={{ uri: previewUrl }} style={styles.avatarImage} />
                 ) : (
                   <View style={styles.avatarFallback}>
-                    <Ionicons name="camera-outline" size={28} color={palette.textMuted} />
+                    <Text style={styles.avatarInitials}>{initialsFromName(displayName)}</Text>
+                    <View style={styles.avatarCameraBadge}>
+                      <Ionicons name="camera" size={14} color={palette.textPrimary} />
+                    </View>
                   </View>
                 )}
                 <Text style={styles.avatarHint}>{t('auth.onboarding.photoHint')}</Text>
@@ -206,6 +236,7 @@ export default function OnboardingScreen() {
                   keyboardType="decimal-pad"
                   style={styles.inputField}
                 />
+                <Text style={styles.unitSuffix}>kg</Text>
               </View>
 
               <Text style={styles.label}>{t('auth.onboarding.heightLabel')}</Text>
@@ -219,6 +250,7 @@ export default function OnboardingScreen() {
                   keyboardType="decimal-pad"
                   style={styles.inputField}
                 />
+                <Text style={styles.unitSuffix}>cm</Text>
               </View>
 
               <TouchableOpacity
@@ -280,9 +312,35 @@ const styles = StyleSheet.create({
     borderColor: palette.border,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: 'rgba(59,130,246,0.16)',
+    position: 'relative',
+  },
+  avatarInitials: {
+    color: palette.textPrimary,
+    fontSize: 28,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  avatarCameraBadge: {
+    position: 'absolute',
+    right: 2,
+    bottom: 2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: palette.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: palette.bgPrimary,
   },
   avatarHint: { color: palette.textMuted, fontSize: 13, fontWeight: '600' },
+  unitSuffix: {
+    color: palette.textMuted,
+    fontSize: 14,
+    fontWeight: '700',
+    paddingRight: Spacing.xs,
+  },
   primaryButton: {
     marginTop: Spacing.sm,
     minHeight: 50,

@@ -16,7 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
-import { startGoogleOAuth } from '@/services/authService';
+import { markTermsAcceptedForOAuth, startGoogleOAuth } from '@/services/authService';
 import { checkUsernameAvailability } from '@/services/profileService';
 import { supabase } from '@/services/supabase';
 
@@ -161,6 +161,9 @@ export default function SignUpScreen() {
     }
 
     try {
+      // Recorded before leaving the app: the callback has no way to know the
+      // user came from sign-up with the box ticked.
+      await markTermsAcceptedForOAuth();
       await startGoogleOAuth();
     } catch (error) {
       const message = error instanceof Error && error.message === 'oauth-cancelled'

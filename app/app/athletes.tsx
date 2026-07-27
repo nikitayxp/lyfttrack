@@ -50,7 +50,9 @@ function openPublicProfile(userId: string) {
 
   router.push({
     pathname: '/(tabs)/profile/[id]' as any,
-    params: { id: normalizedUserId },
+    // The profile cannot work out where it was opened from, and going back
+    // inside the tabs navigator lands on the feed instead of here.
+    params: { id: normalizedUserId, from: 'athletes' },
   });
 }
 

@@ -34,6 +34,12 @@ const SCREEN_BG = palette.bgPrimary;
 const CARD_BG = palette.surface;
 const FEED_PAGE_SIZE = 20;
 
+// Screens that open a public profile, and where "back" should return to.
+const PROFILE_ORIGIN_ROUTES: Record<string, string> = {
+  athletes: '/athletes',
+  social: '/social',
+};
+
 type FeedLikeInteractionState = {
   hasLiked: boolean;
   likesCount: number;
@@ -68,8 +74,29 @@ function initialsFromName(value: string): string {
 
 export default function PublicProfileScreen() {
   const { t } = useTranslation();
-  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const params = useLocalSearchParams<{ id?: string | string[]; from?: string | string[] }>();
   const profileId = useMemo(() => readRouteId(params.id), [params.id]);
+  const openedFrom = useMemo(() => readRouteId(params.from), [params.from]);
+
+  const handleBack = useCallback(() => {
+    // Going back lands on the tab navigator's initial route (the feed) rather
+    // than on the screen that opened this one, so the origin has to be stated
+    // explicitly. Resolved through a fixed map because `from` travels in the
+    // URL on web and must not be able to name an arbitrary route.
+    const origin = openedFrom ? PROFILE_ORIGIN_ROUTES[openedFrom] : undefined;
+
+    if (origin) {
+      router.replace(origin as any);
+      return;
+    }
+
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace('/(tabs)' as any);
+  }, [openedFrom]);
 
   const [profile, setProfile] = useState<PublicProfileView | null>(null);
   const [workouts, setWorkouts] = useState<WorkoutFeedItem[]>([]);
@@ -425,7 +452,7 @@ export default function PublicProfileScreen() {
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void loadData('refresh')} tintColor={palette.accent} />}
       >
         <View style={styles.topRow}>
-          <TouchableOpacity style={styles.backButton} activeOpacity={ACTIVE_OPACITY} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backButton} activeOpacity={ACTIVE_OPACITY} onPress={handleBack}>
             <Ionicons name="arrow-back" size={20} color={palette.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.title}>{t('publicProfile.title')}</Text>

@@ -20,6 +20,12 @@ This directory is now the SQL migration source tracked in git for LyftTrack.
    - Adds atomic RPC `respond_to_friend_request(uuid, text)` for accept/reject flow.
    - Adds profile trigger to keep profiles.updated_at synchronized on updates.
 
+4. 20260727_delete_own_account.sql
+   - Adds `delete_own_account()` RPC so a user can delete their own account.
+   - Removes every row keyed to that user across workouts, sets, routines, templates,
+     measurements, social graph and profile, then the auth.users row last.
+   - Custom exercises are removed only when no set still references them.
+
 ## Rollout notes
 
 - Apply first in staging and validate app flows:

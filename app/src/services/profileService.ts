@@ -276,6 +276,31 @@ export async function getPublicProfileById(profileId: string): Promise<PublicPro
   return data;
 }
 
+/**
+ * Deletes the account and every row belonging to it, then ends the session.
+ *
+ * The heavy lifting is the `delete_own_account` RPC: removing the auth user
+ * needs privileges the anon key does not have, and doing the cleanup in one
+ * transaction avoids a half-deleted account. The local sign-out afterwards is
+ * best-effort — the session is already invalid once the auth row is gone, so a
+ * failure there must not be reported as a failed deletion.
+ */
+export async function deleteOwnAccount(): Promise<void> {
+  await getAuthenticatedUserOrThrow();
+
+  const { error } = await (supabase.rpc as any)('delete_own_account');
+
+  if (error) {
+    throw new Error(`Unable to delete account: ${error.message}`);
+  }
+
+  try {
+    await supabase.auth.signOut();
+  } catch (signOutError) {
+    console.warn('[profileService] Sign-out after account deletion failed', signOutError);
+  }
+}
+
 export async function checkUsernameAvailability(username: string): Promise<boolean> {
   const normalizedUsername = sanitizeUsername(username).slice(0, INPUT_LIMITS.nameMax);
 

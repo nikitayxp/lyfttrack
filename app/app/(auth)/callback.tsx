@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
+import { applyPendingTermsAcceptance } from '@/services/authService';
 import { supabase } from '@/services/supabase';
 
 const palette = Colors.dark;
@@ -80,6 +81,14 @@ export default function OAuthCallbackScreen() {
           console.warn('[auth-callback] exchangeCodeForSession failed', error);
           setIsError(true);
           setMessage(t('auth.callback.errorDescription'));
+          return;
+        }
+
+        // Session exists now, so an acceptance parked before the OAuth
+        // redirect can finally be written to the user.
+        await applyPendingTermsAcceptance();
+
+        if (cancelled) {
           return;
         }
 

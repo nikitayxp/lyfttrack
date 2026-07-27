@@ -22,7 +22,9 @@ import {
   type WorkoutSetType,
 } from '@/services/workoutService';
 import { updateWorkoutSets } from '@/services/sessionRepository';
+import { usePreferences } from '@/context/PreferencesContext';
 import { formatRelativeTime } from '@/utils/dateUtils';
+import { getLocalizedExerciseName, type ExerciseNameSource } from '@/utils/exerciseLocalization';
 import {
   INPUT_LIMITS,
   sanitizeDecimalText,
@@ -67,7 +69,7 @@ type EditableSetDraft = {
 
 type EditableExerciseDraft = {
   exerciseId: string;
-  exerciseName: string;
+  exerciseName: ExerciseNameSource;
   muscleGroup: string | null;
   equipment: string | null;
   sets: EditableSetDraft[];
@@ -76,7 +78,11 @@ type EditableExerciseDraft = {
 function buildExerciseDrafts(details: WorkoutDetails): EditableExerciseDraft[] {
   return details.exercises.map((exercise) => ({
     exerciseId: exercise.exercise_id,
-    exerciseName: exercise.exercise_name,
+    exerciseName: {
+      name: exercise.exercise_name,
+      name_en: exercise.name_en,
+      name_pt: exercise.name_pt,
+    },
     muscleGroup: exercise.muscle_group,
     equipment: exercise.equipment,
     sets: exercise.sets.map((setItem) => ({
@@ -92,6 +98,7 @@ function buildExerciseDrafts(details: WorkoutDetails): EditableExerciseDraft[] {
 
 export default function WorkoutEditScreen() {
   const { t } = useTranslation();
+  const { language } = usePreferences();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
 
   const workoutId = useMemo(() => resolveRouteWorkoutId(params.id), [params.id]);
@@ -311,7 +318,7 @@ export default function WorkoutEditScreen() {
           ) : (
             exerciseDrafts.map((exercise) => (
               <View key={exercise.exerciseId} style={styles.exerciseCard}>
-                <Text style={styles.exerciseName}>{exercise.exerciseName}</Text>
+                <Text style={styles.exerciseName}>{getLocalizedExerciseName(exercise.exerciseName, language)}</Text>
                 <Text style={styles.exerciseMeta}>
                   {(exercise.muscleGroup ?? t('exercise.general')) + ' - ' + (exercise.equipment ?? t('exercise.bodyweight'))}
                 </Text>

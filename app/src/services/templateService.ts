@@ -3,6 +3,7 @@ import { supabase } from '@/services/supabase';
 import { getAuthenticatedUserOrThrow } from '@/services/workoutService';
 import type { Tables, TablesInsert } from '@/types/database';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
+import type { ExerciseNameSource } from '@/utils/exerciseLocalization';
 
 export type WorkoutTemplateRow = Tables<'workout_templates'>;
 export type TemplateExerciseRow = Tables<'template_exercises'>;
@@ -10,7 +11,7 @@ export type ExerciseRow = Tables<'exercises'>;
 
 export type TemplateSummary = Pick<WorkoutTemplateRow, 'id' | 'name' | 'notes' | 'created_at'> & {
   exerciseCount: number;
-  exerciseNames: string[];
+  exerciseNames: ExerciseNameSource[];
 };
 
 export type TemplateDetailExercise = Pick<TemplateExerciseRow, 'id' | 'order_index' | 'rest_seconds'> & {
@@ -22,7 +23,10 @@ export type TemplateDetail = Pick<WorkoutTemplateRow, 'id' | 'user_id' | 'name' 
 };
 
 type RawTemplateExerciseNameRow = Pick<TemplateExerciseRow, 'template_id' | 'order_index'> & {
-  exercises?: Pick<ExerciseRow, 'name'> | Pick<ExerciseRow, 'name'>[] | null;
+  exercises?:
+    | Pick<ExerciseRow, 'name' | 'name_en' | 'name_pt'>
+    | Pick<ExerciseRow, 'name' | 'name_en' | 'name_pt'>[]
+    | null;
 };
 
 type RawTemplateExerciseDetailRow = Pick<TemplateExerciseRow, 'id' | 'order_index' | 'exercise_id' | 'rest_seconds'> & {
@@ -134,7 +138,7 @@ export async function getTemplates(): Promise<TemplateSummary[]> {
 
   const { data: templateExercises, error: templateExercisesError } = await supabase
     .from('template_exercises')
-    .select('template_id, order_index, exercises(name)')
+    .select('template_id, order_index, exercises(name, name_en, name_pt)')
     .in('template_id', templateIds)
     .order('order_index', { ascending: true });
 
@@ -142,7 +146,7 @@ export async function getTemplates(): Promise<TemplateSummary[]> {
     throw new Error(`Unable to load template exercises: ${templateExercisesError.message}`);
   }
 
-  const namesByTemplateId = new Map<string, string[]>();
+  const namesByTemplateId = new Map<string, ExerciseNameSource[]>();
 
   for (const relation of (templateExercises as RawTemplateExerciseNameRow[] | null) ?? []) {
     const exercise = resolveEmbeddedObject(relation.exercises);
@@ -152,7 +156,11 @@ export async function getTemplates(): Promise<TemplateSummary[]> {
     }
 
     const currentValue = namesByTemplateId.get(relation.template_id) ?? [];
-    currentValue.push(exercise.name);
+    currentValue.push({
+      name: exercise.name,
+      name_en: exercise.name_en ?? null,
+      name_pt: exercise.name_pt ?? null,
+    });
     namesByTemplateId.set(relation.template_id, currentValue);
   }
 

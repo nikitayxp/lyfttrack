@@ -12,6 +12,8 @@ import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
+import { usePreferences } from '@/context/PreferencesContext';
+import { getLocalizedExerciseName, type ExerciseNameSource } from '@/utils/exerciseLocalization';
 
 const palette = Colors.dark;
 
@@ -20,7 +22,7 @@ type WorkoutSummaryProps = {
   durationSeconds: number;
   prCount: number;
   completedSetCount: number;
-  exerciseNames: string[];
+  exerciseNames: ExerciseNameSource[];
   onShareAndFinish: () => void;
 };
 
@@ -46,6 +48,7 @@ export function WorkoutSummary({
   onShareAndFinish,
 }: WorkoutSummaryProps) {
   const { t } = useTranslation();
+  const { language } = usePreferences();
   const isWeb = Platform.OS === 'web';
   const modalAnimationType: 'fade' | 'slide' = isWeb ? 'fade' : 'slide';
 
@@ -90,12 +93,16 @@ export function WorkoutSummary({
               {exerciseNames.length === 0 ? (
                 <Text style={styles.emptyText}>{t('workout.summaryNoExercises')}</Text>
               ) : (
-                exerciseNames.map((exerciseName, index) => (
-                  <View key={`${exerciseName}-${index}`} style={styles.exerciseRow}>
-                    <Ionicons name="barbell-outline" size={16} color={palette.textMuted} />
-                    <Text style={styles.exerciseName}>{exerciseName}</Text>
-                  </View>
-                ))
+                exerciseNames.map((exercise, index) => {
+                  const localizedName = getLocalizedExerciseName(exercise, language);
+
+                  return (
+                    <View key={`${localizedName}-${index}`} style={styles.exerciseRow}>
+                      <Ionicons name="barbell-outline" size={16} color={palette.textMuted} />
+                      <Text style={styles.exerciseName}>{localizedName}</Text>
+                    </View>
+                  );
+                })
               )}
             </View>
           </ScrollView>

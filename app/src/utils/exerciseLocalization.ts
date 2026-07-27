@@ -1,17 +1,22 @@
 import type { AppLanguage } from '@/i18n/resources';
 import type { Tables } from '@/types/database';
 
-type ExerciseLocalizationSource = Pick<
-  Tables<'exercises'>,
-  'is_custom' | 'name' | 'name_en' | 'name_pt' | 'muscle_group' | 'muscle_en' | 'muscle_pt' | 'equipment'
->;
+/**
+ * Only the name columns are required to localize a name. Keeping this narrow
+ * lets services carry the three columns around instead of resolving a display
+ * string too early — resolving early is what leaks English names into a
+ * Portuguese UI.
+ */
+export type ExerciseNameSource = Pick<Tables<'exercises'>, 'name' | 'name_en' | 'name_pt'>;
+
+type ExerciseMuscleSource = Pick<Tables<'exercises'>, 'muscle_group' | 'muscle_en' | 'muscle_pt'>;
 
 function normalizeText(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
 }
 
-export function getLocalizedExerciseName(exercise: ExerciseLocalizationSource, language: AppLanguage): string {
+export function getLocalizedExerciseName(exercise: ExerciseNameSource, language: AppLanguage): string {
   if (language === 'pt') {
     return (
       normalizeText(exercise.name_pt) ??
@@ -29,7 +34,7 @@ export function getLocalizedExerciseName(exercise: ExerciseLocalizationSource, l
   );
 }
 
-export function getLocalizedExerciseMuscle(exercise: ExerciseLocalizationSource, language: AppLanguage): string | null {
+export function getLocalizedExerciseMuscle(exercise: ExerciseMuscleSource, language: AppLanguage): string | null {
   if (language === 'pt') {
     return (
       normalizeText(exercise.muscle_pt) ??
@@ -43,4 +48,33 @@ export function getLocalizedExerciseMuscle(exercise: ExerciseLocalizationSource,
     normalizeText(exercise.muscle_group) ??
     normalizeText(exercise.muscle_pt)
   );
+}
+
+/**
+ * Language-independent identity for deduping exercise lists. Dedupe used to run
+ * on the display name, which merged/split entries depending on the active
+ * language.
+ */
+export function exerciseNameKey(exercise: ExerciseNameSource): string {
+  return [exercise.name_en, exercise.name, exercise.name_pt]
+    .map((value) => normalizeText(value)?.toLowerCase() ?? '')
+    .join('|');
+}
+
+export function dedupeExerciseNames(exercises: ExerciseNameSource[]): ExerciseNameSource[] {
+  const seen = new Set<string>();
+  const unique: ExerciseNameSource[] = [];
+
+  for (const exercise of exercises) {
+    const key = exerciseNameKey(exercise);
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    unique.push(exercise);
+  }
+
+  return unique;
 }

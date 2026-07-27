@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
+import { AuthFeedback, type AuthFeedbackValue } from '@/components/auth/AuthFeedback';
 import { markTermsAcceptedForOAuth, startGoogleOAuth } from '@/services/authService';
 import { checkUsernameAvailability } from '@/services/profileService';
 import { supabase } from '@/services/supabase';
@@ -48,7 +49,7 @@ export default function SignUpScreen() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
-  const [feedback, setFeedback] = useState<{ message: string; type: 'error' | 'success' | 'info' } | null>(null);
+  const [feedback, setFeedback] = useState<AuthFeedbackValue | null>(null);
   const [usernameChecking, setUsernameChecking] = useState(false);
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   
@@ -194,20 +195,6 @@ export default function SignUpScreen() {
           </View>
 
           <View style={styles.formCard}>
-            {feedback ? (
-              <View style={[
-                styles.feedbackBanner, 
-                feedback.type === 'error' ? styles.feedbackError : feedback.type === 'success' ? styles.feedbackSuccess : styles.feedbackInfo
-              ]}>
-                <Ionicons 
-                  name={feedback.type === 'error' ? 'alert-circle' : feedback.type === 'success' ? 'checkmark-circle' : 'information-circle'} 
-                  size={16} 
-                  color={feedback.type === 'error' ? palette.error : feedback.type === 'success' ? palette.success : palette.accent} 
-                />
-                <Text style={styles.feedbackText}>{feedback.message}</Text>
-              </View>
-            ) : null}
-
             <Text style={styles.label}>{t('auth.signUp.displayNameLabel')}</Text>
             <View style={styles.inputLine}>
               <TextInput
@@ -332,6 +319,10 @@ export default function SignUpScreen() {
               </Text>
             </TouchableOpacity>
 
+            {/* Next to the button that triggers it: the failure has to be
+                visible from where the user is looking when they submit. */}
+            <AuthFeedback feedback={feedback} />
+
             <TouchableOpacity
               style={[styles.primaryButton, !termsAccepted && styles.primaryButtonDisabled]}
               onPress={() => void handleSignUp()}
@@ -443,33 +434,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-  },
-  feedbackBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: Radius.sm,
-    borderWidth: 1,
-    columnGap: 8,
-    marginBottom: 4,
-  },
-  feedbackError: {
-    backgroundColor: 'rgba(239,68,68,0.08)',
-    borderColor: 'rgba(239,68,68,0.19)',
-  },
-  feedbackSuccess: {
-    backgroundColor: 'rgba(16,185,129,0.08)',
-    borderColor: 'rgba(16,185,129,0.19)',
-  },
-  feedbackInfo: {
-    backgroundColor: 'rgba(59,130,246,0.08)',
-    borderColor: 'rgba(59,130,246,0.19)',
-  },
-  feedbackText: {
-    color: palette.textPrimary,
-    fontSize: 13,
-    fontWeight: '600',
-    flex: 1,
   },
   inputLine: {
     minHeight: 46,

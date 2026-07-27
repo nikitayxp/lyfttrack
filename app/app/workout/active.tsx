@@ -72,7 +72,11 @@ import {
   toSafeInteger,
   toSafeNumber,
 } from '@/utils/inputValidation';
-import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/exerciseLocalization';
+import {
+  getLocalizedExerciseMuscle,
+  getLocalizedExerciseName,
+  type ExerciseNameSource,
+} from '@/utils/exerciseLocalization';
 import { matchesExerciseSearch } from '@/utils/exerciseSearch';
 
 const palette = Colors.dark;
@@ -259,7 +263,7 @@ export default function ActiveWorkout() {
   const [newExerciseMuscleGroup, setNewExerciseMuscleGroup] = useState<ExerciseMuscleKey | null>(null);
   const [newExerciseEquipment, setNewExerciseEquipment] = useState<ExerciseEquipmentKey | null>(null);
   const [finishSummary, setFinishSummary] = useState<FinishWorkoutResult | null>(null);
-  const [summaryExerciseNames, setSummaryExerciseNames] = useState<string[]>([]);
+  const [summaryExerciseNames, setSummaryExerciseNames] = useState<ExerciseNameSource[]>([]);
   const [isSummaryVisible, setIsSummaryVisible] = useState(false);
   const [pendingDeleteSet, setPendingDeleteSet] = useState<{ exerciseId: string; setId: string; setNumber: number } | null>(null);
   const [isDiscardConfirmVisible, setIsDiscardConfirmVisible] = useState(false);

@@ -103,7 +103,7 @@ export default function VerifyScreen() {
 
       await clearStoredEmail();
       Alert.alert(t('auth.verify.verifiedTitle'), t('auth.verify.verifiedDescription'));
-      router.replace('/(tabs)/workout' as any);
+      router.replace('/(auth)/onboarding' as any);
     } finally {
       setLoading(false);
     }

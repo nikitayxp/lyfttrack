@@ -40,6 +40,7 @@ import {
   getExercisesCatalog,
   getLastExerciseRestTimes,
   getRecentExerciseIds,
+  getExercisePersonalBests,
   getPreviousExercisePerformance,
   getRoutineById,
   getWorkoutDetails,
@@ -59,6 +60,7 @@ import {
   normalizeSetTypeOption,
   getCompletedExerciseNames,
   type ActiveExercise,
+  type ActiveSet,
   type CopySetSeed,
   type ExerciseRow,
   type SummaryExercise,
@@ -81,7 +83,14 @@ import {
   getLocalizedExerciseName,
   type ExerciseNameSource,
 } from '@/utils/exerciseLocalization';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { matchesExerciseSearch } from '@/utils/exerciseSearch';
+import {
+  EMPTY_PERSONAL_BEST,
+  isRecordSet,
+  mergePersonalBest,
+  type PersonalBest,
+} from '@/utils/personalRecords';
 import { formatPreviousSetLabel, previousColumnWidthForSets, previousLabelFontSize, previousSetForRow } from '@/utils/previousPerformance';
 
 const palette = Colors.dark;
@@ -277,9 +286,87 @@ export default function ActiveWorkout() {
   const [previousPerformanceByExerciseId, setPreviousPerformanceByExerciseId] = useState<
     Record<string, PreviousExercisePerformanceSet[]>
   >({});
+  const [personalBestsByExerciseId, setPersonalBestsByExerciseId] = useState<Record<string, PersonalBest>>({});
+  const [recordSetIds, setRecordSetIds] = useState<Set<string>>(new Set());
   const exerciseCatalogByFilterRef = useRef<Map<string, ExerciseRow[]>>(new Map());
 
   const timerLabel = useMemo(() => formatElapsedTime(elapsedSeconds), [elapsedSeconds]);
+
+  const activeExerciseIdsKey = useMemo(
+    () => activeExercises.map((exercise) => exercise.exercise.id).sort().join(','),
+    [activeExercises]
+  );
+
+  // All-time bests, not the previous session shown in the Anterior column.
+  // Beating the last workout is not the same as setting a record, and using the
+  // wrong one here would contradict the count on the finish screen.
+  useEffect(() => {
+    const exerciseIds = activeExerciseIdsKey ? activeExerciseIdsKey.split(',') : [];
+
+    if (exerciseIds.length === 0) {
+      setPersonalBestsByExerciseId({});
+      return;
+    }
+
+    let isMounted = true;
+
+    void getExercisePersonalBests(exerciseIds, null)
+      .then((bests) => {
+        if (isMounted) {
+          setPersonalBestsByExerciseId(bests);
+        }
+      })
+      .catch(() => {
+        // Non-critical: without bests no set is flagged, which is the safe
+        // direction to fail — a missing badge beats a wrong one.
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeExerciseIdsKey]);
+
+  const toggleSetAndCheckRecord = useCallback(
+    (exercise: ActiveExercise, setItem: ActiveSet) => {
+      const isCompleting = !setItem.completed;
+      const exerciseId = exercise.exercise.id;
+
+      if (!isCompleting) {
+        setRecordSetIds((current) => {
+          if (!current.has(setItem.id)) {
+            return current;
+          }
+
+          const next = new Set(current);
+          next.delete(setItem.id);
+          return next;
+        });
+
+        handleSetCompletionToggle(exercise.id, setItem.id);
+        return;
+      }
+
+      const best = personalBestsByExerciseId[exerciseId] ?? EMPTY_PERSONAL_BEST;
+      const sample = {
+        weight: toSafeNumber(setItem.weightInput, { min: 0, max: INPUT_LIMITS.weightMax, decimals: 2 }),
+        reps: toSafeInteger(setItem.repsInput, { min: 0, max: INPUT_LIMITS.repsMax }),
+      };
+
+      if (isRecordSet(sample, best)) {
+        setRecordSetIds((current) => new Set(current).add(setItem.id));
+
+        // Raise the bar so a lighter set later in the same exercise does not
+        // also claim the record.
+        setPersonalBestsByExerciseId((current) => ({
+          ...current,
+          [exerciseId]: mergePersonalBest(current[exerciseId] ?? EMPTY_PERSONAL_BEST, sample),
+        }));
+      }
+
+      handleSetCompletionToggle(exercise.id, setItem.id);
+    },
+    [handleSetCompletionToggle, personalBestsByExerciseId]
+  );
 
   const activeExerciseIds = useMemo(
     () => activeExercises.map((exercise) => exercise.exercise.id).filter(Boolean),
@@ -1067,10 +1154,16 @@ export default function ActiveWorkout() {
                       : setItem.set_type === 'drop' ? 'failure'
                       : 'normal';
 
+                    const isRecordBreakingSet = recordSetIds.has(setItem.id);
+
                     return (
                       <View key={setItem.id} style={styles.setRowWrapper}>
                         <Pressable
-                          style={[styles.tableRow, setItem.completed && styles.completedRow]}
+                          style={[
+                            styles.tableRow,
+                            setItem.completed && styles.completedRow,
+                            isRecordBreakingSet && styles.recordRow,
+                          ]}
                           onLongPress={() => {
                             if (exercise.sets.length <= 1) {
                               Alert.alert(t('workout.deleteSetTitle'), t('workout.deleteSetKeepOne'));
@@ -1184,7 +1277,7 @@ export default function ActiveWorkout() {
                             <TouchableOpacity
                               style={[styles.checkButton, setItem.completed && styles.checkButtonCompleted]}
                               activeOpacity={ACTIVE_OPACITY}
-                              onPress={() => handleSetCompletionToggle(exercise.id, setItem.id)}
+                              onPress={() => toggleSetAndCheckRecord(exercise, setItem)}
                               accessibilityRole="button"
                               accessibilityLabel={setItem.completed ? t('accessibility.markSetIncomplete', { defaultValue: 'Mark set incomplete' }) : t('accessibility.markSetComplete', { defaultValue: 'Mark set complete' })}
                               hitSlop={HIT_SLOP}
@@ -1192,11 +1285,30 @@ export default function ActiveWorkout() {
                               <Ionicons
                                 name={setItem.completed ? 'checkmark-circle' : 'ellipse-outline'}
                                 size={22}
-                                color={setItem.completed ? palette.accent : palette.textMuted}
+                                color={
+                                  isRecordBreakingSet
+                                    ? palette.warningText
+                                    : setItem.completed
+                                      ? palette.accent
+                                      : palette.textMuted
+                                }
                               />
                             </TouchableOpacity>
                           </View>
                         </Pressable>
+
+                        {/* At the moment of confirming, not only in the summary
+                            at the end: that was the whole complaint. */}
+                        {isRecordBreakingSet ? (
+                          <Reanimated.View
+                            entering={FadeInDown.duration(220)}
+                            style={styles.recordBanner}
+                            accessibilityLiveRegion="polite"
+                          >
+                            <Ionicons name="trophy" size={13} color={palette.warningText} />
+                            <Text style={styles.recordBannerText}>{t('workout.newRecord')}</Text>
+                          </Reanimated.View>
+                        ) : null}
 
                         <View style={styles.sideToggleRow}>
                           {([
@@ -2014,6 +2126,30 @@ const styles = StyleSheet.create({
   completedRow: {
     backgroundColor: palette.completedRowBg,
     borderRadius: Radius.md,
+  },
+  recordRow: {
+    backgroundColor: 'rgba(251, 191, 36, 0.12)',
+    borderRadius: Radius.md,
+  },
+  recordBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 6,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    marginLeft: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.32)',
+    backgroundColor: 'rgba(251, 191, 36, 0.12)',
+  },
+  recordBannerText: {
+    color: palette.warningText,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
   cellSet: {
     width: 38,

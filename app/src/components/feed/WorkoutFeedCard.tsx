@@ -4,8 +4,10 @@ import { ActivityIndicator, Image, StyleSheet, Text, TouchableOpacity, View } fr
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
+import { usePreferences } from '@/context/PreferencesContext';
 import type { WorkoutFeedItem } from '@/services/workoutService';
 import { formatRelativeTime } from '@/utils/dateUtils';
+import { getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 
 const palette = Colors.dark;
 const CARD_BG = palette.surface;
@@ -75,7 +77,11 @@ export function WorkoutFeedCard({
   disableInteractions = false,
 }: WorkoutFeedCardProps) {
   const { t } = useTranslation();
+  const { language } = usePreferences();
   const displayName = profileDisplayName(workout, t('publicProfile.athleteFallback'));
+  const localizedExerciseNames = workout.exerciseNames.map((exercise) =>
+    getLocalizedExerciseName(exercise, language)
+  );
 
   const resolvedLikeCount = likeCount ?? workout.likes_count;
   const resolvedCommentsCount = commentsCount ?? workout.comments_count;
@@ -133,15 +139,15 @@ export function WorkoutFeedCard({
           </View>
           <View style={styles.metricDivider} />
           <View style={styles.metricBlock}>
-            <Text style={styles.metricValue}>{workout.exerciseNames.length}</Text>
+            <Text style={styles.metricValue}>{localizedExerciseNames.length}</Text>
             <Text style={styles.metricLabel}>{t('feed.metrics.exercises')}</Text>
           </View>
         </View>
 
-        {workout.exerciseNames.length > 0 ? (
+        {localizedExerciseNames.length > 0 ? (
           <View style={styles.exercisePreviewWrap}>
             <Text style={styles.exercisePreviewText} numberOfLines={2}>
-              {workout.exerciseNames.join(' • ')}
+              {localizedExerciseNames.join(' • ')}
             </Text>
           </View>
         ) : null}

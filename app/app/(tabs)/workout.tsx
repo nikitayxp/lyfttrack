@@ -38,7 +38,12 @@ import {
 import { EmptyState } from '@/components/common/EmptyState';
 import { ExerciseThumbnail } from '@/components/common/ExerciseThumbnail';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
-import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/exerciseLocalization';
+import {
+  getLocalizedExerciseMuscle,
+  getLocalizedExerciseName,
+  type ExerciseNameSource,
+} from '@/utils/exerciseLocalization';
+import type { AppLanguage } from '@/i18n/resources';
 import { matchesExerciseSearch } from '@/utils/exerciseSearch';
 import {
   createExercise,
@@ -59,12 +64,20 @@ type ExerciseRow = Tables<'exercises'>;
 
 type WorkoutMode = 'start' | 'templates' | 'exercises';
 
-function summarizeExercises(exerciseNames: string[], emptyLabel: string): string {
+function summarizeExercises(
+  exerciseNames: ExerciseNameSource[],
+  emptyLabel: string,
+  language: AppLanguage
+): string {
   if (exerciseNames.length === 0) {
     return emptyLabel;
   }
 
-  const preview = exerciseNames.slice(0, 3).join(', ');
+  const preview = exerciseNames
+    .slice(0, 3)
+    .map((exercise) => getLocalizedExerciseName(exercise, language))
+    .join(', ');
+
   return exerciseNames.length > 3 ? `${preview}...` : preview;
 }
 
@@ -589,7 +602,7 @@ export default function WorkoutScreen() {
                     <View style={styles.quickStartCardTextWrap}>
                       <Text style={styles.quickStartTitle}>{template.name}</Text>
                       <Text style={styles.quickStartMeta}>{`${template.exerciseCount} ${t('workout.templateExercises').toLowerCase()}`}</Text>
-                      <Text style={styles.quickStartSummary}>{summarizeExercises(template.exerciseNames, t('workout.noExercisesSummary'))}</Text>
+                      <Text style={styles.quickStartSummary}>{summarizeExercises(template.exerciseNames, t('workout.noExercisesSummary'), language)}</Text>
                     </View>
 
                     {startingTemplateId === template.id ? (
@@ -671,7 +684,7 @@ export default function WorkoutScreen() {
                     <View style={styles.quickStartCardTextWrap}>
                       <Text style={styles.quickStartTitle}>{template.name}</Text>
                       <Text style={styles.quickStartMeta}>{`${template.exerciseCount} ${t('workout.templateExercises').toLowerCase()}`}</Text>
-                      <Text style={styles.quickStartSummary}>{summarizeExercises(template.exerciseNames, t('workout.noExercisesSummary'))}</Text>
+                      <Text style={styles.quickStartSummary}>{summarizeExercises(template.exerciseNames, t('workout.noExercisesSummary'), language)}</Text>
                     </View>
 
                     {startingTemplateId === template.id ? (

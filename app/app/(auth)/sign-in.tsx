@@ -17,7 +17,7 @@ import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
 import { AuthLanguageToggle } from '@/components/auth/AuthLanguageToggle';
-import { startGoogleOAuth } from '@/services/authService';
+import { markTermsAcceptedForOAuth, startGoogleOAuth } from '@/services/authService';
 import { getPasswordResetRedirectTo, supabase } from '@/services/supabase';
 
 const palette = Colors.dark;
@@ -94,6 +94,7 @@ export default function SignInScreen() {
     setFeedback(null);
 
     try {
+      await markTermsAcceptedForOAuth();
       await startGoogleOAuth();
     } catch (error) {
       const message = error instanceof Error && error.message === 'oauth-cancelled'
@@ -209,6 +210,18 @@ export default function SignInScreen() {
               <AntDesign name="google" size={16} color={palette.textPrimary} />
               <Text style={styles.googleButtonText}>{t('auth.signIn.continueWithGoogle')}</Text>
             </TouchableOpacity>
+
+            <Text style={styles.googleLegalNote}>
+              {t('auth.googleLegal.prefix')}
+              <Text style={styles.googleLegalLink} onPress={() => router.push('/legal/terms' as any)}>
+                {t('auth.googleLegal.terms')}
+              </Text>
+              {t('auth.googleLegal.conjunction')}
+              <Text style={styles.googleLegalLink} onPress={() => router.push('/legal/privacy' as any)}>
+                {t('auth.googleLegal.privacy')}
+              </Text>
+              {t('auth.googleLegal.suffix')}
+            </Text>
 
             <TouchableOpacity 
               style={styles.secondaryAction} 
@@ -400,6 +413,18 @@ const styles = StyleSheet.create({
   googleButtonText: {
     color: palette.textPrimary,
     fontSize: 15,
+    fontWeight: '700',
+  },
+  googleLegalNote: {
+    marginTop: Spacing.sm,
+    color: palette.textMuted,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  googleLegalLink: {
+    color: palette.accent,
     fontWeight: '700',
   },
   secondaryAction: {

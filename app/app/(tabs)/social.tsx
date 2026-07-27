@@ -65,7 +65,7 @@ function openPublicProfile(userId: string) {
 
   router.push({
     pathname: '/(tabs)/profile/[id]' as any,
-    params: { id: normalizedUserId },
+    params: { id: normalizedUserId, from: 'social' },
   });
 }
 

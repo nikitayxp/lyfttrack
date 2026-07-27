@@ -61,6 +61,7 @@ import {
   type ActiveExercise,
   type CopySetSeed,
   type ExerciseRow,
+  type SummaryExercise,
 } from '@/hooks/useActiveWorkoutState';
 import { useWorkoutContext } from '@/context/WorkoutContext';
 
@@ -267,7 +268,7 @@ export default function ActiveWorkout() {
   const [newExerciseMuscleGroup, setNewExerciseMuscleGroup] = useState<ExerciseMuscleKey | null>(null);
   const [newExerciseEquipment, setNewExerciseEquipment] = useState<ExerciseEquipmentKey | null>(null);
   const [finishSummary, setFinishSummary] = useState<FinishWorkoutResult | null>(null);
-  const [summaryExerciseNames, setSummaryExerciseNames] = useState<ExerciseNameSource[]>([]);
+  const [summaryExerciseNames, setSummaryExerciseNames] = useState<SummaryExercise[]>([]);
   const [isSummaryVisible, setIsSummaryVisible] = useState(false);
   const [pendingDeleteSet, setPendingDeleteSet] = useState<{ exerciseId: string; setId: string; setNumber: number } | null>(null);
   const [pendingRemoveExerciseIndex, setPendingRemoveExerciseIndex] = useState<number | null>(null);
@@ -1623,6 +1624,7 @@ export default function ActiveWorkout() {
         prCount={finishSummary?.prCount ?? 0}
         completedSetCount={finishSummary?.completedSetCount ?? 0}
         exerciseNames={summaryExerciseNames}
+        prExerciseIds={finishSummary?.prExerciseIds ?? []}
         onShareAndFinish={handleShareAndFinish}
       />
 

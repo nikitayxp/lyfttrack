@@ -12,6 +12,7 @@ import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
 import { Colors } from '@/constants/theme';
+import { applyPendingTermsAcceptance } from '@/services/authService';
 import { supabase } from '@/services/supabase';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import NeuralBackground from '@/components/ui/flow-field-background';
@@ -20,6 +21,19 @@ import { MinimizedWorkoutBar } from '@/components/workout/MinimizedWorkoutBar';
 import { PreferencesProvider } from '@/context/PreferencesContext';
 import { WorkoutProvider } from '@/context/WorkoutContext';
 import type { Session } from '@supabase/supabase-js';
+
+function shouldSkipAuthSplashDelay(): boolean {
+  if (typeof window === 'undefined' || !window.location) {
+    return false;
+  }
+
+  // OAuth return must not wait on the branded splash — tokens are already in the URL.
+  if (window.location.pathname === '/callback' || window.location.pathname.endsWith('/callback')) {
+    return true;
+  }
+
+  return false;
+}
 
 /**
  * Chrome (and similar) can cover the bottom of the layout viewport without
@@ -258,7 +272,9 @@ export default function RootLayout() {
 
     Promise.all([
       supabase.auth.getSession(),
-      new Promise((resolve) => setTimeout(resolve, 1500))
+      shouldSkipAuthSplashDelay()
+        ? Promise.resolve()
+        : new Promise((resolve) => setTimeout(resolve, 1500)),
     ]).then(([{ data: { session: initialSession } }]) => {
       if (!isMounted) {
         return;
@@ -269,13 +285,17 @@ export default function RootLayout() {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, nextSession) => {
+      (event, nextSession) => {
         if (!isMounted) {
           return;
         }
 
         setSession(nextSession);
         setIsAuthBootstrapPending(false);
+
+        if (event === 'SIGNED_IN' && nextSession) {
+          void applyPendingTermsAcceptance();
+        }
       }
     );
 

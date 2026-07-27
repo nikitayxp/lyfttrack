@@ -36,6 +36,14 @@ This directory is now the SQL migration source tracked in git for LyftTrack.
    - Stored avatars are removed client-side before the RPC runs, while the session
      is still valid.
 
+6. 20260727194500_catalog_vs_custom_privacy.sql
+   - Removes test custom Preacher Curl (dumbbell) after remapping history to the
+     built-in machine Rosca Scott / Preacher Curl.
+   - Promotes remaining wrongly-marked customs to shared catalogue
+     (`is_custom = false`, `created_by = null`).
+   - SELECT: catalogue for all authenticated users; customs only for their owner.
+   - UPDATE/DELETE limited to own custom rows.
+
 ## Rollout notes
 
 - Apply first in staging and validate app flows:

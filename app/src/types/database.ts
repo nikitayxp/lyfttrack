@@ -595,6 +595,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      delete_own_account: {
+        Args: Record<string, never>
+        Returns: undefined
+      }
       respond_to_friend_request: {
         Args: {
           p_action: string

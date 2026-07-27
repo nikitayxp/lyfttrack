@@ -86,6 +86,11 @@ export default function PublicProfileScreen() {
   const [commentInputValue, setCommentInputValue] = useState('');
   const [currentCommentAuthor, setCurrentCommentAuthor] = useState<CommentAuthorProfile | null>(null);
 
+  // An empty list on a non-public profile means "not allowed to see", not
+  // "trained nothing" — saying the wrong one is what made the old behaviour
+  // read as broken.
+  const isRestrictedProfile = profile ? profile.visibility !== 'public' : false;
+
   const loadData = useCallback(
     async (mode: 'initial' | 'refresh' = 'initial') => {
       if (mode === 'initial') {
@@ -467,9 +472,17 @@ export default function PublicProfileScreen() {
 
             {workouts.length === 0 ? (
               <EmptyState
-                icon="trophy-outline"
-                title={t('publicProfile.noPublicWorkoutsTitle')}
-                description={t('publicProfile.noPublicWorkoutsDescription')}
+                icon={isRestrictedProfile ? 'lock-closed-outline' : 'trophy-outline'}
+                title={
+                  isRestrictedProfile
+                    ? t('publicProfile.restrictedTitle')
+                    : t('publicProfile.noPublicWorkoutsTitle')
+                }
+                description={
+                  isRestrictedProfile
+                    ? t('publicProfile.restrictedDescription')
+                    : t('publicProfile.noPublicWorkoutsDescription')
+                }
                 containerStyle={styles.statusCard}
                 descriptionStyle={styles.statusText}
               />

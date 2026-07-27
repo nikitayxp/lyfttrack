@@ -40,6 +40,7 @@ import { getAllTimePRs, type AllTimePR } from '@/services/statsService';
 import { supabase } from '@/services/supabase';
 import { getErrorMessage, getUserWorkouts, type WorkoutFeedItem } from '@/services/workoutService';
 import { useWorkoutContext } from '@/context/WorkoutContext';
+import { getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 import { sanitizeDecimalText } from '@/utils/inputValidation';
 
 const palette = Colors.dark;
@@ -372,7 +373,7 @@ export default function ProfileScreen() {
     try {
       const [weightEntries, personalRecords] = await Promise.all([
         getWeightHistory(),
-        getAllTimePRs(),
+        getAllTimePRs(uiLanguage.startsWith('pt') ? 'pt' : 'en'),
       ]);
 
       setWeightHistory((currentHistory) => {
@@ -389,7 +390,7 @@ export default function ProfileScreen() {
     } finally {
       setIsLoadingPerformance(false);
     }
-  }, []);
+  }, [uiLanguage]);
 
   const bootstrap = useCallback(async () => {
     setIsBootstrapping(true);
@@ -880,7 +881,7 @@ export default function ProfileScreen() {
 
         await Sharing.shareAsync(captureUri, {
           mimeType: 'image/png',
-          dialogTitle: `${pr.exerciseName} PR`,
+          dialogTitle: `${getLocalizedExerciseName(pr.exercise, uiLanguage.startsWith('pt') ? 'pt' : 'en')} PR`,
           UTI: 'public.png',
         });
       } catch (error) {
@@ -889,7 +890,7 @@ export default function ProfileScreen() {
         setSharingExerciseId(null);
       }
     },
-    [sharingExerciseId, t, trophyCardRefsByExerciseId]
+    [sharingExerciseId, t, trophyCardRefsByExerciseId, uiLanguage]
   );
 
   const headerComponent = useMemo(() => {
@@ -1064,7 +1065,7 @@ export default function ProfileScreen() {
                       </View>
 
                       <Text style={styles.trophyExerciseName} numberOfLines={2}>
-                        {pr.exerciseName}
+                        {getLocalizedExerciseName(pr.exercise, uiLanguage.startsWith('pt') ? 'pt' : 'en')}
                       </Text>
                       <Text style={styles.trophyValue}>{`${formatWeightKg(pr.maxWeight)} kg`}</Text>
                       <Text style={styles.trophyDate}>{formatDateShort(pr.achievedAt, uiLanguage)}</Text>

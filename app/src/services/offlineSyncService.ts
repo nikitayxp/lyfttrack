@@ -22,7 +22,7 @@ import { Platform } from 'react-native';
 
 // ---------- Schema ----------
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const DRAFT_KEY_PREFIX = 'lyfttrack:workout_draft:';
 const SYNC_DRAFT_KEY_PREFIX = 'lyfttrack:workout_draft_sync:';
 const WRITE_DEBOUNCE_MS = 800;
@@ -46,6 +46,9 @@ export type DraftExercise = {
   id: string;
   exerciseId: string;
   exerciseName: string;
+  /** Optional i18n fields — older drafts may omit these. */
+  name_en?: string | null;
+  name_pt?: string | null;
   muscle_group: string | null;
   equipment: string | null;
   defaultRestSeconds: number;

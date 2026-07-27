@@ -20,6 +20,36 @@ This directory is now the SQL migration source tracked in git for LyftTrack.
    - Adds atomic RPC `respond_to_friend_request(uuid, text)` for accept/reject flow.
    - Adds profile trigger to keep profiles.updated_at synchronized on updates.
 
+4. 20260727090000_public_profile_visibility.sql
+   - Adds `can_view_user_content(uuid)` helper and rewrites the SELECT policies for
+     workouts, workout_exercises, sets, workout_likes and workout_comments to use it.
+   - Makes `profiles.visibility = 'public'` actually grant read access; previously the
+     column was never consulted by any policy, so public behaved like friends-only.
+   - Backfills NULL visibility to 'friends' and sets that as the column default.
+
+5. 20260727091000_delete_own_account.sql
+   - Adds `delete_own_account()` RPC so a user can delete their own account.
+   - Removes every row keyed to that user across workouts, sets, routines, templates,
+     measurements, social graph and profile, then the auth.users row last.
+   - Custom exercises are removed only when nothing still references them (sets,
+     workout_exercises, template_exercises or routine_exercises).
+   - Stored avatars are removed client-side before the RPC runs, while the session
+     is still valid.
+
+6. 20260727194500_catalog_vs_custom_privacy.sql
+   - Removes test custom Preacher Curl (dumbbell) after remapping history to the
+     built-in machine Rosca Scott / Preacher Curl.
+   - Promotes remaining wrongly-marked customs to shared catalogue
+     (`is_custom = false`, `created_by = null`).
+   - SELECT: catalogue for all authenticated users; customs only for their owner.
+   - UPDATE/DELETE limited to own custom rows.
+
+7. 20260727200000_exercises_schema_cleanup.sql
+   - Documents column contract via COMMENT.
+   - Normalises equipment / muscle_group casing and known aliases.
+   - Syncs catalogue `name` to `name_en`; fills missing muscle labels.
+   - CHECK ownership invariants + index `(is_custom, created_by)`.
+
 ## Rollout notes
 
 - Apply first in staging and validate app flows:

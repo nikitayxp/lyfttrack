@@ -6,12 +6,12 @@ import {
 } from '@/services/workoutService';
 import { EXERCISE_MUSCLE_LABELS, resolveExerciseMuscleKey } from '@/constants/exerciseCatalog';
 import type { Tables } from '@/types/database';
+import { getLocalizedExerciseName, type ExerciseNameSource } from '@/utils/exerciseLocalization';
 
 export type ProgressMetric = 'duration' | 'volume' | 'reps' | 'weight';
 
-export type StatsExerciseOption = {
+export type StatsExerciseOption = ExerciseNameSource & {
   id: string;
-  name: string;
 };
 
 export type ExerciseProgressPoint = {
@@ -34,7 +34,7 @@ export type ExercisePersonalRecords = {
 
 export type AllTimePR = {
   exerciseId: string;
-  exerciseName: string;
+  exercise: ExerciseNameSource;
   maxWeight: number;
   achievedAt: string;
 };
@@ -45,7 +45,7 @@ export type WeeklyVolumeByMuscle = {
 };
 
 type WorkoutRef = Pick<Tables<'workouts'>, 'start_time' | 'end_time' | 'user_id'>;
-type ExerciseRef = Pick<Tables<'exercises'>, 'id' | 'name'>;
+type ExerciseRef = Pick<Tables<'exercises'>, 'id' | 'name' | 'name_en' | 'name_pt'>;
 type WeeklyExerciseRef = Pick<
   Tables<'exercises'>,
   'name' | 'name_en' | 'name_pt' | 'muscle_group' | 'muscle_en' | 'muscle_pt'
@@ -182,12 +182,12 @@ async function getExerciseSetRowsForUser(exerciseId: string): Promise<RawSetWith
   });
 }
 
-export async function getTrackedExercises(): Promise<StatsExerciseOption[]> {
+export async function getTrackedExercises(language: 'en' | 'pt' = 'en'): Promise<StatsExerciseOption[]> {
   const user = await getAuthenticatedUserOrThrow();
 
   const { data, error } = await supabase
     .from('sets')
-    .select('exercise_id, exercises!inner(id, name), workouts!inner(user_id, end_time)')
+    .select('exercise_id, exercises!inner(id, name, name_en, name_pt), workouts!inner(user_id, end_time)')
     .eq('workouts.user_id', user.id)
     .not('workouts.end_time', 'is', null);
 
@@ -207,10 +207,14 @@ export async function getTrackedExercises(): Promise<StatsExerciseOption[]> {
     optionsById.set(exercise.id, {
       id: exercise.id,
       name: exercise.name,
+      name_en: exercise.name_en ?? null,
+      name_pt: exercise.name_pt ?? null,
     });
   }
 
-  return [...optionsById.values()].sort((a, b) => a.name.localeCompare(b.name));
+  return [...optionsById.values()].sort((a, b) =>
+    getLocalizedExerciseName(a, language).localeCompare(getLocalizedExerciseName(b, language))
+  );
 }
 
 export async function getExerciseProgress(
@@ -330,12 +334,12 @@ export async function getExercisePersonalRecords(exerciseId: string): Promise<Ex
   };
 }
 
-export async function getAllTimePRs(): Promise<AllTimePR[]> {
+export async function getAllTimePRs(language: 'en' | 'pt' = 'en'): Promise<AllTimePR[]> {
   const user = await getAuthenticatedUserOrThrow();
 
   const { data, error } = await supabase
     .from('sets')
-    .select('exercise_id, weight, workouts!inner(start_time, end_time, user_id), exercises!inner(id, name)')
+    .select('exercise_id, weight, workouts!inner(start_time, end_time, user_id), exercises!inner(id, name, name_en, name_pt)')
     .eq('workouts.user_id', user.id)
     .not('workouts.end_time', 'is', null)
     .not('weight', 'is', null)
@@ -365,11 +369,16 @@ export async function getAllTimePRs(): Promise<AllTimePR[]> {
 
     const achievedAt = workout.end_time ?? workout.start_time;
     const existing = bestByExerciseId.get(exercise.id);
+    const exerciseNames: ExerciseNameSource = {
+      name: exercise.name,
+      name_en: exercise.name_en ?? null,
+      name_pt: exercise.name_pt ?? null,
+    };
 
     if (!existing) {
       bestByExerciseId.set(exercise.id, {
         exerciseId: exercise.id,
-        exerciseName: exercise.name,
+        exercise: exerciseNames,
         maxWeight: Number(weight.toFixed(1)),
         achievedAt,
       });
@@ -379,7 +388,7 @@ export async function getAllTimePRs(): Promise<AllTimePR[]> {
     if (weight > existing.maxWeight) {
       bestByExerciseId.set(exercise.id, {
         exerciseId: exercise.id,
-        exerciseName: exercise.name,
+        exercise: exerciseNames,
         maxWeight: Number(weight.toFixed(1)),
         achievedAt,
       });
@@ -404,7 +413,9 @@ export async function getAllTimePRs(): Promise<AllTimePR[]> {
       return b.maxWeight - a.maxWeight;
     }
 
-    return a.exerciseName.localeCompare(b.exerciseName);
+    return getLocalizedExerciseName(a.exercise, language).localeCompare(
+      getLocalizedExerciseName(b.exercise, language)
+    );
   });
 }
 

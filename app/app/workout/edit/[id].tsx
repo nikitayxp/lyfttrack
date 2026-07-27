@@ -22,9 +22,17 @@ import {
   type WorkoutSetType,
 } from '@/services/workoutService';
 import { updateWorkoutSets } from '@/services/sessionRepository';
+import {
+  getEquipmentTranslationKey,
+  getExerciseMuscleTranslationKey,
+} from '@/constants/exerciseCatalog';
 import { usePreferences } from '@/context/PreferencesContext';
 import { formatRelativeTime } from '@/utils/dateUtils';
-import { getLocalizedExerciseName, type ExerciseNameSource } from '@/utils/exerciseLocalization';
+import {
+  getLocalizedExerciseMuscle,
+  getLocalizedExerciseName,
+  type ExerciseNameSource,
+} from '@/utils/exerciseLocalization';
 import {
   INPUT_LIMITS,
   sanitizeDecimalText,
@@ -316,11 +324,33 @@ export default function WorkoutEditScreen() {
               <Text style={styles.emptyText}>{t('workoutDetails.noSetsDescription')}</Text>
             </View>
           ) : (
-            exerciseDrafts.map((exercise) => (
+            exerciseDrafts.map((exercise) => {
+              const muscleKey = getExerciseMuscleTranslationKey({
+                muscleGroup: exercise.muscleGroup,
+                name: exercise.exerciseName.name,
+                nameEn: exercise.exerciseName.name_en,
+                namePt: exercise.exerciseName.name_pt,
+              });
+              const muscleLabel = muscleKey
+                ? t(muscleKey)
+                : getLocalizedExerciseMuscle(
+                    {
+                      muscle_group: exercise.muscleGroup,
+                      muscle_en: null,
+                      muscle_pt: null,
+                    },
+                    language
+                  ) ?? t('exercise.general');
+              const equipmentKey = getEquipmentTranslationKey(exercise.equipment);
+              const equipmentLabel = equipmentKey
+                ? t(equipmentKey)
+                : exercise.equipment ?? t('exercise.equipment.bodyweight');
+
+              return (
               <View key={exercise.exerciseId} style={styles.exerciseCard}>
                 <Text style={styles.exerciseName}>{getLocalizedExerciseName(exercise.exerciseName, language)}</Text>
                 <Text style={styles.exerciseMeta}>
-                  {(exercise.muscleGroup ?? t('exercise.general')) + ' - ' + (exercise.equipment ?? t('exercise.bodyweight'))}
+                  {muscleLabel} - {equipmentLabel}
                 </Text>
 
                 <View style={[styles.tableRow, styles.tableHeaderRow]}>
@@ -362,7 +392,8 @@ export default function WorkoutEditScreen() {
                   </View>
                 ))}
               </View>
-            ))
+              );
+            })
           )}
         </ScrollView>
       )}

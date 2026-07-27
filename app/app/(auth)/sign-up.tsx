@@ -149,12 +149,13 @@ export default function SignUpScreen() {
         email: normalizedEmail,
         password,
         options: {
-          data: {
+            data: {
             username: normalizedUsername,
             full_name: normalizedDisplayName,
             display_name: normalizedDisplayName,
             // Consent has to be provable, not just enforced in the UI.
             terms_accepted_at: new Date().toISOString(),
+            username_confirmed_at: new Date().toISOString(),
           },
         },
       });
@@ -189,16 +190,8 @@ export default function SignUpScreen() {
   async function handleGooglePress() {
     setFeedback(null);
 
-    // Google sign-up creates an account just as much as the email form does,
-    // so it has to be gated on the same explicit acceptance.
-    if (!termsAccepted) {
-      setFeedback({ message: t('auth.signUp.termsRequired'), type: 'error' });
-      return;
-    }
-
     try {
-      // Recorded before leaving the app: the callback has no way to know the
-      // user came from sign-up with the box ticked.
+      // Legal notice under the button (pattern B) — same park as sign-in.
       await markTermsAcceptedForOAuth();
       await startGoogleOAuth();
     } catch (error) {
@@ -408,16 +401,27 @@ export default function SignUpScreen() {
             </View>
 
             <TouchableOpacity
-              style={[styles.googleButton, !termsAccepted && styles.googleButtonDisabled]}
+              style={styles.googleButton}
               onPress={handleGooglePress}
-              disabled={loading || !termsAccepted}
+              disabled={loading}
               accessibilityRole="button"
-              accessibilityState={{ disabled: loading || !termsAccepted }}
               accessibilityLabel={t('auth.signUp.continueWithGoogle')}
             >
               <AntDesign name="google" size={16} color={palette.textPrimary} />
               <Text style={styles.googleButtonText}>{t('auth.signUp.continueWithGoogle')}</Text>
             </TouchableOpacity>
+
+            <Text style={styles.googleLegalNote}>
+              {t('auth.googleLegal.prefix')}
+              <Text style={styles.googleLegalLink} onPress={() => router.push('/legal/terms' as any)}>
+                {t('auth.googleLegal.terms')}
+              </Text>
+              {t('auth.googleLegal.conjunction')}
+              <Text style={styles.googleLegalLink} onPress={() => router.push('/legal/privacy' as any)}>
+                {t('auth.googleLegal.privacy')}
+              </Text>
+              {t('auth.googleLegal.suffix')}
+            </Text>
 
             <TouchableOpacity
               style={styles.switchAction}
@@ -569,12 +573,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     columnGap: 10,
   },
-  googleButtonDisabled: {
-    opacity: 0.45,
-  },
   googleButtonText: {
     color: palette.textPrimary,
     fontSize: 15,
+    fontWeight: '700',
+  },
+  googleLegalNote: {
+    marginTop: Spacing.sm,
+    color: palette.textMuted,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  googleLegalLink: {
+    color: palette.accent,
     fontWeight: '700',
   },
   switchAction: {

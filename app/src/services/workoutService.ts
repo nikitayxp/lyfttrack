@@ -1051,6 +1051,15 @@ export async function getRecentExerciseIds(limit = 20): Promise<string[]> {
   return result;
 }
 
+/** Keep the order of `ids` (most-recent-first). Filtering a name-sorted catalog alone loses that order. */
+export function orderExercisesByIds<T extends { id: string }>(items: T[], ids: string[]): T[] {
+  const byId = new Map(items.map((item) => [item.id, item]));
+  return ids.flatMap((id) => {
+    const match = byId.get(id);
+    return match ? [match] : [];
+  });
+}
+
 export async function getExercisesCatalog(filters: ExerciseCatalogFilters = {}): Promise<ExerciseCatalogItem[]> {
   const muscleFilter = filters.muscle ?? 'all';
   const equipmentFilter = filters.equipment ?? 'all';

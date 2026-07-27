@@ -270,6 +270,7 @@ export default function ActiveWorkout() {
   const [summaryExerciseNames, setSummaryExerciseNames] = useState<ExerciseNameSource[]>([]);
   const [isSummaryVisible, setIsSummaryVisible] = useState(false);
   const [pendingDeleteSet, setPendingDeleteSet] = useState<{ exerciseId: string; setId: string; setNumber: number } | null>(null);
+  const [pendingRemoveExerciseIndex, setPendingRemoveExerciseIndex] = useState<number | null>(null);
   const [isDiscardConfirmVisible, setIsDiscardConfirmVisible] = useState(false);
   const [isDiscardingWorkout, setIsDiscardingWorkout] = useState(false);
   const [previousPerformanceByExerciseId, setPreviousPerformanceByExerciseId] = useState<
@@ -994,23 +995,7 @@ export default function ActiveWorkout() {
                         accessibilityRole="button"
                         accessibilityLabel={t('accessibility.removeExercise', { defaultValue: 'Remove exercise' })}
                         hitSlop={HIT_SLOP}
-                        onPress={() => {
-                          const name = getLocalizedExerciseName(exercise.exercise, language);
-                          if (Platform.OS === 'web') {
-                            if (globalThis.confirm(t('exercise.removeConfirmDescription', { name }))) {
-                              removeExercise(exerciseIndex);
-                            }
-                          } else {
-                            Alert.alert(
-                              t('exercise.removeConfirmTitle'),
-                              t('exercise.removeConfirmDescription', { name }),
-                              [
-                                { text: t('exercise.removeConfirmKeep'), style: 'cancel' },
-                                { text: t('exercise.removeConfirmRemove'), style: 'destructive', onPress: () => removeExercise(exerciseIndex) },
-                              ]
-                            );
-                          }
-                        }}
+                        onPress={() => setPendingRemoveExerciseIndex(exerciseIndex)}
                       >
                         <Ionicons name="trash-outline" size={16} color="#FCA5A5" />
                       </TouchableOpacity>
@@ -1639,6 +1624,29 @@ export default function ActiveWorkout() {
         completedSetCount={finishSummary?.completedSetCount ?? 0}
         exerciseNames={summaryExerciseNames}
         onShareAndFinish={handleShareAndFinish}
+      />
+
+      <ConfirmModal
+        visible={pendingRemoveExerciseIndex !== null}
+        title={t('exercise.removeConfirmTitle')}
+        description={
+          pendingRemoveExerciseIndex !== null && activeExercises[pendingRemoveExerciseIndex]
+            ? t('exercise.removeConfirmDescription', {
+                name: getLocalizedExerciseName(activeExercises[pendingRemoveExerciseIndex].exercise, language),
+              })
+            : undefined
+        }
+        confirmLabel={t('exercise.removeConfirmRemove')}
+        cancelLabel={t('exercise.removeConfirmKeep')}
+        tone="danger"
+        icon="trash-outline"
+        onCancel={() => setPendingRemoveExerciseIndex(null)}
+        onConfirm={() => {
+          if (pendingRemoveExerciseIndex !== null) {
+            removeExercise(pendingRemoveExerciseIndex);
+          }
+          setPendingRemoveExerciseIndex(null);
+        }}
       />
 
       <ConfirmModal

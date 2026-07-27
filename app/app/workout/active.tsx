@@ -1130,7 +1130,12 @@ export default function ActiveWorkout() {
                               accessibilityLabel={t('workout.fillFromPrevious')}
                               hitSlop={HIT_SLOP}
                             >
-                              <Text style={styles.previousCellText} numberOfLines={1}>
+                              <Text
+                                style={styles.previousCellText}
+                                numberOfLines={1}
+                                adjustsFontSizeToFit
+                                minimumFontScale={0.85}
+                              >
                                 {formatPreviousSetLabel(previousSet)}
                               </Text>
                             </TouchableOpacity>
@@ -1924,8 +1929,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 7,
-    paddingHorizontal: 4,
-    columnGap: 6,
+    paddingHorizontal: 2,
+    columnGap: 4,
     borderBottomWidth: 1,
     borderBottomColor: palette.rowSeparator,
     minWidth: 0,
@@ -2015,31 +2020,34 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   cellPrevious: {
-    flex: 1.1,
-    minWidth: 52,
+    flex: 1.35,
+    minWidth: 68,
+    maxWidth: 88,
+    flexShrink: 0,
   },
   previousCellText: {
     color: palette.textMuted,
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 10,
+    lineHeight: 12,
+    fontWeight: '700',
     textAlign: 'center',
     fontVariant: ['tabular-nums'],
   },
   cellKg: {
-    flex: 1.2,
-    minWidth: 58,
+    flex: 1.15,
+    minWidth: 52,
   },
   kgInput: {
-    flex: 1.2,
-    minWidth: 58,
+    flex: 1.15,
+    minWidth: 52,
   },
   cellReps: {
-    flex: 1,
-    minWidth: 44,
+    flex: 0.95,
+    minWidth: 40,
   },
   cellRir: {
-    flex: 1,
-    minWidth: 44,
+    flex: 0.95,
+    minWidth: 40,
   },
   numericInput: {
     flex: 1,
@@ -2050,9 +2058,9 @@ const styles = StyleSheet.create({
     backgroundColor: palette.inputFill,
     color: palette.textPrimary,
     textAlign: 'center',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
     fontVariant: ['tabular-nums'],
     minWidth: 0,
     flexShrink: 1,

@@ -169,7 +169,7 @@ function normalizeNumber(value: number | null | undefined): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
-function normalizeSetType(value: string | null | undefined): WorkoutSetType {
+export function normalizeSetType(value: string | null | undefined): WorkoutSetType {
   if (!value) {
     return 'normal';
   }
@@ -1658,6 +1658,53 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
   });
 }
 
+/**
+ * Mirrors the `can_view_user_content` SQL helper. RLS is the real boundary —
+ * this only exists so the app can show an honest message instead of an empty
+ * workout. Keep the two in step: a profile is visible when it is your own,
+ * when it is public, or when it is friends-only and you are friends.
+ */
+async function canViewUserContent(targetUserId: string): Promise<boolean> {
+  const viewer = await getAuthenticatedUserOrThrow();
+
+  if (viewer.id === targetUserId) {
+    return true;
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('visibility')
+    .eq('id', targetUserId)
+    .maybeSingle();
+
+  if (profileError) {
+    throw new Error(`Unable to validate workout access: ${profileError.message}`);
+  }
+
+  const visibility = profile?.visibility ?? 'friends';
+
+  if (visibility === 'public') {
+    return true;
+  }
+
+  if (visibility === 'private') {
+    return false;
+  }
+
+  const { data: friendshipRows, error: friendshipError } = await supabase
+    .from('friends')
+    .select('id')
+    .eq('user_low_id', viewer.id < targetUserId ? viewer.id : targetUserId)
+    .eq('user_high_id', viewer.id < targetUserId ? targetUserId : viewer.id)
+    .limit(1);
+
+  if (friendshipError) {
+    throw new Error(`Unable to validate workout access: ${friendshipError.message}`);
+  }
+
+  return Boolean(friendshipRows && friendshipRows.length > 0);
+}
+
 export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetails> {
   const viewer = await getAuthenticatedUserOrThrow();
   const normalizedWorkoutId = normalizeOptionalId(workoutId);
@@ -1681,19 +1728,9 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
   }
 
   if (workout.user_id !== viewer.id) {
-    const { data: friendshipRows, error: friendshipError } = await supabase
-      .from('friends')
-      .select('id')
-      .or(
-        `and(user_low_id.eq.${viewer.id},user_high_id.eq.${workout.user_id}),and(user_high_id.eq.${viewer.id},user_low_id.eq.${workout.user_id})`
-      )
-      .limit(1);
+    const canView = await canViewUserContent(workout.user_id);
 
-    if (friendshipError) {
-      throw new Error(`Unable to validate workout access: ${friendshipError.message}`);
-    }
-
-    if (!friendshipRows || friendshipRows.length === 0) {
+    if (!canView) {
       throw new Error('You do not have permission to view this workout.');
     }
   }

@@ -16,7 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
-import { startGoogleOAuth } from '@/services/authService';
+import { markTermsAcceptedForOAuth, startGoogleOAuth } from '@/services/authService';
 import { checkUsernameAvailability } from '@/services/profileService';
 import { supabase } from '@/services/supabase';
 
@@ -125,6 +125,8 @@ export default function SignUpScreen() {
             username: normalizedUsername,
             full_name: normalizedDisplayName,
             display_name: normalizedDisplayName,
+            // Consent has to be provable, not just enforced in the UI.
+            terms_accepted_at: new Date().toISOString(),
           },
         },
       });
@@ -151,7 +153,17 @@ export default function SignUpScreen() {
   async function handleGooglePress() {
     setFeedback(null);
 
+    // Google sign-up creates an account just as much as the email form does,
+    // so it has to be gated on the same explicit acceptance.
+    if (!termsAccepted) {
+      setFeedback({ message: t('auth.signUp.termsRequired'), type: 'error' });
+      return;
+    }
+
     try {
+      // Recorded before leaving the app: the callback has no way to know the
+      // user came from sign-up with the box ticked.
+      await markTermsAcceptedForOAuth();
       await startGoogleOAuth();
     } catch (error) {
       const message = error instanceof Error && error.message === 'oauth-cancelled'
@@ -340,11 +352,12 @@ export default function SignUpScreen() {
               <View style={styles.dividerLine} />
             </View>
 
-            <TouchableOpacity 
-              style={styles.googleButton} 
-              onPress={handleGooglePress} 
-              disabled={loading}
+            <TouchableOpacity
+              style={[styles.googleButton, !termsAccepted && styles.googleButtonDisabled]}
+              onPress={handleGooglePress}
+              disabled={loading || !termsAccepted}
               accessibilityRole="button"
+              accessibilityState={{ disabled: loading || !termsAccepted }}
               accessibilityLabel={t('auth.signUp.continueWithGoogle')}
             >
               <AntDesign name="google" size={16} color={palette.textPrimary} />
@@ -521,6 +534,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     columnGap: 10,
+  },
+  googleButtonDisabled: {
+    opacity: 0.45,
   },
   googleButtonText: {
     color: palette.textPrimary,

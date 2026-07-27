@@ -43,6 +43,7 @@ import {
   getPreviousExercisePerformance,
   getRoutineById,
   getWorkoutDetails,
+  orderExercisesByIds,
   type PreviousExercisePerformanceSet,
 } from '@/services/workoutService';
 import { finishWorkout } from '@/services/sessionRepository';
@@ -378,8 +379,7 @@ export default function ActiveWorkout() {
         getExercisesCatalog({ equipment: selectedEquipmentFilter }),
         getRecentExerciseIds(),
       ]);
-      const idSet = new Set(ids);
-      setCatalogExercises(catalog.filter((exercise) => idSet.has(exercise.id)));
+      setCatalogExercises(orderExercisesByIds(catalog, ids));
     } catch (err) {
       setExerciseLoadError(getErrorMessage(err));
     } finally {

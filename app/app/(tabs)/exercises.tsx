@@ -30,7 +30,7 @@ import {
 } from '@/constants/exerciseCatalog';
 import { usePreferences } from '@/context/PreferencesContext';
 import type { Tables } from '@/types/database';
-import { createExercise, getErrorMessage, getExercisesCatalog, getRecentExerciseIds } from '@/services/workoutService';
+import { createExercise, getErrorMessage, getExercisesCatalog, getRecentExerciseIds, orderExercisesByIds } from '@/services/workoutService';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 import { matchesExerciseSearch } from '@/utils/exerciseSearch';
@@ -162,6 +162,15 @@ export default function ExercisesScreen() {
         getDisplayMuscle(exercise)
       );
     });
+
+    if (deferredShowRecentOnly) {
+      return [
+        {
+          title: t('exercise.filterRecent'),
+          data: orderExercisesByIds(filtered, recentExerciseIds),
+        },
+      ];
+    }
 
     const groups = filtered.reduce<Record<string, ExerciseRow[]>>((acc, exercise) => {
       const groupKey = getDisplayMuscle(exercise);

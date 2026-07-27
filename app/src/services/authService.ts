@@ -68,6 +68,19 @@ export async function applyPendingTermsAcceptance(): Promise<void> {
 export async function startGoogleOAuth(): Promise<void> {
   const redirectTo = getGoogleOAuthRedirectTo();
 
+  if (__DEV__) {
+    const message = `OAuth redirectTo:\n${redirectTo}`;
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const confirmed = window.confirm(`${message}\n\nOK = continuar para o Google`);
+      if (!confirmed) {
+        throw new Error('oauth-cancelled');
+      }
+    } else {
+      console.info('[oauth]', message);
+    }
+  }
+
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
@@ -83,8 +96,23 @@ export async function startGoogleOAuth(): Promise<void> {
   if (__DEV__) {
     try {
       const authorizeUrl = new URL(data.url);
-      console.info('[oauth] authorize redirect_to', authorizeUrl.searchParams.get('redirect_to'));
-    } catch {
+      const asked = authorizeUrl.searchParams.get('redirect_to');
+      console.info('[oauth] authorize redirect_to', asked);
+
+      if (
+        Platform.OS === 'web' &&
+        typeof window !== 'undefined' &&
+        asked &&
+        /vercel\.app|lyfttrack\.app/i.test(asked)
+      ) {
+        window.alert(`ERRO: redirect_to ainda e producao:\n${asked}`);
+        throw new Error('oauth-start-failed');
+      }
+    } catch (probeError) {
+      if (probeError instanceof Error && probeError.message === 'oauth-start-failed') {
+        throw probeError;
+      }
+
       console.info('[oauth] authorize url', data.url);
     }
   }

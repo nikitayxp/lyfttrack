@@ -19,6 +19,7 @@ import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
 import { AuthLanguageToggle } from '@/components/auth/AuthLanguageToggle';
 import { markTermsAcceptedForOAuth, startGoogleOAuth } from '@/services/authService';
 import { checkUsernameAvailability } from '@/services/profileService';
+import { loadSignUpDraft, saveSignUpDraft } from '@/services/signUpDraft';
 import { supabase } from '@/services/supabase';
 
 const palette = Colors.dark;
@@ -53,6 +54,28 @@ export default function SignUpScreen() {
   const [usernameChecking, setUsernameChecking] = useState(false);
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   
+  // Coming back from verify can land on a freshly mounted screen — on a cold
+  // start there is no previous screen holding the typed values. Restore them
+  // so "back to sign up" never means "start the form again".
+  useEffect(() => {
+    let isMounted = true;
+
+    void loadSignUpDraft().then((draft) => {
+      if (!isMounted || !draft) {
+        return;
+      }
+
+      // Never clobber something the user is already typing.
+      setDisplayName((current) => (current ? current : draft.displayName));
+      setUsername((current) => (current ? current : draft.username));
+      setEmail((current) => (current ? current : draft.email));
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   // Real-time username check
   useEffect(() => {
     const normalizedUsername = sanitizeUsername(username).slice(0, USERNAME_MAX_LENGTH);
@@ -141,6 +164,14 @@ export default function SignUpScreen() {
         router.replace('/(auth)/onboarding' as any);
         return;
       }
+
+      // Saved before leaving, so returning from verify finds the form as it
+      // was even if this screen did not stay mounted.
+      await saveSignUpDraft({
+        displayName: normalizedDisplayName,
+        username: normalizedUsername,
+        email: normalizedEmail,
+      });
 
       router.push({
         pathname: '/(auth)/verify' as any,

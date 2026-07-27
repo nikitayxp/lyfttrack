@@ -305,7 +305,19 @@ export function getMuscleTranslationKey(value: string | null | undefined): strin
 
 export function getExerciseMuscleTranslationKey(input: ExerciseMuscleInferenceInput): string | null {
   const normalized = resolveExerciseMuscleKey(input);
-  return normalized ? EXERCISE_MUSCLE_TRANSLATION_KEY[normalized] : null;
+  if (normalized) {
+    return EXERCISE_MUSCLE_TRANSLATION_KEY[normalized];
+  }
+
+  // Labels that exist in i18n (exercise.muscles.*) but are not filter keys
+  for (const candidate of [input.muscleGroup, input.muscleEn, input.musclePt]) {
+    if (!candidate) continue;
+    const key = normalizeLookupKey(candidate);
+    if (key === 'arms' || key === 'bracos') return 'exercise.muscles.arms';
+    if (key === 'legs' || key === 'pernas') return 'exercise.muscles.legs';
+  }
+
+  return null;
 }
 
 export function getEquipmentTranslationKey(value: string | null | undefined): string | null {

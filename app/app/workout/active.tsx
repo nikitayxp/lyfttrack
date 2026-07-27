@@ -1111,9 +1111,34 @@ export default function ActiveWorkout() {
                             ) : null}
                           </TouchableOpacity>
 
-                          <Text style={[styles.previousCellText, styles.cellPrevious]} numberOfLines={1}>
-                            {formatPreviousSetLabel(previousSet)}
-                          </Text>
+                          {previousSet ? (
+                            <TouchableOpacity
+                              style={styles.cellPrevious}
+                              activeOpacity={ACTIVE_OPACITY}
+                              onPress={() => {
+                                if (previousSet.weight != null && Number.isFinite(previousSet.weight)) {
+                                  updateSetInput(exercise.id, setItem.id, 'weightInput', String(previousSet.weight));
+                                }
+                                if (previousSet.reps != null && Number.isFinite(previousSet.reps)) {
+                                  updateSetInput(exercise.id, setItem.id, 'repsInput', String(Math.trunc(previousSet.reps)));
+                                }
+                                if (previousSet.rir != null && Number.isFinite(previousSet.rir)) {
+                                  updateSetInput(exercise.id, setItem.id, 'rirInput', String(previousSet.rir));
+                                }
+                              }}
+                              accessibilityRole="button"
+                              accessibilityLabel={t('workout.fillFromPrevious')}
+                              hitSlop={HIT_SLOP}
+                            >
+                              <Text style={styles.previousCellText} numberOfLines={1}>
+                                {formatPreviousSetLabel(previousSet)}
+                              </Text>
+                            </TouchableOpacity>
+                          ) : (
+                            <Text style={[styles.previousCellText, styles.cellPrevious]} numberOfLines={1}>
+                              —
+                            </Text>
+                          )}
 
                           <TextInput
                             accessibilityLabel={t('accessibility.weightInput', { defaultValue: 'Weight' })}
@@ -1995,7 +2020,7 @@ const styles = StyleSheet.create({
   },
   previousCellText: {
     color: palette.textMuted,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     textAlign: 'center',
     fontVariant: ['tabular-nums'],

@@ -305,11 +305,6 @@ export default function WorkoutDetailsScreen() {
                   name: exercise.exercise_name,
                   name_en: exercise.name_en,
                   name_pt: exercise.name_pt,
-                  is_custom: exercise.is_custom,
-                  muscle_group: exercise.muscle_group,
-                  muscle_en: null,
-                  muscle_pt: null,
-                  equipment: exercise.equipment,
                 },
                 language
               );

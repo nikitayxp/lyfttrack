@@ -20,6 +20,7 @@ import {
   scheduleWorkoutDraftSave,
   SCHEMA_VERSION,
 } from '@/services/offlineSyncService';
+import { dedupeExerciseNames, type ExerciseNameSource } from '@/utils/exerciseLocalization';
 
 export type ExerciseRow = Tables<'exercises'>;
 export type SetRow = Tables<'sets'>;
@@ -176,12 +177,17 @@ export function createExerciseBlockFromSets(
   };
 }
 
-export function getCompletedExerciseNames(exercises: ActiveExercise[]): string[] {
+export function getCompletedExerciseNames(exercises: ActiveExercise[]): ExerciseNameSource[] {
   const names = exercises
     .filter((exercise) => exercise.sets.some((setItem) => setItem.completed))
-    .map((exercise) => exercise.exercise.name.trim())
-    .filter((name) => name.length > 0);
-  return [...new Set(names)];
+    .map((exercise) => ({
+      name: exercise.exercise.name.trim(),
+      name_en: exercise.exercise.name_en,
+      name_pt: exercise.exercise.name_pt,
+    }))
+    .filter((exercise) => exercise.name.length > 0);
+
+  return dedupeExerciseNames(names);
 }
 
 // ---------- Draft hydration helpers ----------

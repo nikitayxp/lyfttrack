@@ -11,6 +11,7 @@ import type { Tables, TablesInsert } from '@/types/database';
 import { INPUT_LIMITS, sanitizeText, toSafeInteger, toSafeNumber } from '@/utils/inputValidation';
 import type { WorkoutSetDraft, WorkoutSetProgressDraft, WorkoutSetType } from './workoutSession.types';
 import { countPersonalRecords, type PersonalRecordSetSample } from '@/utils/personalRecords';
+import { dedupeExerciseNames, type ExerciseNameSource } from '@/utils/exerciseLocalization';
 
 export type ExerciseCatalogItem = Tables<'exercises'>;
 export type ExerciseLibraryMuscleFilter = 'all' | ExerciseMuscleKey;
@@ -55,6 +56,8 @@ export type WorkoutHistorySet = {
   rir: number | null;
   set_type: WorkoutSetType;
   exercise_name: string;
+  name_en: string | null;
+  name_pt: string | null;
   muscle_group: string | null;
 };
 
@@ -67,7 +70,7 @@ export type WorkoutHistoryItem = {
   sets: WorkoutHistorySet[];
   totalVolume: number;
   totalSets: number;
-  exerciseNames: string[];
+  exerciseNames: ExerciseNameSource[];
 };
 
 export type WorkoutStats = {
@@ -86,7 +89,7 @@ export type WorkoutFeedItem = Pick<
   totalVolume: number;
   totalSets: number;
   prCount: number | null;
-  exerciseNames: string[];
+  exerciseNames: ExerciseNameSource[];
   exerciseGroups: WorkoutFeedExerciseGroup[];
   likes_count: number;
   comments_count: number;
@@ -101,6 +104,8 @@ export type WorkoutFeedExerciseSet = Pick<Tables<'sets'>, 'id' | 'set_number' | 
 export type WorkoutFeedExerciseGroup = {
   exercise_id: string | null;
   exercise_name: string;
+  name_en: string | null;
+  name_pt: string | null;
   sets: WorkoutFeedExerciseSet[];
 };
 
@@ -272,7 +277,10 @@ type RawWorkoutFeedSetRow = Pick<
   Tables<'sets'>,
   'id' | 'workout_id' | 'exercise_id' | 'set_number' | 'weight' | 'reps' | 'rir' | 'set_type'
 > & {
-  exercises?: Pick<ExerciseCatalogItem, 'id' | 'name'> | Pick<ExerciseCatalogItem, 'id' | 'name'>[] | null;
+  exercises?:
+    | Pick<ExerciseCatalogItem, 'id' | 'name' | 'name_en' | 'name_pt'>
+    | Pick<ExerciseCatalogItem, 'id' | 'name' | 'name_en' | 'name_pt'>[]
+    | null;
 };
 
 type RawExerciseRestTimeRow = Pick<WorkoutExerciseRow, 'exercise_id' | 'rest_time'>;
@@ -409,7 +417,7 @@ function sortWorkoutFeedExerciseSets(a: WorkoutFeedExerciseSet, b: WorkoutFeedEx
 type WorkoutFeedAggregate = {
   totalVolume: number;
   totalSets: number;
-  exerciseNames: string[];
+  exerciseNames: ExerciseNameSource[];
   exerciseGroups: WorkoutFeedExerciseGroup[];
 };
 
@@ -435,6 +443,11 @@ function aggregateWorkoutFeedSets(rows: RawWorkoutFeedSetRow[]): Map<string, Wor
     const groupIndex = groupIndexByWorkout.get(workoutId) ?? new Map<string, number>();
     const exerciseData = resolveEmbeddedObject(row.exercises);
     const normalizedExerciseName = normalizeOptionalText(exerciseData?.name) ?? 'Exercicio';
+    const exerciseNameSource: ExerciseNameSource = {
+      name: normalizedExerciseName,
+      name_en: normalizeOptionalText(exerciseData?.name_en),
+      name_pt: normalizeOptionalText(exerciseData?.name_pt),
+    };
     const normalizedExerciseId = normalizeOptionalId(row.exercise_id);
     const groupKey = `${normalizedExerciseId ?? 'unknown'}:${normalizedExerciseName.toLowerCase()}`;
 
@@ -444,9 +457,7 @@ function aggregateWorkoutFeedSets(rows: RawWorkoutFeedSetRow[]): Map<string, Wor
     aggregate.totalSets += 1;
     aggregate.totalVolume += Math.max(0, weight) * Math.max(0, reps);
 
-    if (!aggregate.exerciseNames.includes(normalizedExerciseName)) {
-      aggregate.exerciseNames.push(normalizedExerciseName);
-    }
+    aggregate.exerciseNames.push(exerciseNameSource);
 
     let groupPosition = groupIndex.get(groupKey);
 
@@ -454,6 +465,8 @@ function aggregateWorkoutFeedSets(rows: RawWorkoutFeedSetRow[]): Map<string, Wor
       aggregate.exerciseGroups.push({
         exercise_id: normalizedExerciseId,
         exercise_name: normalizedExerciseName,
+        name_en: exerciseNameSource.name_en,
+        name_pt: exerciseNameSource.name_pt,
         sets: [],
       });
 
@@ -475,6 +488,8 @@ function aggregateWorkoutFeedSets(rows: RawWorkoutFeedSetRow[]): Map<string, Wor
   }
 
   for (const aggregate of aggregateByWorkout.values()) {
+    aggregate.exerciseNames = dedupeExerciseNames(aggregate.exerciseNames);
+
     for (const group of aggregate.exerciseGroups) {
       group.sets.sort(sortWorkoutFeedExerciseSets);
     }
@@ -1354,7 +1369,7 @@ export async function getWorkoutHistory(limit = 20): Promise<WorkoutHistoryItem[
 
   const { data: allSets, error: setsError } = await supabase
     .from('sets')
-    .select('*, exercises(name, muscle_group)')
+    .select('*, exercises(name, name_en, name_pt, muscle_group)')
     .in('workout_id', workoutIds);
 
   if (setsError) {
@@ -1367,7 +1382,12 @@ export async function getWorkoutHistory(limit = 20): Promise<WorkoutHistoryItem[
     const workoutId = raw.workout_id;
     if (!workoutId) continue;
 
-    const exerciseData = raw.exercises as { name: string; muscle_group: string | null} | null;
+    const exerciseData = raw.exercises as {
+      name: string;
+      name_en: string | null;
+      name_pt: string | null;
+      muscle_group: string | null;
+    } | null;
 
     const set: WorkoutHistorySet = {
       id: raw.id,
@@ -1377,6 +1397,8 @@ export async function getWorkoutHistory(limit = 20): Promise<WorkoutHistoryItem[
       rir: raw.rir,
       set_type: normalizeSetType((raw as { set_type: string | null }).set_type),
       exercise_name: exerciseData?.name ?? 'Unknown',
+      name_en: exerciseData?.name_en ?? null,
+      name_pt: exerciseData?.name_pt ?? null,
       muscle_group: exerciseData?.muscle_group ?? null,
     };
 
@@ -1395,7 +1417,9 @@ export async function getWorkoutHistory(limit = 20): Promise<WorkoutHistoryItem[
       totalVolume += w * r;
     }
 
-    const uniqueExercises = [...new Set(sets.map((s) => s.exercise_name))];
+    const uniqueExercises = dedupeExerciseNames(
+      sets.map((s) => ({ name: s.exercise_name, name_en: s.name_en, name_pt: s.name_pt }))
+    );
 
     return {
       id: workout.id,
@@ -1552,7 +1576,7 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
 
   const { data: allSets, error: setsError } = await supabase
     .from('sets')
-    .select('id, workout_id, exercise_id, set_number, weight, reps, rir, set_type, exercises(id, name)')
+    .select('id, workout_id, exercise_id, set_number, weight, reps, rir, set_type, exercises(id, name, name_en, name_pt)')
     .in('workout_id', workoutIds)
     .order('exercise_id', { ascending: true })
     .order('set_number', { ascending: true })
@@ -2085,7 +2109,7 @@ export async function getUserWorkouts(userId: string, page = 0, limit = 20): Pro
 
   const { data: allSets, error: setsError } = await supabase
     .from('sets')
-    .select('id, workout_id, exercise_id, set_number, weight, reps, rir, set_type, exercises(id, name)')
+    .select('id, workout_id, exercise_id, set_number, weight, reps, rir, set_type, exercises(id, name, name_en, name_pt)')
     .in('workout_id', workoutIds)
     .order('exercise_id', { ascending: true })
     .order('set_number', { ascending: true })

@@ -40,8 +40,10 @@ import {
   getExercisesCatalog,
   getLastExerciseRestTimes,
   getRecentExerciseIds,
+  getPreviousExercisePerformance,
   getRoutineById,
   getWorkoutDetails,
+  type PreviousExercisePerformanceSet,
 } from '@/services/workoutService';
 import { finishWorkout } from '@/services/sessionRepository';
 import { getTemplateById } from '@/services/templateService';
@@ -78,6 +80,7 @@ import {
   type ExerciseNameSource,
 } from '@/utils/exerciseLocalization';
 import { matchesExerciseSearch } from '@/utils/exerciseSearch';
+import { formatPreviousSetLabel, previousSetForRow } from '@/utils/previousPerformance';
 
 const palette = Colors.dark;
 const DESKTOP_WEB_MIN_WIDTH = 768;
@@ -268,9 +271,62 @@ export default function ActiveWorkout() {
   const [pendingDeleteSet, setPendingDeleteSet] = useState<{ exerciseId: string; setId: string; setNumber: number } | null>(null);
   const [isDiscardConfirmVisible, setIsDiscardConfirmVisible] = useState(false);
   const [isDiscardingWorkout, setIsDiscardingWorkout] = useState(false);
+  const [previousPerformanceByExerciseId, setPreviousPerformanceByExerciseId] = useState<
+    Record<string, PreviousExercisePerformanceSet[]>
+  >({});
   const exerciseCatalogByFilterRef = useRef<Map<string, ExerciseRow[]>>(new Map());
 
   const timerLabel = useMemo(() => formatElapsedTime(elapsedSeconds), [elapsedSeconds]);
+
+  const activeExerciseIds = useMemo(
+    () => activeExercises.map((exercise) => exercise.exercise.id).filter(Boolean),
+    [activeExercises]
+  );
+
+  // Keyed by exercise id so the fetch only runs for exercises we have not seen
+  // yet — re-ordering or adding sets must not re-query.
+  useEffect(() => {
+    const missingIds = activeExerciseIds.filter((id) => !(id in previousPerformanceByExerciseId));
+
+    if (missingIds.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      const entries = await Promise.all(
+        missingIds.map(async (exerciseId) => {
+          try {
+            const sets = await getPreviousExercisePerformance(exerciseId, null);
+            return [exerciseId, sets] as const;
+          } catch {
+            // A missing previous reference is not an error worth surfacing —
+            // the column simply stays empty.
+            return [exerciseId, [] as PreviousExercisePerformanceSet[]] as const;
+          }
+        })
+      );
+
+      if (cancelled) {
+        return;
+      }
+
+      setPreviousPerformanceByExerciseId((current) => {
+        const next = { ...current };
+
+        for (const [exerciseId, sets] of entries) {
+          next[exerciseId] = sets;
+        }
+
+        return next;
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeExerciseIds, previousPerformanceByExerciseId]);
 
   const loadExercises = useCallback(async (filters: ExerciseCatalogFilters, forceRefresh = false) => {
     const cacheKey = buildCatalogCacheKey(filters);
@@ -980,6 +1036,7 @@ export default function ActiveWorkout() {
 
                   <View style={[styles.tableRow, styles.tableHeaderRow]}>
                     <Text style={[styles.headerLabel, styles.cellSet]}>{t('workout.setHeader')}</Text>
+                    <Text style={[styles.headerLabel, styles.cellPrevious]}>{t('workout.previousHeader')}</Text>
                     <Text style={[styles.headerLabel, styles.cellKg]}>kg</Text>
                     <Text style={[styles.headerLabel, styles.cellReps]}>{t('workout.repsHeader')}</Text>
                     <Text style={[styles.headerLabel, styles.cellRir]}>{t('workout.rirHeader')}</Text>
@@ -988,7 +1045,12 @@ export default function ActiveWorkout() {
                     </View>
                   </View>
 
-                  {exercise.sets.map((setItem) => {
+                  {exercise.sets.map((setItem, setRowIndex) => {
+                    const previousSet = previousSetForRow(
+                      previousPerformanceByExerciseId[exercise.exercise.id],
+                      setItem.set_number,
+                      setRowIndex
+                    );
                     const setTypeLabel =
                       setItem.set_type === 'warmup' ? 'W'
                       : setItem.set_type === 'drop' ? 'D'
@@ -1048,6 +1110,10 @@ export default function ActiveWorkout() {
                               <Text style={[styles.setSideBadge, { color: setTypeColor }]}>{setTypeLabel}</Text>
                             ) : null}
                           </TouchableOpacity>
+
+                          <Text style={[styles.previousCellText, styles.cellPrevious]} numberOfLines={1}>
+                            {formatPreviousSetLabel(previousSet)}
+                          </Text>
 
                           <TextInput
                             accessibilityLabel={t('accessibility.weightInput', { defaultValue: 'Weight' })}
@@ -1922,6 +1988,17 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.08)',
     fontSize: 13,
     lineHeight: 18,
+  },
+  cellPrevious: {
+    flex: 1.1,
+    minWidth: 52,
+  },
+  previousCellText: {
+    color: palette.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+    fontVariant: ['tabular-nums'],
   },
   cellKg: {
     flex: 1.2,

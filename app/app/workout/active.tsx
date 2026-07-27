@@ -80,7 +80,7 @@ import {
   type ExerciseNameSource,
 } from '@/utils/exerciseLocalization';
 import { matchesExerciseSearch } from '@/utils/exerciseSearch';
-import { formatPreviousSetLabel, previousSetForRow } from '@/utils/previousPerformance';
+import { formatPreviousSetLabel, previousColumnWidthForSets, previousLabelFontSize, previousSetForRow } from '@/utils/previousPerformance';
 
 const palette = Colors.dark;
 const DESKTOP_WEB_MIN_WIDTH = 768;
@@ -930,6 +930,11 @@ export default function ActiveWorkout() {
             activeExercises.map((exercise, exerciseIndex) => {
               const exerciseStopwatchSeconds = getExerciseStopwatchSeconds(exercise.id);
               const isExerciseStopwatchActive = isExerciseStopwatchRunning(exercise.id);
+              const previousColumnWidth = previousColumnWidthForSets(
+                previousPerformanceByExerciseId[exercise.exercise.id],
+                exercise.sets.length,
+                exercise.sets.map((entry) => entry.set_number)
+              );
 
               return (
                 <View key={exercise.id} style={styles.exerciseCard}>
@@ -1036,7 +1041,15 @@ export default function ActiveWorkout() {
 
                   <View style={[styles.tableRow, styles.tableHeaderRow]}>
                     <Text style={[styles.headerLabel, styles.cellSet]}>{t('workout.setHeader')}</Text>
-                    <Text style={[styles.headerLabel, styles.cellPrevious]}>{t('workout.previousHeader')}</Text>
+                    <Text
+                      style={[
+                        styles.headerLabel,
+                        styles.cellPrevious,
+                        { width: previousColumnWidth },
+                      ]}
+                    >
+                      {t('workout.previousHeader')}
+                    </Text>
                     <Text style={[styles.headerLabel, styles.cellKg]}>kg</Text>
                     <Text style={[styles.headerLabel, styles.cellReps]}>{t('workout.repsHeader')}</Text>
                     <Text style={[styles.headerLabel, styles.cellRir]}>{t('workout.rirHeader')}</Text>
@@ -1051,6 +1064,7 @@ export default function ActiveWorkout() {
                       setItem.set_number,
                       setRowIndex
                     );
+                    const previousLabel = formatPreviousSetLabel(previousSet);
                     const setTypeLabel =
                       setItem.set_type === 'warmup' ? 'W'
                       : setItem.set_type === 'drop' ? 'D'
@@ -1111,9 +1125,44 @@ export default function ActiveWorkout() {
                             ) : null}
                           </TouchableOpacity>
 
-                          <Text style={[styles.previousCellText, styles.cellPrevious]} numberOfLines={1}>
-                            {formatPreviousSetLabel(previousSet)}
-                          </Text>
+                          {previousSet ? (
+                            <TouchableOpacity
+                              style={[styles.cellPrevious, { width: previousColumnWidth }]}
+                              activeOpacity={ACTIVE_OPACITY}
+                              onPress={() => {
+                                if (previousSet.weight != null && Number.isFinite(previousSet.weight)) {
+                                  updateSetInput(exercise.id, setItem.id, 'weightInput', String(previousSet.weight));
+                                }
+                                if (previousSet.reps != null && Number.isFinite(previousSet.reps)) {
+                                  updateSetInput(exercise.id, setItem.id, 'repsInput', String(Math.trunc(previousSet.reps)));
+                                }
+                                if (previousSet.rir != null && Number.isFinite(previousSet.rir)) {
+                                  updateSetInput(exercise.id, setItem.id, 'rirInput', String(previousSet.rir));
+                                }
+                              }}
+                              accessibilityRole="button"
+                              accessibilityLabel={t('workout.fillFromPrevious')}
+                              hitSlop={HIT_SLOP}
+                            >
+                              <Text
+                                style={[styles.previousCellText, { fontSize: previousLabelFontSize(previousLabel) }]}
+                                numberOfLines={1}
+                              >
+                                {previousLabel}
+                              </Text>
+                            </TouchableOpacity>
+                          ) : (
+                            <Text
+                              style={[
+                                styles.previousCellText,
+                                styles.cellPrevious,
+                                { width: previousColumnWidth, fontSize: previousLabelFontSize('—') },
+                              ]}
+                              numberOfLines={1}
+                            >
+                              —
+                            </Text>
+                          )}
 
                           <TextInput
                             accessibilityLabel={t('accessibility.weightInput', { defaultValue: 'Weight' })}
@@ -1899,8 +1948,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 7,
-    paddingHorizontal: 4,
-    columnGap: 6,
+    paddingHorizontal: 2,
+    columnGap: 4,
     borderBottomWidth: 1,
     borderBottomColor: palette.rowSeparator,
     minWidth: 0,
@@ -1990,31 +2039,34 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   cellPrevious: {
-    flex: 1.1,
-    minWidth: 52,
+    flexGrow: 0,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   previousCellText: {
     color: palette.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '700',
     textAlign: 'center',
     fontVariant: ['tabular-nums'],
   },
   cellKg: {
-    flex: 1.2,
-    minWidth: 58,
+    flex: 1.15,
+    minWidth: 52,
   },
   kgInput: {
-    flex: 1.2,
-    minWidth: 58,
+    flex: 1.15,
+    minWidth: 52,
   },
   cellReps: {
-    flex: 1,
-    minWidth: 44,
+    flex: 0.95,
+    minWidth: 40,
   },
   cellRir: {
-    flex: 1,
-    minWidth: 44,
+    flex: 0.95,
+    minWidth: 40,
   },
   numericInput: {
     flex: 1,
@@ -2025,9 +2077,9 @@ const styles = StyleSheet.create({
     backgroundColor: palette.inputFill,
     color: palette.textPrimary,
     textAlign: 'center',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
     fontVariant: ['tabular-nums'],
     minWidth: 0,
     flexShrink: 1,

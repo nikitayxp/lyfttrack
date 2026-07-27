@@ -17,6 +17,7 @@ import {
   countPersonalRecords,
   isRecordSet,
   mergePersonalBest,
+  summarizePersonalBest,
   type PersonalBest,
   type PersonalRecordSetSample,
 } from '@/utils/personalRecords';
@@ -1505,6 +1506,74 @@ export async function getPreviousExercisePerformance(
     rir: setRow.rir,
     setType: normalizeSetType(setRow.set_type),
   }));
+}
+
+/**
+ * All-time best weight and estimated 1RM per exercise, across every finished
+ * workout except the one in progress.
+ *
+ * Deliberately not built on getPreviousExercisePerformance: that returns only
+ * the most recent session with the exercise, so beating it is not the same as
+ * setting a record. Using it for a live "PR" hint would contradict the count on
+ * the finish screen, which compares against the whole history.
+ */
+export async function getExercisePersonalBests(
+  exerciseIds: string[],
+  currentWorkoutId: string | null
+): Promise<Record<string, PersonalBest>> {
+  const user = await getAuthenticatedUserOrThrow();
+  const normalizedIds = [...new Set(exerciseIds.map((id) => normalizeOptionalId(id)).filter(Boolean))] as string[];
+
+  if (normalizedIds.length === 0) {
+    return {};
+  }
+
+  const priorWorkoutsQuery = supabase
+    .from('workouts')
+    .select('id')
+    .eq('user_id', user.id)
+    .not('end_time', 'is', null);
+
+  const normalizedCurrentWorkoutId = normalizeOptionalId(currentWorkoutId);
+
+  if (normalizedCurrentWorkoutId) {
+    priorWorkoutsQuery.neq('id', normalizedCurrentWorkoutId);
+  }
+
+  const { data: priorWorkouts, error: priorWorkoutsError } = await priorWorkoutsQuery;
+
+  if (priorWorkoutsError || !priorWorkouts || priorWorkouts.length === 0) {
+    return {};
+  }
+
+  const { data: previousSets, error: previousSetsError } = await supabase
+    .from('sets')
+    .select('exercise_id, weight, reps')
+    .in('workout_id', priorWorkouts.map((workout) => workout.id))
+    .in('exercise_id', normalizedIds);
+
+  if (previousSetsError || !previousSets) {
+    return {};
+  }
+
+  const samplesByExerciseId = new Map<string, PersonalRecordSetSample[]>();
+
+  for (const row of previousSets) {
+    const exerciseId = row.exercise_id ?? '';
+    if (!exerciseId) continue;
+
+    const current = samplesByExerciseId.get(exerciseId) ?? [];
+    current.push({ exerciseId, weight: row.weight, reps: row.reps });
+    samplesByExerciseId.set(exerciseId, current);
+  }
+
+  const bests: Record<string, PersonalBest> = {};
+
+  for (const [exerciseId, samples] of samplesByExerciseId) {
+    bests[exerciseId] = summarizePersonalBest(samples);
+  }
+
+  return bests;
 }
 
 async function getFeedParticipantIds(userId: string): Promise<string[]> {

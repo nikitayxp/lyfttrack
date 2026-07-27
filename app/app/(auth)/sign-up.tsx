@@ -17,9 +17,13 @@ import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
 import { AuthFeedback, type AuthFeedbackValue } from '@/components/auth/AuthFeedback';
+import { AuthLanguageToggle } from '@/components/auth/AuthLanguageToggle';
+import { PasswordRequirements } from '@/components/auth/PasswordRequirements';
 import { markTermsAcceptedForOAuth, startGoogleOAuth } from '@/services/authService';
 import { checkUsernameAvailability } from '@/services/profileService';
+import { loadSignUpDraft, saveSignUpDraft } from '@/services/signUpDraft';
 import { supabase } from '@/services/supabase';
+import { PASSWORD_MIN_LENGTH, isPasswordStrong } from '@/utils/passwordRules';
 
 const palette = Colors.dark;
 const USERNAME_MAX_LENGTH = 24;
@@ -48,11 +52,34 @@ export default function SignUpScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [feedback, setFeedback] = useState<AuthFeedbackValue | null>(null);
   const [usernameChecking, setUsernameChecking] = useState(false);
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   
+  // Coming back from verify can land on a freshly mounted screen — on a cold
+  // start there is no previous screen holding the typed values. Restore them
+  // so "back to sign up" never means "start the form again".
+  useEffect(() => {
+    let isMounted = true;
+
+    void loadSignUpDraft().then((draft) => {
+      if (!isMounted || !draft) {
+        return;
+      }
+
+      // Never clobber something the user is already typing.
+      setDisplayName((current) => (current ? current : draft.displayName));
+      setUsername((current) => (current ? current : draft.username));
+      setEmail((current) => (current ? current : draft.email));
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   // Real-time username check
   useEffect(() => {
     const normalizedUsername = sanitizeUsername(username).slice(0, USERNAME_MAX_LENGTH);
@@ -96,12 +123,12 @@ export default function SignUpScreen() {
     }
 
     if (usernameAvailable === false) {
-      setFeedback({ message: t('auth.signUp.usernameTaken', { defaultValue: 'Username is already taken' }), type: 'error' });
+      setFeedback({ message: t('auth.signUp.usernameTakenStatus', { defaultValue: 'Username is already taken' }), type: 'error' });
       return;
     }
 
-    if (password.length < 6) {
-      setFeedback({ message: t('auth.signUp.passwordTooShort'), type: 'error' });
+    if (!isPasswordStrong(password)) {
+      setFeedback({ message: t('auth.signUp.passwordTooWeak', { min: PASSWORD_MIN_LENGTH }), type: 'error' });
       return;
     }
 
@@ -141,6 +168,14 @@ export default function SignUpScreen() {
         router.replace('/(auth)/onboarding' as any);
         return;
       }
+
+      // Saved before leaving, so returning from verify finds the form as it
+      // was even if this screen did not stay mounted.
+      await saveSignUpDraft({
+        displayName: normalizedDisplayName,
+        username: normalizedUsername,
+        email: normalizedEmail,
+      });
 
       router.push({
         pathname: '/(auth)/verify' as any,
@@ -186,9 +221,12 @@ export default function SignUpScreen() {
         >
         <View style={styles.container}>
           <View style={styles.header}>
-            <View style={styles.logoRow}>
-              <Text style={styles.logoLyft}>Lyft</Text>
-              <Text style={styles.logoTrack}>Track</Text>
+            <View style={styles.topRow}>
+              <View style={styles.logoRow}>
+                <Text style={styles.logoLyft}>Lyft</Text>
+                <Text style={styles.logoTrack}>Track</Text>
+              </View>
+              <AuthLanguageToggle />
             </View>
             <Text style={styles.title}>{t('auth.signUp.title')}</Text>
             <Text style={styles.subtitle}>{t('auth.signUp.subtitle')}</Text>
@@ -210,17 +248,9 @@ export default function SignUpScreen() {
               />
             </View>
 
-            <View style={[styles.labelRow]}>
-              <Text style={styles.label}>{t('auth.signUp.usernameLabel')}</Text>
-              {usernameChecking ? (
-                <ActivityIndicator size="small" color={palette.accent} style={{ transform: [{ scale: 0.6 }] }} />
-              ) : usernameAvailable === true ? (
-                <Text style={styles.usernameAvailableText}>{t('auth.signUp.usernameAvailable', { defaultValue: 'Available' })}</Text>
-              ) : usernameAvailable === false ? (
-                <Text style={styles.usernameTakenText}>{t('auth.signUp.usernameTaken', { defaultValue: 'Taken' })}</Text>
-              ) : null}
-            </View>
+            <Text style={styles.label}>{t('auth.signUp.usernameLabel')}</Text>
             <View style={[styles.inputLine, usernameAvailable === false && styles.inputLineError]}>
+              <Text style={styles.usernamePrefix}>@</Text>
               <TextInput
                 accessibilityLabel={t('auth.signUp.usernameLabel')}
                 value={username}
@@ -232,6 +262,33 @@ export default function SignUpScreen() {
                 style={styles.inputField}
                 maxLength={USERNAME_MAX_LENGTH}
               />
+              {/* Inside the field, not above it: the status has to read as
+                  belonging to this input and no other. */}
+              <View style={styles.usernameStatus} accessibilityLiveRegion="polite">
+                {usernameChecking ? (
+                  <ActivityIndicator size="small" color={palette.accent} style={styles.usernameSpinner} />
+                ) : usernameAvailable === true ? (
+                  <>
+                    <Ionicons name="checkmark-circle" size={15} color={palette.success} />
+                    <Text
+                      style={styles.usernameAvailableText}
+                      accessibilityLabel={t('auth.signUp.usernameAvailableStatus', { defaultValue: 'Username available' })}
+                    >
+                      {t('auth.signUp.usernameAvailable', { defaultValue: 'Available' })}
+                    </Text>
+                  </>
+                ) : usernameAvailable === false ? (
+                  <>
+                    <Ionicons name="close-circle" size={15} color={palette.error} />
+                    <Text
+                      style={styles.usernameTakenText}
+                      accessibilityLabel={t('auth.signUp.usernameTakenStatus', { defaultValue: 'Username already taken' })}
+                    >
+                      {t('auth.signUp.usernameTaken', { defaultValue: 'Taken' })}
+                    </Text>
+                  </>
+                ) : null}
+              </View>
             </View>
 
             <Text style={styles.label}>{t('auth.signUp.emailLabel')}</Text>
@@ -255,6 +312,7 @@ export default function SignUpScreen() {
                 accessibilityLabel={t('auth.signUp.passwordLabel')}
                 value={password}
                 onChangeText={setPassword}
+                onFocus={() => setPasswordFocused(true)}
                 placeholder={t('auth.signUp.passwordPlaceholder')}
                 placeholderTextColor={palette.textMuted}
                 secureTextEntry={!showPassword}
@@ -271,6 +329,12 @@ export default function SignUpScreen() {
                 <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={19} color={palette.icon} />
               </TouchableOpacity>
             </View>
+
+            {/* Only once there is something to judge: an empty form should not
+                open with a list of things you have already failed. */}
+            {passwordFocused || password.length > 0 ? (
+              <PasswordRequirements password={password} />
+            ) : null}
 
             <Text style={styles.label}>{t('auth.signUp.confirmPasswordLabel')}</Text>
             <View style={styles.inputLine}>
@@ -387,6 +451,12 @@ const styles = StyleSheet.create({
   },
   header: {
     rowGap: Spacing.xs,
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    columnGap: Spacing.md,
   },
   logoRow: {
     flexDirection: 'row',
@@ -560,10 +630,20 @@ const styles = StyleSheet.create({
   primaryButtonDisabled: {
     opacity: 0.45,
   },
-  labelRow: {
+  usernamePrefix: {
+    color: palette.textMuted,
+    fontSize: 15,
+    fontWeight: '700',
+    marginRight: 1,
+  },
+  usernameStatus: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    columnGap: 4,
+    paddingLeft: Spacing.sm,
+  },
+  usernameSpinner: {
+    transform: [{ scale: 0.7 }],
   },
   usernameAvailableText: {
     color: palette.success,

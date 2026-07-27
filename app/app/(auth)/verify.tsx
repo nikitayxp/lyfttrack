@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius, Spacing, Typography } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
+import { clearSignUpDraft } from '@/services/signUpDraft';
 import { supabase } from '@/services/supabase';
 
 const palette = Colors.dark;
@@ -61,6 +62,20 @@ export default function VerifyScreen() {
     } catch {
       // noop
     }
+
+    // The account exists now, so the half-finished form is dead weight.
+    await clearSignUpDraft();
+  }
+
+  function handleBackToSignUp() {
+    // Reaching verify by reopening the app leaves nothing on the stack, and
+    // router.back() there is a silent no-op — the button looked broken.
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace('/(auth)/sign-up' as any);
   }
 
   async function handleVerify() {
@@ -156,7 +171,7 @@ export default function VerifyScreen() {
 
             <TouchableOpacity
               style={styles.switchAction}
-              onPress={() => router.back()}
+              onPress={handleBackToSignUp}
               disabled={loading}
               activeOpacity={ACTIVE_OPACITY}
               accessibilityRole="button"

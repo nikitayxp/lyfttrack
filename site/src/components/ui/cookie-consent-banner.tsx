@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from 'react';
+import { startTransition, useCallback, useEffect, useState } from 'react';
 import {
   ACCEPT_ALL,
   ESSENTIAL_ONLY,
@@ -53,12 +53,17 @@ export function CookieConsentBanner() {
   useEffect(() => {
     const stored = readStoredConsent();
 
-    if (stored) {
-      setDraft(stored.preferences);
-      return;
-    }
+    // startTransition keeps this off the synchronous post-mount path, which is
+    // what react-hooks/set-state-in-effect asks for. The original banner did
+    // the same for the same reason.
+    startTransition(() => {
+      if (stored) {
+        setDraft(stored.preferences);
+        return;
+      }
 
-    setIsBannerVisible(true);
+      setIsBannerVisible(true);
+    });
   }, []);
 
   // Lets the footer reopen preferences so a decision can be withdrawn later.

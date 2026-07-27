@@ -17,10 +17,12 @@ import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
 import { AuthLanguageToggle } from '@/components/auth/AuthLanguageToggle';
+import { PasswordRequirements } from '@/components/auth/PasswordRequirements';
 import { markTermsAcceptedForOAuth, startGoogleOAuth } from '@/services/authService';
 import { checkUsernameAvailability } from '@/services/profileService';
 import { loadSignUpDraft, saveSignUpDraft } from '@/services/signUpDraft';
 import { supabase } from '@/services/supabase';
+import { PASSWORD_MIN_LENGTH, isPasswordStrong } from '@/utils/passwordRules';
 
 const palette = Colors.dark;
 const USERNAME_MAX_LENGTH = 24;
@@ -49,6 +51,7 @@ export default function SignUpScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [feedback, setFeedback] = useState<{ message: string; type: 'error' | 'success' | 'info' } | null>(null);
   const [usernameChecking, setUsernameChecking] = useState(false);
@@ -123,8 +126,8 @@ export default function SignUpScreen() {
       return;
     }
 
-    if (password.length < 6) {
-      setFeedback({ message: t('auth.signUp.passwordTooShort'), type: 'error' });
+    if (!isPasswordStrong(password)) {
+      setFeedback({ message: t('auth.signUp.passwordTooWeak', { min: PASSWORD_MIN_LENGTH }), type: 'error' });
       return;
     }
 
@@ -322,6 +325,7 @@ export default function SignUpScreen() {
                 accessibilityLabel={t('auth.signUp.passwordLabel')}
                 value={password}
                 onChangeText={setPassword}
+                onFocus={() => setPasswordFocused(true)}
                 placeholder={t('auth.signUp.passwordPlaceholder')}
                 placeholderTextColor={palette.textMuted}
                 secureTextEntry={!showPassword}
@@ -338,6 +342,12 @@ export default function SignUpScreen() {
                 <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={19} color={palette.icon} />
               </TouchableOpacity>
             </View>
+
+            {/* Only once there is something to judge: an empty form should not
+                open with a list of things you have already failed. */}
+            {passwordFocused || password.length > 0 ? (
+              <PasswordRequirements password={password} />
+            ) : null}
 
             <Text style={styles.label}>{t('auth.signUp.confirmPasswordLabel')}</Text>
             <View style={styles.inputLine}>

@@ -52,6 +52,7 @@ import {
   getExercisesCatalog,
   getRecentExerciseIds,
   getRoutines,
+  orderExercisesByIds,
   type RoutineSummary,
 } from '@/services/workoutService';
 import type { Tables } from '@/types/database';
@@ -188,6 +189,10 @@ export default function WorkoutScreen() {
       );
     });
 
+    if (deferredShowRecentOnly) {
+      return [[t('exercise.filterRecent'), orderExercisesByIds(filtered, recentExerciseIds)] as const];
+    }
+
     const groups = filtered.reduce<Record<string, ExerciseRow[]>>((acc, exercise) => {
       const groupKey = getDisplayMuscle(exercise);
 
@@ -207,6 +212,7 @@ export default function WorkoutScreen() {
     getDisplayMuscle,
     recentExerciseIds,
     deferredShowRecentOnly,
+    t,
   ]);
 
   useEffect(() => {

@@ -59,17 +59,17 @@ function bestEstimatedOneRepMax(sets: PersonalRecordSetSample[]): number {
 }
 
 /**
- * Count exercises that set a personal record in `currentSets` vs `previousSets`.
+ * Which exercises set a personal record in `currentSets` vs `previousSets`.
  * First-ever performance of an exercise does NOT count as a PR.
  * A PR is heaviest weight OR better estimated 1RM (covers rep PRs at similar load).
  */
-export function countPersonalRecords(
+export function findPersonalRecordExerciseIds(
   currentSets: PersonalRecordSetSample[],
   previousSets: PersonalRecordSetSample[]
-): number {
+): string[] {
   const currentByExercise = groupByExercise(currentSets);
   const previousByExercise = groupByExercise(previousSets);
-  let prCount = 0;
+  const recordExerciseIds: string[] = [];
 
   for (const [exerciseId, currentExerciseSets] of currentByExercise) {
     const previousExerciseSets = previousByExercise.get(exerciseId);
@@ -82,7 +82,7 @@ export function countPersonalRecords(
     const previousWeight = bestWeightKg(previousExerciseSets);
 
     if (currentWeight > previousWeight && currentWeight > 0) {
-      prCount += 1;
+      recordExerciseIds.push(exerciseId);
       continue;
     }
 
@@ -90,11 +90,22 @@ export function countPersonalRecords(
     const previousE1rm = bestEstimatedOneRepMax(previousExerciseSets);
 
     if (currentE1rm > previousE1rm && currentE1rm > 0) {
-      prCount += 1;
+      recordExerciseIds.push(exerciseId);
     }
   }
 
-  return prCount;
+  return recordExerciseIds;
+}
+
+/**
+ * Kept as the count-only view of the same answer, so the number shown on a card
+ * and the exercises marked on the summary can never disagree.
+ */
+export function countPersonalRecords(
+  currentSets: PersonalRecordSetSample[],
+  previousSets: PersonalRecordSetSample[]
+): number {
+  return findPersonalRecordExerciseIds(currentSets, previousSets).length;
 }
 
 // ponytail: one runnable check
@@ -108,4 +119,8 @@ if (typeof __DEV__ !== 'undefined' && __DEV__) {
   console.assert(countPersonalRecords(moreReps, prev) === 1, 'more reps is PR via e1rm');
   console.assert(countPersonalRecords(firstTime, prev) === 0, 'first exercise is not PR');
   console.assert(countPersonalRecords(prev, []) === 0, 'no history is not PR');
+  console.assert(
+    findPersonalRecordExerciseIds(heavier, prev).join() === 'squat',
+    'names the exercise that set the record'
+  );
 }

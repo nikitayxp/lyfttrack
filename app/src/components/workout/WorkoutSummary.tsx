@@ -12,8 +12,10 @@ import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
+import { PrBadge } from '@/components/common/PrBadge';
 import { usePreferences } from '@/context/PreferencesContext';
-import { getLocalizedExerciseName, type ExerciseNameSource } from '@/utils/exerciseLocalization';
+import type { SummaryExercise } from '@/hooks/useActiveWorkoutState';
+import { getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 
 const palette = Colors.dark;
 
@@ -22,7 +24,8 @@ type WorkoutSummaryProps = {
   durationSeconds: number;
   prCount: number;
   completedSetCount: number;
-  exerciseNames: ExerciseNameSource[];
+  exerciseNames: SummaryExercise[];
+  prExerciseIds?: string[];
   onShareAndFinish: () => void;
 };
 
@@ -45,10 +48,12 @@ export function WorkoutSummary({
   prCount,
   completedSetCount,
   exerciseNames,
+  prExerciseIds,
   onShareAndFinish,
 }: WorkoutSummaryProps) {
   const { t } = useTranslation();
   const { language } = usePreferences();
+  const prExerciseIdSet = new Set(prExerciseIds ?? []);
   const isWeb = Platform.OS === 'web';
   const modalAnimationType: 'fade' | 'slide' = isWeb ? 'fade' : 'slide';
 
@@ -95,11 +100,23 @@ export function WorkoutSummary({
               ) : (
                 exerciseNames.map((exercise, index) => {
                   const localizedName = getLocalizedExerciseName(exercise, language);
+                  const hasRecord = prExerciseIdSet.has(exercise.exerciseId);
 
                   return (
-                    <View key={`${localizedName}-${index}`} style={styles.exerciseRow}>
-                      <Ionicons name="barbell-outline" size={16} color={palette.textMuted} />
-                      <Text style={styles.exerciseName}>{localizedName}</Text>
+                    <View
+                      key={`${localizedName}-${index}`}
+                      style={[styles.exerciseRow, hasRecord && styles.exerciseRowRecord]}
+                    >
+                      <Ionicons
+                        name="barbell-outline"
+                        size={16}
+                        color={hasRecord ? palette.warningText : palette.textMuted}
+                      />
+                      <Text style={[styles.exerciseName, hasRecord && styles.exerciseNameRecord]}>
+                        {localizedName}
+                      </Text>
+                      {/* The count card says how many records; this says which. */}
+                      {hasRecord ? <PrBadge count={1} compact /> : null}
                     </View>
                   );
                 })
@@ -247,11 +264,18 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     marginBottom: 8,
   },
+  exerciseRowRecord: {
+    borderColor: 'rgba(251, 191, 36, 0.42)',
+    backgroundColor: 'rgba(251, 191, 36, 0.08)',
+  },
   exerciseName: {
     flex: 1,
     color: '#F1F5F9',
     fontSize: 14.5,
     fontWeight: '700',
+  },
+  exerciseNameRecord: {
+    color: palette.warningText,
   },
   ctaWrap: {
     borderTopWidth: 1,

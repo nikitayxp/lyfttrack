@@ -349,22 +349,55 @@ export default function ExerciseDetailScreen() {
             history.slice(0, 20).map((entry) => (
               <TouchableOpacity
                 key={entry.workoutId}
-                style={styles.historyRow}
+                style={styles.historyCard}
                 activeOpacity={ACTIVE_OPACITY}
                 onPress={() => router.push(`/workout/${entry.workoutId}` as any)}
               >
-                <View style={styles.historyTextWrap}>
-                  <Text style={styles.historyName}>{entry.workoutName}</Text>
-                  <Text style={styles.historyMeta}>
-                    {entry.date} {' \u2022 '} {t('exercise.detail.sets', { count: entry.sets })}
-                  </Text>
+                <View style={styles.historyHeaderRow}>
+                  <View style={styles.historyTextWrap}>
+                    <Text style={styles.historyName}>{entry.workoutName}</Text>
+                    <Text style={styles.historyMeta}>
+                      {entry.date} {' \u2022 '} {t('exercise.detail.workingSets', { count: entry.workingSetCount })}
+                    </Text>
+                  </View>
+                  {entry.bestSet ? (
+                    <Text style={styles.historyBest}>
+                      {t('exercise.detail.bestSet', {
+                        weight: formatNumericValue(entry.bestSet.weight),
+                        reps: entry.bestSet.reps,
+                      })}
+                    </Text>
+                  ) : null}
+                  <Ionicons name="chevron-forward" size={16} color="#475569" />
                 </View>
-                {entry.bestWeight > 0 ? (
-                  <Text style={styles.historyBest}>
-                    {t('exercise.detail.bestSet', { weight: formatNumericValue(entry.bestWeight), reps: entry.bestReps })}
-                  </Text>
+
+                {entry.sets.length > 0 ? (
+                  <View style={styles.historySetsWrap}>
+                    {entry.sets.map((setItem, setIndex) => (
+                      <View key={`${entry.workoutId}-${setItem.setNumber ?? setIndex}`} style={styles.historySetRow}>
+                        <Text style={styles.historySetNumber}>{setItem.setNumber ?? setIndex + 1}</Text>
+
+                        {setItem.setType === 'warmup' ? (
+                          <View style={styles.historySetTypeChip}>
+                            <Text style={styles.historySetTypeChipText}>{t('workoutDetails.setTypeWarmup')}</Text>
+                          </View>
+                        ) : null}
+
+                        <Text style={styles.historySetLoad}>
+                          {`${formatNumericValue(setItem.weight)} kg \u00d7 ${setItem.reps}`}
+                        </Text>
+
+                        <Text style={styles.historySetRir}>
+                          {`${t('workoutDetails.tableRir')} ${
+                            setItem.setType === 'warmup' || setItem.rir === null
+                              ? '\u2014'
+                              : formatNumericValue(setItem.rir)
+                          }`}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
                 ) : null}
-                <Ionicons name="chevron-forward" size={16} color="#475569" />
               </TouchableOpacity>
             ))
           )}
@@ -559,9 +592,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontVariant: ['tabular-nums'],
   },
-  historyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  historyCard: {
     borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.inputFill,
@@ -570,9 +601,59 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     marginBottom: 6,
   },
+  historyHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   historyTextWrap: {
     flex: 1,
     paddingRight: 8,
+  },
+  historySetsWrap: {
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: palette.inputFill,
+    paddingTop: 6,
+    rowGap: 2,
+  },
+  historySetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 8,
+    minHeight: 22,
+  },
+  historySetNumber: {
+    width: 18,
+    color: '#8FA2BA',
+    fontSize: 12,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  historySetTypeChip: {
+    borderRadius: Radius.button,
+    borderWidth: 1,
+    borderColor: palette.inputFill,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+  historySetTypeChipText: {
+    color: '#8FA2BA',
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  historySetLoad: {
+    flex: 1,
+    color: palette.textPrimary,
+    fontSize: 13,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+  },
+  historySetRir: {
+    color: '#8FA2BA',
+    fontSize: 12,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
   },
   historyName: {
     color: palette.textPrimary,

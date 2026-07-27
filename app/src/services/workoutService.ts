@@ -12,7 +12,14 @@ import {
 import type { Tables, TablesInsert } from '@/types/database';
 import { INPUT_LIMITS, sanitizeText, toSafeInteger, toSafeNumber } from '@/utils/inputValidation';
 import type { WorkoutSetDraft, WorkoutSetProgressDraft, WorkoutSetType } from './workoutSession.types';
-import { countPersonalRecords, type PersonalRecordSetSample } from '@/utils/personalRecords';
+import {
+  EMPTY_PERSONAL_BEST,
+  countPersonalRecords,
+  isRecordSet,
+  mergePersonalBest,
+  type PersonalBest,
+  type PersonalRecordSetSample,
+} from '@/utils/personalRecords';
 import { dedupeExerciseNames, type ExerciseNameSource } from '@/utils/exerciseLocalization';
 
 export type ExerciseCatalogItem = Tables<'exercises'>;
@@ -156,6 +163,8 @@ export type WorkoutDetails = Pick<
   totalVolume: number;
   totalSets: number;
   prCount: number;
+  /** Ids of the sets that set the records counted in prCount. */
+  recordSetIds: string[];
   durationSeconds: number;
   heaviestWeight: number | null;
   bestEstimated1RM: number | null;
@@ -2026,6 +2035,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
   }
 
   let prCount = 0;
+  let recordSetIds: string[] = [];
   try {
     const currentSamples: PersonalRecordSetSample[] = detailsExercises.flatMap((exercise) =>
       exercise.sets.map((setItem) => ({
@@ -2056,14 +2066,46 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
           )
           .in('exercise_id', exerciseIds);
 
-        prCount = countPersonalRecords(
-          currentSamples,
-          (previousSets ?? []).map((row) => ({
-            exerciseId: row.exercise_id ?? '',
-            weight: row.weight,
-            reps: row.reps,
-          }))
-        );
+        const previousSamples = (previousSets ?? []).map((row) => ({
+          exerciseId: row.exercise_id ?? '',
+          weight: row.weight,
+          reps: row.reps,
+        }));
+
+        prCount = countPersonalRecords(currentSamples, previousSamples);
+
+        // Naming the set, not just counting it.
+        //
+        // At most one set per exercise is credited, because prCount counts one
+        // record per exercise: marking two sets under a card that says 1 would
+        // be the same contradiction in a different place. Of the sets that beat
+        // the stored best, the strongest is the one credited — the trophy
+        // belongs on the best lift of the session, not on whichever set edged
+        // past the old number first.
+        const bestByExerciseId = new Map<string, PersonalBest>();
+
+        for (const sample of previousSamples) {
+          bestByExerciseId.set(
+            sample.exerciseId,
+            mergePersonalBest(bestByExerciseId.get(sample.exerciseId) ?? EMPTY_PERSONAL_BEST, sample)
+          );
+        }
+
+        for (const exercise of detailsExercises) {
+          const previousBest = bestByExerciseId.get(exercise.exercise_id) ?? EMPTY_PERSONAL_BEST;
+
+          const recordSet = exercise.sets
+            .filter((setItem) => isRecordSet(setItem, previousBest))
+            .sort((left, right) => {
+              const byWeight = (right.weight ?? 0) - (left.weight ?? 0);
+              if (byWeight !== 0) return byWeight;
+              return (right.reps ?? 0) - (left.reps ?? 0);
+            })[0];
+
+          if (recordSet) {
+            recordSetIds.push(recordSet.id);
+          }
+        }
       }
     }
   } catch {
@@ -2083,6 +2125,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
     totalSets: allSets.length,
     prCount,
     durationSeconds: workout.end_time ? calculateDurationSeconds(workout.start_time, workout.end_time) : 0,
+    recordSetIds,
     heaviestWeight: hasWeight ? Number(heaviestWeight.toFixed(1)) : null,
     bestEstimated1RM: hasEstimated1RM ? Number(bestEstimated1RM.toFixed(1)) : null,
   };

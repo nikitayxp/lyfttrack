@@ -125,6 +125,8 @@ export default function SignUpScreen() {
             username: normalizedUsername,
             full_name: normalizedDisplayName,
             display_name: normalizedDisplayName,
+            // Consent has to be provable, not just enforced in the UI.
+            terms_accepted_at: new Date().toISOString(),
           },
         },
       });
@@ -150,6 +152,13 @@ export default function SignUpScreen() {
 
   async function handleGooglePress() {
     setFeedback(null);
+
+    // Google sign-up creates an account just as much as the email form does,
+    // so it has to be gated on the same explicit acceptance.
+    if (!termsAccepted) {
+      setFeedback({ message: t('auth.signUp.termsRequired'), type: 'error' });
+      return;
+    }
 
     try {
       await startGoogleOAuth();
@@ -340,11 +349,12 @@ export default function SignUpScreen() {
               <View style={styles.dividerLine} />
             </View>
 
-            <TouchableOpacity 
-              style={styles.googleButton} 
-              onPress={handleGooglePress} 
-              disabled={loading}
+            <TouchableOpacity
+              style={[styles.googleButton, !termsAccepted && styles.googleButtonDisabled]}
+              onPress={handleGooglePress}
+              disabled={loading || !termsAccepted}
               accessibilityRole="button"
+              accessibilityState={{ disabled: loading || !termsAccepted }}
               accessibilityLabel={t('auth.signUp.continueWithGoogle')}
             >
               <AntDesign name="google" size={16} color={palette.textPrimary} />
@@ -521,6 +531,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     columnGap: 10,
+  },
+  googleButtonDisabled: {
+    opacity: 0.45,
   },
   googleButtonText: {
     color: palette.textPrimary,

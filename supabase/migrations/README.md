@@ -20,7 +20,7 @@ This directory is now the SQL migration source tracked in git for LyftTrack.
    - Adds atomic RPC `respond_to_friend_request(uuid, text)` for accept/reject flow.
    - Adds profile trigger to keep profiles.updated_at synchronized on updates.
 
-4. 20260727_public_profile_visibility.sql
+4. 20260727090000_public_profile_visibility.sql
    - Adds `can_view_user_content(uuid)` helper and rewrites the SELECT policies for
      workouts, workout_exercises, sets, workout_likes and workout_comments to use it.
    - Makes `profiles.visibility = 'public'` actually grant read access; previously the

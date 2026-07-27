@@ -24,8 +24,12 @@ import {
   type WorkoutDetails,
   type WorkoutSetType,
 } from '@/services/workoutService';
+import {
+  getEquipmentTranslationKey,
+  getExerciseMuscleTranslationKey,
+} from '@/constants/exerciseCatalog';
 import { formatRelativeTime } from '@/utils/dateUtils';
-import { getLocalizedExerciseName } from '@/utils/exerciseLocalization';
+import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 
 const palette = Colors.dark;
 const SCREEN_BG = palette.bgPrimary;
@@ -308,6 +312,26 @@ export default function WorkoutDetailsScreen() {
                 },
                 language
               );
+              const muscleKey = getExerciseMuscleTranslationKey({
+                muscleGroup: exercise.muscle_group,
+                name: exercise.exercise_name,
+                nameEn: exercise.name_en,
+                namePt: exercise.name_pt,
+              });
+              const muscleLabel = muscleKey
+                ? t(muscleKey)
+                : getLocalizedExerciseMuscle(
+                    {
+                      muscle_group: exercise.muscle_group,
+                      muscle_en: null,
+                      muscle_pt: null,
+                    },
+                    language
+                  ) ?? t('exercise.general');
+              const equipmentKey = getEquipmentTranslationKey(exercise.equipment);
+              const equipmentLabel = equipmentKey
+                ? t(equipmentKey)
+                : exercise.equipment ?? t('exercise.equipment.bodyweight');
 
               return (
               <View key={`${exercise.id ?? exercise.exercise_id}-${exercise.order}`} style={styles.exerciseCard}>
@@ -328,7 +352,7 @@ export default function WorkoutDetailsScreen() {
                   <View style={styles.exerciseHeaderText}>
                     <Text style={styles.exerciseName}>{localizedName}</Text>
                     <Text style={styles.exerciseMeta}>
-                      {(exercise.muscle_group ?? t('exercise.general')) + ' - ' + (exercise.equipment ?? t('exercise.bodyweight'))}
+                      {muscleLabel} - {equipmentLabel}
                     </Text>
                   </View>
                 </TouchableOpacity>

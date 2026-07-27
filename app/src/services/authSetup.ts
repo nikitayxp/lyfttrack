@@ -1,8 +1,8 @@
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/services/supabase';
 
-/** Accounts created before this ship date are not forced through the new setup screens. */
-export const AUTH_SETUP_LEGACY_BEFORE = '2026-07-28T00:00:00.000Z';
+/** Accounts created before this ship window are not forced through the new setup screens. */
+export const AUTH_SETUP_LEGACY_BEFORE = '2026-07-27T00:00:00.000Z';
 
 export function isGoogleAuthUser(user: User): boolean {
   const providers = user.app_metadata?.providers;

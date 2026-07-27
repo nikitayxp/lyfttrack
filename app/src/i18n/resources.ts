@@ -536,6 +536,7 @@ export const resources = {
         browseAthletes: 'Browse',
         commentPublishError: 'Unable to publish comment',
         likeUpdateError: 'Unable to update like',
+        showMoreExercises: 'See more ({{count}})',
         metrics: {
           sets: 'Sets',
           records: 'Records',
@@ -1217,6 +1218,7 @@ export const resources = {
         browseAthletes: 'Ver lista',
         commentPublishError: 'Nao foi possivel publicar o comentario',
         likeUpdateError: 'Nao foi possivel atualizar o gosto',
+        showMoreExercises: 'Ver mais ({{count}})',
         metrics: {
           sets: 'Series',
           records: 'Recordes',

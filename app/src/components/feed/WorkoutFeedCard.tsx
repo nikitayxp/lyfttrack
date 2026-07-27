@@ -11,6 +11,7 @@ import { getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 
 const palette = Colors.dark;
 const CARD_BG = palette.surface;
+const EXERCISE_PREVIEW_LIMIT = 3;
 
 type WorkoutFeedCardProps = {
   workout: WorkoutFeedItem;
@@ -83,6 +84,11 @@ export function WorkoutFeedCard({
     getLocalizedExerciseName(exercise, language)
   );
 
+  // A card is a summary, not a table of contents: a long session should not
+  // push the like and comment buttons off the bottom of the screen.
+  const previewExerciseNames = localizedExerciseNames.slice(0, EXERCISE_PREVIEW_LIMIT);
+  const hiddenExerciseCount = localizedExerciseNames.length - previewExerciseNames.length;
+
   const resolvedLikeCount = likeCount ?? workout.likes_count;
   const resolvedCommentsCount = commentsCount ?? workout.comments_count;
   const resolvedHasLiked = hasLiked ?? workout.has_liked;
@@ -146,9 +152,27 @@ export function WorkoutFeedCard({
 
         {localizedExerciseNames.length > 0 ? (
           <View style={styles.exercisePreviewWrap}>
-            <Text style={styles.exercisePreviewText} numberOfLines={2}>
-              {localizedExerciseNames.join(' • ')}
-            </Text>
+            {previewExerciseNames.map((name, index) => (
+              <View key={`${name}-${index}`} style={styles.exercisePreviewRow}>
+                <View style={styles.exerciseBullet} />
+                <Text style={styles.exercisePreviewText} numberOfLines={1}>
+                  {name}
+                </Text>
+              </View>
+            ))}
+
+            {/* Text rather than its own TouchableOpacity: the whole card is
+                already the button that opens the workout, and nesting one
+                pressable in another renders a <button> inside a <button> on
+                web, which is invalid and warns about hydration. */}
+            {hiddenExerciseCount > 0 ? (
+              <View style={styles.showMoreRow}>
+                <Text style={styles.showMoreText}>
+                  {t('feed.showMoreExercises', { count: hiddenExerciseCount })}
+                </Text>
+                <Ionicons name="chevron-forward" size={13} color={palette.accent} />
+              </View>
+            ) : null}
           </View>
         ) : null}
       </TouchableOpacity>
@@ -482,11 +506,37 @@ const styles = StyleSheet.create({
   exercisePreviewWrap: {
     marginTop: 8,
     paddingHorizontal: 4,
+    rowGap: 4,
+  },
+  exercisePreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 8,
+  },
+  exerciseBullet: {
+    width: 3,
+    height: 3,
+    borderRadius: 999,
+    backgroundColor: palette.textMuted,
+    flexShrink: 0,
   },
   exercisePreviewText: {
+    flex: 1,
     color: palette.textSecondary,
     fontSize: 12,
     lineHeight: 18,
+  },
+  showMoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 2,
+    marginTop: 2,
+    alignSelf: 'flex-start',
+  },
+  showMoreText: {
+    color: palette.accent,
+    fontSize: 12,
+    fontWeight: '700',
   },
   latestCommentWrap: {
     marginTop: 8,

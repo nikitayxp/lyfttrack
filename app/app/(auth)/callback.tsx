@@ -38,6 +38,33 @@ function buildCallbackUrl(params: Record<string, string | string[] | undefined>)
   return Linking.createURL('callback', { queryParams });
 }
 
+/** Web OAuth may return PKCE `?code=` or implicit `#access_token=` / `#refresh_token=`. */
+function readBrowserOAuthParams(): {
+  error: string;
+  code: string;
+  accessToken: string;
+  refreshToken: string;
+} {
+  if (typeof window === 'undefined' || !window.location) {
+    return { error: '', code: '', accessToken: '', refreshToken: '' };
+  }
+
+  const url = new URL(window.location.href);
+  const hash = new URLSearchParams(url.hash.startsWith('#') ? url.hash.slice(1) : url.hash);
+
+  return {
+    error:
+      url.searchParams.get('error_description') ||
+      url.searchParams.get('error') ||
+      hash.get('error_description') ||
+      hash.get('error') ||
+      '',
+    code: url.searchParams.get('code') || '',
+    accessToken: hash.get('access_token') || '',
+    refreshToken: hash.get('refresh_token') || '',
+  };
+}
+
 export default function OAuthCallbackScreen() {
   const { t } = useTranslation();
   const params = useLocalSearchParams<Record<string, string | string[]>>();
@@ -50,7 +77,9 @@ export default function OAuthCallbackScreen() {
     let cancelled = false;
 
     const exchangeSession = async () => {
-      const errorDescription = readRouteValue(params.error_description) || readRouteValue(params.error);
+      const browser = readBrowserOAuthParams();
+      const errorDescription =
+        browser.error || readRouteValue(params.error_description) || readRouteValue(params.error);
 
       if (errorDescription) {
         if (!cancelled) {
@@ -60,17 +89,50 @@ export default function OAuthCallbackScreen() {
         return;
       }
 
-      const code = readRouteValue(params.code);
-
-      if (!code) {
-        if (!cancelled) {
-          setIsError(true);
-          setMessage(t('auth.callback.missingCode'));
-        }
-        return;
-      }
-
       try {
+        // Production currently returns the implicit hash form.
+        if (browser.accessToken && browser.refreshToken) {
+          const { error } = await supabase.auth.setSession({
+            access_token: browser.accessToken,
+            refresh_token: browser.refreshToken,
+          });
+
+          if (cancelled) {
+            return;
+          }
+
+          if (error) {
+            console.warn('[auth-callback] setSession from hash failed', error);
+            setIsError(true);
+            setMessage(t('auth.callback.errorDescription'));
+            return;
+          }
+
+          await applyPendingTermsAcceptance();
+
+          if (cancelled) {
+            return;
+          }
+
+          if (typeof window !== 'undefined' && window.history?.replaceState && window.location?.pathname) {
+            // Drop tokens from the address bar so a refresh does not re-ingest them.
+            window.history.replaceState({}, '', window.location.pathname);
+          }
+
+          router.replace('/(tabs)/workout' as any);
+          return;
+        }
+
+        const code = browser.code || readRouteValue(params.code);
+
+        if (!code) {
+          if (!cancelled) {
+            setIsError(true);
+            setMessage(t('auth.callback.missingCode'));
+          }
+          return;
+        }
+
         const { error } = await supabase.auth.exchangeCodeForSession(callbackUrl);
 
         if (cancelled) {
@@ -90,6 +152,10 @@ export default function OAuthCallbackScreen() {
 
         if (cancelled) {
           return;
+        }
+
+        if (typeof window !== 'undefined' && window.history?.replaceState && window.location?.pathname) {
+          window.history.replaceState({}, '', window.location.pathname);
         }
 
         router.replace('/(tabs)/workout' as any);

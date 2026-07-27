@@ -225,6 +225,15 @@ export const resources = {
         termsOfServiceSubtitle: 'Read the terms that apply to LyftTrack',
         privacyPolicy: 'Privacy Policy',
         privacyPolicySubtitle: 'How we handle your personal data',
+        dangerZoneTitle: 'Danger zone',
+        deleteAccountAction: 'Delete account',
+        deleteAccountDescription:
+          'Permanently deletes your account and all your data: workouts, sets, routines, measurements, profile, likes and comments. This cannot be undone.',
+        deleteAccountConfirmTitle: 'Delete your account?',
+        deleteAccountConfirmDescription:
+          'Everything is removed for good and cannot be recovered. You will be signed out immediately.',
+        deleteAccountConfirmWord: 'delete',
+        deleteAccountTypePrompt: 'Type "{{word}}" to confirm',
       },
       workout: {
         title: 'Workout',
@@ -884,6 +893,15 @@ export const resources = {
         termsOfServiceSubtitle: 'Ler os termos que se aplicam ao LyftTrack',
         privacyPolicy: 'Politica de Privacidade',
         privacyPolicySubtitle: 'Como tratamos os teus dados pessoais',
+        dangerZoneTitle: 'Zona de perigo',
+        deleteAccountAction: 'Eliminar conta',
+        deleteAccountDescription:
+          'Elimina permanentemente a tua conta e todos os teus dados: treinos, series, rotinas, medicoes, perfil, gostos e comentarios. Esta accao nao pode ser revertida.',
+        deleteAccountConfirmTitle: 'Eliminar a tua conta?',
+        deleteAccountConfirmDescription:
+          'Fica tudo apagado de forma definitiva e sem recuperacao possivel. A sessao termina de imediato.',
+        deleteAccountConfirmWord: 'eliminar',
+        deleteAccountTypePrompt: 'Escreve "{{word}}" para confirmar',
       },
       workout: {
         title: 'Treino',

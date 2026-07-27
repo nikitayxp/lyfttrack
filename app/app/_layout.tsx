@@ -13,6 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
 import { Colors } from '@/constants/theme';
 import { applyPendingTermsAcceptance } from '@/services/authService';
+import { needsOptionalOnboarding, needsUsernameReview } from '@/services/authSetup';
 import { supabase } from '@/services/supabase';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import NeuralBackground from '@/components/ui/flow-field-background';
@@ -190,6 +191,8 @@ export default function RootLayout() {
   const isOAuthCallbackRoute = rootSegment === 'callback' || childSegment === 'callback';
   const isResetPasswordRoute = inAuthGroup && childSegment === 'reset-password';
   const isVerifyEmailChangeRoute = inAuthGroup && childSegment === 'verify-email-change';
+  const isCompleteProfileRoute = inAuthGroup && childSegment === 'complete-profile';
+  const isOnboardingRoute = inAuthGroup && childSegment === 'onboarding';
   const isLegalRoute = rootSegment === 'legal';
   const isAuthLikeRoute = inAuthGroup || isOAuthCallbackRoute;
   const safeAreaStyle = isWeb ? styles.safeAreaWeb : styles.safeArea;
@@ -311,7 +314,25 @@ export default function RootLayout() {
     }
 
     if (session) {
-      if (isAuthLikeRoute && !isResetPasswordRoute && !isVerifyEmailChangeRoute) {
+      if (isOAuthCallbackRoute || isResetPasswordRoute || isVerifyEmailChangeRoute) {
+        return;
+      }
+
+      if (needsUsernameReview(session.user)) {
+        if (!isCompleteProfileRoute) {
+          router.replace('/(auth)/complete-profile' as any);
+        }
+        return;
+      }
+
+      if (needsOptionalOnboarding(session.user)) {
+        if (!isOnboardingRoute) {
+          router.replace('/(auth)/onboarding' as any);
+        }
+        return;
+      }
+
+      if (isAuthLikeRoute) {
         router.replace(AUTHENTICATED_HOME_ROUTE as any);
       }
 
@@ -324,7 +345,10 @@ export default function RootLayout() {
   }, [
     isAuthBootstrapPending,
     isAuthLikeRoute,
+    isCompleteProfileRoute,
     isLegalRoute,
+    isOAuthCallbackRoute,
+    isOnboardingRoute,
     isResetPasswordRoute,
     isVerifyEmailChangeRoute,
     session,

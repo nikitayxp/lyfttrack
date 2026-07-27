@@ -27,6 +27,15 @@ This directory is now the SQL migration source tracked in git for LyftTrack.
      column was never consulted by any policy, so public behaved like friends-only.
    - Backfills NULL visibility to 'friends' and sets that as the column default.
 
+5. 20260727091000_delete_own_account.sql
+   - Adds `delete_own_account()` RPC so a user can delete their own account.
+   - Removes every row keyed to that user across workouts, sets, routines, templates,
+     measurements, social graph and profile, then the auth.users row last.
+   - Custom exercises are removed only when nothing still references them (sets,
+     workout_exercises, template_exercises or routine_exercises).
+   - Stored avatars are removed client-side before the RPC runs, while the session
+     is still valid.
+
 ## Rollout notes
 
 - Apply first in staging and validate app flows:

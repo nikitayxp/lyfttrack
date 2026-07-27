@@ -69,16 +69,7 @@ export async function startGoogleOAuth(): Promise<void> {
   const redirectTo = getGoogleOAuthRedirectTo();
 
   if (__DEV__) {
-    const message = `OAuth redirectTo:\n${redirectTo}`;
-
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const confirmed = window.confirm(`${message}\n\nOK = continuar para o Google`);
-      if (!confirmed) {
-        throw new Error('oauth-cancelled');
-      }
-    } else {
-      console.info('[oauth]', message);
-    }
+    console.info('[oauth] startGoogleOAuth redirectTo', redirectTo);
   }
 
   const { data, error } = await supabase.auth.signInWithOAuth({
@@ -99,11 +90,15 @@ export async function startGoogleOAuth(): Promise<void> {
       const asked = authorizeUrl.searchParams.get('redirect_to');
       console.info('[oauth] authorize redirect_to', asked);
 
+      // Production bounce with ?lan_return= is intentional for Tailscale/Wi-Fi IPs.
+      const isLanBounce = Boolean(asked && /[?&]lan_return=/.test(asked));
+
       if (
         Platform.OS === 'web' &&
         typeof window !== 'undefined' &&
         asked &&
-        /vercel\.app|lyfttrack\.app/i.test(asked)
+        /vercel\.app|lyfttrack\.app/i.test(asked) &&
+        !isLanBounce
       ) {
         window.alert(`ERRO: redirect_to ainda e producao:\n${asked}`);
         throw new Error('oauth-start-failed');

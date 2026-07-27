@@ -4,6 +4,7 @@ import { ActivityIndicator, Image, StyleSheet, Text, TouchableOpacity, View } fr
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
+import { PrBadge } from '@/components/common/PrBadge';
 import { usePreferences } from '@/context/PreferencesContext';
 import type { WorkoutFeedItem } from '@/services/workoutService';
 import { formatRelativeTime } from '@/utils/dateUtils';
@@ -41,11 +42,6 @@ function formatDuration(startIso: string, endIso: string | null): string {
   const minutes = totalMinutes % 60;
 
   return `${hours}h ${minutes}m`;
-}
-
-function formatRecords(value: number | null | undefined): string {
-  if (value === null || value === undefined) return '0';
-  return `${value}`;
 }
 
 function profileDisplayName(workout: WorkoutFeedItem, fallbackLabel: string): string {
@@ -118,9 +114,13 @@ export function WorkoutFeedCard({
             </View>
           </View>
 
-          <View style={styles.durationChip}>
-            <Ionicons name="time-outline" size={13} color={palette.accent} />
-            <Text style={styles.durationText}>{formatDuration(workout.start_time, workout.end_time)}</Text>
+          <View style={styles.headerChips}>
+            <PrBadge count={workout.prCount} />
+
+            <View style={styles.durationChip}>
+              <Ionicons name="time-outline" size={13} color={palette.accent} />
+              <Text style={styles.durationText}>{formatDuration(workout.start_time, workout.end_time)}</Text>
+            </View>
           </View>
         </View>
 
@@ -131,11 +131,6 @@ export function WorkoutFeedCard({
           <View style={styles.metricBlock}>
             <Text style={styles.metricValue}>{workout.totalSets}</Text>
             <Text style={styles.metricLabel}>{t('feed.metrics.sets')}</Text>
-          </View>
-          <View style={styles.metricDivider} />
-          <View style={styles.metricBlock}>
-            <Text style={styles.metricValue}>{formatRecords(workout.prCount)}</Text>
-            <Text style={styles.metricLabel}>{t('feed.metrics.records')}</Text>
           </View>
           <View style={styles.metricDivider} />
           <View style={styles.metricBlock}>
@@ -275,6 +270,11 @@ const styles = StyleSheet.create({
     color: palette.textSecondary,
     fontSize: 10,
     fontWeight: '700',
+  },
+  headerChips: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 6,
   },
   durationChip: {
     flexDirection: 'row',

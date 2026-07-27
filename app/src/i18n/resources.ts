@@ -539,6 +539,8 @@ export const resources = {
         metrics: {
           sets: 'Sets',
           records: 'Records',
+          recordsBadge_one: '{{count}} personal record',
+          recordsBadge_other: '{{count}} personal records',
           exercises: 'Exercises',
         },
         comments: {
@@ -1220,6 +1222,8 @@ export const resources = {
         metrics: {
           sets: 'Series',
           records: 'Recordes',
+          recordsBadge_one: '{{count}} recorde pessoal',
+          recordsBadge_other: '{{count}} recordes pessoais',
           exercises: 'Exercicios',
         },
         comments: {

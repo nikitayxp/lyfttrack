@@ -22,8 +22,18 @@ const aliasMap: Record<string, string> = {
   'supino halter': 'Dumbbell_Bench_Press',
   'supino com halter': 'Dumbbell_Bench_Press',
   'supino com halteres': 'Dumbbell_Bench_Press',
+  // Rosca Scott / Preacher Curl variants (#33). The machine variant reuses the
+  // barbell image because free-exercise-db has no machine-specific entry.
   'rosca scott': 'Preacher_Curl',
+  'rosca scott barra': 'Preacher_Curl',
+  'rosca scott com barra': 'Preacher_Curl',
+  'preacher curl barbell': 'Preacher_Curl',
   'rosca scott halter': 'Preacher_Hammer_Dumbbell_Curl',
+  'rosca scott com halter': 'Preacher_Hammer_Dumbbell_Curl',
+  'preacher curl dumbbell': 'Preacher_Hammer_Dumbbell_Curl',
+  'dumbbell preacher curl': 'Preacher_Hammer_Dumbbell_Curl',
+  'rosca scott maquina': 'Preacher_Curl',
+  'preacher curl machine': 'Preacher_Curl',
   'extensao de triceps unilateral': 'Cable_One_Arm_Tricep_Extension',
   'extensao de triceps unilateral cabo': 'Cable_One_Arm_Tricep_Extension',
   'extensao de triceps acima da cabeca': 'Cable_Rope_Overhead_Triceps_Extension',

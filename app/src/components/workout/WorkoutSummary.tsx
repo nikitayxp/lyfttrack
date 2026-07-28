@@ -22,6 +22,7 @@ type WorkoutSummaryProps = {
   durationSeconds: number;
   prCount: number;
   completedSetCount: number;
+  completedWorkingSetCount: number;
   exerciseNames: ExerciseNameSource[];
   onShareAndFinish: () => void;
 };
@@ -44,11 +45,12 @@ export function WorkoutSummary({
   durationSeconds,
   prCount,
   completedSetCount,
+  completedWorkingSetCount,
   exerciseNames,
   onShareAndFinish,
 }: WorkoutSummaryProps) {
   const { t } = useTranslation();
-  const { language } = usePreferences();
+  const { language, countWorkingSetsOnly } = usePreferences();
   const isWeb = Platform.OS === 'web';
   const modalAnimationType: 'fade' | 'slide' = isWeb ? 'fade' : 'slide';
 
@@ -78,7 +80,9 @@ export function WorkoutSummary({
 
               <View style={styles.metricCard}>
                 <Text style={styles.metricLabel}>{t('workout.summarySetsLabel')}</Text>
-                <Text style={styles.metricValue}>{completedSetCount}</Text>
+                <Text style={styles.metricValue}>
+                  {countWorkingSetsOnly ? completedWorkingSetCount : completedSetCount}
+                </Text>
               </View>
 
               <View style={styles.metricCard}>

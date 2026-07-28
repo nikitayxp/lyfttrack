@@ -68,16 +68,51 @@ export async function applyPendingTermsAcceptance(): Promise<void> {
 export async function startGoogleOAuth(): Promise<void> {
   const redirectTo = getGoogleOAuthRedirectTo();
 
+  if (__DEV__) {
+    console.info('[oauth] startGoogleOAuth redirectTo', redirectTo);
+  }
+
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
       redirectTo,
       skipBrowserRedirect: true,
+      queryParams: {
+        prompt: 'select_account',
+      },
     },
   });
 
   if (error || !data?.url) {
     throw new Error('oauth-start-failed');
+  }
+
+  if (__DEV__) {
+    try {
+      const authorizeUrl = new URL(data.url);
+      const asked = authorizeUrl.searchParams.get('redirect_to');
+      console.info('[oauth] authorize redirect_to', asked);
+
+      // Production bounce with ?lan_return= is intentional for Tailscale/Wi-Fi IPs.
+      const isLanBounce = Boolean(asked && /[?&]lan_return=/.test(asked));
+
+      if (
+        Platform.OS === 'web' &&
+        typeof window !== 'undefined' &&
+        asked &&
+        /vercel\.app|lyfttrack\.app/i.test(asked) &&
+        !isLanBounce
+      ) {
+        window.alert(`ERRO: redirect_to ainda e producao:\n${asked}`);
+        throw new Error('oauth-start-failed');
+      }
+    } catch (probeError) {
+      if (probeError instanceof Error && probeError.message === 'oauth-start-failed') {
+        throw probeError;
+      }
+
+      console.info('[oauth] authorize url', data.url);
+    }
   }
 
   if (Platform.OS === 'web') {

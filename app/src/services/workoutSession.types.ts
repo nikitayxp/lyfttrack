@@ -48,11 +48,15 @@ export type FinishWorkoutResult = {
   workoutId: string;
   insertedSetCount: number;
   completedSetCount: number;
+  /** Completed sets excluding warm-ups, for the "working sets only" preference. */
+  completedWorkingSetCount: number;
   totalVolume: number;
   durationSeconds: number;
   startTime: string;
   endTime: string;
   prCount: number;
+  /** Exercises that set the records counted in prCount, so the summary can say which. */
+  prExerciseIds: string[];
 };
 
 export type WorkoutSaveValidationCode = 'no-completed-sets' | 'no-valid-set-rows';

@@ -3,6 +3,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 import { Database } from '@/types/database';
+import {
+  buildLanOAuthBounceRedirectTo,
+  isIpHostname,
+  isLoopbackHostname,
+} from '@/services/oauthLanReturn';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -86,13 +91,41 @@ export function getEmailChangeRedirectTo(): string {
 export function getGoogleOAuthRedirectTo(): string {
   if (Platform.OS === 'web') {
     if (typeof window !== 'undefined' && window.location?.origin) {
-      return `${removeTrailingSlashes(window.location.origin)}${GOOGLE_OAUTH_CALLBACK_PATH}`;
+      const origin = removeTrailingSlashes(window.location.origin);
+      const lanCallback = `${origin}${GOOGLE_OAUTH_CALLBACK_PATH}`;
+      const hostname = window.location.hostname;
+
+      // GoTrue rejects non-loopback IP redirects → Site URL. Bounce via HTTPS host.
+      if (__DEV__ && isIpHostname(hostname) && !isLoopbackHostname(hostname)) {
+        const redirectTo = buildLanOAuthBounceRedirectTo(resolveAuthWebBaseUrl(), lanCallback);
+        console.info('[oauth] Google redirectTo (web LAN bounce)', redirectTo);
+        return redirectTo;
+      }
+
+      if (__DEV__) {
+        console.info('[oauth] Google redirectTo (web)', lanCallback);
+      }
+
+      return lanCallback;
+    }
+
+    // Never fall back to production Site URL while developing — that is #69.
+    if (__DEV__) {
+      const redirectTo = `http://localhost:8081${GOOGLE_OAUTH_CALLBACK_PATH}`;
+      console.info('[oauth] Google redirectTo (web fallback)', redirectTo);
+      return redirectTo;
     }
 
     return `${resolveAuthWebBaseUrl()}${GOOGLE_OAUTH_CALLBACK_PATH}`;
   }
 
-  return Linking.createURL('callback');
+  const redirectTo = Linking.createURL('callback');
+
+  if (__DEV__) {
+    console.info('[oauth] Google redirectTo (native)', redirectTo);
+  }
+
+  return redirectTo;
 }
 
 function createAuthStorage(): SupabaseStorage | undefined {

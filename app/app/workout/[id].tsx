@@ -111,12 +111,14 @@ function initialsFromName(value: string): string {
 
 export default function WorkoutDetailsScreen() {
   const { t } = useTranslation();
-  const { language } = usePreferences();
+  const { language, countWorkingSetsOnly } = usePreferences();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
 
   const workoutId = useMemo(() => resolveRouteWorkoutId(params.id), [params.id]);
 
   const [details, setDetails] = useState<WorkoutDetails | null>(null);
+  const recordSetIds = useMemo(() => new Set(details?.recordSetIds ?? []), [details]);
+  const hasRecords = (details?.prCount ?? 0) > 0;
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -256,23 +258,24 @@ export default function WorkoutDetailsScreen() {
 
               <View style={styles.statCard}>
                 <Text style={styles.statLabel}>{t('workoutDetails.setsLabel')}</Text>
-                <Text style={styles.statValue}>{details.totalSets}</Text>
+                <Text style={styles.statValue}>
+                  {countWorkingSetsOnly ? details.workingSets : details.totalSets}
+                </Text>
               </View>
 
               <View style={styles.statCard}>
-                <Text style={styles.statLabel}>{t('workoutDetails.recordsLabel')}</Text>
-                <Text style={styles.statValue}>{details.prCount}</Text>
+                {/* The trophy replaces the word: it is the same thing the set
+                    rows are marked with, so the card and the rows read as one
+                    idea instead of two. */}
+                <Ionicons
+                  name="trophy"
+                  size={13}
+                  color={hasRecords ? palette.warningText : palette.textMuted}
+                  accessibilityLabel={t('workoutDetails.recordsLabel')}
+                />
+                <Text style={[styles.statValue, hasRecords && styles.statValueRecord]}>{details.prCount}</Text>
               </View>
             </View>
-
-            {details.heaviestWeight !== null ? (
-              <View style={styles.topSetPill}>
-                <Ionicons name="trophy-outline" size={13} color="#F59E0B" />
-                <Text style={styles.topSetPillText}>
-                  {t('workoutDetails.bestSetLabel', { weight: formatNumericValue(details.heaviestWeight, 'decimal') })}
-                </Text>
-              </View>
-            ) : null}
 
             <View style={styles.actionRow}>
               <TouchableOpacity
@@ -365,15 +368,40 @@ export default function WorkoutDetailsScreen() {
                   <Text style={[styles.headerCell, styles.cellType]}>{t('workoutDetails.tableType')}</Text>
                 </View>
 
-                {exercise.sets.map((setItem) => (
-                  <View key={setItem.id} style={styles.tableRow}>
-                    <Text style={[styles.valueCell, styles.cellSet]}>{setItem.set_number ?? '—'}</Text>
-                    <Text style={[styles.valueCell, styles.cellKg]}>{formatNumericValue(setItem.weight, 'decimal')}</Text>
-                    <Text style={[styles.valueCell, styles.cellReps]}>{formatNumericValue(setItem.reps, 'integer')}</Text>
-                    <Text style={[styles.valueCell, styles.cellRir]}>{formatRirValue(setItem.rir, setItem.set_type)}</Text>
-                    <Text style={[styles.valueCell, styles.cellType]}>{formatSetType(setItem.set_type, t)}</Text>
-                  </View>
-                ))}
+                {exercise.sets.map((setItem) => {
+                  const isRecord = recordSetIds.has(setItem.id);
+
+                  return (
+                    <View key={setItem.id} style={[styles.tableRow, isRecord && styles.recordRow]}>
+                      {/* Hevy puts the trophy where the set number is. Marking
+                          the row itself is the only place the answer to "which
+                          record did I beat" can actually live. */}
+                      <View style={[styles.cellSet, styles.setNumberCell]}>
+                        {isRecord ? (
+                          <Ionicons name="trophy" size={12} color={palette.warningText} />
+                        ) : null}
+                        <Text
+                          style={[styles.valueCell, styles.setNumberText, isRecord && styles.valueCellRecord]}
+                          accessibilityLabel={
+                            isRecord
+                              ? t('workoutDetails.recordSetAccessibility', { set: setItem.set_number ?? 0 })
+                              : undefined
+                          }
+                        >
+                          {setItem.set_number ?? '—'}
+                        </Text>
+                      </View>
+                      <Text style={[styles.valueCell, styles.cellKg, isRecord && styles.valueCellRecord]}>
+                        {formatNumericValue(setItem.weight, 'decimal')}
+                      </Text>
+                      <Text style={[styles.valueCell, styles.cellReps, isRecord && styles.valueCellRecord]}>
+                        {formatNumericValue(setItem.reps, 'integer')}
+                      </Text>
+                      <Text style={[styles.valueCell, styles.cellRir]}>{formatRirValue(setItem.rir, setItem.set_type)}</Text>
+                      <Text style={[styles.valueCell, styles.cellType]}>{formatSetType(setItem.set_type, t)}</Text>
+                    </View>
+                  );
+                })}
               </View>
               );
             })
@@ -538,6 +566,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 10,
     alignItems: 'center',
+    justifyContent: 'center',
+    rowGap: 2,
+  },
+  statValueRecord: {
+    color: palette.warningText,
   },
   statLabel: {
     color: palette.labelMuted,
@@ -554,24 +587,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     textAlign: 'center',
     fontVariant: ['tabular-nums'],
-  },
-  topSetPill: {
-    marginTop: 10,
-    alignSelf: 'flex-start',
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: '#78350F',
-    backgroundColor: '#2A1E10',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    flexDirection: 'row',
-    alignItems: 'center',
-    columnGap: 6,
-  },
-  topSetPillText: {
-    color: '#FBBF24',
-    fontSize: 12,
-    fontWeight: '700',
   },
   actionRow: {
     flexDirection: 'row',
@@ -690,6 +705,22 @@ const styles = StyleSheet.create({
   cellSet: {
     flex: 0.7,
     minWidth: 36,
+  },
+  setNumberCell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    columnGap: 4,
+  },
+  setNumberText: {
+    flex: 0,
+  },
+  recordRow: {
+    backgroundColor: 'rgba(251, 191, 36, 0.10)',
+    borderRadius: Radius.sm,
+  },
+  valueCellRecord: {
+    color: palette.warningText,
   },
   cellKg: {
     flex: 1,

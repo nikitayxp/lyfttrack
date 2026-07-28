@@ -2,54 +2,94 @@ import { Platform, Share } from 'react-native';
 
 export type ShareWorkoutInput = {
   title: string;
-  /** Already-localised summary line, e.g. "12 sets · 6 exercises". */
+  /** Already-localised summary line, e.g. "12 sets - 6 exercises". */
   summary: string;
   url: string;
 };
 
-export type ShareOutcome = 'shared' | 'copied' | 'dismissed' | 'unavailable';
+export type ShareOutcome = 'shared' | 'dismissed' | 'unavailable';
 
 export function buildShareMessage(input: ShareWorkoutInput): string {
   return `${input.title}\n${input.summary}\n${input.url}`;
 }
 
+/** Whether a share sheet exists at all, so the UI can offer it or not. */
+export function canOpenShareSheet(): boolean {
+  if (Platform.OS !== 'web') {
+    return true;
+  }
+
+  return typeof navigator !== 'undefined' && Boolean(navigator.share);
+}
+
 /**
- * One entry point for the three ways a platform will let us share.
+ * Copy that also works where the async Clipboard API does not.
  *
- * React Native's Share is not implemented on web, so calling it there fails
- * silently and the button looks broken. Web goes through the Web Share API when
- * the browser has it — it is missing on desktop Firefox and on any page not
- * served over https — and falls back to the clipboard, which is a worse but
- * honest outcome the caller can report.
+ * navigator.clipboard only exists in a secure context, so it is missing over
+ * plain http — which is exactly how the app is reached on a LAN address during
+ * development, and where the previous version silently gave up. The deprecated
+ * execCommand path still works there, so it is kept as the fallback rather than
+ * reporting failure.
  */
-export async function shareWorkout(input: ShareWorkoutInput): Promise<ShareOutcome> {
+export async function copyToClipboard(text: string): Promise<boolean> {
+  if (Platform.OS !== 'web') {
+    return false;
+  }
+
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Permission denied or blocked: fall through to the legacy path.
+    }
+  }
+
+  if (typeof document === 'undefined') {
+    return false;
+  }
+
+  try {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.top = '-1000px';
+    textarea.style.opacity = '0';
+
+    document.body.appendChild(textarea);
+    textarea.select();
+    textarea.setSelectionRange(0, text.length);
+
+    const copied = document.execCommand('copy');
+    document.body.removeChild(textarea);
+
+    return copied;
+  } catch {
+    return false;
+  }
+}
+
+/** Opens the platform share sheet. Only called once the user asked for it. */
+export async function openShareSheet(input: ShareWorkoutInput): Promise<ShareOutcome> {
   const message = buildShareMessage(input);
 
   if (Platform.OS === 'web') {
-    const nav = typeof navigator === 'undefined' ? undefined : navigator;
-
-    if (nav?.share) {
-      try {
-        await nav.share({ title: input.title, text: `${input.title}\n${input.summary}`, url: input.url });
-        return 'shared';
-      } catch (error) {
-        // AbortError is the user closing the sheet, not a failure.
-        if (error instanceof Error && error.name === 'AbortError') {
-          return 'dismissed';
-        }
-      }
+    if (typeof navigator === 'undefined' || !navigator.share) {
+      return 'unavailable';
     }
 
-    if (nav?.clipboard?.writeText) {
-      try {
-        await nav.clipboard.writeText(message);
-        return 'copied';
-      } catch {
-        return 'unavailable';
-      }
+    try {
+      await navigator.share({
+        title: input.title,
+        text: `${input.title}\n${input.summary}`,
+        url: input.url,
+      });
+      return 'shared';
+    } catch (error) {
+      // AbortError is the user closing the sheet, not a failure.
+      return error instanceof Error && error.name === 'AbortError' ? 'dismissed' : 'unavailable';
     }
-
-    return 'unavailable';
   }
 
   try {

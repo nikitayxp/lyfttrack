@@ -17,8 +17,10 @@ import { Colors } from '@/constants/theme';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { ExerciseThumbnail } from '@/components/common/ExerciseThumbnail';
 import { InlineToast } from '@/components/common/InlineToast';
+import { ShareWorkoutSheet } from '@/components/workout/ShareWorkoutSheet';
 import { WorkoutActionsMenu, type WorkoutMenuAction } from '@/components/workout/WorkoutActionsMenu';
 import { usePreferences } from '@/context/PreferencesContext';
+import { useWorkoutShare } from '@/hooks/useWorkoutShare';
 import {
   getAuthenticatedUserOrThrow,
   getErrorMessage,
@@ -32,8 +34,6 @@ import {
 } from '@/constants/exerciseCatalog';
 import { formatRelativeTime } from '@/utils/dateUtils';
 import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/exerciseLocalization';
-import { buildWorkoutUrl } from '@/utils/shareLinks';
-import { shareWorkout } from '@/utils/shareWorkout';
 
 const palette = Colors.dark;
 const SCREEN_BG = palette.bgPrimary;
@@ -127,7 +127,7 @@ export default function WorkoutDetailsScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [menuVisible, setMenuVisible] = useState(false);
-  const [shareNotice, setShareNotice] = useState<{ message: string; tone: 'info' | 'error' } | null>(null);
+  const share = useWorkoutShare();
 
   useEffect(() => {
     let cancelled = false;
@@ -168,7 +168,7 @@ export default function WorkoutDetailsScreen() {
   }, [workoutId]);
 
   const handleMenuSelect = useCallback(
-    async (action: WorkoutMenuAction) => {
+    (action: WorkoutMenuAction) => {
       setMenuVisible(false);
 
       if (action === 'edit') {
@@ -185,27 +185,19 @@ export default function WorkoutDetailsScreen() {
         return;
       }
 
-      const outcome = await shareWorkout({
+      share.openShare({
+        workoutId: details.id,
+        ownerId: details.user_id,
         title: details.name,
+        // Totals rather than the viewer's preference: the message is read by
+        // someone else.
         summary: t('feed.shareSummary', {
-          // Totals rather than the viewer's preference: the message is read by
-          // someone else.
           sets: details.totalSets,
           exercises: details.exercises.length,
         }),
-        url: buildWorkoutUrl(details.id),
       });
-
-      if (outcome === 'copied') {
-        setShareNotice({ message: t('feed.shareCopiedDescription'), tone: 'info' });
-        return;
-      }
-
-      if (outcome === 'unavailable') {
-        setShareNotice({ message: t('feed.shareUnavailableDescription'), tone: 'error' });
-      }
     },
-    [details, handleCopyWorkout, handleEditWorkout, t]
+    [details, handleCopyWorkout, handleEditWorkout, share, t]
   );
 
   const loadDetails = useCallback(async () => {
@@ -267,11 +259,19 @@ export default function WorkoutDetailsScreen() {
         </TouchableOpacity>
       </View>
 
+      <ShareWorkoutSheet
+        visible={share.sheetVisible}
+        input={share.shareInput}
+        ownerVisibility={share.ownerVisibility}
+        onClose={share.closeShare}
+        onChoose={(choice) => void share.chooseShare(choice)}
+      />
+
       <WorkoutActionsMenu
         visible={menuVisible}
         canManage={isOwnWorkout}
         onClose={() => setMenuVisible(false)}
-        onSelect={(action) => void handleMenuSelect(action)}
+        onSelect={handleMenuSelect}
       />
 
       {isLoading ? (
@@ -314,9 +314,9 @@ export default function WorkoutDetailsScreen() {
             {details.notes ? <Text style={styles.workoutNotes}>{details.notes}</Text> : null}
 
             <InlineToast
-              message={shareNotice?.message ?? null}
-              tone={shareNotice?.tone}
-              onDismiss={() => setShareNotice(null)}
+              message={share.notice?.message ?? null}
+              tone={share.notice?.tone}
+              onDismiss={share.dismissNotice}
             />
 
             <View style={styles.statsGrid}>

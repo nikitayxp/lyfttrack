@@ -111,7 +111,7 @@ function initialsFromName(value: string): string {
 
 export default function WorkoutDetailsScreen() {
   const { t } = useTranslation();
-  const { language } = usePreferences();
+  const { language, countWorkingSetsOnly } = usePreferences();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
 
   const workoutId = useMemo(() => resolveRouteWorkoutId(params.id), [params.id]);
@@ -256,7 +256,9 @@ export default function WorkoutDetailsScreen() {
 
               <View style={styles.statCard}>
                 <Text style={styles.statLabel}>{t('workoutDetails.setsLabel')}</Text>
-                <Text style={styles.statValue}>{details.totalSets}</Text>
+                <Text style={styles.statValue}>
+                  {countWorkingSetsOnly ? details.workingSets : details.totalSets}
+                </Text>
               </View>
 
               <View style={styles.statCard}>

@@ -1,3 +1,4 @@
+import * as Clipboard from 'expo-clipboard';
 import { Platform, Share } from 'react-native';
 
 export type ShareWorkoutInput = {
@@ -23,29 +24,22 @@ export function canOpenShareSheet(): boolean {
 }
 
 /**
- * Copy that also works where the async Clipboard API does not.
+ * Copy that works on native and on LAN http (no secure Clipboard API).
  *
- * navigator.clipboard only exists in a secure context, so it is missing over
- * plain http — which is exactly how the app is reached on a LAN address during
- * development, and where the previous version silently gave up. The deprecated
- * execCommand path still works there, so it is kept as the fallback rather than
- * reporting failure.
+ * Call this while the user gesture / share sheet is still open — closing a
+ * Modal first drops focus and makes execCommand report success while leaving
+ * the clipboard empty (Brave/Android web).
  */
 export async function copyToClipboard(text: string): Promise<boolean> {
-  if (Platform.OS !== 'web') {
-    return false;
+  try {
+    await Clipboard.setStringAsync(text);
+    return true;
+  } catch {
+    // Fall through: expo-clipboard uses navigator.clipboard on web, which is
+    // missing on plain http (Tailscale/LAN hostname).
   }
 
-  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch {
-      // Permission denied or blocked: fall through to the legacy path.
-    }
-  }
-
-  if (typeof document === 'undefined') {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') {
     return false;
   }
 
@@ -53,18 +47,42 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     const textarea = document.createElement('textarea');
     textarea.value = text;
     textarea.setAttribute('readonly', '');
+    // Keep in-viewport and focusable — off-screen + no focus is a common
+    // "returns true, copies nothing" path on mobile browsers.
     textarea.style.position = 'fixed';
-    textarea.style.top = '-1000px';
+    textarea.style.top = '0';
+    textarea.style.left = '0';
+    textarea.style.width = '1px';
+    textarea.style.height = '1px';
+    textarea.style.padding = '0';
+    textarea.style.border = 'none';
+    textarea.style.outline = 'none';
+    textarea.style.boxShadow = 'none';
+    textarea.style.background = 'transparent';
     textarea.style.opacity = '0';
 
     document.body.appendChild(textarea);
+    textarea.focus();
     textarea.select();
     textarea.setSelectionRange(0, text.length);
 
     const copied = document.execCommand('copy');
     document.body.removeChild(textarea);
 
-    return copied;
+    if (!copied) {
+      return false;
+    }
+
+    // Secure contexts can verify; LAN http cannot.
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.readText) {
+      try {
+        return (await navigator.clipboard.readText()) === text;
+      } catch {
+        return true;
+      }
+    }
+
+    return true;
   } catch {
     return false;
   }

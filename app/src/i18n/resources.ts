@@ -392,6 +392,7 @@ export const resources = {
         summaryDurationLabel: 'Time',
         summarySetsLabel: 'Sets',
         summaryPrsLabel: 'Records',
+        newRecord: 'New record',
         summaryExercisesTitle: 'Exercises',
         summaryNoExercises: 'No exercises completed in this session.',
         summaryShareAction: 'Finish',
@@ -407,8 +408,8 @@ export const resources = {
         durationLabel: 'Time',
         setsLabel: 'Sets',
         recordsLabel: 'Records',
+        recordSetAccessibility: 'Set {{set}} — personal record',
         pr1rmLabel: 'PR 1RM',
-        bestSetLabel: 'Best set: {{weight}} kg',
         noSetsTitle: 'No sets logged',
         noSetsDescription: 'This workout does not contain logged sets.',
         copyWorkout: 'Copy workout',
@@ -563,6 +564,8 @@ export const resources = {
         metrics: {
           sets: 'Sets',
           records: 'Records',
+          recordsBadge_one: '{{count}} personal record',
+          recordsBadge_other: '{{count}} personal records',
           exercises: 'Exercises',
         },
         comments: {
@@ -1097,6 +1100,7 @@ export const resources = {
         summaryDurationLabel: 'Tempo',
         summarySetsLabel: 'Series',
         summaryPrsLabel: 'Recordes',
+        newRecord: 'Novo recorde',
         summaryExercisesTitle: 'Exercicios',
         summaryNoExercises: 'Sem exercicios concluidos nesta sessao.',
         summaryShareAction: 'Terminar',
@@ -1112,8 +1116,8 @@ export const resources = {
         durationLabel: 'Tempo',
         setsLabel: 'Series',
         recordsLabel: 'Recordes',
+        recordSetAccessibility: 'Serie {{set}} — recorde pessoal',
         pr1rmLabel: 'PR 1RM',
-        bestSetLabel: 'Melhor set: {{weight}} kg',
         noSetsTitle: 'Sem sets registados',
         noSetsDescription: 'Este treino nao contem sets registados.',
         copyWorkout: 'Copiar treino',
@@ -1268,6 +1272,8 @@ export const resources = {
         metrics: {
           sets: 'Series',
           records: 'Recordes',
+          recordsBadge_one: '{{count}} recorde pessoal',
+          recordsBadge_other: '{{count}} recordes pessoais',
           exercises: 'Exercicios',
         },
         comments: {

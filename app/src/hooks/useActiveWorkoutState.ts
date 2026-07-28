@@ -22,6 +22,8 @@ import {
 } from '@/services/offlineSyncService';
 import { dedupeExerciseNames, type ExerciseNameSource } from '@/utils/exerciseLocalization';
 
+export type SummaryExercise = ExerciseNameSource & { exerciseId: string };
+
 export type ExerciseRow = Tables<'exercises'>;
 export type SetRow = Tables<'sets'>;
 
@@ -177,10 +179,13 @@ export function createExerciseBlockFromSets(
   };
 }
 
-export function getCompletedExerciseNames(exercises: ActiveExercise[]): ExerciseNameSource[] {
+export function getCompletedExerciseNames(exercises: ActiveExercise[]): SummaryExercise[] {
   const names = exercises
     .filter((exercise) => exercise.sets.some((setItem) => setItem.completed))
     .map((exercise) => ({
+      // Carried so the summary can match an exercise against the ids that set
+      // a record; names alone cannot be matched reliably.
+      exerciseId: exercise.exercise.id,
       name: exercise.exercise.name.trim(),
       name_en: exercise.exercise.name_en,
       name_pt: exercise.exercise.name_pt,

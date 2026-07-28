@@ -48,7 +48,29 @@ export default function Root({ children }: PropsWithChildren) {
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-        <title>LyftTrack - App</title>
+        <title>LyftTrack</title>
+        <meta
+          name="description"
+          content="Official LyftTrack website experience with app showcase, bilingual blog and interactive training previews."
+        />
+        <meta name="application-name" content="LyftTrack" />
+        <meta
+          name="keywords"
+          content="fitness, workout tracker, gym app, LyftTrack, blog, training"
+        />
+        <meta property="og:title" content="LyftTrack" />
+        <meta
+          property="og:description"
+          content="Official LyftTrack website experience with app showcase, bilingual blog and interactive training previews."
+        />
+        <meta property="og:site_name" content="LyftTrack" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:title" content="LyftTrack" />
+        <meta
+          name="twitter:description"
+          content="Official LyftTrack website experience with app showcase, bilingual blog and interactive training previews."
+        />
         <meta
           name="viewport"
           content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"

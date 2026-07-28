@@ -7,13 +7,13 @@ import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import { InlineToast } from '@/components/common/InlineToast';
 import { PrBadge } from '@/components/common/PrBadge';
+import { ShareWorkoutSheet } from '@/components/workout/ShareWorkoutSheet';
 import { WorkoutActionsMenu, type WorkoutMenuAction } from '@/components/workout/WorkoutActionsMenu';
 import { usePreferences } from '@/context/PreferencesContext';
+import { useWorkoutShare } from '@/hooks/useWorkoutShare';
 import type { WorkoutFeedItem } from '@/services/workoutService';
 import { formatRelativeTime } from '@/utils/dateUtils';
 import { getLocalizedExerciseName } from '@/utils/exerciseLocalization';
-import { buildWorkoutUrl } from '@/utils/shareLinks';
-import { shareWorkout } from '@/utils/shareWorkout';
 
 const palette = Colors.dark;
 const CARD_BG = palette.surface;
@@ -84,7 +84,7 @@ export function WorkoutFeedCard({
   disableInteractions = false,
 }: WorkoutFeedCardProps) {
   const [menuVisible, setMenuVisible] = useState(false);
-  const [shareNotice, setShareNotice] = useState<{ message: string; tone: 'info' | 'error' } | null>(null);
+  const share = useWorkoutShare();
   const { t } = useTranslation();
   const { language, countWorkingSetsOnly } = usePreferences();
   const displayName = profileDisplayName(workout, t('publicProfile.athleteFallback'));
@@ -103,7 +103,7 @@ export function WorkoutFeedCard({
   const resolvedIsLikePending = isLikePending ?? false;
   const interactionsDisabled = disableInteractions || !onToggleLike;
 
-  async function handleMenuSelect(action: WorkoutMenuAction) {
+  function handleMenuSelect(action: WorkoutMenuAction) {
     setMenuVisible(false);
 
     if (action === 'edit') {
@@ -116,25 +116,19 @@ export function WorkoutFeedCard({
       return;
     }
 
-    // Totals, not the viewer's set-counting preference: the message is read by
-    // someone else, who has no preference of ours to honour.
-    const outcome = await shareWorkout({
+    // Opens the preview instead of firing a share: the user picks what leaves
+    // the app, and gets told when the link will not open for the recipient.
+    share.openShare({
+      workoutId: workout.id,
+      ownerId: workout.user_id ?? null,
       title: workout.name,
+      // Totals, not the viewer's set-counting preference: the message is read
+      // by someone else, who has no preference of ours to honour.
       summary: t('feed.shareSummary', {
         sets: workout.totalSets,
         exercises: localizedExerciseNames.length,
       }),
-      url: buildWorkoutUrl(workout.id),
     });
-
-    if (outcome === 'copied') {
-      setShareNotice({ message: t('feed.shareCopiedDescription'), tone: 'info' });
-      return;
-    }
-
-    if (outcome === 'unavailable') {
-      setShareNotice({ message: t('feed.shareUnavailableDescription'), tone: 'error' });
-    }
   }
 
   function openWorkoutDetails() {
@@ -224,13 +218,21 @@ export function WorkoutFeedCard({
         visible={menuVisible}
         canManage={canManage}
         onClose={() => setMenuVisible(false)}
-        onSelect={(action) => void handleMenuSelect(action)}
+        onSelect={handleMenuSelect}
+      />
+
+      <ShareWorkoutSheet
+        visible={share.sheetVisible}
+        input={share.shareInput}
+        ownerVisibility={share.ownerVisibility}
+        onClose={share.closeShare}
+        onChoose={(choice) => void share.chooseShare(choice)}
       />
 
       <InlineToast
-        message={shareNotice?.message ?? null}
-        tone={shareNotice?.tone}
-        onDismiss={() => setShareNotice(null)}
+        message={share.notice?.message ?? null}
+        tone={share.notice?.tone}
+        onDismiss={share.dismissNotice}
       />
 
       <View style={styles.interactionRow}>

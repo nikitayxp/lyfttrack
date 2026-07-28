@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { BarChart } from 'react-native-gifted-charts';
+import { LineChart } from 'react-native-gifted-charts';
 import {
   ActivityIndicator,
   Image,
@@ -35,6 +35,19 @@ import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/ex
 import { getExerciseImageUrl } from '@/utils/exerciseImage';
 
 const palette = Colors.dark;
+
+const Y_AXIS_LABEL_WIDTH = 44;
+const CHART_EDGE_SPACING = 20;
+
+/** At most six date labels, evenly spread: one per session overlaps into a smear. */
+function shouldLabelPoint(index: number, total: number): boolean {
+  if (total <= 6) {
+    return true;
+  }
+
+  const step = Math.ceil(total / 6);
+  return index === total - 1 || index % step === 0;
+}
 const SCREEN_BG = palette.bgPrimary;
 const CARD_BG = palette.cardBg;
 const CHART_NEON = '#3B82F6';
@@ -86,7 +99,30 @@ export default function ExerciseDetailScreen() {
   const [history, setHistory] = useState<ExerciseWorkoutHistoryEntry[]>([]);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
 
-  const chartWidth = useMemo(() => Math.min(Math.max(280, windowWidth - 56), 360), [windowWidth]);
+  // Total space the chart may occupy inside the card, minus its padding.
+  //
+  // The old floor of 280 was larger than the room available on a 320px phone,
+  // so the card overflowed the screen there regardless of the chart. Capped at
+  // what the window actually offers instead.
+  const chartWidth = useMemo(
+    () => Math.min(Math.max(240, windowWidth - 72), 360),
+    [windowWidth]
+  );
+
+  // What gifted-charts calls `width` is the plot only — the y-axis labels are
+  // drawn outside it and added on top. Passing the full width here is what made
+  // the chart run past the card and clip the last point.
+  const plotWidth = useMemo(
+    () => Math.max(180, chartWidth - Y_AXIS_LABEL_WIDTH - CHART_EDGE_SPACING),
+    [chartWidth]
+  );
+
+  // Reserves the axis gutter and both end margins before dividing, otherwise
+  // the final point is drawn half outside the plot.
+  const lineSpacing = useMemo(() => {
+    const usable = plotWidth - CHART_EDGE_SPACING * 2;
+    return Math.max(24, Math.floor(usable / Math.max(progress.length - 1, 1)));
+  }, [plotWidth, progress.length]);
 
   const loadExercise = useCallback(async () => {
     if (!exerciseId) {
@@ -168,22 +204,50 @@ export default function ExerciseDetailScreen() {
     return key ? t(key) : exercise.equipment;
   }, [exercise, t]);
 
-  const barData = useMemo(
+  const lineData = useMemo(
     () =>
-      progress.map((point) => ({
-        value: Math.max(0, point.value),
-        label: point.label,
-        frontColor: CHART_NEON,
-      })),
+      progress.map((point, index) => {
+        const isLatest = index === progress.length - 1;
+
+        return {
+          value: Math.max(0, point.value),
+          // Only some labels are drawn: one per session turns into a smear of
+          // overlapping dates as soon as there is any history.
+          label: shouldLabelPoint(index, progress.length) ? point.label : '',
+          // The session you just did is the one you are looking for.
+          dataPointColor: isLatest ? palette.textPrimary : CHART_NEON,
+          dataPointRadius: isLatest ? 6 : 4,
+          point,
+        };
+      }),
     [progress]
   );
 
-  const chartMaxValue = useMemo(() => {
-    if (barData.length === 0) return 4;
-    const highest = barData.reduce((m, p) => Math.max(m, p.value), 0);
-    if (highest <= 0) return 4;
-    return Math.max(4, Math.ceil(highest * 1.25));
-  }, [barData]);
+  // Scaled to the data, not to zero. A progression chart anchored at zero turns
+  // 100 kg to 110 kg into a step you cannot see; the interesting range is
+  // between the values.
+  const chartRange = useMemo(() => {
+    const values = lineData.map((item) => item.value).filter((value) => Number.isFinite(value));
+
+    if (values.length === 0) {
+      return { min: 0, max: 4 };
+    }
+
+    const highest = Math.max(...values);
+    const lowest = Math.min(...values);
+
+    if (highest === lowest) {
+      const pad = Math.max(1, Math.round(highest * 0.1));
+      return { min: Math.max(0, highest - pad), max: highest + pad };
+    }
+
+    const padding = Math.max(1, (highest - lowest) * 0.15);
+
+    return {
+      min: Math.max(0, Math.floor(lowest - padding)),
+      max: Math.ceil(highest + padding),
+    };
+  }, [lineData]);
 
   if (isLoading) {
     return (
@@ -253,7 +317,7 @@ export default function ExerciseDetailScreen() {
         {/* Progression chart */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>{t('exercise.detail.progressTitle')}</Text>
-          <Text style={styles.cardSubtitle}>{t('exercise.detail.progressSubtitle')}</Text>
+          <Text style={styles.cardSubtitle}>{t(`exercise.detail.progressSubtitle_${metric}`)}</Text>
 
           <View style={styles.metricToggleRow}>
             {metricFilters.map((opt) => {
@@ -277,39 +341,70 @@ export default function ExerciseDetailScreen() {
             <View style={styles.chartStatusWrap}>
               <ActivityIndicator size="small" color={CHART_NEON} />
             </View>
-          ) : barData.length === 0 ? (
+          ) : lineData.length === 0 ? (
             <View style={styles.chartStatusWrap}>
               <Text style={styles.placeholderText}>{t('exercise.detail.noProgress')}</Text>
             </View>
           ) : (
             <View style={styles.chartWrap}>
-              <BarChart
-                data={barData}
-                width={chartWidth}
+              <LineChart
+                data={lineData}
+                width={plotWidth}
                 height={220}
-                maxValue={chartMaxValue}
-                barWidth={Math.max(14, Math.min(28, Math.floor(chartWidth / Math.max(barData.length, 1)) - 8))}
-                spacing={12}
-                initialSpacing={12}
-                endSpacing={10}
-                roundedTop
-                frontColor={CHART_NEON}
-                gradientColor="#60A5FA"
-                showGradient
+                initialSpacing={CHART_EDGE_SPACING}
+                endSpacing={CHART_EDGE_SPACING}
+                spacing={lineSpacing}
+                curved
+                thickness={2.5}
+                color={CHART_NEON}
+                hideDataPoints={false}
+                dataPointsColor={CHART_NEON}
+                yAxisOffset={chartRange.min}
+                maxValue={chartRange.max - chartRange.min}
+                noOfSections={4}
                 yAxisColor={palette.borderStrong}
                 xAxisColor={palette.borderStrong}
-                yAxisLabelWidth={50}
-                xAxisLabelsHeight={52}
-                xAxisLabelsVerticalShift={8}
-                labelsExtraHeight={36}
-                overflowTop={12}
+                yAxisLabelWidth={Y_AXIS_LABEL_WIDTH}
                 yAxisTextStyle={styles.axisText}
                 xAxisLabelTextStyle={styles.xAxisLabelText}
-                formatYLabel={(label) => formatCompactNumber(label)}
                 rulesColor={palette.inputFill}
-                noOfSections={4}
+                formatYLabel={(label) => formatCompactNumber(label)}
                 isAnimated
-                adjustToWidth
+                // Drag along the chart to read a session, which is the whole
+                // point of the issue: a bar you cannot interrogate says only
+                // "bigger" or "smaller".
+                pointerConfig={{
+                  pointerStripHeight: 200,
+                  pointerStripColor: palette.borderStrong,
+                  pointerStripWidth: 1,
+                  pointerColor: palette.textPrimary,
+                  radius: 5,
+                  pointerLabelWidth: 140,
+                  pointerLabelHeight: 76,
+                  activatePointersOnLongPress: false,
+                  autoAdjustPointerLabelPosition: true,
+                  pointerLabelComponent: (items: { point?: ExerciseProgressPoint }[]) => {
+                    const point = items?.[0]?.point;
+
+                    if (!point) {
+                      return null;
+                    }
+
+                    return (
+                      <View style={styles.pointerCard}>
+                        <Text style={styles.pointerDate}>{point.label}</Text>
+                        <Text style={styles.pointerValue}>
+                          {`${formatNumericValue(point.maxWeight)} kg x ${point.maxWeightReps}`}
+                        </Text>
+                        <Text style={styles.pointerMeta}>
+                          {t('exercise.detail.pointerVolume', {
+                            volume: formatCompactNumber(point.volumeTotal),
+                          })}
+                        </Text>
+                      </View>
+                    );
+                  },
+                }}
               />
             </View>
           )}
@@ -548,7 +643,33 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 28,
     paddingHorizontal: 8,
-    overflow: 'visible',
+    // Was 'visible', which let the plot spill past the card edge.
+    overflow: 'hidden',
+  },
+  pointerCard: {
+    borderRadius: Radius.button,
+    borderWidth: 1,
+    borderColor: palette.borderStrong,
+    backgroundColor: palette.surface,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    rowGap: 2,
+  },
+  pointerDate: {
+    color: palette.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  pointerValue: {
+    color: palette.textPrimary,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  pointerMeta: {
+    color: palette.textSecondary,
+    fontSize: 11,
+    fontWeight: '600',
   },
   axisText: {
     color: '#8FA2BA',

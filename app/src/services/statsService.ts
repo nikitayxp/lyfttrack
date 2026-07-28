@@ -23,6 +23,8 @@ export type ExerciseProgressPoint = {
   durationMinutes: number;
   estimated1RMMax: number;
   maxWeight: number;
+  /** Reps done on the heaviest set that day, so a point can read "100 kg x 5". */
+  maxWeightReps: number;
 };
 
 export type ExercisePersonalRecords = {
@@ -232,6 +234,7 @@ export async function getExerciseProgress(
       durationMinutes: number;
       estimated1RMMax: number;
       maxWeight: number;
+      maxWeightReps: number;
       timestamp: number;
       trackedWorkoutKeys: Set<string>;
     }
@@ -257,6 +260,7 @@ export async function getExerciseProgress(
       durationMinutes: 0,
       estimated1RMMax: 0,
       maxWeight: 0,
+      maxWeightReps: 0,
       timestamp,
       trackedWorkoutKeys: new Set<string>(),
     };
@@ -264,7 +268,13 @@ export async function getExerciseProgress(
     current.volumeTotal += volume;
     current.repsTotal += reps;
     current.estimated1RMMax = Math.max(current.estimated1RMMax, estimated1RM);
-    current.maxWeight = Math.max(current.maxWeight, weight);
+
+    // Reps travel with the weight rather than being maxed separately: the point
+    // has to describe one real set, not the best number from two different ones.
+    if (weight > current.maxWeight || (weight === current.maxWeight && reps > current.maxWeightReps)) {
+      current.maxWeight = weight;
+      current.maxWeightReps = reps;
+    }
 
     const workoutKey = `${workout.start_time}|${workout.end_time ?? ''}`;
 
@@ -285,6 +295,7 @@ export async function getExerciseProgress(
       const estimated1RMMax = Number(aggregate.estimated1RMMax.toFixed(1));
 
       const maxWeight = Number(aggregate.maxWeight.toFixed(1));
+      const maxWeightReps = Math.round(aggregate.maxWeightReps);
 
       const value = metric === 'duration'
         ? durationMinutes
@@ -303,6 +314,7 @@ export async function getExerciseProgress(
         durationMinutes,
         estimated1RMMax,
         maxWeight,
+        maxWeightReps,
       };
     });
 }

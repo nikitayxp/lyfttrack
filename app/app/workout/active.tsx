@@ -96,6 +96,10 @@ import { formatPreviousSetLabel, previousColumnWidthForSets, previousLabelFontSi
 const palette = Colors.dark;
 const DESKTOP_WEB_MIN_WIDTH = 768;
 const ROOT_SCREEN_BG = palette.bgPrimary;
+// Few on purpose: dumping 20 recents would make "scroll down for the rest"
+// an empty promise.
+const PICKER_RECENT_LIMIT = 5;
+
 const MUSCLE_FILTER_CHIP_KEYS: readonly (ExerciseLibraryMuscleFilter | 'recent')[] = [
   'all',
   'recent',
@@ -255,6 +259,7 @@ export default function ActiveWorkout() {
   const [selectedEquipmentFilter, setSelectedEquipmentFilter] = useState<ExerciseLibraryEquipmentFilter>('all');
   const [createExerciseVisible, setCreateExerciseVisible] = useState(false);
   const [catalogExercises, setCatalogExercises] = useState<ExerciseRow[]>([]);
+  const [recentExerciseIds, setRecentExerciseIds] = useState<string[]>([]);
   const [preloadedRoutineId, setPreloadedRoutineId] = useState<string | null>(null);
   const [preloadedTemplateId, setPreloadedTemplateId] = useState<string | null>(null);
   const [preloadedCopyWorkoutId, setPreloadedCopyWorkoutId] = useState<string | null>(null);
@@ -475,6 +480,30 @@ export default function ActiveWorkout() {
       setIsLoadingExercises(false);
     }
   }, [selectedEquipmentFilter]);
+
+  // Carregado sempre que o picker abre, e nao apenas no filtro Recentes: a
+  // lista por omissao passa a comecar por eles.
+  useEffect(() => {
+    if (!exercisePickerVisible) {
+      return;
+    }
+
+    let isMounted = true;
+
+    void getRecentExerciseIds()
+      .then((ids) => {
+        if (isMounted) {
+          setRecentExerciseIds(ids);
+        }
+      })
+      .catch(() => {
+        // Sem recentes a lista fica na ordem normal, que e o comportamento antigo.
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [exercisePickerVisible]);
 
   useEffect(() => {
     if (!exercisePickerVisible) {
@@ -888,6 +917,37 @@ export default function ActiveWorkout() {
       )
     );
   }, [catalogExercises, exercisePickerQuery, language, t]);
+
+  // Recentes primeiro, resto do catalogo a seguir. So na vista por omissao:
+  // ao pesquisar, o utilizador ja disse o que procura e mandar os recentes
+  // para cima da lista so atrapalha a leitura dos resultados.
+  const pickerSections = useMemo(() => {
+    const hasQuery = exercisePickerQuery.trim().length > 0;
+
+    if (hasQuery || selectedMuscleFilter === 'recent') {
+      return [{ key: 'results', titleKey: null, items: filteredCatalogExercises }];
+    }
+
+    const visibleById = new Map(filteredCatalogExercises.map((exercise) => [exercise.id, exercise]));
+    const recentItems = recentExerciseIds
+      .slice(0, PICKER_RECENT_LIMIT)
+      .flatMap((id) => {
+        const match = visibleById.get(id);
+        return match ? [match] : [];
+      });
+
+    if (recentItems.length === 0) {
+      return [{ key: 'all', titleKey: null, items: filteredCatalogExercises }];
+    }
+
+    const recentIdSet = new Set(recentItems.map((exercise) => exercise.id));
+    const rest = filteredCatalogExercises.filter((exercise) => !recentIdSet.has(exercise.id));
+
+    return [
+      { key: 'recent', titleKey: 'workout.pickerRecentSection', items: recentItems },
+      { key: 'all', titleKey: 'workout.pickerAllSection', items: rest },
+    ];
+  }, [exercisePickerQuery, filteredCatalogExercises, recentExerciseIds, selectedMuscleFilter]);
 
   const getMuscleFilterLabel = (filterKey: ExerciseLibraryMuscleFilter | 'recent'): string => {
     if (filterKey === 'all') {
@@ -1596,7 +1656,13 @@ export default function ActiveWorkout() {
                     <Text style={styles.modalStatusText}>{t('exercise.emptySearchSubtitle')}</Text>
                   </View>
                 ) : (
-                  filteredCatalogExercises.map((exercise) => {
+                  pickerSections.map((section) => (
+                    <View key={section.key}>
+                      {section.titleKey ? (
+                        <Text style={styles.modalSectionLabel}>{t(section.titleKey)}</Text>
+                      ) : null}
+
+                      {section.items.map((exercise) => {
                     return (
                       <TouchableOpacity
                         key={exercise.id}
@@ -1619,7 +1685,9 @@ export default function ActiveWorkout() {
                         <Ionicons name="add-circle-outline" size={22} color={palette.accent} />
                       </TouchableOpacity>
                     );
-                  })
+                      })}
+                    </View>
+                  ))
                 )}
               </ScrollView>
             </SafeAreaView>
@@ -2512,6 +2580,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  modalSectionLabel: {
+    color: palette.textMuted,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 12,
+    marginBottom: 6,
+    paddingHorizontal: 4,
   },
   modalExerciseTextWrap: {
     flex: 1,

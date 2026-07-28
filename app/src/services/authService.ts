@@ -77,6 +77,9 @@ export async function startGoogleOAuth(): Promise<void> {
     options: {
       redirectTo,
       skipBrowserRedirect: true,
+      queryParams: {
+        prompt: 'select_account',
+      },
     },
   });
 

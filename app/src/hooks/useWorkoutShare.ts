@@ -57,9 +57,9 @@ export function useWorkoutShare() {
         return;
       }
 
-      setSheetVisible(false);
-
       if (choice === 'sheet') {
+        // Close first so the system sheet is not stacked under ours.
+        setSheetVisible(false);
         const outcome = await openShareSheet(shareInput);
 
         if (outcome === 'unavailable') {
@@ -69,8 +69,11 @@ export function useWorkoutShare() {
         return;
       }
 
+      // Copy before closing the modal: otherwise mobile web reports success
+      // from execCommand while the clipboard stays empty.
       const text = choice === 'link' ? shareInput.url : `${shareInput.title}\n${shareInput.summary}\n${shareInput.url}`;
       const copied = await copyToClipboard(text);
+      setSheetVisible(false);
 
       setNotice(
         copied

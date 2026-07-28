@@ -61,9 +61,11 @@ export function exerciseNameKey(exercise: ExerciseNameSource): string {
     .join('|');
 }
 
-export function dedupeExerciseNames(exercises: ExerciseNameSource[]): ExerciseNameSource[] {
+// Generic over the element so callers can carry extra fields (an id, say)
+// through the dedupe instead of resolving them separately afterwards.
+export function dedupeExerciseNames<T extends ExerciseNameSource>(exercises: T[]): T[] {
   const seen = new Set<string>();
-  const unique: ExerciseNameSource[] = [];
+  const unique: T[] = [];
 
   for (const exercise of exercises) {
     const key = exerciseNameKey(exercise);

@@ -1803,6 +1803,7 @@ export default function ActiveWorkout() {
         durationSeconds={finishSummary?.durationSeconds ?? 0}
         prCount={finishSummary?.prCount ?? 0}
         completedSetCount={finishSummary?.completedSetCount ?? 0}
+        completedWorkingSetCount={finishSummary?.completedWorkingSetCount ?? 0}
         exerciseNames={summaryExerciseNames}
         prExerciseIds={finishSummary?.prExerciseIds ?? []}
         onShareAndFinish={handleShareAndFinish}

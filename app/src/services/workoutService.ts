@@ -12,7 +12,15 @@ import {
 import type { Tables, TablesInsert } from '@/types/database';
 import { INPUT_LIMITS, sanitizeText, toSafeInteger, toSafeNumber } from '@/utils/inputValidation';
 import type { WorkoutSetDraft, WorkoutSetProgressDraft, WorkoutSetType } from './workoutSession.types';
-import { countPersonalRecords, type PersonalRecordSetSample } from '@/utils/personalRecords';
+import {
+  EMPTY_PERSONAL_BEST,
+  countPersonalRecords,
+  isRecordSet,
+  mergePersonalBest,
+  summarizePersonalBest,
+  type PersonalBest,
+  type PersonalRecordSetSample,
+} from '@/utils/personalRecords';
 import { dedupeExerciseNames, type ExerciseNameSource } from '@/utils/exerciseLocalization';
 
 export type ExerciseCatalogItem = Tables<'exercises'>;
@@ -90,6 +98,8 @@ export type WorkoutFeedItem = Pick<
   profile: PublicProfile | null;
   totalVolume: number;
   totalSets: number;
+  /** Sets excluding warm-ups, for the "count working sets only" preference. */
+  workingSets: number;
   prCount: number | null;
   exerciseNames: ExerciseNameSource[];
   exerciseGroups: WorkoutFeedExerciseGroup[];
@@ -155,7 +165,11 @@ export type WorkoutDetails = Pick<
   exercises: WorkoutDetailsExercise[];
   totalVolume: number;
   totalSets: number;
+  /** Sets excluding warm-ups, for the "count working sets only" preference. */
+  workingSets: number;
   prCount: number;
+  /** Ids of the sets that set the records counted in prCount. */
+  recordSetIds: string[];
   durationSeconds: number;
   heaviestWeight: number | null;
   bestEstimated1RM: number | null;
@@ -419,6 +433,7 @@ function sortWorkoutFeedExerciseSets(a: WorkoutFeedExerciseSet, b: WorkoutFeedEx
 type WorkoutFeedAggregate = {
   totalVolume: number;
   totalSets: number;
+  workingSets: number;
   exerciseNames: ExerciseNameSource[];
   exerciseGroups: WorkoutFeedExerciseGroup[];
 };
@@ -438,6 +453,7 @@ function aggregateWorkoutFeedSets(rows: RawWorkoutFeedSetRow[]): Map<string, Wor
       aggregateByWorkout.get(workoutId) ?? {
         totalVolume: 0,
         totalSets: 0,
+        workingSets: 0,
         exerciseNames: [],
         exerciseGroups: [],
       };
@@ -457,6 +473,13 @@ function aggregateWorkoutFeedSets(rows: RawWorkoutFeedSetRow[]): Map<string, Wor
     const reps = normalizeNumber(row.reps) ?? 0;
 
     aggregate.totalSets += 1;
+
+    // Both counts are carried so the screens can honour the preference without
+    // the services having to know it exists.
+    if (normalizeSetType(row.set_type) !== 'warmup') {
+      aggregate.workingSets += 1;
+    }
+
     aggregate.totalVolume += Math.max(0, weight) * Math.max(0, reps);
 
     aggregate.exerciseNames.push(exerciseNameSource);
@@ -1498,6 +1521,74 @@ export async function getPreviousExercisePerformance(
   }));
 }
 
+/**
+ * All-time best weight and estimated 1RM per exercise, across every finished
+ * workout except the one in progress.
+ *
+ * Deliberately not built on getPreviousExercisePerformance: that returns only
+ * the most recent session with the exercise, so beating it is not the same as
+ * setting a record. Using it for a live "PR" hint would contradict the count on
+ * the finish screen, which compares against the whole history.
+ */
+export async function getExercisePersonalBests(
+  exerciseIds: string[],
+  currentWorkoutId: string | null
+): Promise<Record<string, PersonalBest>> {
+  const user = await getAuthenticatedUserOrThrow();
+  const normalizedIds = [...new Set(exerciseIds.map((id) => normalizeOptionalId(id)).filter(Boolean))] as string[];
+
+  if (normalizedIds.length === 0) {
+    return {};
+  }
+
+  const priorWorkoutsQuery = supabase
+    .from('workouts')
+    .select('id')
+    .eq('user_id', user.id)
+    .not('end_time', 'is', null);
+
+  const normalizedCurrentWorkoutId = normalizeOptionalId(currentWorkoutId);
+
+  if (normalizedCurrentWorkoutId) {
+    priorWorkoutsQuery.neq('id', normalizedCurrentWorkoutId);
+  }
+
+  const { data: priorWorkouts, error: priorWorkoutsError } = await priorWorkoutsQuery;
+
+  if (priorWorkoutsError || !priorWorkouts || priorWorkouts.length === 0) {
+    return {};
+  }
+
+  const { data: previousSets, error: previousSetsError } = await supabase
+    .from('sets')
+    .select('exercise_id, weight, reps')
+    .in('workout_id', priorWorkouts.map((workout) => workout.id))
+    .in('exercise_id', normalizedIds);
+
+  if (previousSetsError || !previousSets) {
+    return {};
+  }
+
+  const samplesByExerciseId = new Map<string, PersonalRecordSetSample[]>();
+
+  for (const row of previousSets) {
+    const exerciseId = row.exercise_id ?? '';
+    if (!exerciseId) continue;
+
+    const current = samplesByExerciseId.get(exerciseId) ?? [];
+    current.push({ exerciseId, weight: row.weight, reps: row.reps });
+    samplesByExerciseId.set(exerciseId, current);
+  }
+
+  const bests: Record<string, PersonalBest> = {};
+
+  for (const [exerciseId, samples] of samplesByExerciseId) {
+    bests[exerciseId] = summarizePersonalBest(samples);
+  }
+
+  return bests;
+}
+
 async function getFeedParticipantIds(userId: string): Promise<string[]> {
   const { data: friendships, error: friendshipsError } = await supabase
     .from('friends')
@@ -1626,6 +1717,7 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
       profile: profileByUserId.get(workout.user_id) ?? null,
       totalVolume: Math.round(aggregate?.totalVolume ?? 0),
       totalSets: aggregate?.totalSets ?? 0,
+      workingSets: aggregate?.workingSets ?? 0,
       prCount: prCountByWorkoutId.get(workout.id) ?? 0,
       exerciseNames: aggregate?.exerciseNames ?? [],
       exerciseGroups: aggregate?.exerciseGroups ?? [],
@@ -2026,6 +2118,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
   }
 
   let prCount = 0;
+  let recordSetIds: string[] = [];
   try {
     const currentSamples: PersonalRecordSetSample[] = detailsExercises.flatMap((exercise) =>
       exercise.sets.map((setItem) => ({
@@ -2056,14 +2149,46 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
           )
           .in('exercise_id', exerciseIds);
 
-        prCount = countPersonalRecords(
-          currentSamples,
-          (previousSets ?? []).map((row) => ({
-            exerciseId: row.exercise_id ?? '',
-            weight: row.weight,
-            reps: row.reps,
-          }))
-        );
+        const previousSamples = (previousSets ?? []).map((row) => ({
+          exerciseId: row.exercise_id ?? '',
+          weight: row.weight,
+          reps: row.reps,
+        }));
+
+        prCount = countPersonalRecords(currentSamples, previousSamples);
+
+        // Naming the set, not just counting it.
+        //
+        // At most one set per exercise is credited, because prCount counts one
+        // record per exercise: marking two sets under a card that says 1 would
+        // be the same contradiction in a different place. Of the sets that beat
+        // the stored best, the strongest is the one credited — the trophy
+        // belongs on the best lift of the session, not on whichever set edged
+        // past the old number first.
+        const bestByExerciseId = new Map<string, PersonalBest>();
+
+        for (const sample of previousSamples) {
+          bestByExerciseId.set(
+            sample.exerciseId,
+            mergePersonalBest(bestByExerciseId.get(sample.exerciseId) ?? EMPTY_PERSONAL_BEST, sample)
+          );
+        }
+
+        for (const exercise of detailsExercises) {
+          const previousBest = bestByExerciseId.get(exercise.exercise_id) ?? EMPTY_PERSONAL_BEST;
+
+          const recordSet = exercise.sets
+            .filter((setItem) => isRecordSet(setItem, previousBest))
+            .sort((left, right) => {
+              const byWeight = (right.weight ?? 0) - (left.weight ?? 0);
+              if (byWeight !== 0) return byWeight;
+              return (right.reps ?? 0) - (left.reps ?? 0);
+            })[0];
+
+          if (recordSet) {
+            recordSetIds.push(recordSet.id);
+          }
+        }
       }
     }
   } catch {
@@ -2081,8 +2206,10 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
     exercises: detailsExercises,
     totalVolume: Math.round(totalVolume),
     totalSets: allSets.length,
+    workingSets: allSets.filter((setItem) => setItem.set_type !== 'warmup').length,
     prCount,
     durationSeconds: workout.end_time ? calculateDurationSeconds(workout.start_time, workout.end_time) : 0,
+    recordSetIds,
     heaviestWeight: hasWeight ? Number(heaviestWeight.toFixed(1)) : null,
     bestEstimated1RM: hasEstimated1RM ? Number(bestEstimated1RM.toFixed(1)) : null,
   };
@@ -2178,6 +2305,7 @@ export async function getUserWorkouts(userId: string, page = 0, limit = 20): Pro
       profile: profileByUserId.get(workout.user_id) ?? null,
       totalVolume: Math.round(aggregate?.totalVolume ?? 0),
       totalSets: aggregate?.totalSets ?? 0,
+      workingSets: aggregate?.workingSets ?? 0,
       prCount: prCountByWorkoutId.get(workout.id) ?? 0,
       exerciseNames: aggregate?.exerciseNames ?? [],
       exerciseGroups: aggregate?.exerciseGroups ?? [],

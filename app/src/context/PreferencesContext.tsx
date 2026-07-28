@@ -6,13 +6,22 @@ import { isSupportedLanguage, resolveSupportedLanguage, type AppLanguage } from 
 
 type StoredPreferences = {
   language?: AppLanguage;
+  countWorkingSetsOnly?: boolean;
 };
 
 type PreferencesContextValue = {
   language: AppLanguage;
+  countWorkingSetsOnly: boolean;
   isHydrated: boolean;
   setLanguage: (language: AppLanguage) => Promise<void>;
+  setCountWorkingSetsOnly: (countWorkingSetsOnly: boolean) => Promise<void>;
 };
+
+/**
+ * Off by default: turning it on would silently redraw the set count on every
+ * workout someone already logged. Opting in is a choice; being surprised is not.
+ */
+const DEFAULT_COUNT_WORKING_SETS_ONLY = false;
 
 const PREFERENCES_STORAGE_KEY = 'lyfttrack:preferences:v1';
 
@@ -25,13 +34,12 @@ function getInitialLanguage(): AppLanguage {
 
 export function PreferencesProvider({ children }: PropsWithChildren) {
   const [language, setLanguageState] = useState<AppLanguage>(getInitialLanguage);
+  const [countWorkingSetsOnly, setCountWorkingSetsOnlyState] = useState(DEFAULT_COUNT_WORKING_SETS_ONLY);
   const [isHydrated, setIsHydrated] = useState(false);
 
-  const persistLanguage = useCallback(async (nextLanguage: AppLanguage) => {
-    const payload: StoredPreferences = {
-      language: nextLanguage,
-    };
-
+  // Writes the whole payload: persisting one key at a time would drop the other
+  // preference every time either one changed.
+  const persistPreferences = useCallback(async (payload: StoredPreferences) => {
     await AsyncStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(payload));
   }, []);
 
@@ -40,9 +48,15 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
 
     await Promise.all([
       i18n.changeLanguage(nextLanguage),
-      persistLanguage(nextLanguage),
+      persistPreferences({ language: nextLanguage, countWorkingSetsOnly }),
     ]);
-  }, [persistLanguage]);
+  }, [countWorkingSetsOnly, persistPreferences]);
+
+  const setCountWorkingSetsOnly = useCallback(async (nextValue: boolean) => {
+    setCountWorkingSetsOnlyState(nextValue);
+
+    await persistPreferences({ language, countWorkingSetsOnly: nextValue });
+  }, [language, persistPreferences]);
 
   useEffect(() => {
     let isMounted = true;
@@ -56,6 +70,10 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
         }
 
         const parsed = JSON.parse(rawStoredPreferences) as StoredPreferences;
+        if (typeof parsed.countWorkingSetsOnly === 'boolean') {
+          setCountWorkingSetsOnlyState(parsed.countWorkingSetsOnly);
+        }
+
         const storedLanguage = parsed.language;
 
         if (!isSupportedLanguage(storedLanguage)) {
@@ -82,9 +100,11 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
 
   const contextValue = useMemo<PreferencesContextValue>(() => ({
     language,
+    countWorkingSetsOnly,
     isHydrated,
     setLanguage,
-  }), [isHydrated, language, setLanguage]);
+    setCountWorkingSetsOnly,
+  }), [countWorkingSetsOnly, isHydrated, language, setCountWorkingSetsOnly, setLanguage]);
 
   return <PreferencesContext.Provider value={contextValue}>{children}</PreferencesContext.Provider>;
 }

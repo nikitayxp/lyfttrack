@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
+import { isAllowedLanReturn } from '@/services/oauthLanReturn';
 import { supabase } from '@/services/supabase';
 
 const palette = Colors.dark;
@@ -76,6 +77,23 @@ export default function OAuthCallbackScreen() {
     let cancelled = false;
 
     const exchangeSession = async () => {
+      // Dev LAN OAuth: production callback forwards tokens back to Metro IP (#69).
+      if (typeof window !== 'undefined' && window.location) {
+        const current = new URL(window.location.href);
+        const lanReturn = current.searchParams.get('lan_return');
+
+        if (lanReturn && isAllowedLanReturn(lanReturn)) {
+          const dest = new URL(lanReturn);
+          current.searchParams.delete('lan_return');
+          current.searchParams.forEach((value, key) => {
+            dest.searchParams.set(key, value);
+          });
+          dest.hash = current.hash;
+          window.location.replace(dest.toString());
+          return;
+        }
+      }
+
       const browser = readBrowserOAuthParams();
       const errorDescription =
         browser.error || readRouteValue(params.error_description) || readRouteValue(params.error);

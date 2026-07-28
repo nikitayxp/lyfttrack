@@ -16,6 +16,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { ExerciseThumbnail } from '@/components/common/ExerciseThumbnail';
+import { InlineToast } from '@/components/common/InlineToast';
+import { WorkoutActionsMenu, type WorkoutMenuAction } from '@/components/workout/WorkoutActionsMenu';
 import { usePreferences } from '@/context/PreferencesContext';
 import {
   getAuthenticatedUserOrThrow,
@@ -30,6 +32,8 @@ import {
 } from '@/constants/exerciseCatalog';
 import { formatRelativeTime } from '@/utils/dateUtils';
 import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/exerciseLocalization';
+import { buildWorkoutUrl } from '@/utils/shareLinks';
+import { shareWorkout } from '@/utils/shareWorkout';
 
 const palette = Colors.dark;
 const SCREEN_BG = palette.bgPrimary;
@@ -122,6 +126,8 @@ export default function WorkoutDetailsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [shareNotice, setShareNotice] = useState<{ message: string; tone: 'info' | 'error' } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -160,6 +166,47 @@ export default function WorkoutDetailsScreen() {
 
     router.push(`/workout/edit/${encodeURIComponent(workoutId)}` as any);
   }, [workoutId]);
+
+  const handleMenuSelect = useCallback(
+    async (action: WorkoutMenuAction) => {
+      setMenuVisible(false);
+
+      if (action === 'edit') {
+        handleEditWorkout();
+        return;
+      }
+
+      if (action === 'copy') {
+        handleCopyWorkout();
+        return;
+      }
+
+      if (!details) {
+        return;
+      }
+
+      const outcome = await shareWorkout({
+        title: details.name,
+        summary: t('feed.shareSummary', {
+          // Totals rather than the viewer's preference: the message is read by
+          // someone else.
+          sets: details.totalSets,
+          exercises: details.exercises.length,
+        }),
+        url: buildWorkoutUrl(details.id),
+      });
+
+      if (outcome === 'copied') {
+        setShareNotice({ message: t('feed.shareCopiedDescription'), tone: 'info' });
+        return;
+      }
+
+      if (outcome === 'unavailable') {
+        setShareNotice({ message: t('feed.shareUnavailableDescription'), tone: 'error' });
+      }
+    },
+    [details, handleCopyWorkout, handleEditWorkout, t]
+  );
 
   const loadDetails = useCallback(async () => {
     if (!workoutId) {
@@ -208,8 +255,24 @@ export default function WorkoutDetailsScreen() {
 
         <Text style={styles.headerTitle}>{t('workoutDetails.headerTitle')}</Text>
 
-        <View style={styles.headerSpacer} />
+        <TouchableOpacity
+          style={styles.backButton}
+          activeOpacity={ACTIVE_OPACITY}
+          onPress={() => setMenuVisible(true)}
+          disabled={!details}
+          accessibilityRole="button"
+          accessibilityLabel={t('feed.workoutActions', { defaultValue: 'Workout actions' })}
+        >
+          <Ionicons name="ellipsis-horizontal" size={21} color={details ? palette.textPrimary : palette.textMuted} />
+        </TouchableOpacity>
       </View>
+
+      <WorkoutActionsMenu
+        visible={menuVisible}
+        canManage={isOwnWorkout}
+        onClose={() => setMenuVisible(false)}
+        onSelect={(action) => void handleMenuSelect(action)}
+      />
 
       {isLoading ? (
         <View style={styles.statusWrap}>
@@ -250,6 +313,12 @@ export default function WorkoutDetailsScreen() {
             <Text style={styles.workoutName}>{details.name}</Text>
             {details.notes ? <Text style={styles.workoutNotes}>{details.notes}</Text> : null}
 
+            <InlineToast
+              message={shareNotice?.message ?? null}
+              tone={shareNotice?.tone}
+              onDismiss={() => setShareNotice(null)}
+            />
+
             <View style={styles.statsGrid}>
               <View style={styles.statCard}>
                 <Text style={styles.statLabel}>{t('workoutDetails.durationLabel')}</Text>
@@ -277,27 +346,6 @@ export default function WorkoutDetailsScreen() {
               </View>
             </View>
 
-            <View style={styles.actionRow}>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.actionButtonPrimary]}
-                activeOpacity={ACTIVE_OPACITY}
-                onPress={handleCopyWorkout}
-              >
-                <Ionicons name="copy-outline" size={16} color="#FFFFFF" />
-                <Text style={styles.actionButtonTextPrimary}>{t('workoutDetails.copyWorkout')}</Text>
-              </TouchableOpacity>
-
-              {isOwnWorkout ? (
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.actionButtonSecondary]}
-                  activeOpacity={ACTIVE_OPACITY}
-                  onPress={handleEditWorkout}
-                >
-                  <Ionicons name="create-outline" size={16} color={palette.textPrimary} />
-                  <Text style={styles.actionButtonTextSecondary}>{t('workoutDetails.editWorkout')}</Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
           </View>
 
           {details.exercises.length === 0 ? (
@@ -443,10 +491,6 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '800',
   },
-  headerSpacer: {
-    width: 36,
-    height: 36,
-  },
   scroll: {
     flex: 1,
     backgroundColor: ROOT_SCREEN_BG,
@@ -587,39 +631,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     textAlign: 'center',
     fontVariant: ['tabular-nums'],
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 14,
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 11,
-    borderRadius: Radius.button,
-    borderWidth: 1,
-  },
-  actionButtonPrimary: {
-    backgroundColor: palette.accent,
-    borderColor: palette.accent,
-  },
-  actionButtonSecondary: {
-    backgroundColor: palette.surface,
-    borderColor: palette.inputStroke,
-  },
-  actionButtonTextPrimary: {
-    color: palette.textPrimary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  actionButtonTextSecondary: {
-    color: '#E5E7EB',
-    fontSize: 13,
-    fontWeight: '700',
   },
   emptyCard: {
     borderRadius: Radius.card,

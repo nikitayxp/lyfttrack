@@ -1,14 +1,19 @@
+import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { ActivityIndicator, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
+import { InlineToast } from '@/components/common/InlineToast';
 import { PrBadge } from '@/components/common/PrBadge';
+import { WorkoutActionsMenu, type WorkoutMenuAction } from '@/components/workout/WorkoutActionsMenu';
 import { usePreferences } from '@/context/PreferencesContext';
 import type { WorkoutFeedItem } from '@/services/workoutService';
 import { formatRelativeTime } from '@/utils/dateUtils';
 import { getLocalizedExerciseName } from '@/utils/exerciseLocalization';
+import { buildWorkoutUrl } from '@/utils/shareLinks';
+import { shareWorkout } from '@/utils/shareWorkout';
 
 const palette = Colors.dark;
 const CARD_BG = palette.surface;
@@ -23,6 +28,9 @@ type WorkoutFeedCardProps = {
   onToggleLike?: () => void;
   onOpenComments?: () => void;
   onCopyWorkout?: () => void;
+  onEditWorkout?: () => void;
+  /** Whether the viewer owns this workout, which decides the menu contents. */
+  canManage?: boolean;
   disableInteractions?: boolean;
 };
 
@@ -71,8 +79,12 @@ export function WorkoutFeedCard({
   onToggleLike,
   onOpenComments,
   onCopyWorkout,
+  onEditWorkout,
+  canManage = false,
   disableInteractions = false,
 }: WorkoutFeedCardProps) {
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [shareNotice, setShareNotice] = useState<{ message: string; tone: 'info' | 'error' } | null>(null);
   const { t } = useTranslation();
   const { language, countWorkingSetsOnly } = usePreferences();
   const displayName = profileDisplayName(workout, t('publicProfile.athleteFallback'));
@@ -90,6 +102,40 @@ export function WorkoutFeedCard({
   const resolvedHasLiked = hasLiked ?? workout.has_liked;
   const resolvedIsLikePending = isLikePending ?? false;
   const interactionsDisabled = disableInteractions || !onToggleLike;
+
+  async function handleMenuSelect(action: WorkoutMenuAction) {
+    setMenuVisible(false);
+
+    if (action === 'edit') {
+      onEditWorkout?.();
+      return;
+    }
+
+    if (action === 'copy') {
+      onCopyWorkout?.();
+      return;
+    }
+
+    // Totals, not the viewer's set-counting preference: the message is read by
+    // someone else, who has no preference of ours to honour.
+    const outcome = await shareWorkout({
+      title: workout.name,
+      summary: t('feed.shareSummary', {
+        sets: workout.totalSets,
+        exercises: localizedExerciseNames.length,
+      }),
+      url: buildWorkoutUrl(workout.id),
+    });
+
+    if (outcome === 'copied') {
+      setShareNotice({ message: t('feed.shareCopiedDescription'), tone: 'info' });
+      return;
+    }
+
+    if (outcome === 'unavailable') {
+      setShareNotice({ message: t('feed.shareUnavailableDescription'), tone: 'error' });
+    }
+  }
 
   function openWorkoutDetails() {
     router.push(`/workout/${workout.id}` as any);
@@ -174,6 +220,19 @@ export function WorkoutFeedCard({
         ) : null}
       </TouchableOpacity>
 
+      <WorkoutActionsMenu
+        visible={menuVisible}
+        canManage={canManage}
+        onClose={() => setMenuVisible(false)}
+        onSelect={(action) => void handleMenuSelect(action)}
+      />
+
+      <InlineToast
+        message={shareNotice?.message ?? null}
+        tone={shareNotice?.tone}
+        onDismiss={() => setShareNotice(null)}
+      />
+
       <View style={styles.interactionRow}>
         <TouchableOpacity
           style={[styles.interactionButton, resolvedHasLiked && styles.likeButtonActive]}
@@ -207,17 +266,17 @@ export function WorkoutFeedCard({
           <Text style={styles.interactionText}>{resolvedCommentsCount}</Text>
         </TouchableOpacity>
 
-        {onCopyWorkout ? (
-          <TouchableOpacity
-            style={styles.interactionButtonStatic}
-            activeOpacity={ACTIVE_OPACITY}
-            onPress={onCopyWorkout}
-            accessibilityRole="button"
-            accessibilityLabel={t('feed.copyWorkout', { defaultValue: 'Copy workout' })}
-          >
-            <Ionicons name="copy-outline" size={17} color={palette.textMuted} />
-          </TouchableOpacity>
-        ) : null}
+        {/* One menu instead of a lone copy icon: it also gives someone else's
+            workout a share action without offering edit or copy. */}
+        <TouchableOpacity
+          style={styles.interactionButtonStatic}
+          activeOpacity={ACTIVE_OPACITY}
+          onPress={() => setMenuVisible(true)}
+          accessibilityRole="button"
+          accessibilityLabel={t('feed.workoutActions', { defaultValue: 'Workout actions' })}
+        >
+          <Ionicons name="ellipsis-horizontal" size={17} color={palette.textMuted} />
+        </TouchableOpacity>
       </View>
 
       {('latest_comment' in workout && (workout as any).latest_comment) ? (

@@ -23,14 +23,14 @@ import {
   type WorkoutSetDraft,
   WorkoutSaveValidationError,
 } from './workoutSession.types';
-import { countPersonalRecords, type PersonalRecordSetSample } from '@/utils/personalRecords';
+import { findPersonalRecordExerciseIds, type PersonalRecordSetSample } from '@/utils/personalRecords';
 
 // ---------- Create Workout ----------
 
-async function countNewPersonalRecords(
+async function findNewPersonalRecordExerciseIds(
   currentWorkoutId: string,
   completedSetDrafts: WorkoutSetDraft[],
-): Promise<number> {
+): Promise<string[]> {
   const currentSamples: PersonalRecordSetSample[] = [];
 
   for (const draft of completedSetDrafts) {
@@ -44,7 +44,7 @@ async function countNewPersonalRecords(
     });
   }
 
-  if (currentSamples.length === 0) return 0;
+  if (currentSamples.length === 0) return [];
 
   const { data: currentWorkout, error: currentWorkoutError } = await supabase
     .from('workouts')
@@ -53,7 +53,7 @@ async function countNewPersonalRecords(
     .maybeSingle();
 
   if (currentWorkoutError || !currentWorkout) {
-    return 0;
+    return [];
   }
 
   const exerciseIds = [...new Set(currentSamples.map((sample) => sample.exerciseId))];
@@ -67,7 +67,7 @@ async function countNewPersonalRecords(
     .lt('start_time', currentWorkout.start_time);
 
   if (!priorWorkouts || priorWorkouts.length === 0) {
-    return 0;
+    return [];
   }
 
   const { data: previousSets } = await supabase
@@ -79,7 +79,7 @@ async function countNewPersonalRecords(
     )
     .in('exercise_id', exerciseIds);
 
-  return countPersonalRecords(
+  return findPersonalRecordExerciseIds(
     currentSamples,
     (previousSets ?? []).map((row) => ({
       exerciseId: row.exercise_id ?? '',
@@ -129,11 +129,11 @@ export async function finishWorkout(input: FinishWorkoutInput): Promise<FinishWo
     throw error;
   }
 
-  let prCount = 0;
+  let prExerciseIds: string[] = [];
   try {
-    prCount = await countNewPersonalRecords(saveResult.workoutId, completedSetDrafts);
+    prExerciseIds = await findNewPersonalRecordExerciseIds(saveResult.workoutId, completedSetDrafts);
   } catch {
-    // Non-critical — default to 0 if PR check fails
+    // Non-critical — default to none if PR check fails
   }
 
   return {
@@ -145,7 +145,8 @@ export async function finishWorkout(input: FinishWorkoutInput): Promise<FinishWo
     durationSeconds: calculateDurationSeconds(input.startTime, endTime),
     startTime: input.startTime,
     endTime,
-    prCount,
+    prCount: prExerciseIds.length,
+    prExerciseIds,
   };
 }
 

@@ -40,6 +40,7 @@ import {
   getExercisesCatalog,
   getLastExerciseRestTimes,
   getRecentExerciseIds,
+  getExercisePersonalBests,
   getPreviousExercisePerformance,
   getRoutineById,
   getWorkoutDetails,
@@ -59,8 +60,10 @@ import {
   normalizeSetTypeOption,
   getCompletedExerciseNames,
   type ActiveExercise,
+  type ActiveSet,
   type CopySetSeed,
   type ExerciseRow,
+  type SummaryExercise,
 } from '@/hooks/useActiveWorkoutState';
 import { useWorkoutContext } from '@/context/WorkoutContext';
 
@@ -80,12 +83,23 @@ import {
   getLocalizedExerciseName,
   type ExerciseNameSource,
 } from '@/utils/exerciseLocalization';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { matchesExerciseSearch } from '@/utils/exerciseSearch';
+import {
+  EMPTY_PERSONAL_BEST,
+  isRecordSet,
+  mergePersonalBest,
+  type PersonalBest,
+} from '@/utils/personalRecords';
 import { formatPreviousSetLabel, previousColumnWidthForSets, previousLabelFontSize, previousSetForRow } from '@/utils/previousPerformance';
 
 const palette = Colors.dark;
 const DESKTOP_WEB_MIN_WIDTH = 768;
 const ROOT_SCREEN_BG = palette.bgPrimary;
+// Few on purpose: dumping 20 recents would make "scroll down for the rest"
+// an empty promise.
+const PICKER_RECENT_LIMIT = 5;
+
 const MUSCLE_FILTER_CHIP_KEYS: readonly (ExerciseLibraryMuscleFilter | 'recent')[] = [
   'all',
   'recent',
@@ -245,6 +259,7 @@ export default function ActiveWorkout() {
   const [selectedEquipmentFilter, setSelectedEquipmentFilter] = useState<ExerciseLibraryEquipmentFilter>('all');
   const [createExerciseVisible, setCreateExerciseVisible] = useState(false);
   const [catalogExercises, setCatalogExercises] = useState<ExerciseRow[]>([]);
+  const [recentExerciseIds, setRecentExerciseIds] = useState<string[]>([]);
   const [preloadedRoutineId, setPreloadedRoutineId] = useState<string | null>(null);
   const [preloadedTemplateId, setPreloadedTemplateId] = useState<string | null>(null);
   const [preloadedCopyWorkoutId, setPreloadedCopyWorkoutId] = useState<string | null>(null);
@@ -267,7 +282,7 @@ export default function ActiveWorkout() {
   const [newExerciseMuscleGroup, setNewExerciseMuscleGroup] = useState<ExerciseMuscleKey | null>(null);
   const [newExerciseEquipment, setNewExerciseEquipment] = useState<ExerciseEquipmentKey | null>(null);
   const [finishSummary, setFinishSummary] = useState<FinishWorkoutResult | null>(null);
-  const [summaryExerciseNames, setSummaryExerciseNames] = useState<ExerciseNameSource[]>([]);
+  const [summaryExerciseNames, setSummaryExerciseNames] = useState<SummaryExercise[]>([]);
   const [isSummaryVisible, setIsSummaryVisible] = useState(false);
   const [pendingDeleteSet, setPendingDeleteSet] = useState<{ exerciseId: string; setId: string; setNumber: number } | null>(null);
   const [pendingRemoveExerciseIndex, setPendingRemoveExerciseIndex] = useState<number | null>(null);
@@ -276,9 +291,87 @@ export default function ActiveWorkout() {
   const [previousPerformanceByExerciseId, setPreviousPerformanceByExerciseId] = useState<
     Record<string, PreviousExercisePerformanceSet[]>
   >({});
+  const [personalBestsByExerciseId, setPersonalBestsByExerciseId] = useState<Record<string, PersonalBest>>({});
+  const [recordSetIds, setRecordSetIds] = useState<Set<string>>(new Set());
   const exerciseCatalogByFilterRef = useRef<Map<string, ExerciseRow[]>>(new Map());
 
   const timerLabel = useMemo(() => formatElapsedTime(elapsedSeconds), [elapsedSeconds]);
+
+  const activeExerciseIdsKey = useMemo(
+    () => activeExercises.map((exercise) => exercise.exercise.id).sort().join(','),
+    [activeExercises]
+  );
+
+  // All-time bests, not the previous session shown in the Anterior column.
+  // Beating the last workout is not the same as setting a record, and using the
+  // wrong one here would contradict the count on the finish screen.
+  useEffect(() => {
+    const exerciseIds = activeExerciseIdsKey ? activeExerciseIdsKey.split(',') : [];
+
+    if (exerciseIds.length === 0) {
+      setPersonalBestsByExerciseId({});
+      return;
+    }
+
+    let isMounted = true;
+
+    void getExercisePersonalBests(exerciseIds, null)
+      .then((bests) => {
+        if (isMounted) {
+          setPersonalBestsByExerciseId(bests);
+        }
+      })
+      .catch(() => {
+        // Non-critical: without bests no set is flagged, which is the safe
+        // direction to fail — a missing badge beats a wrong one.
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeExerciseIdsKey]);
+
+  const toggleSetAndCheckRecord = useCallback(
+    (exercise: ActiveExercise, setItem: ActiveSet) => {
+      const isCompleting = !setItem.completed;
+      const exerciseId = exercise.exercise.id;
+
+      if (!isCompleting) {
+        setRecordSetIds((current) => {
+          if (!current.has(setItem.id)) {
+            return current;
+          }
+
+          const next = new Set(current);
+          next.delete(setItem.id);
+          return next;
+        });
+
+        handleSetCompletionToggle(exercise.id, setItem.id);
+        return;
+      }
+
+      const best = personalBestsByExerciseId[exerciseId] ?? EMPTY_PERSONAL_BEST;
+      const sample = {
+        weight: toSafeNumber(setItem.weightInput, { min: 0, max: INPUT_LIMITS.weightMax, decimals: 2 }),
+        reps: toSafeInteger(setItem.repsInput, { min: 0, max: INPUT_LIMITS.repsMax }),
+      };
+
+      if (isRecordSet(sample, best)) {
+        setRecordSetIds((current) => new Set(current).add(setItem.id));
+
+        // Raise the bar so a lighter set later in the same exercise does not
+        // also claim the record.
+        setPersonalBestsByExerciseId((current) => ({
+          ...current,
+          [exerciseId]: mergePersonalBest(current[exerciseId] ?? EMPTY_PERSONAL_BEST, sample),
+        }));
+      }
+
+      handleSetCompletionToggle(exercise.id, setItem.id);
+    },
+    [handleSetCompletionToggle, personalBestsByExerciseId]
+  );
 
   const activeExerciseIds = useMemo(
     () => activeExercises.map((exercise) => exercise.exercise.id).filter(Boolean),
@@ -387,6 +480,30 @@ export default function ActiveWorkout() {
       setIsLoadingExercises(false);
     }
   }, [selectedEquipmentFilter]);
+
+  // Carregado sempre que o picker abre, e nao apenas no filtro Recentes: a
+  // lista por omissao passa a comecar por eles.
+  useEffect(() => {
+    if (!exercisePickerVisible) {
+      return;
+    }
+
+    let isMounted = true;
+
+    void getRecentExerciseIds()
+      .then((ids) => {
+        if (isMounted) {
+          setRecentExerciseIds(ids);
+        }
+      })
+      .catch(() => {
+        // Sem recentes a lista fica na ordem normal, que e o comportamento antigo.
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [exercisePickerVisible]);
 
   useEffect(() => {
     if (!exercisePickerVisible) {
@@ -801,6 +918,37 @@ export default function ActiveWorkout() {
     );
   }, [catalogExercises, exercisePickerQuery, language, t]);
 
+  // Recentes primeiro, resto do catalogo a seguir. So na vista por omissao:
+  // ao pesquisar, o utilizador ja disse o que procura e mandar os recentes
+  // para cima da lista so atrapalha a leitura dos resultados.
+  const pickerSections = useMemo(() => {
+    const hasQuery = exercisePickerQuery.trim().length > 0;
+
+    if (hasQuery || selectedMuscleFilter === 'recent') {
+      return [{ key: 'results', titleKey: null, items: filteredCatalogExercises }];
+    }
+
+    const visibleById = new Map(filteredCatalogExercises.map((exercise) => [exercise.id, exercise]));
+    const recentItems = recentExerciseIds
+      .slice(0, PICKER_RECENT_LIMIT)
+      .flatMap((id) => {
+        const match = visibleById.get(id);
+        return match ? [match] : [];
+      });
+
+    if (recentItems.length === 0) {
+      return [{ key: 'all', titleKey: null, items: filteredCatalogExercises }];
+    }
+
+    const recentIdSet = new Set(recentItems.map((exercise) => exercise.id));
+    const rest = filteredCatalogExercises.filter((exercise) => !recentIdSet.has(exercise.id));
+
+    return [
+      { key: 'recent', titleKey: 'workout.pickerRecentSection', items: recentItems },
+      { key: 'all', titleKey: 'workout.pickerAllSection', items: rest },
+    ];
+  }, [exercisePickerQuery, filteredCatalogExercises, recentExerciseIds, selectedMuscleFilter]);
+
   const getMuscleFilterLabel = (filterKey: ExerciseLibraryMuscleFilter | 'recent'): string => {
     if (filterKey === 'all') {
       return language === 'pt' ? 'Todos' : 'All';
@@ -1066,10 +1214,16 @@ export default function ActiveWorkout() {
                       : setItem.set_type === 'drop' ? 'failure'
                       : 'normal';
 
+                    const isRecordBreakingSet = recordSetIds.has(setItem.id);
+
                     return (
                       <View key={setItem.id} style={styles.setRowWrapper}>
                         <Pressable
-                          style={[styles.tableRow, setItem.completed && styles.completedRow]}
+                          style={[
+                            styles.tableRow,
+                            setItem.completed && styles.completedRow,
+                            isRecordBreakingSet && styles.recordRow,
+                          ]}
                           onLongPress={() => {
                             if (exercise.sets.length <= 1) {
                               Alert.alert(t('workout.deleteSetTitle'), t('workout.deleteSetKeepOne'));
@@ -1183,7 +1337,7 @@ export default function ActiveWorkout() {
                             <TouchableOpacity
                               style={[styles.checkButton, setItem.completed && styles.checkButtonCompleted]}
                               activeOpacity={ACTIVE_OPACITY}
-                              onPress={() => handleSetCompletionToggle(exercise.id, setItem.id)}
+                              onPress={() => toggleSetAndCheckRecord(exercise, setItem)}
                               accessibilityRole="button"
                               accessibilityLabel={setItem.completed ? t('accessibility.markSetIncomplete', { defaultValue: 'Mark set incomplete' }) : t('accessibility.markSetComplete', { defaultValue: 'Mark set complete' })}
                               hitSlop={HIT_SLOP}
@@ -1191,11 +1345,30 @@ export default function ActiveWorkout() {
                               <Ionicons
                                 name={setItem.completed ? 'checkmark-circle' : 'ellipse-outline'}
                                 size={22}
-                                color={setItem.completed ? palette.accent : palette.textMuted}
+                                color={
+                                  isRecordBreakingSet
+                                    ? palette.warningText
+                                    : setItem.completed
+                                      ? palette.accent
+                                      : palette.textMuted
+                                }
                               />
                             </TouchableOpacity>
                           </View>
                         </Pressable>
+
+                        {/* At the moment of confirming, not only in the summary
+                            at the end: that was the whole complaint. */}
+                        {isRecordBreakingSet ? (
+                          <Reanimated.View
+                            entering={FadeInDown.duration(220)}
+                            style={styles.recordBanner}
+                            accessibilityLiveRegion="polite"
+                          >
+                            <Ionicons name="trophy" size={13} color={palette.warningText} />
+                            <Text style={styles.recordBannerText}>{t('workout.newRecord')}</Text>
+                          </Reanimated.View>
+                        ) : null}
 
                         <View style={styles.sideToggleRow}>
                           {([
@@ -1483,7 +1656,13 @@ export default function ActiveWorkout() {
                     <Text style={styles.modalStatusText}>{t('exercise.emptySearchSubtitle')}</Text>
                   </View>
                 ) : (
-                  filteredCatalogExercises.map((exercise) => {
+                  pickerSections.map((section) => (
+                    <View key={section.key}>
+                      {section.titleKey ? (
+                        <Text style={styles.modalSectionLabel}>{t(section.titleKey)}</Text>
+                      ) : null}
+
+                      {section.items.map((exercise) => {
                     return (
                       <TouchableOpacity
                         key={exercise.id}
@@ -1506,7 +1685,9 @@ export default function ActiveWorkout() {
                         <Ionicons name="add-circle-outline" size={22} color={palette.accent} />
                       </TouchableOpacity>
                     );
-                  })
+                      })}
+                    </View>
+                  ))
                 )}
               </ScrollView>
             </SafeAreaView>
@@ -1624,6 +1805,7 @@ export default function ActiveWorkout() {
         completedSetCount={finishSummary?.completedSetCount ?? 0}
         completedWorkingSetCount={finishSummary?.completedWorkingSetCount ?? 0}
         exerciseNames={summaryExerciseNames}
+        prExerciseIds={finishSummary?.prExerciseIds ?? []}
         onShareAndFinish={handleShareAndFinish}
       />
 
@@ -2014,6 +2196,30 @@ const styles = StyleSheet.create({
     backgroundColor: palette.completedRowBg,
     borderRadius: Radius.md,
   },
+  recordRow: {
+    backgroundColor: 'rgba(251, 191, 36, 0.12)',
+    borderRadius: Radius.md,
+  },
+  recordBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 6,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    marginLeft: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.32)',
+    backgroundColor: 'rgba(251, 191, 36, 0.12)',
+  },
+  recordBannerText: {
+    color: palette.warningText,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
   cellSet: {
     width: 38,
     minWidth: 38,
@@ -2375,6 +2581,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  modalSectionLabel: {
+    color: palette.textMuted,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 12,
+    marginBottom: 6,
+    paddingHorizontal: 4,
   },
   modalExerciseTextWrap: {
     flex: 1,

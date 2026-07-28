@@ -98,6 +98,8 @@ export type WorkoutFeedItem = Pick<
   profile: PublicProfile | null;
   totalVolume: number;
   totalSets: number;
+  /** Sets excluding warm-ups, for the "count working sets only" preference. */
+  workingSets: number;
   prCount: number | null;
   exerciseNames: ExerciseNameSource[];
   exerciseGroups: WorkoutFeedExerciseGroup[];
@@ -163,6 +165,8 @@ export type WorkoutDetails = Pick<
   exercises: WorkoutDetailsExercise[];
   totalVolume: number;
   totalSets: number;
+  /** Sets excluding warm-ups, for the "count working sets only" preference. */
+  workingSets: number;
   prCount: number;
   /** Ids of the sets that set the records counted in prCount. */
   recordSetIds: string[];
@@ -429,6 +433,7 @@ function sortWorkoutFeedExerciseSets(a: WorkoutFeedExerciseSet, b: WorkoutFeedEx
 type WorkoutFeedAggregate = {
   totalVolume: number;
   totalSets: number;
+  workingSets: number;
   exerciseNames: ExerciseNameSource[];
   exerciseGroups: WorkoutFeedExerciseGroup[];
 };
@@ -448,6 +453,7 @@ function aggregateWorkoutFeedSets(rows: RawWorkoutFeedSetRow[]): Map<string, Wor
       aggregateByWorkout.get(workoutId) ?? {
         totalVolume: 0,
         totalSets: 0,
+        workingSets: 0,
         exerciseNames: [],
         exerciseGroups: [],
       };
@@ -467,6 +473,13 @@ function aggregateWorkoutFeedSets(rows: RawWorkoutFeedSetRow[]): Map<string, Wor
     const reps = normalizeNumber(row.reps) ?? 0;
 
     aggregate.totalSets += 1;
+
+    // Both counts are carried so the screens can honour the preference without
+    // the services having to know it exists.
+    if (normalizeSetType(row.set_type) !== 'warmup') {
+      aggregate.workingSets += 1;
+    }
+
     aggregate.totalVolume += Math.max(0, weight) * Math.max(0, reps);
 
     aggregate.exerciseNames.push(exerciseNameSource);
@@ -1704,6 +1717,7 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
       profile: profileByUserId.get(workout.user_id) ?? null,
       totalVolume: Math.round(aggregate?.totalVolume ?? 0),
       totalSets: aggregate?.totalSets ?? 0,
+      workingSets: aggregate?.workingSets ?? 0,
       prCount: prCountByWorkoutId.get(workout.id) ?? 0,
       exerciseNames: aggregate?.exerciseNames ?? [],
       exerciseGroups: aggregate?.exerciseGroups ?? [],
@@ -2192,6 +2206,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
     exercises: detailsExercises,
     totalVolume: Math.round(totalVolume),
     totalSets: allSets.length,
+    workingSets: allSets.filter((setItem) => setItem.set_type !== 'warmup').length,
     prCount,
     durationSeconds: workout.end_time ? calculateDurationSeconds(workout.start_time, workout.end_time) : 0,
     recordSetIds,
@@ -2290,6 +2305,7 @@ export async function getUserWorkouts(userId: string, page = 0, limit = 20): Pro
       profile: profileByUserId.get(workout.user_id) ?? null,
       totalVolume: Math.round(aggregate?.totalVolume ?? 0),
       totalSets: aggregate?.totalSets ?? 0,
+      workingSets: aggregate?.workingSets ?? 0,
       prCount: prCountByWorkoutId.get(workout.id) ?? 0,
       exerciseNames: aggregate?.exerciseNames ?? [],
       exerciseGroups: aggregate?.exerciseGroups ?? [],

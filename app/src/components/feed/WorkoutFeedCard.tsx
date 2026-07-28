@@ -74,7 +74,7 @@ export function WorkoutFeedCard({
   disableInteractions = false,
 }: WorkoutFeedCardProps) {
   const { t } = useTranslation();
-  const { language } = usePreferences();
+  const { language, countWorkingSetsOnly } = usePreferences();
   const displayName = profileDisplayName(workout, t('publicProfile.athleteFallback'));
   const localizedExerciseNames = workout.exerciseNames.map((exercise) =>
     getLocalizedExerciseName(exercise, language)
@@ -135,7 +135,9 @@ export function WorkoutFeedCard({
 
         <View style={styles.metricsRow}>
           <View style={styles.metricBlock}>
-            <Text style={styles.metricValue}>{workout.totalSets}</Text>
+            <Text style={styles.metricValue}>
+              {countWorkingSetsOnly ? workout.workingSets : workout.totalSets}
+            </Text>
             <Text style={styles.metricLabel}>{t('feed.metrics.sets')}</Text>
           </View>
           <View style={styles.metricDivider} />

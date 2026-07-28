@@ -31,6 +31,14 @@ const LANGUAGE_OPTIONS: readonly {
   { key: 'pt', labelKey: 'language.portuguese' },
 ];
 
+const SET_COUNTING_OPTIONS: readonly {
+  workingOnly: boolean;
+  labelKey: 'settings.setCountingAll' | 'settings.setCountingWorkingOnly';
+}[] = [
+  { workingOnly: false, labelKey: 'settings.setCountingAll' },
+  { workingOnly: true, labelKey: 'settings.setCountingWorkingOnly' },
+];
+
 const PRIVACY_OPTIONS: readonly {
   key: 'public' | 'friends' | 'private';
   labelKey: 'settings.visibilityPublic' | 'settings.visibilityFriends' | 'settings.visibilityPrivate';
@@ -52,7 +60,7 @@ export default function ProfileSettingsScreen() {
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isUpdatingLanguage, setIsUpdatingLanguage] = useState(false);
   const { t } = useTranslation();
-  const { language, setLanguage } = usePreferences();
+  const { language, setLanguage, countWorkingSetsOnly, setCountWorkingSetsOnly } = usePreferences();
   const [visibility, setVisibility] = useState<'public' | 'friends' | 'private'>('public');
   const [isUpdatingPrivacy, setIsUpdatingPrivacy] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
@@ -315,6 +323,36 @@ export default function ProfileSettingsScreen() {
                   onPress={() => void handleLanguageChange(option.key)}
                   disabled={isUpdatingLanguage}
                   accessibilityRole="button"
+                  accessibilityLabel={t(option.labelKey)}
+                >
+                  <Text style={[styles.languageSegmentText, isSelected && styles.languageSegmentTextSelected]}>
+                    {t(option.labelKey)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.languageSection}>
+          <View style={styles.languageSectionHeader}>
+            <Text style={styles.languageSectionTitle}>{t('settings.setCounting')}</Text>
+          </View>
+
+          <Text style={styles.settingHint}>{t('settings.setCountingHint')}</Text>
+
+          <View style={styles.languageSegmentedControl}>
+            {SET_COUNTING_OPTIONS.map((option) => {
+              const isSelected = option.workingOnly === countWorkingSetsOnly;
+
+              return (
+                <TouchableOpacity
+                  key={option.labelKey}
+                  style={[styles.languageSegmentButton, isSelected && styles.languageSegmentButtonSelected]}
+                  activeOpacity={ACTIVE_OPACITY}
+                  onPress={() => void setCountWorkingSetsOnly(option.workingOnly)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
                   accessibilityLabel={t(option.labelKey)}
                 >
                   <Text style={[styles.languageSegmentText, isSelected && styles.languageSegmentTextSelected]}>
@@ -711,6 +749,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     marginBottom: 2,
+  },
+  settingHint: {
+    color: palette.textMuted,
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: 8,
   },
   languageSegmentedControl: {
     flexDirection: 'row',

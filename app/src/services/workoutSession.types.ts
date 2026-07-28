@@ -48,6 +48,8 @@ export type FinishWorkoutResult = {
   workoutId: string;
   insertedSetCount: number;
   completedSetCount: number;
+  /** Completed sets excluding warm-ups, for the "working sets only" preference. */
+  completedWorkingSetCount: number;
   totalVolume: number;
   durationSeconds: number;
   startTime: string;

@@ -140,6 +140,7 @@ export async function finishWorkout(input: FinishWorkoutInput): Promise<FinishWo
     workoutId: saveResult.workoutId,
     insertedSetCount: saveResult.insertedSetCount,
     completedSetCount: completedSetDrafts.length,
+    completedWorkingSetCount: completedSetDrafts.filter((draft) => draft.setType !== 'warmup').length,
     totalVolume: calculateWorkoutVolume(input.setDrafts),
     durationSeconds: calculateDurationSeconds(input.startTime, endTime),
     startTime: input.startTime,

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { ActivityIndicator, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -5,7 +6,12 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import { PrBadge } from '@/components/common/PrBadge';
+import { DismissibleBottomSheet } from '@/components/common/DismissibleBottomSheet';
+import { ShareWorkoutSheet } from '@/components/workout/ShareWorkoutSheet';
+import { WorkoutActionsMenu, type WorkoutMenuAction } from '@/components/workout/WorkoutActionsMenu';
 import { usePreferences } from '@/context/PreferencesContext';
+import { useAppToast } from '@/context/ToastContext';
+import { useWorkoutShare } from '@/hooks/useWorkoutShare';
 import type { WorkoutFeedItem } from '@/services/workoutService';
 import { formatRelativeTime } from '@/utils/dateUtils';
 import { getLocalizedExerciseName } from '@/utils/exerciseLocalization';
@@ -23,6 +29,9 @@ type WorkoutFeedCardProps = {
   onToggleLike?: () => void;
   onOpenComments?: () => void;
   onCopyWorkout?: () => void;
+  onEditWorkout?: () => void;
+  /** Whether the viewer owns this workout, which decides the menu contents. */
+  canManage?: boolean;
   disableInteractions?: boolean;
 };
 
@@ -71,8 +80,13 @@ export function WorkoutFeedCard({
   onToggleLike,
   onOpenComments,
   onCopyWorkout,
+  onEditWorkout,
+  canManage = false,
   disableInteractions = false,
 }: WorkoutFeedCardProps) {
+  const [sheetMode, setSheetMode] = useState<'closed' | 'menu' | 'share'>('closed');
+  const share = useWorkoutShare();
+  const { showToast } = useAppToast();
   const { t } = useTranslation();
   const { language, countWorkingSetsOnly } = usePreferences();
   const displayName = profileDisplayName(workout, t('publicProfile.athleteFallback'));
@@ -90,6 +104,36 @@ export function WorkoutFeedCard({
   const resolvedHasLiked = hasLiked ?? workout.has_liked;
   const resolvedIsLikePending = isLikePending ?? false;
   const interactionsDisabled = disableInteractions || !onToggleLike;
+
+  function closeSheet() {
+    setSheetMode('closed');
+    share.resetShare();
+  }
+
+  function handleMenuSelect(action: WorkoutMenuAction) {
+    if (action === 'edit') {
+      closeSheet();
+      onEditWorkout?.();
+      return;
+    }
+
+    if (action === 'copy') {
+      closeSheet();
+      onCopyWorkout?.();
+      return;
+    }
+
+    share.prepareShare({
+      workoutId: workout.id,
+      ownerId: workout.user_id ?? null,
+      title: workout.name,
+      summary: t('feed.shareSummary', {
+        sets: countWorkingSetsOnly ? workout.workingSets : workout.totalSets,
+        exercises: localizedExerciseNames.length,
+      }),
+    });
+    setSheetMode('share');
+  }
 
   function openWorkoutDetails() {
     router.push(`/workout/${workout.id}` as any);
@@ -174,6 +218,31 @@ export function WorkoutFeedCard({
         ) : null}
       </TouchableOpacity>
 
+      <DismissibleBottomSheet visible={sheetMode !== 'closed'} onClose={closeSheet}>
+        {sheetMode === 'share' ? (
+          <ShareWorkoutSheet
+            input={share.shareInput}
+            ownerVisibility={share.ownerVisibility}
+            notice={share.notice}
+            onCancel={closeSheet}
+            onChoose={(choice) => {
+              void share.chooseShare(choice).then((result) => {
+                if (result.status === 'copied') {
+                  closeSheet();
+                  // After the sheet exit so our toast is not under the modal /
+                  // racing a browser clipboard banner.
+                  setTimeout(() => {
+                    showToast({ message: result.message, tone: 'info' });
+                  }, 220);
+                }
+              });
+            }}
+          />
+        ) : (
+          <WorkoutActionsMenu canManage={canManage} onSelect={handleMenuSelect} onCancel={closeSheet} />
+        )}
+      </DismissibleBottomSheet>
+
       <View style={styles.interactionRow}>
         <TouchableOpacity
           style={[styles.interactionButton, resolvedHasLiked && styles.likeButtonActive]}
@@ -207,17 +276,17 @@ export function WorkoutFeedCard({
           <Text style={styles.interactionText}>{resolvedCommentsCount}</Text>
         </TouchableOpacity>
 
-        {onCopyWorkout ? (
-          <TouchableOpacity
-            style={styles.interactionButtonStatic}
-            activeOpacity={ACTIVE_OPACITY}
-            onPress={onCopyWorkout}
-            accessibilityRole="button"
-            accessibilityLabel={t('feed.copyWorkout', { defaultValue: 'Copy workout' })}
-          >
-            <Ionicons name="copy-outline" size={17} color={palette.textMuted} />
-          </TouchableOpacity>
-        ) : null}
+        {/* One menu instead of a lone copy icon: it also gives someone else's
+            workout a share action without offering edit or copy. */}
+        <TouchableOpacity
+          style={styles.interactionButtonStatic}
+          activeOpacity={ACTIVE_OPACITY}
+          onPress={() => setSheetMode('menu')}
+          accessibilityRole="button"
+          accessibilityLabel={t('feed.workoutActions', { defaultValue: 'Workout actions' })}
+        >
+          <Ionicons name="ellipsis-horizontal" size={17} color={palette.textMuted} />
+        </TouchableOpacity>
       </View>
 
       {('latest_comment' in workout && (workout as any).latest_comment) ? (

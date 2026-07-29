@@ -56,6 +56,8 @@ type ChartMetric = Extract<ProgressMetric, 'weight' | 'e1rm'>;
 // `shiftPointerLabelX` is not one of them — it is ignored outright while
 // `autoAdjustPointerLabelPosition` is on, which we want for the edge clamping.
 const POINTER_X_CORRECTION = -CHART_EDGE_SPACING;
+/** Must match `styles.activeDataPoint` — gifted-charts centres custom points with dataPointWidth/Height (default 4). */
+const ACTIVE_POINT_SIZE = 12;
 
 /** At most six date labels, evenly spread: one per session overlaps into a smear. */
 function shouldLabelPoint(index: number, total: number): boolean {
@@ -356,6 +358,11 @@ export default function ExerciseDetailScreen() {
         pointerShiftX: POINTER_X_CORRECTION,
         ...(isActive
           ? {
+              // Library anchors customDataPoint at getX/getY minus half of these.
+              // Defaults are 4×4; our hollow ring is 12×12, so without this the
+              // ring sat a few pixels down-right of the line tip (review note).
+              dataPointWidth: ACTIVE_POINT_SIZE,
+              dataPointHeight: ACTIVE_POINT_SIZE,
               customDataPoint: () => <View style={styles.activeDataPoint} />,
             }
           : null),
@@ -847,9 +854,9 @@ const styles = StyleSheet.create({
     transform: [{ translateX: POINTER_X_CORRECTION }],
   },
   activeDataPoint: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: ACTIVE_POINT_SIZE,
+    height: ACTIVE_POINT_SIZE,
+    borderRadius: ACTIVE_POINT_SIZE / 2,
     borderWidth: 2,
     borderColor: palette.textPrimary,
     backgroundColor: 'transparent',

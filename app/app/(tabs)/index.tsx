@@ -23,7 +23,12 @@ import {
   type CommentAuthorProfile,
   type WorkoutCommentWithProfile,
 } from '@/services/interactionService';
-import { getErrorMessage, getFeedWorkouts, type WorkoutFeedItem } from '@/services/workoutService';
+import {
+  getAuthenticatedUserOrThrow,
+  getErrorMessage,
+  getFeedWorkouts,
+  type WorkoutFeedItem,
+} from '@/services/workoutService';
 import { EmptyState } from '@/components/common/EmptyState';
 import { FeedCommentsModal } from '@/components/feed/FeedCommentsModal';
 import { WorkoutFeedCard } from '@/components/feed/WorkoutFeedCard';
@@ -50,6 +55,7 @@ export default function FeedScreen() {
   const [currentPage, setCurrentPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [feedError, setFeedError] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [optimisticLikeState, setOptimisticLikeState] = useState<Record<string, FeedLikeInteractionState>>({});
   const [commentsByWorkoutId, setCommentsByWorkoutId] = useState<Record<string, WorkoutCommentWithProfile[]>>({});
   const [commentCountByWorkoutId, setCommentCountByWorkoutId] = useState<Record<string, number>>({});
@@ -60,6 +66,27 @@ export default function FeedScreen() {
   const [commentInputValue, setCommentInputValue] = useState('');
   const [currentCommentAuthor, setCurrentCommentAuthor] = useState<CommentAuthorProfile | null>(null);
   const [animationEpoch, setAnimationEpoch] = useState(0);
+
+  // Decides whether a card offers edit and copy or only share.
+  useEffect(() => {
+    let cancelled = false;
+
+    getAuthenticatedUserOrThrow()
+      .then((user) => {
+        if (!cancelled) {
+          setCurrentUserId(user.id);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCurrentUserId(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -512,6 +539,9 @@ export default function FeedScreen() {
                 isLikePending={interactionState?.isPending ?? false}
                 onToggleLike={() => void handleToggleLike(item)}
                 onOpenComments={() => openCommentsModal(item)}
+                canManage={Boolean(currentUserId) && item.user_id === currentUserId}
+                onEditWorkout={() => router.push(`/workout/edit/${item.id}` as any)}
+                onCopyWorkout={() => router.push(`/workout/active?copyFromWorkoutId=${item.id}` as any)}
               />
             </Animated.View>
           );

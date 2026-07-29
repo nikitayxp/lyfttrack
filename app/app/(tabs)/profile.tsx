@@ -1183,6 +1183,8 @@ export default function ProfileScreen() {
               isLikePending={interactionState?.isPending ?? false}
               onToggleLike={() => void handleToggleLike(item)}
               onOpenComments={() => openCommentsModal(item)}
+              canManage
+              onEditWorkout={() => router.push(`/workout/edit/${item.id}` as any)}
               onCopyWorkout={() => {
                 if (activeExercises.length > 0) {
                   Alert.alert(

@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { Modal, Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
+  Easing,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
@@ -15,8 +16,12 @@ import { Radius, Spacing } from '@/constants/Styles';
 const palette = Colors.dark;
 const DISMISS_DISTANCE = 96;
 const DISMISS_VELOCITY = 900;
-const ENTER_Y = 420;
-const EXIT_Y = 520;
+/** Short travel + snappy easing reads smoother than a long slow slide on web. */
+const ENTER_Y = 240;
+const EXIT_Y = 280;
+const ENTER_MS = 170;
+const EXIT_MS = 140;
+const SNAP_SPRING = { damping: 26, stiffness: 420, mass: 0.75, overshootClamping: true } as const;
 
 type DismissibleBottomSheetProps = {
   visible: boolean;
@@ -68,8 +73,14 @@ export function DismissibleBottomSheet({
       setMounted(true);
       translateY.value = ENTER_Y;
       backdropOpacity.value = 0;
-      translateY.value = withTiming(0, { duration: 220 });
-      backdropOpacity.value = withTiming(1, { duration: 220 });
+      translateY.value = withTiming(0, {
+        duration: ENTER_MS,
+        easing: Easing.out(Easing.cubic),
+      });
+      backdropOpacity.value = withTiming(1, {
+        duration: ENTER_MS,
+        easing: Easing.out(Easing.quad),
+      });
       return;
     }
 
@@ -77,12 +88,16 @@ export function DismissibleBottomSheet({
       return;
     }
 
-    backdropOpacity.value = withTiming(0, { duration: 160 });
-    translateY.value = withTiming(EXIT_Y, { duration: 180 }, (finished) => {
-      if (finished) {
-        runOnJS(setMounted)(false);
+    backdropOpacity.value = withTiming(0, { duration: EXIT_MS, easing: Easing.in(Easing.quad) });
+    translateY.value = withTiming(
+      EXIT_Y,
+      { duration: EXIT_MS, easing: Easing.in(Easing.cubic) },
+      (finished) => {
+        if (finished) {
+          runOnJS(setMounted)(false);
+        }
       }
-    });
+    );
   }, [backdropOpacity, mounted, translateY, visible]);
 
   const pan = Gesture.Pan()
@@ -101,8 +116,8 @@ export function DismissibleBottomSheet({
         return;
       }
 
-      translateY.value = withSpring(0, { damping: 22, stiffness: 260 });
-      backdropOpacity.value = withSpring(1, { damping: 22, stiffness: 260 });
+      translateY.value = withSpring(0, SNAP_SPRING);
+      backdropOpacity.value = withSpring(1, SNAP_SPRING);
     });
 
   // Same drag-to-dismiss on the dimmed area; tap still closes.

@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useState } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Modal, Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -105,6 +105,12 @@ export function DismissibleBottomSheet({
       backdropOpacity.value = withSpring(1, { damping: 22, stiffness: 260 });
     });
 
+  // Same drag-to-dismiss on the dimmed area; tap still closes.
+  const backdropTap = Gesture.Tap().onEnd(() => {
+    runOnJS(onClose)();
+  });
+  const backdropGesture = Gesture.Exclusive(pan, backdropTap);
+
   const sheetAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
   }));
@@ -121,14 +127,13 @@ export function DismissibleBottomSheet({
     <Modal visible transparent animationType="none" onRequestClose={onClose}>
       <GestureHandlerRootView style={styles.flex}>
         <View style={styles.backdropRoot}>
-          <Animated.View style={[styles.backdropFill, backdropAnimatedStyle]}>
-            <Pressable
-              style={styles.dismissArea}
-              onPress={onClose}
+          <GestureDetector gesture={backdropGesture}>
+            <Animated.View
+              style={[styles.backdropFill, backdropAnimatedStyle]}
               accessibilityRole="button"
               accessibilityLabel={t('accessibility.closeModal', { defaultValue: 'Close modal' })}
             />
-          </Animated.View>
+          </GestureDetector>
 
           <GestureDetector gesture={pan}>
             <Animated.View style={[styles.sheet, isWeb && styles.sheetWeb, sheetStyle, sheetAnimatedStyle]}>
@@ -159,9 +164,6 @@ const styles = StyleSheet.create({
   backdropFill: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: palette.overlay,
-  },
-  dismissArea: {
-    flex: 1,
   },
   sheet: {
     borderTopLeftRadius: Radius.sheet,

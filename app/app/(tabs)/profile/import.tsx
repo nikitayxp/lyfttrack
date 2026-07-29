@@ -23,6 +23,7 @@ import {
   type ImportPlan,
   type ImportSummary,
 } from '@/services/import/importService';
+import { notifyWorkoutsImported } from '@/services/import/importEvents';
 
 const palette = Colors.dark;
 
@@ -112,6 +113,9 @@ export default function ImportDataScreen() {
       const summary = await runImport(plan, {
         onProgress: ({ done, total }) => setStage({ kind: 'importing', done, total }),
       });
+      if (summary.importedWorkouts > 0) {
+        notifyWorkoutsImported();
+      }
       setStage({ kind: 'done', summary });
     } catch (err) {
       setStage({ kind: 'idle' });
@@ -283,7 +287,10 @@ export default function ImportDataScreen() {
       <TouchableOpacity
         style={styles.primaryButton}
         activeOpacity={ACTIVE_OPACITY}
-        onPress={() => router.push('/(tabs)' as any)}
+        onPress={() => {
+          notifyWorkoutsImported();
+          router.replace('/(tabs)' as any);
+        }}
       >
         <Text style={styles.primaryButtonText}>{t('importData.seeWorkouts')}</Text>
       </TouchableOpacity>

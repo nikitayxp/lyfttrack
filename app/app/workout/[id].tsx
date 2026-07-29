@@ -16,7 +16,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { ExerciseThumbnail } from '@/components/common/ExerciseThumbnail';
-import { InlineToast } from '@/components/common/InlineToast';
 import { ShareWorkoutSheet } from '@/components/workout/ShareWorkoutSheet';
 import { WorkoutActionsMenu, type WorkoutMenuAction } from '@/components/workout/WorkoutActionsMenu';
 import { usePreferences } from '@/context/PreferencesContext';
@@ -262,7 +261,7 @@ export default function WorkoutDetailsScreen() {
         visible={share.sheetVisible}
         input={share.shareInput}
         ownerVisibility={share.ownerVisibility}
-        notice={share.sheetVisible ? share.notice : null}
+        notice={share.notice}
         onClose={share.closeShare}
         onChoose={(choice) => void share.chooseShare(choice)}
       />
@@ -312,12 +311,6 @@ export default function WorkoutDetailsScreen() {
 
             <Text style={styles.workoutName}>{details.name}</Text>
             {details.notes ? <Text style={styles.workoutNotes}>{details.notes}</Text> : null}
-
-            <InlineToast
-              message={!share.sheetVisible ? share.notice?.message ?? null : null}
-              tone={share.notice?.tone}
-              onDismiss={share.dismissNotice}
-            />
 
             <View style={styles.statsGrid}>
               <View style={styles.statCard}>

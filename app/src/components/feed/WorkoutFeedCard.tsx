@@ -5,7 +5,6 @@ import { ActivityIndicator, Image, StyleSheet, Text, TouchableOpacity, View } fr
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
-import { InlineToast } from '@/components/common/InlineToast';
 import { PrBadge } from '@/components/common/PrBadge';
 import { ShareWorkoutSheet } from '@/components/workout/ShareWorkoutSheet';
 import { WorkoutActionsMenu, type WorkoutMenuAction } from '@/components/workout/WorkoutActionsMenu';
@@ -224,15 +223,9 @@ export function WorkoutFeedCard({
         visible={share.sheetVisible}
         input={share.shareInput}
         ownerVisibility={share.ownerVisibility}
-        notice={share.sheetVisible ? share.notice : null}
+        notice={share.notice}
         onClose={share.closeShare}
         onChoose={(choice) => void share.chooseShare(choice)}
-      />
-
-      <InlineToast
-        message={!share.sheetVisible ? share.notice?.message ?? null : null}
-        tone={share.notice?.tone}
-        onDismiss={share.dismissNotice}
       />
 
       <View style={styles.interactionRow}>

@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProfileVisibility, ShareChoice } from '@/components/workout/ShareWorkoutSheet';
+import { useAppToast } from '@/context/ToastContext';
 import { getPublicProfileById } from '@/services/profileService';
 import { buildWorkoutUrl } from '@/utils/shareLinks';
 import { copyToClipboard, type ShareWorkoutInput } from '@/utils/shareWorkout';
@@ -14,6 +15,7 @@ export type ShareNotice = { message: string; tone: 'info' | 'error' };
  */
 export function useWorkoutShare() {
   const { t } = useTranslation();
+  const { showToast } = useAppToast();
 
   const [sheetVisible, setSheetVisible] = useState(false);
   const [shareInput, setShareInput] = useState<ShareWorkoutInput | null>(null);
@@ -65,7 +67,8 @@ export function useWorkoutShare() {
 
       if (copied) {
         setSheetVisible(false);
-        setNotice({
+        setNotice(null);
+        showToast({
           message: choice === 'link' ? t('feed.shareLinkCopied') : t('feed.shareTextCopied'),
           tone: 'info',
         });
@@ -78,7 +81,7 @@ export function useWorkoutShare() {
         tone: 'error',
       });
     },
-    [shareInput, t]
+    [shareInput, showToast, t]
   );
 
   return {

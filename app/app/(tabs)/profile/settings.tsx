@@ -268,6 +268,23 @@ export default function ProfileSettingsScreen() {
           </View>
           <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.rowButton}
+          activeOpacity={ACTIVE_OPACITY}
+          onPress={() => router.push('/(tabs)/profile/import' as any)}
+          accessibilityRole="button"
+          accessibilityLabel={t('settings.importData')}
+        >
+          <View style={styles.rowIconWrap}>
+            <Ionicons name="download-outline" size={17} color={palette.accent} />
+          </View>
+          <View style={styles.rowTextWrap}>
+            <Text style={styles.rowTitle}>{t('settings.importData')}</Text>
+            <Text style={styles.rowSubtitle}>{t('settings.importDataSubtitle')}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.card}>

@@ -19,7 +19,9 @@ import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-c
 import NeuralBackground from '@/components/ui/flow-field-background';
 import { SplashLoader } from '@/components/ui/SplashLoader';
 import { MinimizedWorkoutBar } from '@/components/workout/MinimizedWorkoutBar';
+import { AppToastHost } from '@/components/common/AppToastHost';
 import { PreferencesProvider } from '@/context/PreferencesContext';
+import { ToastProvider } from '@/context/ToastContext';
 import { WorkoutProvider } from '@/context/WorkoutContext';
 import type { Session } from '@supabase/supabase-js';
 
@@ -367,79 +369,82 @@ export default function RootLayout() {
 
   const layout = (
     <PreferencesProvider>
-      <WorkoutProvider>
-        <SafeAreaProvider style={safeAreaStyle} initialMetrics={isWeb ? undefined : initialWindowMetrics}>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: {
-                backgroundColor: palette.bgPrimary,
-              },
-            }}
-          >
-            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen
-              name="workout/active"
-              options={{
+      <ToastProvider>
+        <WorkoutProvider>
+          <SafeAreaProvider style={safeAreaStyle} initialMetrics={isWeb ? undefined : initialWindowMetrics}>
+            <Stack
+              screenOptions={{
                 headerShown: false,
-                presentation: isWeb ? 'card' : 'fullScreenModal',
-                animation: 'slide_from_bottom',
-                statusBarStyle: 'light',
+                contentStyle: {
+                  backgroundColor: palette.bgPrimary,
+                },
               }}
-            />
-            <Stack.Screen
-              name="workout/[id]"
-              options={{
-                headerShown: false,
-                animation: 'slide_from_right',
-                statusBarStyle: 'light',
-              }}
-            />
-            <Stack.Screen
-              name="workout/edit/[id]"
-              options={{
-                headerShown: false,
-                animation: 'slide_from_right',
-                statusBarStyle: 'light',
-              }}
-            />
-            <Stack.Screen
-              name="exercise/[id]"
-              options={{
-                headerShown: false,
-                animation: 'slide_from_right',
-                statusBarStyle: 'light',
-              }}
-            />
-            <Stack.Screen
-              name="athletes"
-              options={{
-                headerShown: false,
-                animation: 'slide_from_right',
-                statusBarStyle: 'light',
-              }}
-            />
-            <Stack.Screen
-              name="legal/terms"
-              options={{
-                headerShown: false,
-                animation: 'slide_from_right',
-                statusBarStyle: 'light',
-              }}
-            />
-            <Stack.Screen
-              name="legal/privacy"
-              options={{
-                headerShown: false,
-                animation: 'slide_from_right',
-                statusBarStyle: 'light',
-              }}
-            />
-          </Stack>
-          <MinimizedWorkoutBar visible={isTabsRoute} />
-        </SafeAreaProvider>
-      </WorkoutProvider>
+            >
+              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen
+                name="workout/active"
+                options={{
+                  headerShown: false,
+                  presentation: isWeb ? 'card' : 'fullScreenModal',
+                  animation: 'slide_from_bottom',
+                  statusBarStyle: 'light',
+                }}
+              />
+              <Stack.Screen
+                name="workout/[id]"
+                options={{
+                  headerShown: false,
+                  animation: 'slide_from_right',
+                  statusBarStyle: 'light',
+                }}
+              />
+              <Stack.Screen
+                name="workout/edit/[id]"
+                options={{
+                  headerShown: false,
+                  animation: 'slide_from_right',
+                  statusBarStyle: 'light',
+                }}
+              />
+              <Stack.Screen
+                name="exercise/[id]"
+                options={{
+                  headerShown: false,
+                  animation: 'slide_from_right',
+                  statusBarStyle: 'light',
+                }}
+              />
+              <Stack.Screen
+                name="athletes"
+                options={{
+                  headerShown: false,
+                  animation: 'slide_from_right',
+                  statusBarStyle: 'light',
+                }}
+              />
+              <Stack.Screen
+                name="legal/terms"
+                options={{
+                  headerShown: false,
+                  animation: 'slide_from_right',
+                  statusBarStyle: 'light',
+                }}
+              />
+              <Stack.Screen
+                name="legal/privacy"
+                options={{
+                  headerShown: false,
+                  animation: 'slide_from_right',
+                  statusBarStyle: 'light',
+                }}
+              />
+            </Stack>
+            <MinimizedWorkoutBar visible={isTabsRoute} />
+            <AppToastHost aboveTabBar={isTabsRoute} />
+          </SafeAreaProvider>
+        </WorkoutProvider>
+      </ToastProvider>
     </PreferencesProvider>
   );
 

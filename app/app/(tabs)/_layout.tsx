@@ -108,6 +108,13 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="profile/import"
+        options={{
+          href: null,
+          title: t('settings.importData'),
+        }}
+      />
+      <Tabs.Screen
         name="public-profile/[id]"
         options={{
           href: null,

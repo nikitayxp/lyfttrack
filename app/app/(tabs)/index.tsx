@@ -4,6 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
+  DeviceEventEmitter,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -29,6 +30,7 @@ import {
   getFeedWorkouts,
   type WorkoutFeedItem,
 } from '@/services/workoutService';
+import { WORKOUTS_IMPORTED_EVENT } from '@/services/import/importEvents';
 import { EmptyState } from '@/components/common/EmptyState';
 import { FeedCommentsModal } from '@/components/feed/FeedCommentsModal';
 import { WorkoutFeedCard } from '@/components/feed/WorkoutFeedCard';
@@ -222,6 +224,20 @@ export default function FeedScreen() {
     };
 
     void run();
+  }, [loadFeedPage]);
+
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener(WORKOUTS_IMPORTED_EVENT, () => {
+      void (async () => {
+        setIsLoading(true);
+        await loadFeedPage(0, 'reset');
+        setIsLoading(false);
+      })();
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, [loadFeedPage]);
 
   const onRefresh = useCallback(async () => {

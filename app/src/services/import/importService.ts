@@ -21,7 +21,7 @@ import {
 
 export type ImportSource = 'hevy';
 
-export type ExerciseMatchKind = 'exact' | 'none';
+export type ExerciseMatchKind = 'exact' | 'alias' | 'none';
 
 export type ExerciseMatch = {
   /** The name as it appears in the export. */
@@ -68,17 +68,98 @@ function normalizeTitle(value: string): string {
     .trim()
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
+/** Equipment / spelling bridges shared with the exercise search bar. */
+function applyEquipmentSynonyms(normalized: string): string {
+  return normalized
+    .replace(/\bbarra\b/g, 'bar')
+    .replace(/\btbar\b/g, 't bar')
+    .replace(/\bhalteres?\b/g, 'dumbbell')
+    .replace(/\bmaquina\b/g, 'machine')
+    .replace(/\bpolia\b/g, 'cable');
+}
+
+/**
+ * Movement words that mean the same lift in PT and EN.
+ * Kept tight on purpose — loose aliases (e.g. bare "press") would cross wires.
+ */
+const MOVEMENT_TOKEN_CANONICAL: Record<string, string> = {
+  remada: 'row',
+  row: 'row',
+  rows: 'row',
+  puxada: 'pulldown',
+  pulldown: 'pulldown',
+  pulldowns: 'pulldown',
+  supino: 'bench',
+  bench: 'bench',
+  agachamento: 'squat',
+  squat: 'squat',
+  squats: 'squat',
+  rosca: 'curl',
+  curl: 'curl',
+  curls: 'curl',
+  desenvolvimento: 'press',
+  terra: 'deadlift',
+  deadlift: 'deadlift',
+  stiff: 'rdl',
+  romeno: 'rdl',
+};
+
+const TITLE_STOP_WORDS = new Set([
+  'a',
+  'an',
+  'and',
+  'com',
+  'da',
+  'das',
+  'de',
+  'do',
+  'dos',
+  'e',
+  'em',
+  'in',
+  'na',
+  'nas',
+  'no',
+  'nos',
+  'of',
+  'on',
+  'para',
+  'the',
+]);
+
+/**
+ * Sorted significant tokens after PT/EN equipment + movement synonyms.
+ * "Remada na Barra T" and "T-Bar Row" both become "bar row t".
+ */
+export function titleTokenKey(value: string): string {
+  const normalized = applyEquipmentSynonyms(normalizeTitle(value));
+  const tokens = normalized
+    .split(' ')
+    .filter(Boolean)
+    .map((token) => MOVEMENT_TOKEN_CANONICAL[token] ?? token)
+    .filter((token) => token.length > 0 && !TITLE_STOP_WORDS.has(token));
+
+  return [...new Set(tokens)].sort().join(' ');
+}
+
 function inferEquipmentKey(title: string): ExerciseEquipmentKey | null {
-  const normalized = normalizeTitle(title);
+  const normalized = applyEquipmentSynonyms(normalizeTitle(title));
+
+  // T-bar / landmine style titles mention "bar" and must not become "machine"
+  // just because Hevy's export sometimes says "maquina" nearby in other rows.
+  if (/\bt\b/.test(normalized) && /\bbar\b/.test(normalized)) {
+    return 'barbell';
+  }
 
   for (const [key, keywords] of Object.entries(EXERCISE_EQUIPMENT_FILTER_KEYWORDS)) {
     for (const keyword of keywords) {
-      const needle = normalizeTitle(keyword.replace(/_/g, ' '));
+      const needle = applyEquipmentSynonyms(normalizeTitle(keyword.replace(/_/g, ' ')));
       if (needle.length > 2 && normalized.includes(needle)) {
         return key as ExerciseEquipmentKey;
       }
@@ -88,46 +169,94 @@ function inferEquipmentKey(title: string): ExerciseEquipmentKey | null {
   return null;
 }
 
+function catalogQuality(item: ExerciseCatalogItem): number {
+  let score = item.is_custom ? 0 : 80;
+  if (item.name_en) score += 20;
+  if (item.name_pt) score += 20;
+  return score;
+}
+
+function preferCatalogItem(candidate: ExerciseCatalogItem, current: ExerciseCatalogItem | undefined): boolean {
+  if (!current) return true;
+  return catalogQuality(candidate) > catalogQuality(current);
+}
+
 function indexCatalog(catalog: ExerciseCatalogItem[]) {
   const exact = new Map<string, ExerciseCatalogItem>();
+  const byTokens = new Map<string, ExerciseCatalogItem>();
 
   for (const item of catalog) {
     for (const name of [item.name, item.name_en, item.name_pt]) {
       if (!name) continue;
-      const key = normalizeTitle(name);
-      if (key && !exact.has(key)) exact.set(key, item);
+
+      const exactKey = normalizeTitle(name);
+      if (exactKey && preferCatalogItem(item, exact.get(exactKey))) {
+        exact.set(exactKey, item);
+      }
+
+      const tokenKey = titleTokenKey(name);
+      if (tokenKey && preferCatalogItem(item, byTokens.get(tokenKey))) {
+        byTokens.set(tokenKey, item);
+      }
     }
   }
 
-  return exact;
+  return { exact, byTokens };
 }
 
 /**
- * Names only match when they match on every word.
+ * Match Hevy titles to the catalogue.
  *
- * An earlier attempt also tried the name with its bracketed qualifier removed,
- * so that "Supino (Barra)" would answer to "supino". That is wrong in the one
- * way that matters: it lets "Supino (Máquina)" land on the barbell entry and
- * quietly file machine work under a different lift. Anything we are not sure
- * about is better off as the user's own exercise, which is what `kind: 'none'`
- * leads to.
- *
- * Case, accents and punctuation are already handled by the normalisation, so
- * "Supino - Barra" and "Supino (Barra)" still meet.
+ * 1. Exact letters/digits after normalisation ("Supino - Barra" = "Supino (Barra)").
+ * 2. Token alias: same significant words after PT/EN synonyms
+ *    ("Remada na Barra T" = "T-Bar Row"). Still requires the *same* set of
+ *    movement+equipment tokens, so "Supino Máquina" never lands on "Supino Barra".
  */
 export function matchExerciseTitles(
   titles: string[],
   catalog: ExerciseCatalogItem[]
 ): ExerciseMatch[] {
-  const exact = indexCatalog(catalog);
+  const { exact, byTokens } = indexCatalog(catalog);
 
   return titles.map((title) => {
-    const hit = exact.get(normalizeTitle(title));
+    const exactHit = exact.get(normalizeTitle(title));
+    if (exactHit) {
+      return {
+        title,
+        exerciseId: exactHit.id,
+        matchedName: exactHit.name,
+        kind: 'exact' as const,
+      };
+    }
 
-    return hit
-      ? { title, exerciseId: hit.id, matchedName: hit.name, kind: 'exact' as const }
-      : { title, exerciseId: null, matchedName: null, kind: 'none' as const };
+    const tokenHit = byTokens.get(titleTokenKey(title));
+    if (tokenHit) {
+      return {
+        title,
+        exerciseId: tokenHit.id,
+        matchedName: tokenHit.name,
+        kind: 'alias' as const,
+      };
+    }
+
+    return { title, exerciseId: null, matchedName: null, kind: 'none' as const };
   });
+}
+
+// ponytail: import matching checks (no test runner in app/)
+if (typeof __DEV__ !== 'undefined' && __DEV__) {
+  console.assert(
+    titleTokenKey('Remada na Barra T') === titleTokenKey('T-Bar Row'),
+    'Remada na Barra T ↔ T-Bar Row tokens'
+  );
+  console.assert(
+    titleTokenKey('Remada na Barra T') === titleTokenKey('Remada T-Bar'),
+    'Remada na Barra T ↔ Remada T-Bar tokens'
+  );
+  console.assert(
+    titleTokenKey('Supino Maquina') !== titleTokenKey('Supino Barra'),
+    'machine bench must not equal barbell bench'
+  );
 }
 
 /**

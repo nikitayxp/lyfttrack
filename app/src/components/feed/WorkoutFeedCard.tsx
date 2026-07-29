@@ -122,10 +122,9 @@ export function WorkoutFeedCard({
       workoutId: workout.id,
       ownerId: workout.user_id ?? null,
       title: workout.name,
-      // Totals, not the viewer's set-counting preference: the message is read
-      // by someone else, who has no preference of ours to honour.
+      // Same number the card shows (honours the current set-counting preference).
       summary: t('feed.shareSummary', {
-        sets: workout.totalSets,
+        sets: countWorkingSetsOnly ? workout.workingSets : workout.totalSets,
         exercises: localizedExerciseNames.length,
       }),
     });
@@ -225,12 +224,13 @@ export function WorkoutFeedCard({
         visible={share.sheetVisible}
         input={share.shareInput}
         ownerVisibility={share.ownerVisibility}
+        notice={share.sheetVisible ? share.notice : null}
         onClose={share.closeShare}
         onChoose={(choice) => void share.chooseShare(choice)}
       />
 
       <InlineToast
-        message={share.notice?.message ?? null}
+        message={!share.sheetVisible ? share.notice?.message ?? null : null}
         tone={share.notice?.tone}
         onDismiss={share.dismissNotice}
       />

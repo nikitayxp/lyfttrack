@@ -189,15 +189,14 @@ export default function WorkoutDetailsScreen() {
         workoutId: details.id,
         ownerId: details.user_id,
         title: details.name,
-        // Totals rather than the viewer's preference: the message is read by
-        // someone else.
+        // Same number the details screen shows right now.
         summary: t('feed.shareSummary', {
-          sets: details.totalSets,
+          sets: countWorkingSetsOnly ? details.workingSets : details.totalSets,
           exercises: details.exercises.length,
         }),
       });
     },
-    [details, handleCopyWorkout, handleEditWorkout, share, t]
+    [countWorkingSetsOnly, details, handleCopyWorkout, handleEditWorkout, share, t]
   );
 
   const loadDetails = useCallback(async () => {
@@ -263,6 +262,7 @@ export default function WorkoutDetailsScreen() {
         visible={share.sheetVisible}
         input={share.shareInput}
         ownerVisibility={share.ownerVisibility}
+        notice={share.sheetVisible ? share.notice : null}
         onClose={share.closeShare}
         onChoose={(choice) => void share.chooseShare(choice)}
       />
@@ -314,7 +314,7 @@ export default function WorkoutDetailsScreen() {
             {details.notes ? <Text style={styles.workoutNotes}>{details.notes}</Text> : null}
 
             <InlineToast
-              message={share.notice?.message ?? null}
+              message={!share.sheetVisible ? share.notice?.message ?? null : null}
               tone={share.notice?.tone}
               onDismiss={share.dismissNotice}
             />

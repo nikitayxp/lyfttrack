@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Modal, Platform, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { DismissibleBottomSheet } from '@/components/common/DismissibleBottomSheet';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 
@@ -34,93 +35,40 @@ const ACTION_LABEL_KEYS: Record<WorkoutMenuAction, string> = {
 
 export function WorkoutActionsMenu({ visible, canManage, onClose, onSelect }: WorkoutActionsMenuProps) {
   const { t } = useTranslation();
-  const isWeb = Platform.OS === 'web';
   const actions: WorkoutMenuAction[] = canManage ? ['edit', 'copy', 'share'] : ['share'];
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType={isWeb ? 'fade' : 'slide'}
-      onRequestClose={onClose}
-    >
-      <View style={styles.backdrop}>
-        <Pressable
-          style={styles.dismissArea}
-          onPress={onClose}
+    <DismissibleBottomSheet visible={visible} onClose={onClose}>
+      {actions.map((action) => (
+        <TouchableOpacity
+          key={action}
+          style={styles.row}
+          activeOpacity={ACTIVE_OPACITY}
+          onPress={() => onSelect(action)}
           accessibilityRole="button"
-          accessibilityLabel={t('accessibility.closeModal', { defaultValue: 'Close modal' })}
-        />
+          accessibilityLabel={t(ACTION_LABEL_KEYS[action])}
+        >
+          <View style={styles.rowIcon}>
+            <Ionicons name={ACTION_ICONS[action]} size={18} color={palette.accent} />
+          </View>
+          <Text style={styles.rowLabel}>{t(ACTION_LABEL_KEYS[action])}</Text>
+        </TouchableOpacity>
+      ))}
 
-        <View style={[styles.sheet, isWeb && styles.sheetWeb]}>
-          <View style={styles.handle} />
-
-          {actions.map((action) => (
-            <TouchableOpacity
-              key={action}
-              style={styles.row}
-              activeOpacity={ACTIVE_OPACITY}
-              onPress={() => onSelect(action)}
-              accessibilityRole="button"
-              accessibilityLabel={t(ACTION_LABEL_KEYS[action])}
-            >
-              <View style={styles.rowIcon}>
-                <Ionicons name={ACTION_ICONS[action]} size={18} color={palette.accent} />
-              </View>
-              <Text style={styles.rowLabel}>{t(ACTION_LABEL_KEYS[action])}</Text>
-            </TouchableOpacity>
-          ))}
-
-          <TouchableOpacity
-            style={styles.cancelRow}
-            activeOpacity={ACTIVE_OPACITY}
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.cancel')}
-          >
-            <Text style={styles.cancelLabel}>{t('common.cancel')}</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
+      <TouchableOpacity
+        style={styles.cancelRow}
+        activeOpacity={ACTIVE_OPACITY}
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel={t('common.cancel')}
+      >
+        <Text style={styles.cancelLabel}>{t('common.cancel')}</Text>
+      </TouchableOpacity>
+    </DismissibleBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: palette.overlay,
-  },
-  dismissArea: {
-    flex: 1,
-  },
-  sheet: {
-    borderTopLeftRadius: Radius.sheet,
-    borderTopRightRadius: Radius.sheet,
-    borderTopWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.surface,
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.xxl,
-  },
-  sheetWeb: {
-    alignSelf: 'center',
-    width: '100%',
-    maxWidth: 420,
-    borderRadius: Radius.sheet,
-    borderWidth: 1,
-    marginBottom: Spacing.lg,
-  },
-  handle: {
-    alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: Radius.pill,
-    backgroundColor: palette.border,
-    marginBottom: Spacing.md,
-  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

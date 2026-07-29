@@ -6,9 +6,11 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import { PrBadge } from '@/components/common/PrBadge';
+import { DismissibleBottomSheet } from '@/components/common/DismissibleBottomSheet';
 import { ShareWorkoutSheet } from '@/components/workout/ShareWorkoutSheet';
 import { WorkoutActionsMenu, type WorkoutMenuAction } from '@/components/workout/WorkoutActionsMenu';
 import { usePreferences } from '@/context/PreferencesContext';
+import { useAppToast } from '@/context/ToastContext';
 import { useWorkoutShare } from '@/hooks/useWorkoutShare';
 import type { WorkoutFeedItem } from '@/services/workoutService';
 import { formatRelativeTime } from '@/utils/dateUtils';
@@ -82,8 +84,9 @@ export function WorkoutFeedCard({
   canManage = false,
   disableInteractions = false,
 }: WorkoutFeedCardProps) {
-  const [menuVisible, setMenuVisible] = useState(false);
+  const [sheetMode, setSheetMode] = useState<'closed' | 'menu' | 'share'>('closed');
   const share = useWorkoutShare();
+  const { showToast } = useAppToast();
   const { t } = useTranslation();
   const { language, countWorkingSetsOnly } = usePreferences();
   const displayName = profileDisplayName(workout, t('publicProfile.athleteFallback'));
@@ -102,31 +105,34 @@ export function WorkoutFeedCard({
   const resolvedIsLikePending = isLikePending ?? false;
   const interactionsDisabled = disableInteractions || !onToggleLike;
 
-  function handleMenuSelect(action: WorkoutMenuAction) {
-    setMenuVisible(false);
+  function closeSheet() {
+    setSheetMode('closed');
+    share.resetShare();
+  }
 
+  function handleMenuSelect(action: WorkoutMenuAction) {
     if (action === 'edit') {
+      closeSheet();
       onEditWorkout?.();
       return;
     }
 
     if (action === 'copy') {
+      closeSheet();
       onCopyWorkout?.();
       return;
     }
 
-    // Opens the preview instead of firing a share: the user picks what leaves
-    // the app, and gets told when the link will not open for the recipient.
-    share.openShare({
+    share.prepareShare({
       workoutId: workout.id,
       ownerId: workout.user_id ?? null,
       title: workout.name,
-      // Same number the card shows (honours the current set-counting preference).
       summary: t('feed.shareSummary', {
         sets: countWorkingSetsOnly ? workout.workingSets : workout.totalSets,
         exercises: localizedExerciseNames.length,
       }),
     });
+    setSheetMode('share');
   }
 
   function openWorkoutDetails() {
@@ -212,21 +218,30 @@ export function WorkoutFeedCard({
         ) : null}
       </TouchableOpacity>
 
-      <WorkoutActionsMenu
-        visible={menuVisible}
-        canManage={canManage}
-        onClose={() => setMenuVisible(false)}
-        onSelect={handleMenuSelect}
-      />
-
-      <ShareWorkoutSheet
-        visible={share.sheetVisible}
-        input={share.shareInput}
-        ownerVisibility={share.ownerVisibility}
-        notice={share.notice}
-        onClose={share.closeShare}
-        onChoose={(choice) => void share.chooseShare(choice)}
-      />
+      <DismissibleBottomSheet visible={sheetMode !== 'closed'} onClose={closeSheet}>
+        {sheetMode === 'share' ? (
+          <ShareWorkoutSheet
+            input={share.shareInput}
+            ownerVisibility={share.ownerVisibility}
+            notice={share.notice}
+            onCancel={closeSheet}
+            onChoose={(choice) => {
+              void share.chooseShare(choice).then((result) => {
+                if (result.status === 'copied') {
+                  closeSheet();
+                  // After the sheet exit so our toast is not under the modal /
+                  // racing a browser clipboard banner.
+                  setTimeout(() => {
+                    showToast({ message: result.message, tone: 'info' });
+                  }, 220);
+                }
+              });
+            }}
+          />
+        ) : (
+          <WorkoutActionsMenu canManage={canManage} onSelect={handleMenuSelect} onCancel={closeSheet} />
+        )}
+      </DismissibleBottomSheet>
 
       <View style={styles.interactionRow}>
         <TouchableOpacity
@@ -266,7 +281,7 @@ export function WorkoutFeedCard({
         <TouchableOpacity
           style={styles.interactionButtonStatic}
           activeOpacity={ACTIVE_OPACITY}
-          onPress={() => setMenuVisible(true)}
+          onPress={() => setSheetMode('menu')}
           accessibilityRole="button"
           accessibilityLabel={t('feed.workoutActions', { defaultValue: 'Workout actions' })}
         >

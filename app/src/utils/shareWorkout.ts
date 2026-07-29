@@ -39,8 +39,6 @@ function copyViaDomEvent(text: string): boolean {
     textarea.style.border = 'none';
     textarea.style.opacity = '0';
 
-    // Append inside the open modal when possible — focus outside a modal
-    // often fails on mobile browsers.
     const modalRoot =
       document.querySelector('[aria-modal="true"]') ??
       document.querySelector('[role="dialog"]') ??
@@ -63,34 +61,27 @@ function copyViaDomEvent(text: string): boolean {
 }
 
 /**
- * Copy for native + web. On LAN http there is no Clipboard API, so we use the
- * document `copy` event (more honest than trusting execCommand alone).
- *
- * Call while the share sheet is still open.
+ * Prefer the DOM copy path on web — Clipboard API often pops a second system
+ * toast (Brave/Chrome). Native uses expo-clipboard.
  */
 export async function copyToClipboard(text: string): Promise<boolean> {
-  try {
-    await Clipboard.setStringAsync(text);
-
-    // Secure contexts can verify. Insecure LAN http usually cannot.
-    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard?.readText) {
-      try {
-        return (await navigator.clipboard.readText()) === text;
-      } catch {
-        return true;
-      }
-    }
-
-    if (Platform.OS !== 'web') {
+  if (Platform.OS === 'web') {
+    if (copyViaDomEvent(text)) {
       return true;
     }
-  } catch {
-    // Fall through on web http / denied permission.
+
+    try {
+      await Clipboard.setStringAsync(text);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
-  if (Platform.OS !== 'web') {
+  try {
+    await Clipboard.setStringAsync(text);
+    return true;
+  } catch {
     return false;
   }
-
-  return copyViaDomEvent(text);
 }

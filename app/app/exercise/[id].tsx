@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { LineChart } from 'react-native-gifted-charts';
@@ -11,6 +11,8 @@ import {
   TouchableOpacity,
   View,
   useWindowDimensions,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -40,6 +42,10 @@ const palette = Colors.dark;
 
 const Y_AXIS_LABEL_WIDTH = 44;
 const CHART_EDGE_SPACING = 20;
+/** Keep points tappable; if they cannot fit, the chart scrolls instead of clipping. */
+const MIN_POINT_SPACING = 48;
+const EDGE_SCROLL_ZONE = 44;
+const EDGE_SCROLL_STEP = 24;
 
 type ChartRange = '3m' | '1y';
 type ChartMetric = Extract<ProgressMetric, 'weight' | 'e1rm'>;
@@ -210,6 +216,12 @@ export default function ExerciseDetailScreen() {
   const [records, setRecords] = useState<ExercisePersonalRecords | null>(null);
   const [history, setHistory] = useState<ExerciseWorkoutHistoryEntry[]>([]);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const [parentScrollEnabled, setParentScrollEnabled] = useState(true);
+
+  const chartScrollRef = useRef<ScrollView | null>(null);
+  const lastScrollXRef = useRef(0);
+  const edgeDirectionRef = useRef(0);
+  const edgeRafRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Total space the chart may occupy inside the card, minus its padding.
   //
@@ -248,10 +260,111 @@ export default function ExerciseDetailScreen() {
 
   // Reserves the axis gutter and both end margins before dividing, otherwise
   // the final point is drawn half outside the plot.
+  //
+  // Floor at MIN_POINT_SPACING so a long history never compresses into a smear
+  // that clips the newest sessions — the chart grows and scrolls instead.
   const lineSpacing = useMemo(() => {
+    if (chartProgress.length <= 1) {
+      return MIN_POINT_SPACING;
+    }
+
     const usable = plotWidth - CHART_EDGE_SPACING * 2;
-    return Math.max(24, Math.floor(usable / Math.max(chartProgress.length - 1, 1)));
+    const fitted = Math.floor(usable / (chartProgress.length - 1));
+    return Math.max(MIN_POINT_SPACING, fitted);
   }, [plotWidth, chartProgress.length]);
+
+  const chartContentWidth = useMemo(() => {
+    if (chartProgress.length <= 1) {
+      return plotWidth;
+    }
+
+    return CHART_EDGE_SPACING * 2 + lineSpacing * (chartProgress.length - 1);
+  }, [chartProgress.length, lineSpacing, plotWidth]);
+
+  const needsHorizontalScroll = chartContentWidth > plotWidth + 1;
+
+  const stopEdgeScroll = useCallback(() => {
+    edgeDirectionRef.current = 0;
+    if (edgeRafRef.current != null) {
+      clearInterval(edgeRafRef.current);
+      edgeRafRef.current = null;
+    }
+  }, []);
+
+  const startEdgeScroll = useCallback(
+    (direction: -1 | 1) => {
+      if (!needsHorizontalScroll) {
+        stopEdgeScroll();
+        return;
+      }
+
+      edgeDirectionRef.current = direction;
+
+      if (edgeRafRef.current != null) {
+        return;
+      }
+
+      edgeRafRef.current = setInterval(() => {
+        const scrollView = chartScrollRef.current as (ScrollView & {
+          scrollTo?: (options: { x: number; animated?: boolean }) => void;
+        }) | null;
+
+        if (!scrollView?.scrollTo || edgeDirectionRef.current === 0) {
+          return;
+        }
+
+        const maxX = Math.max(0, chartContentWidth - plotWidth);
+        const next = Math.min(
+          maxX,
+          Math.max(0, lastScrollXRef.current + edgeDirectionRef.current * EDGE_SCROLL_STEP)
+        );
+
+        if (next === lastScrollXRef.current) {
+          return;
+        }
+
+        lastScrollXRef.current = next;
+        scrollView.scrollTo({ x: next, animated: false });
+      }, 32);
+    },
+    [chartContentWidth, needsHorizontalScroll, plotWidth, stopEdgeScroll]
+  );
+
+  useEffect(() => () => stopEdgeScroll(), [stopEdgeScroll]);
+
+  const handleChartScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    lastScrollXRef.current = event.nativeEvent.contentOffset.x;
+  }, []);
+
+  const handlePointerProps = useCallback(
+    ({ pointerX }: { pointerX: number; pointerY: number; pointerIndex: number }) => {
+      // pointerX === 0 means the finger is up (or idle). Persist still shows the
+      // last card, but the chart can scroll again and the page can scroll too.
+      if (!pointerX) {
+        setParentScrollEnabled(true);
+        stopEdgeScroll();
+        return;
+      }
+
+      setParentScrollEnabled(false);
+
+      if (!needsHorizontalScroll) {
+        stopEdgeScroll();
+        return;
+      }
+
+      // pointerX is in the visible plot; when the finger sits on either edge,
+      // pan so older / newer sessions come into view without lifting.
+      if (pointerX <= EDGE_SCROLL_ZONE) {
+        startEdgeScroll(-1);
+      } else if (pointerX >= plotWidth - EDGE_SCROLL_ZONE) {
+        startEdgeScroll(1);
+      } else {
+        stopEdgeScroll();
+      }
+    },
+    [needsHorizontalScroll, plotWidth, startEdgeScroll, stopEdgeScroll]
+  );
 
   const loadExercise = useCallback(async () => {
     if (!exerciseId) {
@@ -445,7 +558,11 @@ export default function ExerciseDetailScreen() {
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <StatusBar style="light" />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        scrollEnabled={parentScrollEnabled}
+        nestedScrollEnabled
+      >
         <View style={styles.headerRow}>
           <TouchableOpacity style={styles.backButton} activeOpacity={ACTIVE_OPACITY} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={18} color={palette.textPrimary} />
@@ -527,8 +644,11 @@ export default function ExerciseDetailScreen() {
             </View>
           ) : (
             <View style={styles.chartWrap}>
+              {needsHorizontalScroll ? (
+                <Text style={styles.chartScrollHint}>{t('exercise.detail.chartScrollHint')}</Text>
+              ) : null}
               <LineChart
-                key={`${metric}-${range}-${lineData.length}-${initialPointerIndex}`}
+                key={`${metric}-${range}-${lineData.length}-${initialPointerIndex}-${needsHorizontalScroll ? 'scroll' : 'fit'}`}
                 data={lineData}
                 width={plotWidth}
                 height={220}
@@ -550,10 +670,18 @@ export default function ExerciseDetailScreen() {
                 xAxisLabelTextStyle={styles.xAxisLabelText}
                 rulesColor={palette.inputFill}
                 formatYLabel={(label) => formatCompactNumber(label)}
-                isAnimated
-                // Drag along the chart to read a session, which is the whole
-                // point of the issue: a bar you cannot interrogate says only
-                // "bigger" or "smaller".
+                // Long histories animate poorly and fight scrollToEnd on mount.
+                isAnimated={lineData.length <= 12}
+                scrollRef={chartScrollRef}
+                disableScroll={false}
+                scrollToEnd={needsHorizontalScroll}
+                scrollAnimation={false}
+                showScrollIndicator={needsHorizontalScroll}
+                nestedScrollEnabled
+                onScroll={handleChartScroll}
+                getPointerProps={handlePointerProps}
+                // Drag / long-press to read a session. Swipe pans when the
+                // history is wider than the card; press-and-hold scrubs.
                 pointerConfig={{
                   pointerStripHeight: 200,
                   pointerStripColor: palette.borderStrong,
@@ -562,7 +690,10 @@ export default function ExerciseDetailScreen() {
                   radius: 5,
                   pointerLabelWidth: 140,
                   pointerLabelHeight: 84,
-                  activatePointersOnLongPress: false,
+                  // Required so pointerConfig does not swallow horizontal scroll.
+                  activatePointersOnLongPress: needsHorizontalScroll,
+                  activatePointersDelay: 160,
+                  activatePointersInstantlyOnTouch: !needsHorizontalScroll,
                   autoAdjustPointerLabelPosition: true,
                   persistPointer: true,
                   resetPointerOnDataChange: true,
@@ -835,6 +966,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     // Was 'visible', which let the plot spill past the card edge.
     overflow: 'hidden',
+  },
+  chartScrollHint: {
+    color: palette.labelMuted,
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 8,
+    paddingHorizontal: 4,
   },
   pointerCard: {
     borderRadius: Radius.button,

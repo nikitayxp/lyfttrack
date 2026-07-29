@@ -39,6 +39,19 @@ const palette = Colors.dark;
 const Y_AXIS_LABEL_WIDTH = 44;
 const CHART_EDGE_SPACING = 20;
 
+// gifted-charts places the pointer overlay one `initialSpacing` to the right of
+// the point it is reporting: `getX` already includes `initialSpacing`, and the
+// overlay's own origin adds it a second time. Measured at exactly 20px with
+// `initialSpacing={20}` — the strip, the dot and the card all landed beside the
+// data point instead of on it, which is what the review flagged.
+//
+// The library gives no way to shift the overlay as a whole, so each of the three
+// pieces is pulled back by hand: the strip through `pointerShiftX` on the data,
+// the dot through `pointerComponent`, and the card through its own style.
+// `shiftPointerLabelX` is not one of them — it is ignored outright while
+// `autoAdjustPointerLabelPosition` is on, which we want for the edge clamping.
+const POINTER_X_CORRECTION = -CHART_EDGE_SPACING;
+
 /** At most six date labels, evenly spread: one per session overlaps into a smear. */
 function shouldLabelPoint(index: number, total: number): boolean {
   if (total <= 6) {
@@ -217,6 +230,8 @@ export default function ExerciseDetailScreen() {
           // The session you just did is the one you are looking for.
           dataPointColor: isLatest ? palette.textPrimary : CHART_NEON,
           dataPointRadius: isLatest ? 6 : 4,
+          // Pulls the pointer strip back onto the point. See POINTER_X_CORRECTION.
+          pointerShiftX: POINTER_X_CORRECTION,
           point,
         };
       }),
@@ -383,6 +398,7 @@ export default function ExerciseDetailScreen() {
                   pointerLabelHeight: 76,
                   activatePointersOnLongPress: false,
                   autoAdjustPointerLabelPosition: true,
+                  pointerComponent: () => <View style={styles.pointerDot} />,
                   pointerLabelComponent: (items: { point?: ExerciseProgressPoint }[]) => {
                     const point = items?.[0]?.point;
 
@@ -654,6 +670,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     rowGap: 2,
+    transform: [{ translateX: POINTER_X_CORRECTION }],
+  },
+  pointerDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: palette.textPrimary,
+    transform: [{ translateX: POINTER_X_CORRECTION }],
   },
   pointerDate: {
     color: palette.textMuted,

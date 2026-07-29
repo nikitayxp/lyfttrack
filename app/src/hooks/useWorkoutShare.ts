@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { ProfileVisibility, ShareChoice } from '@/components/workout/ShareWorkoutSheet';
 import { getPublicProfileById } from '@/services/profileService';
 import { buildWorkoutUrl } from '@/utils/shareLinks';
-import { copyToClipboard, openShareSheet, type ShareWorkoutInput } from '@/utils/shareWorkout';
+import { copyToClipboard, type ShareWorkoutInput } from '@/utils/shareWorkout';
 
 export type ShareNotice = { message: string; tone: 'info' | 'error' };
 
@@ -28,6 +28,7 @@ export function useWorkoutShare() {
         url: buildWorkoutUrl(input.workoutId),
       });
       setOwnerVisibility(null);
+      setNotice(null);
       setSheetVisible(true);
 
       if (!input.ownerId) {
@@ -57,29 +58,25 @@ export function useWorkoutShare() {
         return;
       }
 
-      if (choice === 'sheet') {
-        // Close first so the system sheet is not stacked under ours.
+      // Copy while the sheet is still open (user gesture + focus). Closing
+      // first makes mobile web report success with an empty clipboard.
+      const text = choice === 'link' ? shareInput.url : `${shareInput.title}\n${shareInput.summary}\n${shareInput.url}`;
+      const copied = await copyToClipboard(text);
+
+      if (copied) {
         setSheetVisible(false);
-        const outcome = await openShareSheet(shareInput);
-
-        if (outcome === 'unavailable') {
-          setNotice({ message: t('feed.shareUnavailableDescription'), tone: 'error' });
-        }
-
+        setNotice({
+          message: choice === 'link' ? t('feed.shareLinkCopied') : t('feed.shareTextCopied'),
+          tone: 'info',
+        });
         return;
       }
 
-      // Copy before closing the modal: otherwise mobile web reports success
-      // from execCommand while the clipboard stays empty.
-      const text = choice === 'link' ? shareInput.url : `${shareInput.title}\n${shareInput.summary}\n${shareInput.url}`;
-      const copied = await copyToClipboard(text);
-      setSheetVisible(false);
-
-      setNotice(
-        copied
-          ? { message: choice === 'link' ? t('feed.shareLinkCopied') : t('feed.shareTextCopied'), tone: 'info' }
-          : { message: t('feed.shareCopyFailed'), tone: 'error' }
-      );
+      // Keep the sheet open so the selectable preview can be long-pressed.
+      setNotice({
+        message: t('feed.shareCopyFailed'),
+        tone: 'error',
+      });
     },
     [shareInput, t]
   );

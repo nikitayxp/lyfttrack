@@ -1,5 +1,5 @@
 import * as Clipboard from 'expo-clipboard';
-import { Platform, Share } from 'react-native';
+import { Platform } from 'react-native';
 
 export type ShareWorkoutInput = {
   title: string;
@@ -8,73 +8,72 @@ export type ShareWorkoutInput = {
   url: string;
 };
 
-export type ShareOutcome = 'shared' | 'dismissed' | 'unavailable';
-
 export function buildShareMessage(input: ShareWorkoutInput): string {
   return `${input.title}\n${input.summary}\n${input.url}`;
 }
 
-/** Whether a share sheet exists at all, so the UI can offer it or not. */
-export function canOpenShareSheet(): boolean {
-  if (Platform.OS !== 'web') {
-    return true;
-  }
-
-  return typeof navigator !== 'undefined' && Boolean(navigator.share);
-}
-
-/**
- * Copy that works on native and on LAN http (no secure Clipboard API).
- *
- * Call this while the user gesture / share sheet is still open — closing a
- * Modal first drops focus and makes execCommand report success while leaving
- * the clipboard empty (Brave/Android web).
- */
-export async function copyToClipboard(text: string): Promise<boolean> {
-  try {
-    await Clipboard.setStringAsync(text);
-    return true;
-  } catch {
-    // Fall through: expo-clipboard uses navigator.clipboard on web, which is
-    // missing on plain http (Tailscale/LAN hostname).
-  }
-
-  if (Platform.OS !== 'web' || typeof document === 'undefined') {
+function copyViaDomEvent(text: string): boolean {
+  if (typeof document === 'undefined') {
     return false;
   }
 
+  let wrote = false;
+
+  const onCopy = (event: ClipboardEvent) => {
+    event.preventDefault();
+    event.clipboardData?.setData('text/plain', text);
+    wrote = Boolean(event.clipboardData);
+  };
+
+  document.addEventListener('copy', onCopy);
   try {
     const textarea = document.createElement('textarea');
     textarea.value = text;
     textarea.setAttribute('readonly', '');
-    // Keep in-viewport and focusable — off-screen + no focus is a common
-    // "returns true, copies nothing" path on mobile browsers.
     textarea.style.position = 'fixed';
     textarea.style.top = '0';
     textarea.style.left = '0';
-    textarea.style.width = '1px';
-    textarea.style.height = '1px';
+    textarea.style.width = '2px';
+    textarea.style.height = '2px';
     textarea.style.padding = '0';
     textarea.style.border = 'none';
-    textarea.style.outline = 'none';
-    textarea.style.boxShadow = 'none';
-    textarea.style.background = 'transparent';
     textarea.style.opacity = '0';
 
-    document.body.appendChild(textarea);
+    // Append inside the open modal when possible — focus outside a modal
+    // often fails on mobile browsers.
+    const modalRoot =
+      document.querySelector('[aria-modal="true"]') ??
+      document.querySelector('[role="dialog"]') ??
+      document.body;
+
+    modalRoot.appendChild(textarea);
     textarea.focus();
     textarea.select();
     textarea.setSelectionRange(0, text.length);
 
-    const copied = document.execCommand('copy');
-    document.body.removeChild(textarea);
+    const triggered = document.execCommand('copy');
+    modalRoot.removeChild(textarea);
 
-    if (!copied) {
-      return false;
-    }
+    return triggered && wrote;
+  } catch {
+    return false;
+  } finally {
+    document.removeEventListener('copy', onCopy);
+  }
+}
 
-    // Secure contexts can verify; LAN http cannot.
-    if (typeof navigator !== 'undefined' && navigator.clipboard?.readText) {
+/**
+ * Copy for native + web. On LAN http there is no Clipboard API, so we use the
+ * document `copy` event (more honest than trusting execCommand alone).
+ *
+ * Call while the share sheet is still open.
+ */
+export async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await Clipboard.setStringAsync(text);
+
+    // Secure contexts can verify. Insecure LAN http usually cannot.
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard?.readText) {
       try {
         return (await navigator.clipboard.readText()) === text;
       } catch {
@@ -82,38 +81,16 @@ export async function copyToClipboard(text: string): Promise<boolean> {
       }
     }
 
-    return true;
+    if (Platform.OS !== 'web') {
+      return true;
+    }
   } catch {
+    // Fall through on web http / denied permission.
+  }
+
+  if (Platform.OS !== 'web') {
     return false;
   }
-}
 
-/** Opens the platform share sheet. Only called once the user asked for it. */
-export async function openShareSheet(input: ShareWorkoutInput): Promise<ShareOutcome> {
-  const message = buildShareMessage(input);
-
-  if (Platform.OS === 'web') {
-    if (typeof navigator === 'undefined' || !navigator.share) {
-      return 'unavailable';
-    }
-
-    try {
-      await navigator.share({
-        title: input.title,
-        text: `${input.title}\n${input.summary}`,
-        url: input.url,
-      });
-      return 'shared';
-    } catch (error) {
-      // AbortError is the user closing the sheet, not a failure.
-      return error instanceof Error && error.name === 'AbortError' ? 'dismissed' : 'unavailable';
-    }
-  }
-
-  try {
-    const result = await Share.share({ title: input.title, message });
-    return result.action === Share.dismissedAction ? 'dismissed' : 'shared';
-  } catch {
-    return 'unavailable';
-  }
+  return copyViaDomEvent(text);
 }

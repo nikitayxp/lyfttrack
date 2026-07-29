@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { DismissibleBottomSheet } from '@/components/common/DismissibleBottomSheet';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { buildShareMessage, type ShareWorkoutInput } from '@/utils/shareWorkout';
@@ -13,7 +12,6 @@ export type ProfileVisibility = 'public' | 'friends' | 'private';
 export type ShareChoice = 'link' | 'text';
 
 type ShareWorkoutSheetProps = {
-  visible: boolean;
   input: ShareWorkoutInput | null;
   /**
    * The owner's profile visibility, which is what actually decides whether the
@@ -21,28 +19,26 @@ type ShareWorkoutSheetProps = {
    */
   ownerVisibility: ProfileVisibility | null;
   notice?: { message: string; tone: 'info' | 'error' } | null;
-  onClose: () => void;
+  onCancel: () => void;
   onChoose: (choice: ShareChoice) => void;
 };
 
+/** Content only — parent owns the bottom sheet so menu → share keeps the backdrop. */
 export function ShareWorkoutSheet({
-  visible,
   input,
   ownerVisibility,
   notice = null,
-  onClose,
+  onCancel,
   onChoose,
 }: ShareWorkoutSheetProps) {
   const { t } = useTranslation();
   const preview = input ? buildShareMessage(input) : '';
 
-  // Nobody outside can open a private profile's workout, so a link is a dead
-  // link. Better to say so than to hand over something that quietly fails.
   const isPrivate = ownerVisibility === 'private';
   const isFriendsOnly = ownerVisibility === 'friends';
 
   return (
-    <DismissibleBottomSheet visible={visible} onClose={onClose}>
+    <View>
       <Text style={styles.title}>{t('workoutDetails.shareWorkout')}</Text>
 
       {input ? (
@@ -52,7 +48,6 @@ export function ShareWorkoutSheet({
           editable={false}
           multiline
           selectTextOnFocus
-          // Long-press / select works when automatic clipboard is blocked (LAN http).
           showSoftInputOnFocus={false}
           accessibilityLabel={t('feed.sharePreview', { defaultValue: 'Share preview' })}
         />
@@ -113,13 +108,13 @@ export function ShareWorkoutSheet({
       <TouchableOpacity
         style={styles.cancelRow}
         activeOpacity={ACTIVE_OPACITY}
-        onPress={onClose}
+        onPress={onCancel}
         accessibilityRole="button"
         accessibilityLabel={t('common.cancel')}
       >
         <Text style={styles.cancelLabel}>{t('common.cancel')}</Text>
       </TouchableOpacity>
-    </DismissibleBottomSheet>
+    </View>
   );
 }
 

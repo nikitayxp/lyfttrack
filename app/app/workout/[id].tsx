@@ -16,9 +16,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { ExerciseThumbnail } from '@/components/common/ExerciseThumbnail';
+import { DismissibleBottomSheet } from '@/components/common/DismissibleBottomSheet';
 import { ShareWorkoutSheet } from '@/components/workout/ShareWorkoutSheet';
 import { WorkoutActionsMenu, type WorkoutMenuAction } from '@/components/workout/WorkoutActionsMenu';
 import { usePreferences } from '@/context/PreferencesContext';
+import { useAppToast } from '@/context/ToastContext';
 import { useWorkoutShare } from '@/hooks/useWorkoutShare';
 import {
   getAuthenticatedUserOrThrow,
@@ -125,8 +127,9 @@ export default function WorkoutDetailsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [menuVisible, setMenuVisible] = useState(false);
+  const [sheetMode, setSheetMode] = useState<'closed' | 'menu' | 'share'>('closed');
   const share = useWorkoutShare();
+  const { showToast } = useAppToast();
 
   useEffect(() => {
     let cancelled = false;
@@ -150,6 +153,11 @@ export default function WorkoutDetailsScreen() {
 
   const isOwnWorkout = Boolean(details && currentUserId && details.user_id === currentUserId);
 
+  const closeSheet = useCallback(() => {
+    setSheetMode('closed');
+    share.resetShare();
+  }, [share]);
+
   const handleCopyWorkout = useCallback(() => {
     if (!workoutId) {
       return;
@@ -168,14 +176,14 @@ export default function WorkoutDetailsScreen() {
 
   const handleMenuSelect = useCallback(
     (action: WorkoutMenuAction) => {
-      setMenuVisible(false);
-
       if (action === 'edit') {
+        closeSheet();
         handleEditWorkout();
         return;
       }
 
       if (action === 'copy') {
+        closeSheet();
         handleCopyWorkout();
         return;
       }
@@ -184,18 +192,18 @@ export default function WorkoutDetailsScreen() {
         return;
       }
 
-      share.openShare({
+      share.prepareShare({
         workoutId: details.id,
         ownerId: details.user_id,
         title: details.name,
-        // Same number the details screen shows right now.
         summary: t('feed.shareSummary', {
           sets: countWorkingSetsOnly ? details.workingSets : details.totalSets,
           exercises: details.exercises.length,
         }),
       });
+      setSheetMode('share');
     },
-    [countWorkingSetsOnly, details, handleCopyWorkout, handleEditWorkout, share, t]
+    [closeSheet, countWorkingSetsOnly, details, handleCopyWorkout, handleEditWorkout, share, t]
   );
 
   const loadDetails = useCallback(async () => {
@@ -248,7 +256,7 @@ export default function WorkoutDetailsScreen() {
         <TouchableOpacity
           style={styles.backButton}
           activeOpacity={ACTIVE_OPACITY}
-          onPress={() => setMenuVisible(true)}
+          onPress={() => setSheetMode('menu')}
           disabled={!details}
           accessibilityRole="button"
           accessibilityLabel={t('feed.workoutActions', { defaultValue: 'Workout actions' })}
@@ -257,21 +265,32 @@ export default function WorkoutDetailsScreen() {
         </TouchableOpacity>
       </View>
 
-      <ShareWorkoutSheet
-        visible={share.sheetVisible}
-        input={share.shareInput}
-        ownerVisibility={share.ownerVisibility}
-        notice={share.notice}
-        onClose={share.closeShare}
-        onChoose={(choice) => void share.chooseShare(choice)}
-      />
-
-      <WorkoutActionsMenu
-        visible={menuVisible}
-        canManage={isOwnWorkout}
-        onClose={() => setMenuVisible(false)}
-        onSelect={handleMenuSelect}
-      />
+      <DismissibleBottomSheet visible={sheetMode !== 'closed'} onClose={closeSheet}>
+        {sheetMode === 'share' ? (
+          <ShareWorkoutSheet
+            input={share.shareInput}
+            ownerVisibility={share.ownerVisibility}
+            notice={share.notice}
+            onCancel={closeSheet}
+            onChoose={(choice) => {
+              void share.chooseShare(choice).then((result) => {
+                if (result.status === 'copied') {
+                  closeSheet();
+                  setTimeout(() => {
+                    showToast({ message: result.message, tone: 'info' });
+                  }, 220);
+                }
+              });
+            }}
+          />
+        ) : (
+          <WorkoutActionsMenu
+            canManage={isOwnWorkout}
+            onSelect={handleMenuSelect}
+            onCancel={closeSheet}
+          />
+        )}
+      </DismissibleBottomSheet>
 
       {isLoading ? (
         <View style={styles.statusWrap}>

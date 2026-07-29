@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
@@ -15,6 +15,8 @@ import { Radius, Spacing } from '@/constants/Styles';
 const palette = Colors.dark;
 const DISMISS_DISTANCE = 96;
 const DISMISS_VELOCITY = 900;
+const ENTER_Y = 420;
+const EXIT_Y = 520;
 
 type DismissibleBottomSheetProps = {
   visible: boolean;
@@ -24,8 +26,8 @@ type DismissibleBottomSheetProps = {
 };
 
 /**
- * Bottom sheet with the usual grey handle — dragging the sheet down closes it
- * instead of triggering the browser pull-to-refresh behind the modal.
+ * Bottom sheet with enter/exit motion. Changing `children` while `visible`
+ * stays true (menu → share) keeps the dimmed backdrop — no flash.
  */
 export function DismissibleBottomSheet({
   visible,
@@ -35,22 +37,12 @@ export function DismissibleBottomSheet({
 }: DismissibleBottomSheetProps) {
   const { t } = useTranslation();
   const isWeb = Platform.OS === 'web';
-  const translateY = useSharedValue(0);
-  const backdropOpacity = useSharedValue(1);
+  const [mounted, setMounted] = useState(visible);
+  const translateY = useSharedValue(ENTER_Y);
+  const backdropOpacity = useSharedValue(0);
 
   useEffect(() => {
-    if (visible) {
-      translateY.value = 0;
-      backdropOpacity.value = 1;
-    }
-  }, [backdropOpacity, translateY, visible]);
-
-  useEffect(() => {
-    if (!isWeb || typeof document === 'undefined') {
-      return;
-    }
-
-    if (!visible) {
+    if (!isWeb || typeof document === 'undefined' || !mounted) {
       return;
     }
 
@@ -69,33 +61,43 @@ export function DismissibleBottomSheet({
       body.style.overscrollBehaviorY = previousBodyOverscroll;
       body.style.overflow = previousBodyOverflow;
     };
-  }, [isWeb, visible]);
+  }, [isWeb, mounted]);
 
-  const closeNow = () => {
-    onClose();
-  };
+  useEffect(() => {
+    if (visible) {
+      setMounted(true);
+      translateY.value = ENTER_Y;
+      backdropOpacity.value = 0;
+      translateY.value = withTiming(0, { duration: 220 });
+      backdropOpacity.value = withTiming(1, { duration: 220 });
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    backdropOpacity.value = withTiming(0, { duration: 160 });
+    translateY.value = withTiming(EXIT_Y, { duration: 180 }, (finished) => {
+      if (finished) {
+        runOnJS(setMounted)(false);
+      }
+    });
+  }, [backdropOpacity, mounted, translateY, visible]);
 
   const pan = Gesture.Pan()
     .activeOffsetY(8)
     .failOffsetX([-24, 24])
     .onUpdate((event) => {
       translateY.value = Math.max(0, event.translationY);
-      const fade = Math.max(0.25, 1 - event.translationY / 280);
-      backdropOpacity.value = fade;
+      backdropOpacity.value = Math.max(0.25, 1 - event.translationY / 280);
     })
     .onEnd((event) => {
       const shouldDismiss =
         event.translationY > DISMISS_DISTANCE || event.velocityY > DISMISS_VELOCITY;
 
       if (shouldDismiss) {
-        // Timing (not spring): spring callbacks were flaky on web and left the
-        // dimmed backdrop up while the sheet flashed back during Modal exit.
-        backdropOpacity.value = withTiming(0, { duration: 160 });
-        translateY.value = withTiming(520, { duration: 180 }, (finished) => {
-          if (finished) {
-            runOnJS(closeNow)();
-          }
-        });
+        runOnJS(onClose)();
         return;
       }
 
@@ -111,13 +113,12 @@ export function DismissibleBottomSheet({
     opacity: backdropOpacity.value,
   }));
 
+  if (!mounted) {
+    return null;
+  }
+
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="none"
-      onRequestClose={onClose}
-    >
+    <Modal visible transparent animationType="none" onRequestClose={onClose}>
       <GestureHandlerRootView style={styles.flex}>
         <View style={styles.backdropRoot}>
           <Animated.View style={[styles.backdropFill, backdropAnimatedStyle]}>

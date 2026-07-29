@@ -11,8 +11,6 @@ import {
   TouchableOpacity,
   View,
   useWindowDimensions,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -44,8 +42,7 @@ const Y_AXIS_LABEL_WIDTH = 44;
 const CHART_EDGE_SPACING = 20;
 /** Keep points tappable; if they cannot fit, the chart scrolls instead of clipping. */
 const MIN_POINT_SPACING = 48;
-const EDGE_SCROLL_ZONE = 44;
-const EDGE_SCROLL_STEP = 24;
+const CHART_PAGE_RATIO = 0.75;
 
 type ChartRange = '3m' | '1y';
 type ChartMetric = Extract<ProgressMetric, 'weight' | 'e1rm'>;
@@ -90,6 +87,22 @@ function rangeStartDate(range: ChartRange): string {
     date.setFullYear(date.getFullYear() - 1);
   }
   return localDateKey(date);
+}
+
+function nextChartScrollX(
+  current: number,
+  max: number,
+  plotWidth: number,
+  direction: -1 | 1
+): number {
+  const page = Math.max(120, plotWidth * CHART_PAGE_RATIO);
+  return Math.min(max, Math.max(0, current + direction * page));
+}
+
+if (typeof __DEV__ !== 'undefined' && __DEV__) {
+  console.assert(nextChartScrollX(900, 900, 300, -1) === 675, 'older chart page');
+  console.assert(nextChartScrollX(0, 900, 300, -1) === 0, 'chart start clamp');
+  console.assert(nextChartScrollX(800, 900, 300, 1) === 900, 'chart end clamp');
 }
 
 function formatProgressDateLabel(dateIso: string, language: string): string {
@@ -216,12 +229,10 @@ export default function ExerciseDetailScreen() {
   const [records, setRecords] = useState<ExercisePersonalRecords | null>(null);
   const [history, setHistory] = useState<ExerciseWorkoutHistoryEntry[]>([]);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
-  const [parentScrollEnabled, setParentScrollEnabled] = useState(true);
+  const [chartScrollPosition, setChartScrollPosition] = useState({ x: 0, max: 0 });
 
   const chartScrollRef = useRef<ScrollView | null>(null);
   const lastScrollXRef = useRef(0);
-  const edgeDirectionRef = useRef(0);
-  const edgeRafRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Total space the chart may occupy inside the card, minus its padding.
   //
@@ -283,87 +294,36 @@ export default function ExerciseDetailScreen() {
 
   const needsHorizontalScroll = chartContentWidth > plotWidth + 1;
 
-  const stopEdgeScroll = useCallback(() => {
-    edgeDirectionRef.current = 0;
-    if (edgeRafRef.current != null) {
-      clearInterval(edgeRafRef.current);
-      edgeRafRef.current = null;
-    }
+  const handleChartScroll = useCallback((event: {
+    nativeEvent: {
+      contentOffset: { x: number };
+      contentSize: { width: number };
+      layoutMeasurement: { width: number };
+    };
+  }) => {
+    const x = Math.max(0, event.nativeEvent.contentOffset.x);
+    const max = Math.max(
+      0,
+      event.nativeEvent.contentSize.width - event.nativeEvent.layoutMeasurement.width
+    );
+    lastScrollXRef.current = x;
+    setChartScrollPosition({ x, max });
   }, []);
 
-  const startEdgeScroll = useCallback(
+  const moveChart = useCallback(
     (direction: -1 | 1) => {
-      if (!needsHorizontalScroll) {
-        stopEdgeScroll();
-        return;
-      }
+      const next = nextChartScrollX(
+        lastScrollXRef.current,
+        chartScrollPosition.max,
+        plotWidth,
+        direction
+      );
 
-      edgeDirectionRef.current = direction;
-
-      if (edgeRafRef.current != null) {
-        return;
-      }
-
-      edgeRafRef.current = setInterval(() => {
-        const scrollView = chartScrollRef.current as (ScrollView & {
-          scrollTo?: (options: { x: number; animated?: boolean }) => void;
-        }) | null;
-
-        if (!scrollView?.scrollTo || edgeDirectionRef.current === 0) {
-          return;
-        }
-
-        const maxX = Math.max(0, chartContentWidth - plotWidth);
-        const next = Math.min(
-          maxX,
-          Math.max(0, lastScrollXRef.current + edgeDirectionRef.current * EDGE_SCROLL_STEP)
-        );
-
-        if (next === lastScrollXRef.current) {
-          return;
-        }
-
-        lastScrollXRef.current = next;
-        scrollView.scrollTo({ x: next, animated: false });
-      }, 32);
+      lastScrollXRef.current = next;
+      chartScrollRef.current?.scrollTo({ x: next, animated: true });
+      setChartScrollPosition((current) => ({ ...current, x: next }));
     },
-    [chartContentWidth, needsHorizontalScroll, plotWidth, stopEdgeScroll]
-  );
-
-  useEffect(() => () => stopEdgeScroll(), [stopEdgeScroll]);
-
-  const handleChartScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    lastScrollXRef.current = event.nativeEvent.contentOffset.x;
-  }, []);
-
-  const handlePointerProps = useCallback(
-    ({ pointerX }: { pointerX: number; pointerY: number; pointerIndex: number }) => {
-      // pointerX === 0 means the finger is up (or idle). Persist still shows the
-      // last card, but the chart can scroll again and the page can scroll too.
-      if (!pointerX) {
-        setParentScrollEnabled(true);
-        stopEdgeScroll();
-        return;
-      }
-
-      setParentScrollEnabled(false);
-
-      if (!needsHorizontalScroll) {
-        stopEdgeScroll();
-        return;
-      }
-
-      // pointerX is in the visible plot; when the finger sits on either edge,
-      // pan so older / newer sessions come into view without lifting.
-      if (pointerX <= EDGE_SCROLL_ZONE) {
-        startEdgeScroll(-1);
-      } else if (pointerX >= plotWidth - EDGE_SCROLL_ZONE) {
-        startEdgeScroll(1);
-      } else {
-        stopEdgeScroll();
-      }
-    },
-    [needsHorizontalScroll, plotWidth, startEdgeScroll, stopEdgeScroll]
+    [chartScrollPosition.max, plotWidth]
   );
 
   const loadExercise = useCallback(async () => {
@@ -558,11 +518,7 @@ export default function ExerciseDetailScreen() {
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <StatusBar style="light" />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        scrollEnabled={parentScrollEnabled}
-        nestedScrollEnabled
-      >
+      <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.headerRow}>
           <TouchableOpacity style={styles.backButton} activeOpacity={ACTIVE_OPACITY} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={18} color={palette.textPrimary} />
@@ -645,10 +601,43 @@ export default function ExerciseDetailScreen() {
           ) : (
             <View style={styles.chartWrap}>
               {needsHorizontalScroll ? (
-                <Text style={styles.chartScrollHint}>{t('exercise.detail.chartScrollHint')}</Text>
+                <View style={styles.chartNavigation}>
+                  <TouchableOpacity
+                    style={[
+                      styles.chartNavigationButton,
+                      chartScrollPosition.x <= 1 && styles.chartNavigationButtonDisabled,
+                    ]}
+                    activeOpacity={ACTIVE_OPACITY}
+                    disabled={chartScrollPosition.x <= 1}
+                    onPress={() => moveChart(-1)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('exercise.detail.chartOlder')}
+                  >
+                    <Ionicons name="chevron-back" size={16} color={palette.textPrimary} />
+                    <Text style={styles.chartNavigationText}>{t('exercise.detail.chartOlder')}</Text>
+                  </TouchableOpacity>
+
+                  <Text style={styles.chartScrollHint}>{t('exercise.detail.chartScrollHint')}</Text>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.chartNavigationButton,
+                      chartScrollPosition.x >= chartScrollPosition.max - 1 &&
+                        styles.chartNavigationButtonDisabled,
+                    ]}
+                    activeOpacity={ACTIVE_OPACITY}
+                    disabled={chartScrollPosition.x >= chartScrollPosition.max - 1}
+                    onPress={() => moveChart(1)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('exercise.detail.chartNewer')}
+                  >
+                    <Text style={styles.chartNavigationText}>{t('exercise.detail.chartNewer')}</Text>
+                    <Ionicons name="chevron-forward" size={16} color={palette.textPrimary} />
+                  </TouchableOpacity>
+                </View>
               ) : null}
               <LineChart
-                key={`${metric}-${range}-${lineData.length}-${initialPointerIndex}-${needsHorizontalScroll ? 'scroll' : 'fit'}`}
+                key={`${metric}-${range}-${lineData.length}-${initialPointerIndex}-${needsHorizontalScroll ? 'paged' : 'fit'}`}
                 data={lineData}
                 width={plotWidth}
                 height={220}
@@ -673,15 +662,14 @@ export default function ExerciseDetailScreen() {
                 // Long histories animate poorly and fight scrollToEnd on mount.
                 isAnimated={lineData.length <= 12}
                 scrollRef={chartScrollRef}
-                disableScroll={false}
+                disableScroll
                 scrollToEnd={needsHorizontalScroll}
                 scrollAnimation={false}
-                showScrollIndicator={needsHorizontalScroll}
-                nestedScrollEnabled
+                showScrollIndicator={false}
                 onScroll={handleChartScroll}
-                getPointerProps={handlePointerProps}
-                // Drag / long-press to read a session. Swipe pans when the
-                // history is wider than the card; press-and-hold scrubs.
+                // The chart owns horizontal drag only for point inspection.
+                // Paging history is kept on explicit buttons above, so it never
+                // steals the page's vertical scroll gesture.
                 pointerConfig={{
                   pointerStripHeight: 200,
                   pointerStripColor: palette.borderStrong,
@@ -690,10 +678,8 @@ export default function ExerciseDetailScreen() {
                   radius: 5,
                   pointerLabelWidth: 140,
                   pointerLabelHeight: 84,
-                  // Required so pointerConfig does not swallow horizontal scroll.
-                  activatePointersOnLongPress: needsHorizontalScroll,
-                  activatePointersDelay: 160,
-                  activatePointersInstantlyOnTouch: !needsHorizontalScroll,
+                  activatePointersOnLongPress: false,
+                  activatePointersInstantlyOnTouch: true,
                   autoAdjustPointerLabelPosition: true,
                   persistPointer: true,
                   resetPointerOnDataChange: true,
@@ -967,12 +953,39 @@ const styles = StyleSheet.create({
     // Was 'visible', which let the plot spill past the card edge.
     overflow: 'hidden',
   },
-  chartScrollHint: {
-    color: palette.labelMuted,
-    fontSize: 11,
-    fontWeight: '600',
+  chartNavigation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    columnGap: 6,
     marginBottom: 8,
-    paddingHorizontal: 4,
+  },
+  chartNavigationButton: {
+    minHeight: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    columnGap: 2,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: palette.inputStroke,
+    backgroundColor: palette.surface,
+    paddingHorizontal: 7,
+  },
+  chartNavigationButtonDisabled: {
+    opacity: 0.35,
+  },
+  chartNavigationText: {
+    color: palette.textPrimary,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  chartScrollHint: {
+    flex: 1,
+    color: palette.labelMuted,
+    fontSize: 10,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   pointerCard: {
     borderRadius: Radius.button,

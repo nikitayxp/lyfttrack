@@ -24,8 +24,8 @@ export type TemplateDetail = Pick<WorkoutTemplateRow, 'id' | 'user_id' | 'name' 
 
 type RawTemplateExerciseNameRow = Pick<TemplateExerciseRow, 'template_id' | 'order_index'> & {
   exercises?:
-    | Pick<ExerciseRow, 'name' | 'name_en' | 'name_pt'>
-    | Pick<ExerciseRow, 'name' | 'name_en' | 'name_pt'>[]
+    | Pick<ExerciseRow, 'name' | 'name_pt'>
+    | Pick<ExerciseRow, 'name' | 'name_pt'>[]
     | null;
 };
 
@@ -138,7 +138,7 @@ export async function getTemplates(): Promise<TemplateSummary[]> {
 
   const { data: templateExercises, error: templateExercisesError } = await supabase
     .from('template_exercises')
-    .select('template_id, order_index, exercises(name, name_en, name_pt)')
+    .select('template_id, order_index, exercises(name, name_pt)')
     .in('template_id', templateIds)
     .order('order_index', { ascending: true });
 
@@ -158,7 +158,6 @@ export async function getTemplates(): Promise<TemplateSummary[]> {
     const currentValue = namesByTemplateId.get(relation.template_id) ?? [];
     currentValue.push({
       name: exercise.name,
-      name_en: exercise.name_en ?? null,
       name_pt: exercise.name_pt ?? null,
     });
     namesByTemplateId.set(relation.template_id, currentValue);

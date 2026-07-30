@@ -1,15 +1,14 @@
 import type { AppLanguage } from '@/i18n/resources';
 import type { Tables } from '@/types/database';
+import { EXERCISE_MUSCLE_LABELS, resolveExerciseMuscleKey } from '@/constants/exerciseCatalog';
 
 /**
- * Only the name columns are required to localize a name. Keeping this narrow
- * lets services carry the three columns around instead of resolving a display
- * string too early — resolving early is what leaks English names into a
- * Portuguese UI.
+ * Catalogue identity is English `name`. Optional `name_pt` is filled later by hand.
+ * Muscle labels come from `muscle_group` keys via app i18n — not DB columns.
  */
-export type ExerciseNameSource = Pick<Tables<'exercises'>, 'name' | 'name_en' | 'name_pt'>;
+export type ExerciseNameSource = Pick<Tables<'exercises'>, 'name' | 'name_pt'>;
 
-type ExerciseMuscleSource = Pick<Tables<'exercises'>, 'muscle_group' | 'muscle_en' | 'muscle_pt'>;
+type ExerciseMuscleSource = Pick<Tables<'exercises'>, 'muscle_group' | 'name' | 'name_pt'>;
 
 function normalizeText(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
@@ -18,51 +17,33 @@ function normalizeText(value: string | null | undefined): string | null {
 
 export function getLocalizedExerciseName(exercise: ExerciseNameSource, language: AppLanguage): string {
   if (language === 'pt') {
-    return (
-      normalizeText(exercise.name_pt) ??
-      normalizeText(exercise.name) ??
-      normalizeText(exercise.name_en) ??
-      'Exercicio'
-    );
+    return normalizeText(exercise.name_pt) ?? normalizeText(exercise.name) ?? 'Exercicio';
   }
 
-  return (
-    normalizeText(exercise.name_en) ??
-    normalizeText(exercise.name) ??
-    normalizeText(exercise.name_pt) ??
-    'Exercise'
-  );
+  return normalizeText(exercise.name) ?? normalizeText(exercise.name_pt) ?? 'Exercise';
 }
 
 export function getLocalizedExerciseMuscle(exercise: ExerciseMuscleSource, language: AppLanguage): string | null {
-  if (language === 'pt') {
-    return (
-      normalizeText(exercise.muscle_pt) ??
-      normalizeText(exercise.muscle_group) ??
-      normalizeText(exercise.muscle_en)
-    );
+  const key = resolveExerciseMuscleKey({
+    muscleGroup: exercise.muscle_group,
+    name: exercise.name,
+    namePt: exercise.name_pt,
+  });
+
+  if (!key) {
+    return normalizeText(exercise.muscle_group);
   }
 
-  return (
-    normalizeText(exercise.muscle_en) ??
-    normalizeText(exercise.muscle_group) ??
-    normalizeText(exercise.muscle_pt)
-  );
+  return language === 'pt' ? EXERCISE_MUSCLE_LABELS[key].pt : EXERCISE_MUSCLE_LABELS[key].en;
 }
 
 /**
- * Language-independent identity for deduping exercise lists. Dedupe used to run
- * on the display name, which merged/split entries depending on the active
- * language.
+ * Language-independent identity for deduping exercise lists.
  */
 export function exerciseNameKey(exercise: ExerciseNameSource): string {
-  return [exercise.name_en, exercise.name, exercise.name_pt]
-    .map((value) => normalizeText(value)?.toLowerCase() ?? '')
-    .join('|');
+  return (normalizeText(exercise.name) ?? normalizeText(exercise.name_pt) ?? '').toLowerCase();
 }
 
-// Generic over the element so callers can carry extra fields (an id, say)
-// through the dedupe instead of resolving them separately afterwards.
 export function dedupeExerciseNames<T extends ExerciseNameSource>(exercises: T[]): T[] {
   const seen = new Set<string>();
   const unique: T[] = [];
@@ -70,7 +51,7 @@ export function dedupeExerciseNames<T extends ExerciseNameSource>(exercises: T[]
   for (const exercise of exercises) {
     const key = exerciseNameKey(exercise);
 
-    if (seen.has(key)) {
+    if (!key || seen.has(key)) {
       continue;
     }
 

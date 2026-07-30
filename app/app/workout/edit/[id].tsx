@@ -88,7 +88,6 @@ function buildExerciseDrafts(details: WorkoutDetails): EditableExerciseDraft[] {
     exerciseId: exercise.exercise_id,
     exerciseName: {
       name: exercise.exercise_name,
-      name_en: exercise.name_en,
       name_pt: exercise.name_pt,
     },
     muscleGroup: exercise.muscle_group,
@@ -328,7 +327,6 @@ export default function WorkoutEditScreen() {
               const muscleKey = getExerciseMuscleTranslationKey({
                 muscleGroup: exercise.muscleGroup,
                 name: exercise.exerciseName.name,
-                nameEn: exercise.exerciseName.name_en,
                 namePt: exercise.exerciseName.name_pt,
               });
               const muscleLabel = muscleKey
@@ -336,8 +334,8 @@ export default function WorkoutEditScreen() {
                 : getLocalizedExerciseMuscle(
                     {
                       muscle_group: exercise.muscleGroup,
-                      muscle_en: null,
-                      muscle_pt: null,
+                      name: exercise.exerciseName.name,
+                      name_pt: exercise.exerciseName.name_pt,
                     },
                     language
                   ) ?? t('exercise.general');

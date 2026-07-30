@@ -116,10 +116,7 @@ export default function RoutinesScreen() {
   const getExerciseMuscleLabel = useCallback((exercise: ExerciseRow) => {
     const muscleKey = getExerciseMuscleTranslationKey({
       muscleGroup: exercise.muscle_group,
-      muscleEn: exercise.muscle_en,
-      musclePt: exercise.muscle_pt,
       name: exercise.name,
-      nameEn: exercise.name_en,
       namePt: exercise.name_pt,
     });
 

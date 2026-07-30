@@ -16,48 +16,33 @@ export type Database = {
     Tables: {
       exercises: {
         Row: {
-          created_at: string | null
           created_by: string | null
-          description: string | null
           equipment: string | null
           id: string
           image_url: string | null
           is_custom: boolean
-          muscle_en: string | null
           muscle_group: string | null
-          muscle_pt: string | null
           name: string
-          name_en: string | null
           name_pt: string | null
         }
         Insert: {
-          created_at?: string | null
           created_by?: string | null
-          description?: string | null
           equipment?: string | null
           id?: string
           image_url?: string | null
           is_custom?: boolean
-          muscle_en?: string | null
           muscle_group?: string | null
-          muscle_pt?: string | null
           name: string
-          name_en?: string | null
           name_pt?: string | null
         }
         Update: {
-          created_at?: string | null
           created_by?: string | null
-          description?: string | null
           equipment?: string | null
           id?: string
           image_url?: string | null
           is_custom?: boolean
-          muscle_en?: string | null
           muscle_group?: string | null
-          muscle_pt?: string | null
           name?: string
-          name_en?: string | null
           name_pt?: string | null
         }
         Relationships: [

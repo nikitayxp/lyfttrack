@@ -1,10 +1,7 @@
 type ExerciseSearchFields = {
   name?: string | null;
-  name_en?: string | null;
   name_pt?: string | null;
   muscle_group?: string | null;
-  muscle_en?: string | null;
-  muscle_pt?: string | null;
 };
 
 function normalizeSearchText(value: string): string {
@@ -50,11 +47,8 @@ export function matchesExerciseSearch(
         displayName,
         displayMuscle,
         exercise.name,
-        exercise.name_en,
         exercise.name_pt,
         exercise.muscle_group,
-        exercise.muscle_en,
-        exercise.muscle_pt,
       ]
         .filter(Boolean)
         .join(' ')
@@ -69,19 +63,13 @@ export function matchesExerciseSearch(
 if (typeof __DEV__ !== 'undefined' && __DEV__) {
   const tBar = {
     name: 'T-Bar Row',
-    name_en: 'T-Bar Row',
     name_pt: 'Remada T-Bar',
     muscle_group: 'Back',
-    muscle_en: 'Back',
-    muscle_pt: 'Costas',
   };
   const chest = {
     name: 'Chest Press',
-    name_en: 'Chest Press',
     name_pt: 'Supino Maquina',
     muscle_group: 'Chest',
-    muscle_en: 'Chest',
-    muscle_pt: 'Peito',
   };
 
   console.assert(matchesExerciseSearch(tBar, 'barra t', 'Remada T-Bar', 'Costas'), 'barra t → T-Bar');

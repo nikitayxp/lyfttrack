@@ -635,7 +635,7 @@ export default function ActiveWorkout() {
             return createExerciseBlockFromSets(exerciseRow, seeds, {
               defaultRestSeconds: entry.rest_time ?? undefined,
               // Keep notes from that past session (equipment settings, unilateral notes, etc.).
-              notes: entry.notes ?? exerciseRow.description ?? null,
+              notes: entry.notes ?? null,
             });
           });
 
@@ -892,10 +892,7 @@ export default function ActiveWorkout() {
   const getExerciseMuscleLabel = (exercise: ExerciseRow): string => {
     const muscleKey = getExerciseMuscleTranslationKey({
       muscleGroup: exercise.muscle_group,
-      muscleEn: exercise.muscle_en,
-      musclePt: exercise.muscle_pt,
       name: exercise.name,
-      nameEn: exercise.name_en,
       namePt: exercise.name_pt,
     });
 

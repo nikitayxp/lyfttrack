@@ -5,7 +5,7 @@ import imageMap from './exerciseImageMap.json';
 const FREE_EXERCISE_DB_BASE =
   'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises';
 
-type ExerciseImageSource = Pick<Tables<'exercises'>, 'name' | 'name_en' | 'name_pt' | 'image_url'>;
+type ExerciseImageSource = Pick<Tables<'exercises'>, 'name' | 'name_pt' | 'image_url'>;
 
 const normalizedMap = new Map<string, string>();
 for (const [key, value] of Object.entries(imageMap)) {
@@ -93,12 +93,12 @@ export function getExerciseImageUrl(exercise: ExerciseImageSource): string | nul
     return exercise.image_url;
   }
 
-  const cacheKey = `${exercise.name_en ?? ''}|${exercise.name ?? ''}|${exercise.name_pt ?? ''}`;
+  const cacheKey = `${exercise.name}|${exercise.name_pt ?? ''}`;
   if (urlCache.has(cacheKey)) {
     return urlCache.get(cacheKey) ?? null;
   }
 
-  const candidates = [exercise.name_en, exercise.name, exercise.name_pt].filter(
+  const candidates = [exercise.name, exercise.name_pt].filter(
     (value): value is string => typeof value === 'string' && value.trim().length > 0
   );
 

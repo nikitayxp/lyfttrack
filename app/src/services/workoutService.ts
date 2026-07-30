@@ -3,7 +3,6 @@ import { supabase } from '@/services/supabase';
 import {
   EXERCISE_EQUIPMENT_FILTER_KEYWORDS,
   EXERCISE_MUSCLE_FILTER_KEYWORDS,
-  EXERCISE_MUSCLE_LABELS,
   normalizeEquipmentKey,
   normalizeMuscleKey,
   resolveExerciseMuscleKey,
@@ -66,7 +65,6 @@ export type WorkoutHistorySet = {
   rir: number | null;
   set_type: WorkoutSetType;
   exercise_name: string;
-  name_en: string | null;
   name_pt: string | null;
   muscle_group: string | null;
 };
@@ -116,7 +114,6 @@ export type WorkoutFeedExerciseSet = Pick<Tables<'sets'>, 'id' | 'set_number' | 
 export type WorkoutFeedExerciseGroup = {
   exercise_id: string | null;
   exercise_name: string;
-  name_en: string | null;
   name_pt: string | null;
   sets: WorkoutFeedExerciseSet[];
 };
@@ -147,7 +144,6 @@ export type WorkoutDetailsExercise = {
   rest_time: number | null;
   exercise_id: string;
   exercise_name: string;
-  name_en: string | null;
   name_pt: string | null;
   is_custom: boolean;
   image_url: string | null;
@@ -277,7 +273,7 @@ type RawWorkoutFeedRow = Tables<'workouts'> & {
 
 type ExerciseSummary = Pick<
   ExerciseCatalogItem,
-  'id' | 'name' | 'name_en' | 'name_pt' | 'muscle_group' | 'equipment' | 'is_custom' | 'image_url'
+  'id' | 'name' | 'name_pt' | 'muscle_group' | 'equipment' | 'is_custom' | 'image_url'
 >;
 
 type RawWorkoutExerciseDetailsRow = Pick<WorkoutExerciseRow, 'id' | 'order' | 'rest_time' | 'exercise_id' | 'notes'> & {
@@ -294,8 +290,8 @@ type RawWorkoutFeedSetRow = Pick<
   'id' | 'workout_id' | 'exercise_id' | 'set_number' | 'weight' | 'reps' | 'rir' | 'set_type'
 > & {
   exercises?:
-    | Pick<ExerciseCatalogItem, 'id' | 'name' | 'name_en' | 'name_pt'>
-    | Pick<ExerciseCatalogItem, 'id' | 'name' | 'name_en' | 'name_pt'>[]
+    | Pick<ExerciseCatalogItem, 'id' | 'name' | 'name_pt'>
+    | Pick<ExerciseCatalogItem, 'id' | 'name' | 'name_pt'>[]
     | null;
 };
 
@@ -463,7 +459,6 @@ function aggregateWorkoutFeedSets(rows: RawWorkoutFeedSetRow[]): Map<string, Wor
     const normalizedExerciseName = normalizeOptionalText(exerciseData?.name) ?? 'Exercicio';
     const exerciseNameSource: ExerciseNameSource = {
       name: normalizedExerciseName,
-      name_en: normalizeOptionalText(exerciseData?.name_en),
       name_pt: normalizeOptionalText(exerciseData?.name_pt),
     };
     const normalizedExerciseId = normalizeOptionalId(row.exercise_id);
@@ -490,7 +485,6 @@ function aggregateWorkoutFeedSets(rows: RawWorkoutFeedSetRow[]): Map<string, Wor
       aggregate.exerciseGroups.push({
         exercise_id: normalizedExerciseId,
         exercise_name: normalizedExerciseName,
-        name_en: exerciseNameSource.name_en,
         name_pt: exerciseNameSource.name_pt,
         sets: [],
       });
@@ -835,7 +829,7 @@ function canonicalizeExerciseNameToken(token: string): string {
 function getExerciseNameTokens(exercise: ExerciseCatalogItem): string[] {
   const tokens: string[] = [];
 
-  for (const value of [exercise.name_en, exercise.name, exercise.name_pt]) {
+  for (const value of [exercise.name, exercise.name_pt]) {
     const normalized = normalizeFilterLookup(value);
 
     if (!normalized || tokens.includes(normalized)) {
@@ -852,9 +846,7 @@ function buildPreferredNameTokenMap(rows: ExerciseCatalogItem[]): Map<string, st
   const map = new Map<string, string>();
 
   for (const row of rows) {
-    const englishToken = canonicalizeExerciseNameToken(
-      normalizeFilterLookup(row.name_en) || normalizeFilterLookup(row.name)
-    );
+    const englishToken = canonicalizeExerciseNameToken(normalizeFilterLookup(row.name));
 
     if (!englishToken) {
       continue;
@@ -875,10 +867,7 @@ function buildPreferredNameTokenMap(rows: ExerciseCatalogItem[]): Map<string, st
 function resolveCatalogMuscleKey(exercise: ExerciseCatalogItem): ExerciseMuscleKey | null {
   return resolveExerciseMuscleKey({
     muscleGroup: exercise.muscle_group,
-    muscleEn: exercise.muscle_en,
-    musclePt: exercise.muscle_pt,
     name: exercise.name,
-    nameEn: exercise.name_en,
     namePt: exercise.name_pt,
   });
 }
@@ -916,20 +905,8 @@ function getCatalogQualityScore(exercise: ExerciseCatalogItem): number {
     score += 80;
   }
 
-  if (normalizeFilterLookup(exercise.name_en)) {
-    score += 20;
-  }
-
   if (normalizeFilterLookup(exercise.name_pt)) {
     score += 20;
-  }
-
-  if (normalizeFilterLookup(exercise.muscle_en)) {
-    score += 8;
-  }
-
-  if (normalizeFilterLookup(exercise.muscle_pt)) {
-    score += 8;
   }
 
   if (resolveCatalogMuscleKey(exercise)) {
@@ -984,10 +961,7 @@ function matchesMuscleFilter(exercise: ExerciseCatalogItem, filter: ExerciseLibr
   const keywords = EXERCISE_MUSCLE_FILTER_KEYWORDS[filter];
   const candidates = [
     exercise.muscle_group,
-    exercise.muscle_en,
-    exercise.muscle_pt,
     exercise.name,
-    exercise.name_en,
     exercise.name_pt,
   ];
 
@@ -1107,17 +1081,12 @@ export async function createExercise(input: CreateExerciseInput): Promise<Exerci
   const normalizedMuscleKey = normalizeMuscleKey(input.muscleGroup);
   const normalizedEquipmentKey = normalizeEquipmentKey(input.equipment);
 
-  const muscleLabels = normalizedMuscleKey ? EXERCISE_MUSCLE_LABELS[normalizedMuscleKey] : null;
-
   const insertRow: TablesInsert<'exercises'> = {
     name: normalizedName,
-    name_en: normalizedName,
-    name_pt: normalizedName,
+    name_pt: null,
     created_by: user.id,
     is_custom: true,
     muscle_group: normalizedMuscleKey ?? normalizeWriteText(input.muscleGroup, INPUT_LIMITS.nameMax),
-    muscle_en: muscleLabels?.en ?? null,
-    muscle_pt: muscleLabels?.pt ?? null,
     equipment: normalizedEquipmentKey ?? normalizeWriteText(input.equipment, INPUT_LIMITS.nameMax),
   };
 
@@ -1380,7 +1349,7 @@ export async function getWorkoutHistory(limit = 20): Promise<WorkoutHistoryItem[
 
   const { data: allSets, error: setsError } = await supabase
     .from('sets')
-    .select('*, exercises(name, name_en, name_pt, muscle_group)')
+    .select('*, exercises(name, name_pt, muscle_group)')
     .in('workout_id', workoutIds);
 
   if (setsError) {
@@ -1395,7 +1364,6 @@ export async function getWorkoutHistory(limit = 20): Promise<WorkoutHistoryItem[
 
     const exerciseData = raw.exercises as {
       name: string;
-      name_en: string | null;
       name_pt: string | null;
       muscle_group: string | null;
     } | null;
@@ -1408,7 +1376,6 @@ export async function getWorkoutHistory(limit = 20): Promise<WorkoutHistoryItem[
       rir: raw.rir,
       set_type: normalizeSetType((raw as { set_type: string | null }).set_type),
       exercise_name: exerciseData?.name ?? 'Unknown',
-      name_en: exerciseData?.name_en ?? null,
       name_pt: exerciseData?.name_pt ?? null,
       muscle_group: exerciseData?.muscle_group ?? null,
     };
@@ -1429,7 +1396,7 @@ export async function getWorkoutHistory(limit = 20): Promise<WorkoutHistoryItem[
     }
 
     const uniqueExercises = dedupeExerciseNames(
-      sets.map((s) => ({ name: s.exercise_name, name_en: s.name_en, name_pt: s.name_pt }))
+      sets.map((s) => ({ name: s.exercise_name, name_pt: s.name_pt }))
     );
 
     return {
@@ -1655,7 +1622,7 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
 
   const { data: allSets, error: setsError } = await supabase
     .from('sets')
-    .select('id, workout_id, exercise_id, set_number, weight, reps, rir, set_type, exercises(id, name, name_en, name_pt)')
+    .select('id, workout_id, exercise_id, set_number, weight, reps, rir, set_type, exercises(id, name, name_pt)')
     .in('workout_id', workoutIds)
     .order('exercise_id', { ascending: true })
     .order('set_number', { ascending: true })
@@ -1810,7 +1777,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
 
   const { data: rawWorkoutExercisesData, error: workoutExercisesError } = await supabase
     .from('workout_exercises')
-    .select('id, order, rest_time, exercise_id, notes, exercises(id, name, name_en, name_pt, muscle_group, equipment, is_custom, image_url)')
+    .select('id, order, rest_time, exercise_id, notes, exercises(id, name, name_pt, muscle_group, equipment, is_custom, image_url)')
     .eq('workout_id', normalizedWorkoutId)
     .order('order', { ascending: true });
 
@@ -1826,7 +1793,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
     if (isNotesMissing) {
       const fallback = await supabase
         .from('workout_exercises')
-        .select('id, order, rest_time, exercise_id, exercises(id, name, name_en, name_pt, muscle_group, equipment, is_custom, image_url)')
+        .select('id, order, rest_time, exercise_id, exercises(id, name, name_pt, muscle_group, equipment, is_custom, image_url)')
         .eq('workout_id', normalizedWorkoutId)
         .order('order', { ascending: true });
 
@@ -1944,7 +1911,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
   if (missingExerciseIds.length > 0) {
     const { data: missingExercises, error: missingExercisesError } = await supabase
       .from('exercises')
-      .select('id, name, name_en, name_pt, muscle_group, equipment, is_custom, image_url')
+      .select('id, name, name_pt, muscle_group, equipment, is_custom, image_url')
       .in('id', missingExerciseIds);
 
     if (missingExercisesError) {
@@ -2003,7 +1970,6 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
       rest_time: relation.rest_time,
       exercise_id: relation.exercise_id,
       exercise_name: exerciseInfo?.name ?? 'Unknown exercise',
-      name_en: exerciseInfo?.name_en ?? null,
       name_pt: exerciseInfo?.name_pt ?? null,
       is_custom: exerciseInfo?.is_custom ?? false,
       image_url: exerciseInfo?.image_url ?? null,
@@ -2039,7 +2005,6 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
       rest_time: null,
       exercise_id: exerciseId,
       exercise_name: exerciseInfo?.name ?? 'Unknown exercise',
-      name_en: exerciseInfo?.name_en ?? null,
       name_pt: exerciseInfo?.name_pt ?? null,
       is_custom: exerciseInfo?.is_custom ?? false,
       image_url: exerciseInfo?.image_url ?? null,
@@ -2067,7 +2032,6 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
       rest_time: null,
       exercise_id: exerciseId,
       exercise_name: exerciseInfo?.name ?? 'Unknown exercise',
-      name_en: exerciseInfo?.name_en ?? null,
       name_pt: exerciseInfo?.name_pt ?? null,
       is_custom: exerciseInfo?.is_custom ?? false,
       image_url: exerciseInfo?.image_url ?? null,
@@ -2261,7 +2225,7 @@ export async function getUserWorkouts(userId: string, page = 0, limit = 20): Pro
 
   const { data: allSets, error: setsError } = await supabase
     .from('sets')
-    .select('id, workout_id, exercise_id, set_number, weight, reps, rir, set_type, exercises(id, name, name_en, name_pt)')
+    .select('id, workout_id, exercise_id, set_number, weight, reps, rir, set_type, exercises(id, name, name_pt)')
     .in('workout_id', workoutIds)
     .order('exercise_id', { ascending: true })
     .order('set_number', { ascending: true })

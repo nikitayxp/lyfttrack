@@ -7,7 +7,7 @@ import type { Tables } from '@/types/database';
 
 const palette = Colors.dark;
 
-type ExerciseImageSource = Pick<Tables<'exercises'>, 'name' | 'name_en' | 'name_pt' | 'image_url'>;
+type ExerciseImageSource = Pick<Tables<'exercises'>, 'name' | 'name_pt' | 'image_url'>;
 
 type ExerciseThumbnailProps = {
   exercise: ExerciseImageSource;
@@ -18,7 +18,6 @@ function ExerciseThumbnailComponent({ exercise, size = 40 }: ExerciseThumbnailPr
   const imageUrl = useMemo(() => getExerciseImageUrl(exercise), [
     exercise.image_url,
     exercise.name,
-    exercise.name_en,
     exercise.name_pt,
   ]);
   const [failed, setFailed] = useState(false);

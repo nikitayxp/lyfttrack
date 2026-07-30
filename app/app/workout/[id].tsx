@@ -370,7 +370,6 @@ export default function WorkoutDetailsScreen() {
               const localizedName = getLocalizedExerciseName(
                 {
                   name: exercise.exercise_name,
-                  name_en: exercise.name_en,
                   name_pt: exercise.name_pt,
                 },
                 language
@@ -378,7 +377,6 @@ export default function WorkoutDetailsScreen() {
               const muscleKey = getExerciseMuscleTranslationKey({
                 muscleGroup: exercise.muscle_group,
                 name: exercise.exercise_name,
-                nameEn: exercise.name_en,
                 namePt: exercise.name_pt,
               });
               const muscleLabel = muscleKey
@@ -386,8 +384,8 @@ export default function WorkoutDetailsScreen() {
                 : getLocalizedExerciseMuscle(
                     {
                       muscle_group: exercise.muscle_group,
-                      muscle_en: null,
-                      muscle_pt: null,
+                      name: exercise.exercise_name,
+                      name_pt: exercise.name_pt,
                     },
                     language
                   ) ?? t('exercise.general');
@@ -406,7 +404,6 @@ export default function WorkoutDetailsScreen() {
                   <ExerciseThumbnail
                     exercise={{
                       name: exercise.exercise_name,
-                      name_en: exercise.name_en,
                       name_pt: exercise.name_pt,
                       image_url: exercise.image_url,
                     }}

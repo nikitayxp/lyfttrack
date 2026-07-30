@@ -55,10 +55,10 @@ export type WeeklyVolumeByMuscle = {
 };
 
 type WorkoutRef = Pick<Tables<'workouts'>, 'start_time' | 'end_time' | 'user_id'>;
-type ExerciseRef = Pick<Tables<'exercises'>, 'id' | 'name' | 'name_en' | 'name_pt'>;
+type ExerciseRef = Pick<Tables<'exercises'>, 'id' | 'name' | 'name_pt'>;
 type WeeklyExerciseRef = Pick<
   Tables<'exercises'>,
-  'name' | 'name_en' | 'name_pt' | 'muscle_group' | 'muscle_en' | 'muscle_pt'
+  'name' | 'name_pt' | 'muscle_group'
 >;
 
 type RawSetWithWorkout = Pick<Tables<'sets'>, 'weight' | 'reps' | 'rir' | 'set_type' | 'exercise_id'> & {
@@ -133,10 +133,7 @@ function normalizeMuscleLabel(exercise: WeeklyExerciseRef | null | undefined, lo
 
   const normalizedKey = resolveExerciseMuscleKey({
     muscleGroup: exercise.muscle_group,
-    muscleEn: exercise.muscle_en,
-    musclePt: exercise.muscle_pt,
     name: exercise.name,
-    nameEn: exercise.name_en,
     namePt: exercise.name_pt,
   });
 
@@ -189,7 +186,7 @@ export async function getTrackedExercises(language: 'en' | 'pt' = 'en'): Promise
 
   const { data, error } = await supabase
     .from('sets')
-    .select('exercise_id, exercises!inner(id, name, name_en, name_pt), workouts!inner(user_id, end_time)')
+    .select('exercise_id, exercises!inner(id, name, name_pt), workouts!inner(user_id, end_time)')
     .eq('workouts.user_id', user.id)
     .not('workouts.end_time', 'is', null);
 
@@ -209,7 +206,6 @@ export async function getTrackedExercises(language: 'en' | 'pt' = 'en'): Promise
     optionsById.set(exercise.id, {
       id: exercise.id,
       name: exercise.name,
-      name_en: exercise.name_en ?? null,
       name_pt: exercise.name_pt ?? null,
     });
   }
@@ -365,7 +361,7 @@ export async function getAllTimePRs(language: 'en' | 'pt' = 'en'): Promise<AllTi
 
   const { data, error } = await supabase
     .from('sets')
-    .select('exercise_id, weight, workouts!inner(start_time, end_time, user_id), exercises!inner(id, name, name_en, name_pt)')
+    .select('exercise_id, weight, workouts!inner(start_time, end_time, user_id), exercises!inner(id, name, name_pt)')
     .eq('workouts.user_id', user.id)
     .not('workouts.end_time', 'is', null)
     .not('weight', 'is', null)
@@ -397,7 +393,6 @@ export async function getAllTimePRs(language: 'en' | 'pt' = 'en'): Promise<AllTi
     const existing = bestByExerciseId.get(exercise.id);
     const exerciseNames: ExerciseNameSource = {
       name: exercise.name,
-      name_en: exercise.name_en ?? null,
       name_pt: exercise.name_pt ?? null,
     };
 
@@ -451,7 +446,7 @@ export async function getWeeklyVolumeByMuscle(localeTag?: string): Promise<Weekl
 
   const { data, error } = await supabase
     .from('sets')
-    .select('id, workouts!inner(start_time, end_time, user_id), exercises(name, name_en, name_pt, muscle_group, muscle_en, muscle_pt)')
+    .select('id, workouts!inner(start_time, end_time, user_id), exercises(name, name_pt, muscle_group)')
     .eq('workouts.user_id', user.id)
     .gte('workouts.start_time', sinceIso)
     .not('workouts.end_time', 'is', null);

@@ -149,10 +149,7 @@ export default function WorkoutScreen() {
   const getDisplayMuscle = useCallback((exercise: ExerciseRow) => {
     const translatedKey = getExerciseMuscleTranslationKey({
       muscleGroup: exercise.muscle_group,
-      muscleEn: exercise.muscle_en,
-      musclePt: exercise.muscle_pt,
       name: exercise.name,
-      nameEn: exercise.name_en,
       namePt: exercise.name_pt,
     });
 

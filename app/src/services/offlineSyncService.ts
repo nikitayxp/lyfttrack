@@ -46,8 +46,7 @@ export type DraftExercise = {
   id: string;
   exerciseId: string;
   exerciseName: string;
-  /** Optional i18n fields — older drafts may omit these. */
-  name_en?: string | null;
+  /** Optional localized name — older drafts may omit it. */
   name_pt?: string | null;
   muscle_group: string | null;
   equipment: string | null;

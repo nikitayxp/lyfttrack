@@ -44,7 +44,7 @@ export type ActiveExercise = {
   exercise: ExerciseRow;
   defaultRestSeconds: number;
   sets: ActiveSet[];
-  /** Per-workout snapshot of the exercise description/notes. */
+  /** Per-workout exercise notes. */
   notes: string | null;
 };
 
@@ -123,7 +123,7 @@ export function createExerciseBlock(exercise: ExerciseRow, defaultRestSeconds = 
     id: `active-${exercise.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     exercise,
     defaultRestSeconds: normalizeExerciseRestSeconds(defaultRestSeconds),
-    notes: exercise.description ?? null,
+    notes: null,
     sets: [
       createSet(exercise.id, 1, { setType: 'warmup' }),
       createSet(exercise.id, 2, { setType: 'normal' }),
@@ -155,7 +155,7 @@ export function createExerciseBlockFromSets(
     id: `active-${exercise.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     exercise,
     defaultRestSeconds: normalizeExerciseRestSeconds(options.defaultRestSeconds ?? DEFAULT_REST_SECONDS),
-    notes: options.notes ?? exercise.description ?? null,
+    notes: options.notes ?? null,
     sets: safeSets.map((seed, index) => {
       const weightInput =
         seed.weight != null && Number.isFinite(seed.weight) && seed.weight > 0
@@ -187,7 +187,6 @@ export function getCompletedExerciseNames(exercises: ActiveExercise[]): SummaryE
       // a record; names alone cannot be matched reliably.
       exerciseId: exercise.exercise.id,
       name: exercise.exercise.name.trim(),
-      name_en: exercise.exercise.name_en,
       name_pt: exercise.exercise.name_pt,
     }))
     .filter((exercise) => exercise.name.length > 0);
@@ -202,7 +201,6 @@ function exerciseToDraft(exercise: ActiveExercise): DraftExercise {
     id: exercise.id,
     exerciseId: exercise.exercise.id,
     exerciseName: exercise.exercise.name,
-    name_en: exercise.exercise.name_en,
     name_pt: exercise.exercise.name_pt,
     muscle_group: exercise.exercise.muscle_group ?? null,
     equipment: exercise.exercise.equipment ?? null,
@@ -232,17 +230,12 @@ function draftToActiveExercise(draft: DraftExercise): ActiveExercise {
   const exercise: ExerciseRow = {
     id: draft.exerciseId,
     name: draft.exerciseName,
-    name_en: draft.name_en ?? null,
     name_pt: draft.name_pt ?? null,
     muscle_group: draft.muscle_group,
-    muscle_en: null,
-    muscle_pt: null,
     equipment: draft.equipment,
-    // required DB fields that aren't stored in the draft
+    // Required DB fields that aren't stored in the draft.
     created_by: null,
-    created_at: new Date().toISOString(),
     is_custom: false,
-    description: null,
   } as ExerciseRow;
 
   return {

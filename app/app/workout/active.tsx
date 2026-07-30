@@ -5,7 +5,6 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -71,6 +70,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar';
 import { WorkoutSummary } from '@/components/workout/WorkoutSummary';
 import { ConfirmModal } from '@/components/common/ConfirmModal';
+import { DismissibleBottomSheet } from '@/components/common/DismissibleBottomSheet';
 import { ExerciseThumbnail } from '@/components/common/ExerciseThumbnail';
 import {
   INPUT_LIMITS,
@@ -180,7 +180,6 @@ export default function ActiveWorkout() {
   const { width: windowWidth } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
   const isDesktopWeb = isWeb && windowWidth > DESKTOP_WEB_MIN_WIDTH;
-  const modalAnimationType: 'fade' | 'slide' = isWeb ? 'fade' : 'slide';
   const searchParams = useLocalSearchParams<{
     routineId?: string | string[];
     templateId?: string | string[];
@@ -1433,86 +1432,63 @@ export default function ActiveWorkout() {
         </View>
       </View>
 
-      <Modal
+      <DismissibleBottomSheet
         visible={isFinishModalVisible}
-        transparent
-        animationType={modalAnimationType}
-        onRequestClose={() => setIsFinishModalVisible(false)}
+        onClose={() => setIsFinishModalVisible(false)}
       >
-        <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
-          <Pressable 
-            style={styles.modalDismissArea} 
-            onPress={() => setIsFinishModalVisible(false)} 
+        <Text style={styles.modalTitle}>{t('workout.finishModalTitle')}</Text>
+        <Text style={styles.finishModalSubtitle}>{t('workout.finishModalSubtitle')}</Text>
+
+        <Text style={styles.modalOptionLabel}>{t('workout.finishWorkoutTitleLabel')}</Text>
+        <TextInput
+          accessibilityLabel={t('accessibility.workoutTitle', { defaultValue: 'Workout title' })}
+          value={workoutTitleInput}
+          onChangeText={(value) => {
+            setHasManualWorkoutTitle(true);
+            setWorkoutTitleInput(value.substring(0, INPUT_LIMITS.nameMax));
+          }}
+          style={styles.modalInput}
+          placeholder={t('workout.finishWorkoutTitlePlaceholder')}
+          placeholderTextColor={palette.textMuted}
+          autoCapitalize="words"
+          maxLength={INPUT_LIMITS.nameMax}
+        />
+
+        <View style={styles.modalButtonRow}>
+          <TouchableOpacity
+            style={styles.modalCancelButton}
+            onPress={() => setIsFinishModalVisible(false)}
+            activeOpacity={ACTIVE_OPACITY}
             accessibilityRole="button"
-            accessibilityLabel={t('accessibility.closeModal', { defaultValue: 'Close modal' })}
-          />
+            accessibilityLabel={t('common.cancel')}
+          >
+            <Text style={styles.modalCancelButtonText}>{t('common.cancel')}</Text>
+          </TouchableOpacity>
 
-          <View style={[styles.modalSheet, isWeb && styles.modalSheetWeb]}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>{t('workout.finishModalTitle')}</Text>
-            <Text style={styles.finishModalSubtitle}>{t('workout.finishModalSubtitle')}</Text>
-
-            <Text style={styles.modalOptionLabel}>{t('workout.finishWorkoutTitleLabel')}</Text>
-            <TextInput
-              accessibilityLabel={t('accessibility.workoutTitle', { defaultValue: 'Workout title' })}
-              value={workoutTitleInput}
-              onChangeText={(value) => {
-                setHasManualWorkoutTitle(true);
-                setWorkoutTitleInput(value.substring(0, INPUT_LIMITS.nameMax));
-              }}
-              style={styles.modalInput}
-              placeholder={t('workout.finishWorkoutTitlePlaceholder')}
-              placeholderTextColor={palette.textMuted}
-              autoCapitalize="words"
-              maxLength={INPUT_LIMITS.nameMax}
-            />
-
-            <View style={styles.modalButtonRow}>
-              <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={() => setIsFinishModalVisible(false)}
-                activeOpacity={ACTIVE_OPACITY}
-                accessibilityRole="button"
-                accessibilityLabel={t('common.cancel')}
-              >
-                <Text style={styles.modalCancelButtonText}>{t('common.cancel')}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.modalCreateButton, isSubmitting && styles.modalCreateButtonDisabled]}
-                onPress={() => void handleFinishWorkout()}
-                activeOpacity={ACTIVE_OPACITY}
-                disabled={isSubmitting}
-                accessibilityRole="button"
-                accessibilityLabel={t('workout.finish')}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator size="small" color={palette.textPrimary} />
-                ) : (
-                  <Text style={styles.modalCreateButtonText}>{t('workout.finish')}</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
+          <TouchableOpacity
+            style={[styles.modalCreateButton, isSubmitting && styles.modalCreateButtonDisabled]}
+            onPress={() => void handleFinishWorkout()}
+            activeOpacity={ACTIVE_OPACITY}
+            disabled={isSubmitting}
+            accessibilityRole="button"
+            accessibilityLabel={t('workout.finish')}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator size="small" color={palette.textPrimary} />
+            ) : (
+              <Text style={styles.modalCreateButtonText}>{t('workout.finish')}</Text>
+            )}
+          </TouchableOpacity>
         </View>
-      </Modal>
+      </DismissibleBottomSheet>
 
-      <Modal
+      <DismissibleBottomSheet
         visible={exercisePickerVisible}
-        transparent
-        animationType={modalAnimationType}
-        onRequestClose={closeExercisePicker}
+        onClose={closeExercisePicker}
+        scrollable={!isLoadingExercises && catalogExercises.length > 0}
+        sheetStyle={styles.pickerModalSheet}
       >
-        <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
-          <Pressable 
-            style={styles.modalDismissArea} 
-            onPress={closeExercisePicker} 
-            accessibilityRole="button"
-            accessibilityLabel={t('accessibility.closeModal', { defaultValue: 'Close modal' })}
-          />
-
-          <View style={[styles.modalSheet, styles.pickerModalSheet, isWeb && styles.modalSheetWeb]}>
-            <SafeAreaView edges={['bottom']} style={styles.modalSheetSafeArea}>
+        <SafeAreaView edges={['bottom']} style={styles.modalSheetSafeArea}>
               <View style={styles.modalHeaderRow}>
                 <Text style={styles.modalTitle}>{t('workout.selectExercise')}</Text>
                 <TouchableOpacity
@@ -1528,8 +1504,6 @@ export default function ActiveWorkout() {
                   <Text style={styles.modalCustomButtonText}>{t('workout.customLabel')}</Text>
                 </TouchableOpacity>
               </View>
-
-              <View style={styles.modalHandle} />
 
               <View style={styles.pickerSearchBar}>
                 <Ionicons name="search" size={18} color={palette.textMuted} />
@@ -1607,6 +1581,8 @@ export default function ActiveWorkout() {
                 style={styles.modalList}
                 contentContainerStyle={styles.modalListContent}
                 showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
               >
                 {isLoadingExercises ? (
                   <View style={styles.modalStatusContainer}>
@@ -1690,27 +1666,14 @@ export default function ActiveWorkout() {
                   ))
                 )}
               </ScrollView>
-            </SafeAreaView>
-          </View>
-        </View>
-      </Modal>
+        </SafeAreaView>
+      </DismissibleBottomSheet>
 
-      <Modal
+      <DismissibleBottomSheet
         visible={createExerciseVisible}
-        transparent
-        animationType={modalAnimationType}
-        onRequestClose={() => setCreateExerciseVisible(false)}
+        onClose={() => setCreateExerciseVisible(false)}
+        scrollable
       >
-        <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
-          <Pressable 
-            style={styles.modalDismissArea} 
-            onPress={() => setCreateExerciseVisible(false)} 
-            accessibilityRole="button"
-            accessibilityLabel={t('accessibility.closeModal', { defaultValue: 'Close modal' })}
-          />
-
-          <View style={[styles.modalSheet, isWeb && styles.modalSheetWeb]}>
-            <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>{t('workout.createExercise')}</Text>
 
             <TextInput
@@ -1794,9 +1757,7 @@ export default function ActiveWorkout() {
                 )}
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
-      </Modal>
+      </DismissibleBottomSheet>
 
       <WorkoutSummary
         visible={isSummaryVisible && finishSummary !== null}
@@ -2415,17 +2376,12 @@ const styles = StyleSheet.create({
   pickerModalSheet: {
     minHeight: '62%',
     maxHeight: '88%',
+    paddingBottom: Spacing.md,
   },
   modalSheetSafeArea: {
-    flex: 1,
+    flexGrow: 1,
     minHeight: 0,
-  },
-  modalSheetWeb: {
-    width: 393,
-    maxWidth: '100%',
-    marginLeft: 'auto',
-    marginRight: 'auto',
-    backgroundColor: palette.surface,
+    maxHeight: '100%',
   },
   modalHeaderRow: {
     flexDirection: 'row',

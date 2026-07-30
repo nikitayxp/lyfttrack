@@ -1,0 +1,862 @@
+{
+  "promoted": 91,
+  "skippedPersonal": [
+    {
+      "title": "Unilateral Extension",
+      "reason": "personal"
+    },
+    {
+      "title": "Bicep Sentado Alterando",
+      "reason": "personal"
+    },
+    {
+      "title": "Extensão Unilateral",
+      "reason": "personal"
+    },
+    {
+      "title": "Keenan Curl",
+      "reason": "personal"
+    },
+    {
+      "title": "Kelso",
+      "reason": "personal"
+    },
+    {
+      "title": "Balesian Curl",
+      "reason": "personal"
+    },
+    {
+      "title": "Aquele Extensao Tricep Cabeca Meio",
+      "reason": "personal"
+    },
+    {
+      "title": "Rosca Unilateral Do Samsulek Na Polia",
+      "reason": "personal"
+    },
+    {
+      "title": "Elevação Frontal Da Bolacha",
+      "reason": "personal"
+    }
+  ],
+  "rows": [
+    {
+      "id": "cc47c2ce-4d66-50e8-af2c-f8aef727b9ce",
+      "name_en": "One Arm Triceps Extension (Cable)",
+      "name_pt": "Extensão de Tríceps Unilateral (Cabo)",
+      "muscle_group": "triceps",
+      "equipment": "cable",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Cable_One_Arm_Tricep_Extension/0.jpg",
+      "setRows": 455
+    },
+    {
+      "id": "e3f7a8c7-d3fe-5171-9903-cf7fbeb4a0c6",
+      "name_en": "T-Bar Row (Barbell)",
+      "name_pt": "Remada na Barra T",
+      "muscle_group": "back",
+      "equipment": "barbell",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/T-Bar_Row_with_Handle/0.jpg",
+      "setRows": 438
+    },
+    {
+      "id": "e8bb6ad6-1ec8-5560-80ba-0a7b86150b3b",
+      "name_en": "Preacher Curl (Dumbbell)",
+      "name_pt": "Rosca Scott (Halter)",
+      "muscle_group": "biceps",
+      "equipment": "dumbbell",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Two-Arm_Dumbbell_Preacher_Curl/0.jpg",
+      "setRows": 435
+    },
+    {
+      "id": "0b25e15e-7f05-5ba3-a73a-e5239722ea81",
+      "name_en": "Thigh Adductor (Machine)",
+      "name_pt": "Cadeira Adutora (Máquina)",
+      "muscle_group": "glutes",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Thigh_Adductor/0.jpg",
+      "setRows": 431
+    },
+    {
+      "id": "1af96353-45a8-52b0-921e-a577c58cc9c5",
+      "name_en": "Lat Pulldown (Machine)",
+      "name_pt": "Puxada Alta na Polia (Máquina)",
+      "muscle_group": "back",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Lat_Pulldown/0.jpg",
+      "setRows": 430
+    },
+    {
+      "id": "e2e91c92-f1eb-5f3c-b074-1256868baa9c",
+      "name_en": "Pec Deck Fly (Machine)",
+      "name_pt": "Crucifixo no Voador (Máquina)",
+      "muscle_group": "chest",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Butterfly/0.jpg",
+      "setRows": 295
+    },
+    {
+      "id": "c8a0bbee-6add-5da1-960d-fb2db1048e96",
+      "name_en": "Seated Leg Curl (Machine)",
+      "name_pt": "Cadeira Flexora (Máquina)",
+      "muscle_group": "hamstrings",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Seated_Leg_Curl/0.jpg",
+      "setRows": 287
+    },
+    {
+      "id": "59b6022d-a5f3-5e4d-847d-bc5c7a7f744d",
+      "name_en": "Single Leg Standing Calf Raise (Machine)",
+      "name_pt": "Elevação Unilateral de Panturrilha em Pé (Máquina)",
+      "muscle_group": "calves",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Donkey_Calf_Raises/0.jpg",
+      "setRows": 277
+    },
+    {
+      "id": "eb30a9d2-084c-5161-a9f4-6109acab0dc6",
+      "name_en": "Single Leg Extension (Machine)",
+      "name_pt": "Extensão De Perna Unilateral (Máquina)",
+      "muscle_group": "quadriceps",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Single-Leg_Leg_Extension/0.jpg",
+      "setRows": 262
+    },
+    {
+      "id": "2056704c-8210-5e30-8858-39803a01d0fd",
+      "name_en": "Lateral Raise (Cable)",
+      "name_pt": "Elevação Lateral (Cabo)",
+      "muscle_group": "shoulders",
+      "equipment": "cable",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Side_Lateral_Raise/0.jpg",
+      "setRows": 247
+    },
+    {
+      "id": "58376161-90e2-5a4f-8c44-9d90d601725f",
+      "name_en": "Cable Crunch (Rope)",
+      "name_pt": "Abdominal (Corda)",
+      "muscle_group": "core",
+      "equipment": "cable",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Cable_Crunch/0.jpg",
+      "setRows": 234
+    },
+    {
+      "id": "af013174-cb4c-5c5f-8a7a-21b489201e33",
+      "name_en": "Seated Shoulder Press (Dumbbell)",
+      "name_pt": "Press De Ombros (Sentada) (Halter)",
+      "muscle_group": "shoulders",
+      "equipment": "dumbbell",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Dumbbell_Shoulder_Press/0.jpg",
+      "setRows": 213
+    },
+    {
+      "id": "0c244e87-7321-53c8-bd8c-de0b5dcf3f1a",
+      "name_en": "Shoulder Press Plate Loaded (Machine)",
+      "name_pt": "Desenvolvimento de Ombros (Máquina de Placas)",
+      "muscle_group": "shoulders",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Machine_Shoulder_Military_Press/0.jpg",
+      "setRows": 182
+    },
+    {
+      "id": "664229a0-9c9d-5415-81c3-6d8eec3d5d45",
+      "name_en": "Reverse Hyperextension (Machine)",
+      "name_pt": "Hiperextensão Reversa",
+      "muscle_group": "hamstrings",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Hyperextensions_Back_Extensions/0.jpg",
+      "setRows": 180
+    },
+    {
+      "id": "bc7083ee-12d8-5746-a464-68606195ed89",
+      "name_en": "Stiff Leg Deadlift (Barbell)",
+      "name_pt": "Peso Morto Com Pernas Esticadas",
+      "muscle_group": "hamstrings",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Stiff-Legged_Barbell_Deadlift/0.jpg",
+      "setRows": 156
+    },
+    {
+      "id": "ba531f35-fe1e-5ea0-b7dd-4a5e283cb962",
+      "name_en": "Seated Row (Machine)",
+      "name_pt": "Remo Sentado (Máquina)",
+      "muscle_group": "back",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Seated_Cable_Rows/0.jpg",
+      "setRows": 154
+    },
+    {
+      "id": "39813b47-5829-57de-80f5-5c4c762d1856",
+      "name_en": "Lateral Raise (Machine)",
+      "name_pt": "Elevação Lateral (Máquina)",
+      "muscle_group": "shoulders",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Side_Lateral_Raise/0.jpg",
+      "setRows": 146
+    },
+    {
+      "id": "e831175c-e897-5f34-8987-c8044dd4717d",
+      "name_en": "Bench Press (Barbell)",
+      "name_pt": "Supino (Barra)",
+      "muscle_group": "chest",
+      "equipment": "barbell",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Barbell_Bench_Press_-_Medium_Grip/0.jpg",
+      "setRows": 117
+    },
+    {
+      "id": "0229ef51-10ad-5d4f-a827-dead34307331",
+      "name_en": "Standing Leg Curl (Machine)",
+      "name_pt": "Flexão de Pernas em Pé",
+      "muscle_group": "full_body",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Standing_Leg_Curl/0.jpg",
+      "setRows": 114
+    },
+    {
+      "id": "75232569-fa79-58ae-9c39-b26a5446a317",
+      "name_en": "Seated Shoulder Press (Machine)",
+      "name_pt": "Prensa De Ombros (Sentada) (Máquina)",
+      "muscle_group": "shoulders",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Machine_Shoulder_Military_Press/0.jpg",
+      "setRows": 108
+    },
+    {
+      "id": "827c727b-14b0-58df-9ab8-aff601c9bf43",
+      "name_en": "Reverse Fly (Machine)",
+      "name_pt": "Aberturas Invertidas De Ombro Posterior (Na Máquina)",
+      "muscle_group": "shoulders",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Reverse_Machine_Flyes/0.jpg",
+      "setRows": 92
+    },
+    {
+      "id": "db2cf505-b3ff-5dee-aa58-79933724d0aa",
+      "name_en": "45 Degree Leg Press (Machine)",
+      "name_pt": "Leg Press 45º (Máquina)",
+      "muscle_group": "quadriceps",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Leg_Press/0.jpg",
+      "setRows": 74
+    },
+    {
+      "id": "46f78030-650d-5826-92c3-4686c4985a49",
+      "name_en": "Standing Calf Raise (Machine)",
+      "name_pt": "Elevação de Panturrilha em Pé (Máquina)",
+      "muscle_group": "calves",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Standing_Calf_Raises/0.jpg",
+      "setRows": 70
+    },
+    {
+      "id": "f3d15b93-0afe-5eb0-8094-a7d62ec90057",
+      "name_en": "Extensão de Panturrilha (Máquina)",
+      "name_pt": "Extensão de Panturrilha (Máquina)",
+      "muscle_group": "calves",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Standing_Calf_Raises/0.jpg",
+      "setRows": 60
+    },
+    {
+      "id": "90b59782-4b13-55e0-853d-5b0e50669753",
+      "name_en": "Horizontal Leg Press (Machine)",
+      "name_pt": "Leg Press Horizontal (Máquina)",
+      "muscle_group": "quadriceps",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Leg_Press/0.jpg",
+      "setRows": 60
+    },
+    {
+      "id": "5b7ac7a2-5489-5c9e-9212-91fe5df79f57",
+      "name_en": "Triceps Pushdown (Cable)",
+      "name_pt": "Tríceps na Polia",
+      "muscle_group": "triceps",
+      "equipment": "cable",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Triceps_Pushdown/0.jpg",
+      "setRows": 55
+    },
+    {
+      "id": "490467aa-d38c-595d-864d-7334301712e7",
+      "name_en": "Wrist Curl (Dumbbell)",
+      "name_pt": "Rosca de Punho (Halter)",
+      "muscle_group": "biceps",
+      "equipment": "dumbbell",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Palms-Up_Barbell_Wrist_Curl/0.jpg",
+      "setRows": 54
+    },
+    {
+      "id": "80bbf888-5d75-5378-bd91-804feb79fedb",
+      "name_en": "Triceps Pushdown Rope (Cable)",
+      "name_pt": "Tríceps na Polia com Corda",
+      "muscle_group": "triceps",
+      "equipment": "cable",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Triceps_Pushdown_-_Rope_Attachment/0.jpg",
+      "setRows": 54
+    },
+    {
+      "id": "b2a58cd2-5417-5452-982f-3b3cc04fd6b1",
+      "name_en": "Reverse Curl (Barbell)",
+      "name_pt": "Rosca Mao Ao Contrário",
+      "muscle_group": "biceps",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Reverse_Barbell_Curl/0.jpg",
+      "setRows": 53
+    },
+    {
+      "id": "4d3cd97d-3583-5e1c-9d11-7b38ccb01d9d",
+      "name_en": "Remada Sentada com Pegada em V (Cabo)",
+      "name_pt": "Remada Sentada com Pegada em V (Cabo)",
+      "muscle_group": "back",
+      "equipment": "cable",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Seated_Cable_Rows/0.jpg",
+      "setRows": 50
+    },
+    {
+      "id": "3a863185-a613-5193-9db2-ce9fd2c8747a",
+      "name_en": "Elevação Lateral Unilateral (Cabo)",
+      "name_pt": "Elevação Lateral Unilateral (Cabo)",
+      "muscle_group": "shoulders",
+      "equipment": "cable",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Side_Lateral_Raise/0.jpg",
+      "setRows": 48
+    },
+    {
+      "id": "ed10c604-a84a-5fb3-b04c-193bb808e361",
+      "name_en": "Incline Bench Press (Dumbbell)",
+      "name_pt": "Supino Inclinado (Halter)",
+      "muscle_group": "chest",
+      "equipment": "dumbbell",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Incline_Dumbbell_Press/0.jpg",
+      "setRows": 48
+    },
+    {
+      "id": "5bac3c69-6749-5de1-ad89-f5cb13337cf7",
+      "name_en": "Lat Pulldown (Machine)",
+      "name_pt": "Puxada Alta (Máquina)",
+      "muscle_group": "back",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Lat_Pulldown/0.jpg",
+      "setRows": 46
+    },
+    {
+      "id": "ffc25b0f-bdc4-561b-af0a-3be2eb2e798f",
+      "name_en": "Tricep Corda Extensão Cabeça",
+      "name_pt": "Tricep Corda Extensão Cabeça",
+      "muscle_group": "triceps",
+      "equipment": "cable",
+      "image_url": null,
+      "setRows": 46
+    },
+    {
+      "id": "2946ec13-97c8-5f8b-86ea-4b6f9b4f4d68",
+      "name_en": "Abdominal Declinado (Com Peso)",
+      "name_pt": "Abdominal Declinado (Com Peso)",
+      "muscle_group": "core",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Decline_Crunch/0.jpg",
+      "setRows": 42
+    },
+    {
+      "id": "c4c70c6f-2aff-5e69-a168-49742afc1ecd",
+      "name_en": "Remadas Iso-Lateral (Máquina)",
+      "name_pt": "Remadas Iso-Lateral (Máquina)",
+      "muscle_group": "back",
+      "equipment": "machine",
+      "image_url": null,
+      "setRows": 39
+    },
+    {
+      "id": "0534da6b-850f-57e8-9c02-c0c5b6d984a6",
+      "name_en": "Rosca Direta na Polia",
+      "name_pt": "Rosca Direta na Polia",
+      "muscle_group": "biceps",
+      "equipment": "cable",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Cable_Curl/0.jpg",
+      "setRows": 34
+    },
+    {
+      "id": "c6f0cd00-a0a9-5440-b5c5-b3a9247ced9d",
+      "name_en": "Supino Inclinado Na Máquina",
+      "name_pt": "Supino Inclinado Na Máquina",
+      "muscle_group": "chest",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Incline_Dumbbell_Press/0.jpg",
+      "setRows": 34
+    },
+    {
+      "id": "e7f2aba2-5923-502e-b1bd-b9694bd46306",
+      "name_en": "Remada (Barra)\\n",
+      "name_pt": "Remada (Barra)\\n",
+      "muscle_group": "back",
+      "equipment": "barbell",
+      "image_url": null,
+      "setRows": 33
+    },
+    {
+      "id": "55e419b4-2891-5386-b903-33bca898301d",
+      "name_en": "Leg Extension (Machine)",
+      "name_pt": "Cadeira Extensora (Máquina)",
+      "muscle_group": "quadriceps",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Leg_Extensions/0.jpg",
+      "setRows": 32
+    },
+    {
+      "id": "8fc17e5a-b780-5768-bba1-b7f4d75f6d65",
+      "name_en": "Rosca Invertida (Cabo)",
+      "name_pt": "Rosca Invertida (Cabo)",
+      "muscle_group": "biceps",
+      "equipment": "cable",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Reverse_Cable_Curl/0.jpg",
+      "setRows": 30
+    },
+    {
+      "id": "cfcd8036-e89a-54d1-a0ae-c2b2b8ef8fd9",
+      "name_en": "Extensão de Punho (Barra)",
+      "name_pt": "Extensão de Punho (Barra)",
+      "muscle_group": "biceps",
+      "equipment": "barbell",
+      "image_url": null,
+      "setRows": 25
+    },
+    {
+      "id": "ad0b7f5c-8af3-5bee-af74-489caee79dba",
+      "name_en": "Weighted Pull-Up",
+      "name_pt": "Barra Fixa (Com Peso)",
+      "muscle_group": "back",
+      "equipment": "barbell",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Weighted_Pull_Ups/0.jpg",
+      "setRows": 24
+    },
+    {
+      "id": "ad6edcf4-8b1a-56b0-9cad-ce868ca8d306",
+      "name_en": "Elevação de Panturrilha Sentado (Máquina)",
+      "name_pt": "Elevação de Panturrilha Sentado (Máquina)",
+      "muscle_group": "calves",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Seated_Calf_Raise/0.jpg",
+      "setRows": 23
+    },
+    {
+      "id": "e91cabd7-0f77-5759-8243-f756eba2622d",
+      "name_en": "Flexão de Pescoço Deitado (Com Peso)",
+      "name_pt": "Flexão de Pescoço Deitado (Com Peso)",
+      "muscle_group": "shoulders",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Isometric_Neck_Exercise_-_Front_And_Back/0.jpg",
+      "setRows": 23
+    },
+    {
+      "id": "c97127d0-171c-588c-ba13-34b2edf276a2",
+      "name_en": "Crucifixo Inclinado",
+      "name_pt": "Crucifixo Inclinado",
+      "muscle_group": "chest",
+      "equipment": "machine",
+      "image_url": null,
+      "setRows": 22
+    },
+    {
+      "id": "0b4cba98-bab8-5afa-8153-94778df43d88",
+      "name_en": "Incline Bench Press (Barbell)",
+      "name_pt": "Supino Inclinado (Barra)",
+      "muscle_group": "chest",
+      "equipment": "barbell",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Barbell_Incline_Bench_Press_-_Medium_Grip/0.jpg",
+      "setRows": 22
+    },
+    {
+      "id": "49646b5f-1cf6-5ba3-859c-8f836ee2375a",
+      "name_en": "Extensão de Tríceps na Polia (Máquina)",
+      "name_pt": "Extensão de Tríceps na Polia (Máquina)",
+      "muscle_group": "triceps",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Triceps_Pushdown/0.jpg",
+      "setRows": 21
+    },
+    {
+      "id": "ab6408f4-82dd-5077-a2b2-b2fddffc829e",
+      "name_en": "Puxada Alta (Elástico)",
+      "name_pt": "Puxada Alta (Elástico)",
+      "muscle_group": "back",
+      "equipment": "cable",
+      "image_url": null,
+      "setRows": 21
+    },
+    {
+      "id": "e0b950b7-a244-5b8f-a5c9-9145f898c200",
+      "name_en": "Levantamento De Joelhos Nas Barras Paralelas",
+      "name_pt": "Levantamento De Joelhos Nas Barras Paralelas",
+      "muscle_group": "triceps",
+      "equipment": "machine",
+      "image_url": null,
+      "setRows": 20
+    },
+    {
+      "id": "89c10e33-efd3-571b-bf9d-2051132752a9",
+      "name_en": "Rotação Externa",
+      "name_pt": "Rotação Externa",
+      "muscle_group": "shoulders",
+      "equipment": "machine",
+      "image_url": null,
+      "setRows": 19
+    },
+    {
+      "id": "940b982d-5b72-5711-b396-e2d926747af1",
+      "name_en": "Rotação Interna",
+      "name_pt": "Rotação Interna",
+      "muscle_group": "shoulders",
+      "equipment": "machine",
+      "image_url": null,
+      "setRows": 19
+    },
+    {
+      "id": "acd8eef1-2e8f-5af4-a90c-98436270178f",
+      "name_en": "Extensão de Tríceps Unilateral (Halter)",
+      "name_pt": "Extensão de Tríceps Unilateral (Halter)",
+      "muscle_group": "triceps",
+      "equipment": "dumbbell",
+      "image_url": null,
+      "setRows": 18
+    },
+    {
+      "id": "d63f879e-eee9-5732-9dd1-da4c1397d2e7",
+      "name_en": "Extensão de Pescoço Deitado (Com Peso)",
+      "name_pt": "Extensão de Pescoço Deitado (Com Peso)",
+      "muscle_group": "shoulders",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Isometric_Neck_Exercise_-_Front_And_Back/0.jpg",
+      "setRows": 17
+    },
+    {
+      "id": "da1f4e7e-79db-5716-ba3c-9989574f3f23",
+      "name_en": "Lunge A Cima Da Cabeça (Halter)",
+      "name_pt": "Lunge A Cima Da Cabeça (Halter)",
+      "muscle_group": "quadriceps",
+      "equipment": "dumbbell",
+      "image_url": null,
+      "setRows": 15
+    },
+    {
+      "id": "c475a618-bbc7-5b60-9293-180ea9d6cbd6",
+      "name_en": "Rosca Martelo com Corda na Polia",
+      "name_pt": "Rosca Martelo com Corda na Polia",
+      "muscle_group": "biceps",
+      "equipment": "cable",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Cable_Hammer_Curl_-_Rope_Attachment/0.jpg",
+      "setRows": 15
+    },
+    {
+      "id": "bc3f4ed3-381c-5b5c-8eaf-4cb17b27fa47",
+      "name_en": "Tríceps na Paralela (Com Peso)",
+      "name_pt": "Tríceps na Paralela (Com Peso)",
+      "muscle_group": "triceps",
+      "equipment": "bodyweight",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Weighted_Bench_Dip/0.jpg",
+      "setRows": 15
+    },
+    {
+      "id": "1c3b00b4-4c33-59af-ad95-f8c9f8b9b25c",
+      "name_en": "Remada Inclinada Apoiada No Peito (Halter)",
+      "name_pt": "Remada Inclinada Apoiada No Peito (Halter)",
+      "muscle_group": "chest",
+      "equipment": "dumbbell",
+      "image_url": null,
+      "setRows": 13
+    },
+    {
+      "id": "6243c219-70d9-502d-83d0-7767ec53eda9",
+      "name_en": "Rosca de Pulso Atrás das Costas (Barra)",
+      "name_pt": "Rosca de Pulso Atrás das Costas (Barra)",
+      "muscle_group": "biceps",
+      "equipment": "barbell",
+      "image_url": null,
+      "setRows": 12
+    },
+    {
+      "id": "396a5636-c9c4-5da7-85c3-008c2521b089",
+      "name_en": "Supino Declinado (Máquina)",
+      "name_pt": "Supino Declinado (Máquina)",
+      "muscle_group": "chest",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Decline_Dumbbell_Bench_Press/0.jpg",
+      "setRows": 12
+    },
+    {
+      "id": "9334f9ad-7fc3-5115-a7aa-8f090b605e33",
+      "name_en": "Tração Vertical (Máquina)",
+      "name_pt": "Tração Vertical (Máquina)",
+      "muscle_group": "back",
+      "equipment": "machine",
+      "image_url": null,
+      "setRows": 12
+    },
+    {
+      "id": "a22c8c5b-d2b7-5199-be58-23164958dc1f",
+      "name_en": "Pull-Up (Bodyweight)",
+      "name_pt": "Barra Fixa",
+      "muscle_group": "back",
+      "equipment": "barbell",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Pullups/0.jpg",
+      "setRows": 10
+    },
+    {
+      "id": "2aa66ca5-2db8-5458-9ddd-f1dcc2ffc16f",
+      "name_en": "Agachamento Pêndulo (Máquina)",
+      "name_pt": "Agachamento Pêndulo (Máquina)",
+      "muscle_group": "quadriceps",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Hack_Squat/0.jpg",
+      "setRows": 9
+    },
+    {
+      "id": "a431b5ec-3bfd-54cd-b9d6-53238b36d38f",
+      "name_en": "Puxada Unilateral",
+      "name_pt": "Puxada Unilateral",
+      "muscle_group": "back",
+      "equipment": "machine",
+      "image_url": null,
+      "setRows": 8
+    },
+    {
+      "id": "ac1c78c4-7fb5-5398-a6a5-6af218ddd1d5",
+      "name_en": "Shrug (Barbell)",
+      "name_pt": "Shrug",
+      "muscle_group": "shoulders",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Barbell_Shrug/0.jpg",
+      "setRows": 7
+    },
+    {
+      "id": "b239fb74-d79d-5d95-ba7e-926312fafdf7",
+      "name_en": "Extensão de tríceps acima da cabeça (cabo)",
+      "name_pt": "Extensão de tríceps acima da cabeça (cabo)",
+      "muscle_group": "triceps",
+      "equipment": "cable",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Cable_Rope_Overhead_Triceps_Extension/0.jpg",
+      "setRows": 6
+    },
+    {
+      "id": "ddfa3c93-f46b-55b9-a9e9-f425686a796f",
+      "name_en": "Back Extension (Machine)",
+      "name_pt": "Extensão Lombar Maquina",
+      "muscle_group": "hamstrings",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Hyperextensions_Back_Extensions/0.jpg",
+      "setRows": 6
+    },
+    {
+      "id": "a87b93b0-887f-5bf8-bd3a-851971375393",
+      "name_en": "Parallel Bar Dip (Bodyweight)",
+      "name_pt": "Paralela",
+      "muscle_group": "triceps",
+      "equipment": "bodyweight",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Bench_Dips/0.jpg",
+      "setRows": 6
+    },
+    {
+      "id": "8624e1ef-1c0c-5023-97dc-28498299c655",
+      "name_en": "Press De Peito Iso-Lateral (Máquina)",
+      "name_pt": "Press De Peito Iso-Lateral (Máquina)",
+      "muscle_group": "chest",
+      "equipment": "machine",
+      "image_url": null,
+      "setRows": 6
+    },
+    {
+      "id": "3b414322-857a-59b5-be15-31385702e4ba",
+      "name_en": "Remada Unilateral Na Polia",
+      "name_pt": "Remada Unilateral Na Polia",
+      "muscle_group": "back",
+      "equipment": "cable",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Cable_One_Arm_Lat_Pulldown/0.jpg",
+      "setRows": 6
+    },
+    {
+      "id": "315c4fba-0563-5d9c-b1de-7b4ef550eb1e",
+      "name_en": "Remadas Altas Iso-Lateral (Máquina)",
+      "name_pt": "Remadas Altas Iso-Lateral (Máquina)",
+      "muscle_group": "back",
+      "equipment": "machine",
+      "image_url": null,
+      "setRows": 6
+    },
+    {
+      "id": "ebcbcce7-3be2-5dcf-88d0-a9db8de20ebf",
+      "name_en": "Rolo Antebraço",
+      "name_pt": "Rolo Antebraço",
+      "muscle_group": "biceps",
+      "equipment": "machine",
+      "image_url": null,
+      "setRows": 6
+    },
+    {
+      "id": "b90360dd-14d1-5577-856f-1d7d5bcba505",
+      "name_en": "Remadas Dobradas (Barra)",
+      "name_pt": "Remadas Dobradas (Barra)",
+      "muscle_group": "back",
+      "equipment": "barbell",
+      "image_url": null,
+      "setRows": 5
+    },
+    {
+      "id": "0bafdbfb-8e72-5c0e-b715-801db50f2e5a",
+      "name_en": "Serratus Punch Machine",
+      "name_pt": "Serratus Punch Machine",
+      "muscle_group": "full_body",
+      "equipment": "machine",
+      "image_url": null,
+      "setRows": 5
+    },
+    {
+      "id": "9d7b81f8-4e60-5ee4-8852-d580f2e065ae",
+      "name_en": "Agachamento Pistola Com Assistência",
+      "name_pt": "Agachamento Pistola Com Assistência",
+      "muscle_group": "quadriceps",
+      "equipment": "machine",
+      "image_url": null,
+      "setRows": 4
+    },
+    {
+      "id": "a0dc133b-d8a3-5067-9a35-aae2c96905b9",
+      "name_en": "Puxada Alta - Pegada Triângulo",
+      "name_pt": "Puxada Alta - Pegada Triângulo",
+      "muscle_group": "back",
+      "equipment": "machine",
+      "image_url": null,
+      "setRows": 4
+    },
+    {
+      "id": "b3eebe74-169a-5b09-92fc-c19161b1a740",
+      "name_en": "Bicep Curl (Dumbbell)",
+      "name_pt": "Rosca Direta (Halter)",
+      "muscle_group": "biceps",
+      "equipment": "dumbbell",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Dumbbell_Bicep_Curl/0.jpg",
+      "setRows": 4
+    },
+    {
+      "id": "9cac3412-d5fd-5959-8829-075768732c35",
+      "name_en": "Skull Crusher (Barbell)",
+      "name_pt": "Triceps Testa (Barra)",
+      "muscle_group": "triceps",
+      "equipment": "barbell",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Lying_Triceps_Press/0.jpg",
+      "setRows": 4
+    },
+    {
+      "id": "9a77da97-5abe-50ec-951f-2c2ffaa289ac",
+      "name_en": "Crucifixo Baixo na Polia (Máquina)",
+      "name_pt": "Crucifixo Baixo na Polia (Máquina)",
+      "muscle_group": "chest",
+      "equipment": "machine",
+      "image_url": null,
+      "setRows": 3
+    },
+    {
+      "id": "4c9b75dd-2e6d-5dc2-b5b4-43c758a50c94",
+      "name_en": "Crucifixo na Polia (Máquina)",
+      "name_pt": "Crucifixo na Polia (Máquina)",
+      "muscle_group": "chest",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Cable_Crossover/0.jpg",
+      "setRows": 3
+    },
+    {
+      "id": "d73f2618-dd3b-5bf9-8cbd-5ad770819e52",
+      "name_en": "Crucifixo Sentado (Cabo)",
+      "name_pt": "Crucifixo Sentado (Cabo)",
+      "muscle_group": "chest",
+      "equipment": "cable",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Cable_Crossover/0.jpg",
+      "setRows": 3
+    },
+    {
+      "id": "f756f800-e23b-57e4-901e-04ddf1de51b8",
+      "name_en": "Puxada Com O Braço Reto (Corda)",
+      "name_pt": "Puxada Com O Braço Reto (Corda)",
+      "muscle_group": "back",
+      "equipment": "cable",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Straight-Arm_Pulldown/0.jpg",
+      "setRows": 3
+    },
+    {
+      "id": "bcc6e2ff-2d6a-587a-9b57-0f9719185396",
+      "name_en": "Bulgarian Split Squat",
+      "name_pt": "Agachamento Búlgaro",
+      "muscle_group": "quadriceps",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/One_Leg_Barbell_Squat/0.jpg",
+      "setRows": 2
+    },
+    {
+      "id": "c1be2bae-a1cd-57e8-ac9a-3c99bd6af1a2",
+      "name_en": "Walking",
+      "name_pt": "Caminhada",
+      "muscle_group": "cardio",
+      "equipment": "bodyweight",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Walking_Lunge_Male/0.jpg",
+      "setRows": 2
+    },
+    {
+      "id": "045130f8-de73-5ea3-864a-037fd0b3a415",
+      "name_en": "Glute Kickback (Machine)",
+      "name_pt": "Glúteo Coice (Máquina)",
+      "muscle_group": "glutes",
+      "equipment": "machine",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Glute_Kickback/0.jpg",
+      "setRows": 2
+    },
+    {
+      "id": "42e65444-43f6-510b-9639-d894eac21b2b",
+      "name_en": "Press De Ombros (Sentada) (Barra)",
+      "name_pt": "Press De Ombros (Sentada) (Barra)",
+      "muscle_group": "shoulders",
+      "equipment": "barbell",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Barbell_Shoulder_Press/0.jpg",
+      "setRows": 2
+    },
+    {
+      "id": "afcb8678-f27f-5dfa-9620-a052acf52505",
+      "name_en": "Press de tríceps com cotovelos abertos (halteres)",
+      "name_pt": "Press de tríceps com cotovelos abertos (halteres)",
+      "muscle_group": "triceps",
+      "equipment": "machine",
+      "image_url": null,
+      "setRows": 2
+    },
+    {
+      "id": "1ddd2edf-153d-5bd4-9e10-57422080ba59",
+      "name_en": "Rosca Punho Pa Frente",
+      "name_pt": "Rosca Punho Pa Frente",
+      "muscle_group": "biceps",
+      "equipment": "machine",
+      "image_url": null,
+      "setRows": 2
+    },
+    {
+      "id": "0daaed81-a757-5f03-ac89-f2f1d20f0f33",
+      "name_en": "Running",
+      "name_pt": "Corrida",
+      "muscle_group": "cardio",
+      "equipment": "bodyweight",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Walking_Lunge_Male/0.jpg",
+      "setRows": 1
+    },
+    {
+      "id": "63bf2b03-2f2a-5982-9786-2e589ddae825",
+      "name_en": "Elevação De Pernas Na Barra Fixa",
+      "name_pt": "Elevação De Pernas Na Barra Fixa",
+      "muscle_group": "back",
+      "equipment": "barbell",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Hanging_Leg_Raise/0.jpg",
+      "setRows": 1
+    },
+    {
+      "id": "cebef187-626e-5f27-8194-12cd28ff4711",
+      "name_en": "Halo (Kettlebell)",
+      "name_pt": "Halo com kettlebell",
+      "muscle_group": "full_body",
+      "equipment": "kettlebell",
+      "image_url": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Kettlebell_Halo/0.jpg",
+      "setRows": 1
+    }
+  ]
+}

@@ -1944,7 +1944,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
   if (missingExerciseIds.length > 0) {
     const { data: missingExercises, error: missingExercisesError } = await supabase
       .from('exercises')
-      .select('id, name, name_en, name_pt, muscle_group, equipment, is_custom, image_url')
+      .select('id, name, name_en, name_pt, aliases, muscle_group, equipment, is_custom, image_url')
       .in('id', missingExerciseIds);
 
     if (missingExercisesError) {

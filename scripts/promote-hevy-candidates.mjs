@@ -181,7 +181,11 @@ function normalizeTitle(value) {
 }
 
 function cleanTitle(title) {
-  return String(title || '').replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim();
+  return String(title || '')
+    .replace(/\\n/g, ' ')
+    .replace(/\r?\n/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function uuidFromKey(key) {

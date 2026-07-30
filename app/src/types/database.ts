@@ -23,6 +23,7 @@ export type Database = {
           id: string
           image_url: string | null
           is_custom: boolean
+          aliases: string[]
           muscle_en: string | null
           muscle_group: string | null
           muscle_pt: string | null
@@ -38,6 +39,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_custom?: boolean
+          aliases?: string[]
           muscle_en?: string | null
           muscle_group?: string | null
           muscle_pt?: string | null
@@ -53,6 +55,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_custom?: boolean
+          aliases?: string[]
           muscle_en?: string | null
           muscle_group?: string | null
           muscle_pt?: string | null

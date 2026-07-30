@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { BarChart } from 'react-native-gifted-charts';
+import { LineChart } from 'react-native-gifted-charts';
 import {
   ActivityIndicator,
   Image,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,9 +16,10 @@ import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Colors } from '@/constants/theme';
-import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
+import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import { getExerciseMuscleTranslationKey, getEquipmentTranslationKey } from '@/constants/exerciseCatalog';
 import { usePreferences } from '@/context/PreferencesContext';
+import { useWorkoutContext } from '@/context/WorkoutContext';
 import type { Tables } from '@/types/database';
 import { getExercisesByIds } from '@/services/workoutService';
 import {
@@ -31,10 +31,144 @@ import {
   type ExerciseWorkoutHistoryEntry,
   type ProgressMetric,
 } from '@/services/statsService';
+import { estimateOneRepMax } from '@/utils/estimateOneRepMax';
 import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 import { getExerciseImageUrl } from '@/utils/exerciseImage';
+import type { ActiveExercise } from '@/hooks/useActiveWorkoutState';
 
 const palette = Colors.dark;
+
+const Y_AXIS_LABEL_WIDTH = 44;
+const CHART_EDGE_SPACING = 20;
+/** Keep points tappable; if they cannot fit, the chart scrolls instead of clipping. */
+const MIN_POINT_SPACING = 48;
+const CHART_PAGE_RATIO = 0.75;
+
+type ChartRange = '3m' | '1y';
+type ChartMetric = Extract<ProgressMetric, 'weight' | 'e1rm'>;
+
+// gifted-charts places the pointer overlay one `initialSpacing` to the right of
+// the point it is reporting: `getX` already includes `initialSpacing`, and the
+// overlay's own origin adds it a second time. Measured at exactly 20px with
+// `initialSpacing={20}` — the strip, the dot and the card all landed beside the
+// data point instead of on it, which is what the review flagged.
+//
+// The library gives no way to shift the overlay as a whole, so each of the three
+// pieces is pulled back by hand: the strip through `pointerShiftX` on the data,
+// the dot through `pointerComponent`, and the card through its own style.
+// `shiftPointerLabelX` is not one of them — it is ignored outright while
+// `autoAdjustPointerLabelPosition` is on, which we want for the edge clamping.
+const POINTER_X_CORRECTION = -CHART_EDGE_SPACING;
+/** Must match `styles.activeDataPoint` — gifted-charts centres custom points with dataPointWidth/Height (default 4). */
+const ACTIVE_POINT_SIZE = 12;
+
+/** At most six date labels, evenly spread: one per session overlaps into a smear. */
+function shouldLabelPoint(index: number, total: number): boolean {
+  if (total <= 6) {
+    return true;
+  }
+
+  const step = Math.ceil(total / 6);
+  return index === total - 1 || index % step === 0;
+}
+
+function localDateKey(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function rangeStartDate(range: ChartRange): string {
+  const date = new Date();
+  if (range === '3m') {
+    date.setMonth(date.getMonth() - 3);
+  } else {
+    date.setFullYear(date.getFullYear() - 1);
+  }
+  return localDateKey(date);
+}
+
+function nextChartScrollX(
+  current: number,
+  max: number,
+  plotWidth: number,
+  direction: -1 | 1
+): number {
+  const page = Math.max(120, plotWidth * CHART_PAGE_RATIO);
+  return Math.min(max, Math.max(0, current + direction * page));
+}
+
+if (typeof __DEV__ !== 'undefined' && __DEV__) {
+  console.assert(nextChartScrollX(900, 900, 300, -1) === 675, 'older chart page');
+  console.assert(nextChartScrollX(0, 900, 300, -1) === 0, 'chart start clamp');
+  console.assert(nextChartScrollX(800, 900, 300, 1) === 900, 'chart end clamp');
+}
+
+function formatProgressDateLabel(dateIso: string, language: string): string {
+  const d = new Date(`${dateIso}T12:00:00.000Z`);
+  const locale = language.startsWith('pt') ? 'pt-PT' : 'en-US';
+  return d.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
+}
+
+function buildActiveProgressPoint(
+  activeExercise: ActiveExercise | undefined,
+  metric: ChartMetric,
+  language: string
+): ExerciseProgressPoint | null {
+  if (!activeExercise) {
+    return null;
+  }
+
+  const completedSets = activeExercise.sets.filter(
+    (setItem) =>
+      setItem.completed &&
+      setItem.set_type !== 'warmup' &&
+      (setItem.weight ?? 0) > 0 &&
+      (metric === 'weight' || (setItem.reps ?? 0) > 0)
+  );
+
+  if (completedSets.length === 0) {
+    return null;
+  }
+
+  let maxWeight = 0;
+  let maxWeightReps = 0;
+  let estimated1RMMax = 0;
+  let volumeTotal = 0;
+  let repsTotal = 0;
+
+  for (const setItem of completedSets) {
+    const weight = setItem.weight ?? 0;
+    const reps = setItem.reps ?? 0;
+    volumeTotal += weight * reps;
+    repsTotal += reps;
+    estimated1RMMax = Math.max(estimated1RMMax, estimateOneRepMax(weight, reps, setItem.rir));
+
+    if (weight > maxWeight || (weight === maxWeight && reps > maxWeightReps)) {
+      maxWeight = weight;
+      maxWeightReps = reps;
+    }
+  }
+
+  const date = localDateKey();
+  const estimated = Number(estimated1RMMax.toFixed(1));
+  const heaviest = Number(maxWeight.toFixed(1));
+
+  return {
+    date,
+    label: formatProgressDateLabel(date, language),
+    value: metric === 'e1rm' ? estimated : heaviest,
+    volumeTotal: Math.round(volumeTotal),
+    repsTotal: Math.round(repsTotal),
+    durationMinutes: 0,
+    estimated1RMMax: estimated,
+    maxWeight: heaviest,
+    maxWeightReps: Math.round(maxWeightReps),
+    isActive: true,
+  };
+}
+
 const SCREEN_BG = palette.bgPrimary;
 const CARD_BG = palette.cardBg;
 const CHART_NEON = '#3B82F6';
@@ -59,13 +193,22 @@ export default function ExerciseDetailScreen() {
   const { language } = usePreferences();
   const { width: windowWidth } = useWindowDimensions();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const { activeExercises, hasActiveWorkout } = useWorkoutContext();
 
   const metricFilters = useMemo(
     () =>
       [
-        { key: 'volume' as const, label: t('workout.liveStatsMetricVolume') },
-        { key: 'reps' as const, label: t('workout.liveStatsMetricReps') },
-        { key: 'weight' as const, label: t('workout.liveStatsMetricKg') },
+        { key: 'weight' as const, label: t('exercise.detail.metricHeaviest') },
+        { key: 'e1rm' as const, label: t('exercise.detail.metricE1rm') },
+      ] as const,
+    [t]
+  );
+
+  const rangeFilters = useMemo(
+    () =>
+      [
+        { key: '3m' as const, label: t('exercise.detail.range3m') },
+        { key: '1y' as const, label: t('exercise.detail.range1y') },
       ] as const,
     [t]
   );
@@ -80,13 +223,108 @@ export default function ExerciseDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [metric, setMetric] = useState<ProgressMetric>('volume');
+  const [metric, setMetric] = useState<ChartMetric>('weight');
+  const [range, setRange] = useState<ChartRange>('3m');
   const [progress, setProgress] = useState<ExerciseProgressPoint[]>([]);
   const [records, setRecords] = useState<ExercisePersonalRecords | null>(null);
   const [history, setHistory] = useState<ExerciseWorkoutHistoryEntry[]>([]);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const [chartScrollPosition, setChartScrollPosition] = useState({ x: 0, max: 0 });
 
-  const chartWidth = useMemo(() => Math.min(Math.max(280, windowWidth - 56), 360), [windowWidth]);
+  const chartScrollRef = useRef<ScrollView | null>(null);
+  const lastScrollXRef = useRef(0);
+
+  // Total space the chart may occupy inside the card, minus its padding.
+  //
+  // The old floor of 280 was larger than the room available on a 320px phone,
+  // so the card overflowed the screen there regardless of the chart. Capped at
+  // what the window actually offers instead.
+  const chartWidth = useMemo(
+    () => Math.min(Math.max(240, windowWidth - 72), 360),
+    [windowWidth]
+  );
+
+  // What gifted-charts calls `width` is the plot only — the y-axis labels are
+  // drawn outside it and added on top. Passing the full width here is what made
+  // the chart run past the card and clip the last point.
+  const plotWidth = useMemo(
+    () => Math.max(180, chartWidth - Y_AXIS_LABEL_WIDTH - CHART_EDGE_SPACING),
+    [chartWidth]
+  );
+
+  const activeProgressPoint = useMemo(() => {
+    if (!exerciseId || !hasActiveWorkout) {
+      return null;
+    }
+
+    const activeExercise = activeExercises.find((item) => item.exercise.id === exerciseId);
+    return buildActiveProgressPoint(activeExercise, metric, language);
+  }, [activeExercises, exerciseId, hasActiveWorkout, language, metric]);
+
+  const chartProgress = useMemo(() => {
+    const finished = activeProgressPoint
+      ? progress.filter((point) => point.date !== activeProgressPoint.date)
+      : progress;
+
+    return activeProgressPoint ? [...finished, activeProgressPoint] : finished;
+  }, [activeProgressPoint, progress]);
+
+  // Reserves the axis gutter and both end margins before dividing, otherwise
+  // the final point is drawn half outside the plot.
+  //
+  // Floor at MIN_POINT_SPACING so a long history never compresses into a smear
+  // that clips the newest sessions — the chart grows and scrolls instead.
+  const lineSpacing = useMemo(() => {
+    if (chartProgress.length <= 1) {
+      return MIN_POINT_SPACING;
+    }
+
+    const usable = plotWidth - CHART_EDGE_SPACING * 2;
+    const fitted = Math.floor(usable / (chartProgress.length - 1));
+    return Math.max(MIN_POINT_SPACING, fitted);
+  }, [plotWidth, chartProgress.length]);
+
+  const chartContentWidth = useMemo(() => {
+    if (chartProgress.length <= 1) {
+      return plotWidth;
+    }
+
+    return CHART_EDGE_SPACING * 2 + lineSpacing * (chartProgress.length - 1);
+  }, [chartProgress.length, lineSpacing, plotWidth]);
+
+  const needsHorizontalScroll = chartContentWidth > plotWidth + 1;
+
+  const handleChartScroll = useCallback((event: {
+    nativeEvent: {
+      contentOffset: { x: number };
+      contentSize: { width: number };
+      layoutMeasurement: { width: number };
+    };
+  }) => {
+    const x = Math.max(0, event.nativeEvent.contentOffset.x);
+    const max = Math.max(
+      0,
+      event.nativeEvent.contentSize.width - event.nativeEvent.layoutMeasurement.width
+    );
+    lastScrollXRef.current = x;
+    setChartScrollPosition({ x, max });
+  }, []);
+
+  const moveChart = useCallback(
+    (direction: -1 | 1) => {
+      const next = nextChartScrollX(
+        lastScrollXRef.current,
+        chartScrollPosition.max,
+        plotWidth,
+        direction
+      );
+
+      lastScrollXRef.current = next;
+      chartScrollRef.current?.scrollTo({ x: next, animated: true });
+      setChartScrollPosition((current) => ({ ...current, x: next }));
+    },
+    [chartScrollPosition.max, plotWidth]
+  );
 
   const loadExercise = useCallback(async () => {
     if (!exerciseId) {
@@ -122,7 +360,7 @@ export default function ExerciseDetailScreen() {
 
     try {
       const [pts, prs, hist] = await Promise.all([
-        getExerciseProgress(exerciseId, metric, language),
+        getExerciseProgress(exerciseId, metric, language, { sinceDate: rangeStartDate(range) }),
         getExercisePersonalRecords(exerciseId),
         getExerciseWorkoutHistory(exerciseId),
       ]);
@@ -137,7 +375,7 @@ export default function ExerciseDetailScreen() {
     } finally {
       setIsLoadingStats(false);
     }
-  }, [exerciseId, metric, language]);
+  }, [exerciseId, metric, language, range]);
 
   useEffect(() => { void loadExercise(); }, [loadExercise]);
   useEffect(() => { void loadStats(); }, [loadStats]);
@@ -168,22 +406,83 @@ export default function ExerciseDetailScreen() {
     return key ? t(key) : exercise.equipment;
   }, [exercise, t]);
 
-  const barData = useMemo(
-    () =>
-      progress.map((point) => ({
-        value: Math.max(0, point.value),
-        label: point.label,
-        frontColor: CHART_NEON,
-      })),
-    [progress]
-  );
+  const lineData = useMemo(() => {
+    let lastFinishedIndex = -1;
+    for (let i = chartProgress.length - 1; i >= 0; i -= 1) {
+      if (!chartProgress[i]?.isActive) {
+        lastFinishedIndex = i;
+        break;
+      }
+    }
 
-  const chartMaxValue = useMemo(() => {
-    if (barData.length === 0) return 4;
-    const highest = barData.reduce((m, p) => Math.max(m, p.value), 0);
-    if (highest <= 0) return 4;
-    return Math.max(4, Math.ceil(highest * 1.25));
-  }, [barData]);
+    return chartProgress.map((point, index) => {
+      const isLatestFinished = !point.isActive && index === lastFinishedIndex;
+      const isActive = Boolean(point.isActive);
+
+      return {
+        value: Math.max(0, point.value),
+        // Only some labels are drawn: one per session turns into a smear of
+        // overlapping dates as soon as there is any history.
+        label: shouldLabelPoint(index, chartProgress.length) ? point.label : '',
+        // The session you just did is the one you are looking for.
+        dataPointColor: isActive ? 'transparent' : isLatestFinished ? palette.textPrimary : CHART_NEON,
+        dataPointRadius: isActive || isLatestFinished ? 6 : 4,
+        // Pulls the pointer strip back onto the point. See POINTER_X_CORRECTION.
+        pointerShiftX: POINTER_X_CORRECTION,
+        ...(isActive
+          ? {
+              // Library anchors customDataPoint at getX/getY minus half of these.
+              // Defaults are 4×4; our hollow ring is 12×12, so without this the
+              // ring sat a few pixels down-right of the line tip (review note).
+              dataPointWidth: ACTIVE_POINT_SIZE,
+              dataPointHeight: ACTIVE_POINT_SIZE,
+              customDataPoint: () => <View style={styles.activeDataPoint} />,
+            }
+          : null),
+        point,
+      };
+    });
+  }, [chartProgress]);
+
+  const initialPointerIndex = useMemo(() => {
+    if (lineData.length === 0) {
+      return -1;
+    }
+
+    for (let i = chartProgress.length - 1; i >= 0; i -= 1) {
+      if (!chartProgress[i]?.isActive) {
+        return i;
+      }
+    }
+
+    return lineData.length - 1;
+  }, [chartProgress, lineData.length]);
+
+  // Scaled to the data, not to zero. A progression chart anchored at zero turns
+  // 100 kg to 110 kg into a step you cannot see; the interesting range is
+  // between the values.
+  const chartRange = useMemo(() => {
+    const values = lineData.map((item) => item.value).filter((value) => Number.isFinite(value));
+
+    if (values.length === 0) {
+      return { min: 0, max: 4 };
+    }
+
+    const highest = Math.max(...values);
+    const lowest = Math.min(...values);
+
+    if (highest === lowest) {
+      const pad = Math.max(1, Math.round(highest * 0.1));
+      return { min: Math.max(0, highest - pad), max: highest + pad };
+    }
+
+    const padding = Math.max(1, (highest - lowest) * 0.15);
+
+    return {
+      min: Math.max(0, Math.floor(lowest - padding)),
+      max: Math.ceil(highest + padding),
+    };
+  }, [lineData]);
 
   if (isLoading) {
     return (
@@ -253,7 +552,7 @@ export default function ExerciseDetailScreen() {
         {/* Progression chart */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>{t('exercise.detail.progressTitle')}</Text>
-          <Text style={styles.cardSubtitle}>{t('exercise.detail.progressSubtitle')}</Text>
+          <Text style={styles.cardSubtitle}>{t(`exercise.detail.progressSubtitle_${metric}`)}</Text>
 
           <View style={styles.metricToggleRow}>
             {metricFilters.map((opt) => {
@@ -273,43 +572,146 @@ export default function ExerciseDetailScreen() {
             })}
           </View>
 
+          <View style={styles.metricToggleRow}>
+            {rangeFilters.map((opt) => {
+              const isActive = range === opt.key;
+              return (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[styles.metricToggle, isActive && styles.metricToggleActive]}
+                  activeOpacity={ACTIVE_OPACITY}
+                  onPress={() => setRange(opt.key)}
+                >
+                  <Text style={[styles.metricToggleText, isActive && styles.metricToggleTextActive]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
           {isLoadingStats ? (
             <View style={styles.chartStatusWrap}>
               <ActivityIndicator size="small" color={CHART_NEON} />
             </View>
-          ) : barData.length === 0 ? (
+          ) : lineData.length === 0 ? (
             <View style={styles.chartStatusWrap}>
               <Text style={styles.placeholderText}>{t('exercise.detail.noProgress')}</Text>
             </View>
           ) : (
             <View style={styles.chartWrap}>
-              <BarChart
-                data={barData}
-                width={chartWidth}
+              {needsHorizontalScroll ? (
+                <View style={styles.chartNavigation}>
+                  <TouchableOpacity
+                    style={[
+                      styles.chartNavigationButton,
+                      chartScrollPosition.x <= 1 && styles.chartNavigationButtonDisabled,
+                    ]}
+                    activeOpacity={ACTIVE_OPACITY}
+                    disabled={chartScrollPosition.x <= 1}
+                    onPress={() => moveChart(-1)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('exercise.detail.chartOlder')}
+                  >
+                    <Ionicons name="chevron-back" size={16} color={palette.textPrimary} />
+                    <Text style={styles.chartNavigationText}>{t('exercise.detail.chartOlder')}</Text>
+                  </TouchableOpacity>
+
+                  <Text style={styles.chartScrollHint}>{t('exercise.detail.chartScrollHint')}</Text>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.chartNavigationButton,
+                      chartScrollPosition.x >= chartScrollPosition.max - 1 &&
+                        styles.chartNavigationButtonDisabled,
+                    ]}
+                    activeOpacity={ACTIVE_OPACITY}
+                    disabled={chartScrollPosition.x >= chartScrollPosition.max - 1}
+                    onPress={() => moveChart(1)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('exercise.detail.chartNewer')}
+                  >
+                    <Text style={styles.chartNavigationText}>{t('exercise.detail.chartNewer')}</Text>
+                    <Ionicons name="chevron-forward" size={16} color={palette.textPrimary} />
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+              <LineChart
+                key={`${metric}-${range}-${lineData.length}-${initialPointerIndex}-${needsHorizontalScroll ? 'paged' : 'fit'}`}
+                data={lineData}
+                width={plotWidth}
                 height={220}
-                maxValue={chartMaxValue}
-                barWidth={Math.max(14, Math.min(28, Math.floor(chartWidth / Math.max(barData.length, 1)) - 8))}
-                spacing={12}
-                initialSpacing={12}
-                endSpacing={10}
-                roundedTop
-                frontColor={CHART_NEON}
-                gradientColor="#60A5FA"
-                showGradient
+                initialSpacing={CHART_EDGE_SPACING}
+                endSpacing={CHART_EDGE_SPACING}
+                spacing={lineSpacing}
+                curved
+                thickness={2.5}
+                color={CHART_NEON}
+                hideDataPoints={false}
+                dataPointsColor={CHART_NEON}
+                yAxisOffset={chartRange.min}
+                maxValue={chartRange.max - chartRange.min}
+                noOfSections={4}
                 yAxisColor={palette.borderStrong}
                 xAxisColor={palette.borderStrong}
-                yAxisLabelWidth={50}
-                xAxisLabelsHeight={52}
-                xAxisLabelsVerticalShift={8}
-                labelsExtraHeight={36}
-                overflowTop={12}
+                yAxisLabelWidth={Y_AXIS_LABEL_WIDTH}
                 yAxisTextStyle={styles.axisText}
                 xAxisLabelTextStyle={styles.xAxisLabelText}
-                formatYLabel={(label) => formatCompactNumber(label)}
                 rulesColor={palette.inputFill}
-                noOfSections={4}
-                isAnimated
-                adjustToWidth
+                formatYLabel={(label) => formatCompactNumber(label)}
+                // Long histories animate poorly and fight scrollToEnd on mount.
+                isAnimated={lineData.length <= 12}
+                scrollRef={chartScrollRef}
+                disableScroll
+                scrollToEnd={needsHorizontalScroll}
+                scrollAnimation={false}
+                showScrollIndicator={false}
+                onScroll={handleChartScroll}
+                // The chart owns horizontal drag only for point inspection.
+                // Paging history is kept on explicit buttons above, so it never
+                // steals the page's vertical scroll gesture.
+                pointerConfig={{
+                  pointerStripHeight: 200,
+                  pointerStripColor: palette.borderStrong,
+                  pointerStripWidth: 1,
+                  pointerColor: palette.textPrimary,
+                  radius: 5,
+                  pointerLabelWidth: 140,
+                  pointerLabelHeight: 84,
+                  activatePointersOnLongPress: false,
+                  activatePointersInstantlyOnTouch: true,
+                  autoAdjustPointerLabelPosition: true,
+                  persistPointer: true,
+                  resetPointerOnDataChange: true,
+                  initialPointerIndex,
+                  pointerComponent: () => <View style={styles.pointerDot} />,
+                  pointerLabelComponent: (items: { point?: ExerciseProgressPoint }[]) => {
+                    const point = items?.[0]?.point;
+
+                    if (!point) {
+                      return null;
+                    }
+
+                    return (
+                      <View style={styles.pointerCard}>
+                        <Text style={styles.pointerDate}>{point.label}</Text>
+                        {point.isActive ? (
+                          <Text style={styles.pointerMeta}>{t('exercise.detail.pointerInProgress')}</Text>
+                        ) : null}
+                        <Text style={styles.pointerValue}>
+                          {`${formatNumericValue(point.maxWeight)} kg x ${point.maxWeightReps}`}
+                        </Text>
+                        {metric === 'e1rm' ? (
+                          <Text style={styles.pointerMeta}>
+                            {t('exercise.detail.pointerE1rm', {
+                              value: formatNumericValue(point.estimated1RMMax),
+                            })}
+                          </Text>
+                        ) : null}
+                      </View>
+                    );
+                  },
+                }}
               />
             </View>
           )}
@@ -548,7 +950,84 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 28,
     paddingHorizontal: 8,
-    overflow: 'visible',
+    // Was 'visible', which let the plot spill past the card edge.
+    overflow: 'hidden',
+  },
+  chartNavigation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    columnGap: 6,
+    marginBottom: 8,
+  },
+  chartNavigationButton: {
+    minHeight: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    columnGap: 2,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: palette.inputStroke,
+    backgroundColor: palette.surface,
+    paddingHorizontal: 7,
+  },
+  chartNavigationButtonDisabled: {
+    opacity: 0.35,
+  },
+  chartNavigationText: {
+    color: palette.textPrimary,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  chartScrollHint: {
+    flex: 1,
+    color: palette.labelMuted,
+    fontSize: 10,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  pointerCard: {
+    borderRadius: Radius.button,
+    borderWidth: 1,
+    borderColor: palette.borderStrong,
+    backgroundColor: palette.surface,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    rowGap: 2,
+    transform: [{ translateX: POINTER_X_CORRECTION }],
+  },
+  pointerDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: palette.textPrimary,
+    transform: [{ translateX: POINTER_X_CORRECTION }],
+  },
+  activeDataPoint: {
+    width: ACTIVE_POINT_SIZE,
+    height: ACTIVE_POINT_SIZE,
+    borderRadius: ACTIVE_POINT_SIZE / 2,
+    borderWidth: 2,
+    borderColor: palette.textPrimary,
+    backgroundColor: 'transparent',
+    borderStyle: 'dashed',
+  },
+  pointerDate: {
+    color: palette.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  pointerValue: {
+    color: palette.textPrimary,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  pointerMeta: {
+    color: palette.textSecondary,
+    fontSize: 11,
+    fontWeight: '600',
   },
   axisText: {
     color: '#8FA2BA',

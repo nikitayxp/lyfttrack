@@ -2,6 +2,7 @@ type ExerciseSearchFields = {
   name?: string | null;
   name_en?: string | null;
   name_pt?: string | null;
+  aliases?: string[] | null;
   muscle_group?: string | null;
   muscle_en?: string | null;
   muscle_pt?: string | null;
@@ -52,6 +53,7 @@ export function matchesExerciseSearch(
         exercise.name,
         exercise.name_en,
         exercise.name_pt,
+        ...(exercise.aliases ?? []),
         exercise.muscle_group,
         exercise.muscle_en,
         exercise.muscle_pt,

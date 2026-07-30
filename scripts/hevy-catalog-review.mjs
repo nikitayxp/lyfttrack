@@ -111,7 +111,7 @@ function parseHevyTitles(csvText) {
     const line = lines[i];
     if (!line.trim()) continue;
     const cols = splitCsvLine(line);
-    const title = (cols[idx] || '').replace(/^"|"$/g, '').trim();
+    const title = (cols[idx] || '').replace(/^"|"$/g, '').replace(/\\n/g, ' ').replace(/\r?\n/g, ' ').trim();
     if (!title) continue;
     counts.set(title, (counts.get(title) || 0) + 1);
   }
@@ -173,7 +173,7 @@ function loadCatalogFromDb() {
   mkdirSync(OUT_DIR, { recursive: true });
   writeFileSync(
     tmpSql,
-    'select id, name, name_en, name_pt, muscle_group, equipment, is_custom from public.exercises where is_custom = false order by name;\n',
+    'select id, name, name_en, name_pt, aliases, muscle_group, equipment, is_custom from public.exercises where is_custom = false order by name;\n',
     'utf8'
   );
   const proc = spawnSync(
@@ -207,7 +207,8 @@ function indexCatalog(catalog) {
   const exact = new Map();
   const byTokens = new Map();
   for (const item of catalog) {
-    for (const name of [item.name, item.name_en, item.name_pt]) {
+    const names = [item.name, item.name_en, item.name_pt, ...(item.aliases || [])];
+    for (const name of names) {
       if (!name) continue;
       const exactKey = normalizeTitle(name);
       if (exactKey && prefer(item, exact.get(exactKey))) exact.set(exactKey, item);

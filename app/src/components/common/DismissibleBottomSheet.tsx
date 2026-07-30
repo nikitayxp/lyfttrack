@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useLayoutEffect, useState } from 'react';
 import {
   Modal,
   Platform,
@@ -25,10 +25,10 @@ const palette = Colors.dark;
 const DISMISS_DISTANCE = 96;
 const DISMISS_VELOCITY = 900;
 /** Short travel + snappy easing reads smoother than a long slow slide on web. */
-const ENTER_Y = 240;
-const EXIT_Y = 280;
-const ENTER_MS = 170;
-const EXIT_MS = 140;
+const ENTER_Y = 280;
+const EXIT_Y = 300;
+const ENTER_MS = 220;
+const EXIT_MS = 160;
 const SNAP_SPRING = { damping: 26, stiffness: 420, mass: 0.75, overshootClamping: true } as const;
 
 type DismissibleBottomSheetProps = {
@@ -57,6 +57,8 @@ export function DismissibleBottomSheet({
   const { t } = useTranslation();
   const isWeb = Platform.OS === 'web';
   const [mounted, setMounted] = useState(visible);
+  /** Block taps on the sheet until the enter slide finishes (avoids accidental presses). */
+  const [sheetInteractive, setSheetInteractive] = useState(false);
   const translateY = useSharedValue(ENTER_Y);
   const backdropOpacity = useSharedValue(0);
 
@@ -82,21 +84,41 @@ export function DismissibleBottomSheet({
     };
   }, [isWeb, mounted]);
 
+  // Park off-screen before paint so the first frame isn't already open.
+  useLayoutEffect(() => {
+    if (!visible) {
+      return;
+    }
+    translateY.value = ENTER_Y;
+    backdropOpacity.value = 0;
+  }, [backdropOpacity, translateY, visible]);
+
   useEffect(() => {
     if (visible) {
       setMounted(true);
+      setSheetInteractive(false);
       translateY.value = ENTER_Y;
       backdropOpacity.value = 0;
-      translateY.value = withTiming(0, {
-        duration: ENTER_MS,
-        easing: Easing.out(Easing.cubic),
-      });
+      translateY.value = withTiming(
+        0,
+        {
+          duration: ENTER_MS,
+          easing: Easing.out(Easing.cubic),
+        },
+        (finished) => {
+          if (finished) {
+            runOnJS(setSheetInteractive)(true);
+          }
+        }
+      );
       backdropOpacity.value = withTiming(1, {
         duration: ENTER_MS,
         easing: Easing.out(Easing.quad),
       });
       return;
     }
+
+    setSheetInteractive(false);
 
     if (!mounted) {
       return;
@@ -113,8 +135,7 @@ export function DismissibleBottomSheet({
       }
     );
     // Intentionally not depending on `mounted`: including it restarts the enter
-    // animation and can leave gestures dead until the next layout (e.g. after
-    // a slow catalog fetch).
+    // animation and can leave gestures dead until the next layout.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mounted gated inside
   }, [backdropOpacity, translateY, visible]);
 
@@ -198,13 +219,19 @@ export function DismissibleBottomSheet({
           </GestureDetector>
 
           {scrollable ? (
-            <Animated.View style={[styles.sheet, isWeb && styles.sheetWeb, sheetStyle, sheetAnimatedStyle]}>
+            <Animated.View
+              pointerEvents={sheetInteractive ? 'auto' : 'none'}
+              style={[styles.sheet, isWeb && styles.sheetWeb, sheetStyle, sheetAnimatedStyle]}
+            >
               <GestureDetector gesture={pan}>{handle}</GestureDetector>
               <View style={styles.scrollableBody}>{children}</View>
             </Animated.View>
           ) : (
             <GestureDetector gesture={pan}>
-              <Animated.View style={[styles.sheet, isWeb && styles.sheetWeb, sheetStyle, sheetAnimatedStyle]}>
+              <Animated.View
+                pointerEvents={sheetInteractive ? 'auto' : 'none'}
+                style={[styles.sheet, isWeb && styles.sheetWeb, sheetStyle, sheetAnimatedStyle]}
+              >
                 {handle}
                 {children}
               </Animated.View>

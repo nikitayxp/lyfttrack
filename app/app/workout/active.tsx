@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
@@ -521,6 +521,24 @@ export default function ActiveWorkout() {
     setExercisePickerVisible(false);
     setExercisePickerQuery('');
   }, []);
+
+  const restoreExercisePickerRef = useRef(false);
+
+  const openExerciseDetailsFromPicker = useCallback((exercise: ExerciseRow) => {
+    restoreExercisePickerRef.current = true;
+    setExercisePickerVisible(false);
+    router.push(`/exercise/${exercise.id}` as any);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!restoreExercisePickerRef.current) {
+        return;
+      }
+      restoreExercisePickerRef.current = false;
+      setExercisePickerVisible(true);
+    }, [])
+  );
 
   const preloadRoutine = useCallback(
     async (routineId: string, force = false) => {
@@ -1485,7 +1503,7 @@ export default function ActiveWorkout() {
       <DismissibleBottomSheet
         visible={exercisePickerVisible}
         onClose={closeExercisePicker}
-        scrollable={!isLoadingExercises && catalogExercises.length > 0}
+        scrollable
         sheetStyle={styles.pickerModalSheet}
       >
         <SafeAreaView edges={['bottom']} style={styles.modalSheetSafeArea}>
@@ -1639,27 +1657,44 @@ export default function ActiveWorkout() {
                       ) : null}
 
                       {section.items.map((exercise) => {
+                    const exerciseLabel = getLocalizedExerciseName(exercise, language);
                     return (
-                      <TouchableOpacity
-                        key={exercise.id}
-                        style={styles.modalExerciseRow}
-                        activeOpacity={ACTIVE_OPACITY}
-                        accessibilityRole="button"
-                        accessibilityLabel={t('accessibility.addSpecificExercise', { name: getLocalizedExerciseName(exercise, language), defaultValue: 'Add exercise' })}
-                        onPress={() => {
-                          addExercise(exercise);
-                          closeExercisePicker();
-                        }}
-                      >
-                        <ExerciseThumbnail exercise={exercise} size={34} />
-                        <View style={styles.modalExerciseTextWrap}>
-                          <Text style={styles.modalExerciseName}>{getLocalizedExerciseName(exercise, language)}</Text>
-                          <Text style={styles.modalExerciseMeta}>
-                            {getExerciseMuscleLabel(exercise)} - {getExerciseEquipmentLabel(exercise)}
-                          </Text>
-                        </View>
-                        <Ionicons name="add-circle-outline" size={22} color={palette.accent} />
-                      </TouchableOpacity>
+                      <View key={exercise.id} style={styles.modalExerciseRow}>
+                        <TouchableOpacity
+                          style={styles.modalExerciseMain}
+                          activeOpacity={ACTIVE_OPACITY}
+                          accessibilityRole="button"
+                          accessibilityLabel={t('accessibility.openExerciseDetails', {
+                            name: exerciseLabel,
+                            defaultValue: `Open ${exerciseLabel} details`,
+                          })}
+                          onPress={() => openExerciseDetailsFromPicker(exercise)}
+                        >
+                          <ExerciseThumbnail exercise={exercise} size={34} />
+                          <View style={styles.modalExerciseTextWrap}>
+                            <Text style={styles.modalExerciseName}>{exerciseLabel}</Text>
+                            <Text style={styles.modalExerciseMeta}>
+                              {getExerciseMuscleLabel(exercise)} - {getExerciseEquipmentLabel(exercise)}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.modalExerciseAddButton}
+                          activeOpacity={ACTIVE_OPACITY}
+                          hitSlop={HIT_SLOP}
+                          accessibilityRole="button"
+                          accessibilityLabel={t('accessibility.addSpecificExercise', {
+                            name: exerciseLabel,
+                            defaultValue: 'Add exercise',
+                          })}
+                          onPress={() => {
+                            addExercise(exercise);
+                            closeExercisePicker();
+                          }}
+                        >
+                          <Ionicons name="add-circle-outline" size={26} color={palette.accent} />
+                        </TouchableOpacity>
+                      </View>
                     );
                       })}
                     </View>
@@ -2531,12 +2566,26 @@ const styles = StyleSheet.create({
     borderColor: palette.border,
     borderRadius: Radius.card,
     backgroundColor: palette.surfaceAlt,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingLeft: 10,
+    paddingRight: 6,
+    paddingVertical: 8,
     marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+  },
+  modalExerciseMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingRight: 8,
+    minWidth: 0,
+  },
+  modalExerciseAddButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalSectionLabel: {
     color: palette.textMuted,

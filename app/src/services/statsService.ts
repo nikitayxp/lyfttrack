@@ -7,8 +7,14 @@ import {
 import { EXERCISE_MUSCLE_LABELS, resolveExerciseMuscleKey } from '@/constants/exerciseCatalog';
 import type { Tables } from '@/types/database';
 import { getLocalizedExerciseName, type ExerciseNameSource } from '@/utils/exerciseLocalization';
+import { estimateOneRepMax } from '@/utils/estimateOneRepMax';
 
-export type ProgressMetric = 'duration' | 'volume' | 'reps' | 'weight';
+export type ProgressMetric = 'duration' | 'volume' | 'reps' | 'weight' | 'e1rm';
+
+export type ExerciseProgressOptions = {
+  /** Inclusive lower bound as YYYY-MM-DD (UTC date key). */
+  sinceDate?: string;
+};
 
 export type StatsExerciseOption = ExerciseNameSource & {
   id: string;
@@ -23,6 +29,10 @@ export type ExerciseProgressPoint = {
   durationMinutes: number;
   estimated1RMMax: number;
   maxWeight: number;
+  /** Reps done on the heaviest set that day, so a point can read "100 kg x 5". */
+  maxWeightReps: number;
+  /** Live tip from an unfinished workout — hollow point on the chart. */
+  isActive?: boolean;
 };
 
 export type ExercisePersonalRecords = {
@@ -51,7 +61,7 @@ type WeeklyExerciseRef = Pick<
   'name' | 'name_en' | 'name_pt' | 'muscle_group' | 'muscle_en' | 'muscle_pt'
 >;
 
-type RawSetWithWorkout = Pick<Tables<'sets'>, 'weight' | 'reps' | 'exercise_id'> & {
+type RawSetWithWorkout = Pick<Tables<'sets'>, 'weight' | 'reps' | 'rir' | 'set_type' | 'exercise_id'> & {
   workouts: WorkoutRef | WorkoutRef[] | null;
   exercises?: ExerciseRef | ExerciseRef[] | null;
 };
@@ -80,14 +90,6 @@ function toNonNegativeNumber(value: number | null | undefined): number {
   }
 
   return Math.max(0, value);
-}
-
-function estimate1RM(weight: number, reps: number): number {
-  if (weight <= 0 || reps <= 0) {
-    return 0;
-  }
-
-  return weight * (1 + reps / 30);
 }
 
 function isPortugueseLocale(localeTag?: string): boolean {
@@ -166,7 +168,7 @@ async function getExerciseSetRowsForUser(exerciseId: string): Promise<RawSetWith
 
   const { data, error } = await supabase
     .from('sets')
-    .select('exercise_id, weight, reps, workouts!inner(start_time, end_time, user_id)')
+    .select('exercise_id, weight, reps, rir, set_type, workouts!inner(start_time, end_time, user_id)')
     .eq('exercise_id', normalizedExerciseId)
     .eq('workouts.user_id', user.id);
 
@@ -220,9 +222,11 @@ export async function getTrackedExercises(language: 'en' | 'pt' = 'en'): Promise
 export async function getExerciseProgress(
   exerciseId: string,
   metric: ProgressMetric = 'volume',
-  localeTag?: string
+  localeTag?: string,
+  options?: ExerciseProgressOptions
 ): Promise<ExerciseProgressPoint[]> {
   const rows = await getExerciseSetRowsForUser(exerciseId);
+  const sinceDate = options?.sinceDate?.trim() || null;
 
   const byDay = new Map<
     string,
@@ -232,6 +236,7 @@ export async function getExerciseProgress(
       durationMinutes: number;
       estimated1RMMax: number;
       maxWeight: number;
+      maxWeightReps: number;
       timestamp: number;
       trackedWorkoutKeys: Set<string>;
     }
@@ -245,11 +250,18 @@ export async function getExerciseProgress(
     }
 
     const dateKey = workout.start_time.slice(0, 10);
+
+    if (sinceDate && dateKey < sinceDate) {
+      continue;
+    }
+
     const timestamp = new Date(dateKey).getTime();
     const weight = toNonNegativeNumber(row.weight);
     const reps = toNonNegativeNumber(row.reps);
     const volume = weight * reps;
-    const estimated1RM = estimate1RM(weight, reps);
+    const setType = normalizeSetType(row.set_type);
+    const isWarmup = setType === 'warmup';
+    const estimated1RM = isWarmup ? 0 : estimateOneRepMax(weight, reps, row.rir);
 
     const current = byDay.get(dateKey) ?? {
       volumeTotal: 0,
@@ -257,6 +269,7 @@ export async function getExerciseProgress(
       durationMinutes: 0,
       estimated1RMMax: 0,
       maxWeight: 0,
+      maxWeightReps: 0,
       timestamp,
       trackedWorkoutKeys: new Set<string>(),
     };
@@ -264,7 +277,15 @@ export async function getExerciseProgress(
     current.volumeTotal += volume;
     current.repsTotal += reps;
     current.estimated1RMMax = Math.max(current.estimated1RMMax, estimated1RM);
-    current.maxWeight = Math.max(current.maxWeight, weight);
+
+    // Chart metrics ignore warm-ups so a heavy warm-up does not flatten the line.
+    if (
+      !isWarmup &&
+      (weight > current.maxWeight || (weight === current.maxWeight && reps > current.maxWeightReps))
+    ) {
+      current.maxWeight = weight;
+      current.maxWeightReps = reps;
+    }
 
     const workoutKey = `${workout.start_time}|${workout.end_time ?? ''}`;
 
@@ -285,14 +306,18 @@ export async function getExerciseProgress(
       const estimated1RMMax = Number(aggregate.estimated1RMMax.toFixed(1));
 
       const maxWeight = Number(aggregate.maxWeight.toFixed(1));
+      const maxWeightReps = Math.round(aggregate.maxWeightReps);
 
-      const value = metric === 'duration'
-        ? durationMinutes
-        : metric === 'reps'
-          ? repsTotal
-          : metric === 'weight'
-            ? maxWeight
-            : volumeTotal;
+      const value =
+        metric === 'duration'
+          ? durationMinutes
+          : metric === 'reps'
+            ? repsTotal
+            : metric === 'weight'
+              ? maxWeight
+              : metric === 'e1rm'
+                ? estimated1RMMax
+                : volumeTotal;
 
       return {
         date,
@@ -303,6 +328,7 @@ export async function getExerciseProgress(
         durationMinutes,
         estimated1RMMax,
         maxWeight,
+        maxWeightReps,
       };
     });
 }
@@ -320,7 +346,7 @@ export async function getExercisePersonalRecords(exerciseId: string): Promise<Ex
     const reps = toNonNegativeNumber(row.reps);
 
     heaviestWeight = Math.max(heaviestWeight, weight);
-    bestEstimated1RM = Math.max(bestEstimated1RM, estimate1RM(weight, reps));
+    bestEstimated1RM = Math.max(bestEstimated1RM, estimateOneRepMax(weight, reps, row.rir));
     completedSetCount += 1;
   }
 

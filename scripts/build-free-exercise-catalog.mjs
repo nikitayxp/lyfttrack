@@ -240,6 +240,9 @@ function translateBaseToPt(enBase) {
     .toLowerCase()
     .normalize('NFD')
     .replace(/\p{M}/gu, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
     .replace(/\bcurls\b/g, 'curl')
     .replace(/\bpresses\b/g, 'press')
     .replace(/\braises\b/g, 'raise')
@@ -273,18 +276,24 @@ function translateBaseToPt(enBase) {
   };
   if (exact[lower]) return exact[lower];
 
+  // Multi-pass: old single-replace left English modifiers ("Wide Grip Supino").
   const sorted = [...PT_PHRASES].sort((a, b) => b[0].length - a[0].length);
   let out = lower;
-  let hit = false;
-  for (const [en, pt] of sorted) {
-    if (out.includes(en)) {
-      out = out.replace(en, ` ${pt.toLowerCase()} `);
-      hit = true;
-      break;
+  let guard = 0;
+  let any = false;
+  while (guard++ < 40) {
+    let hit = false;
+    for (const [en, pt] of sorted) {
+      if (out.includes(en)) {
+        out = out.replace(en, ` ${pt.toLowerCase()} `).replace(/\s+/g, ' ').trim();
+        hit = true;
+        any = true;
+        break;
+      }
     }
+    if (!hit) break;
   }
-  if (!hit) return enBase;
-  out = out.replace(/\s+/g, ' ').trim();
+  if (!any) return enBase;
   return titleCase(out);
 }
 

@@ -4,9 +4,6 @@ import { router, useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
-  Modal,
-  Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -30,6 +27,7 @@ import type { Tables } from '@/types/database';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 import { getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 import { matchesExerciseSearch } from '@/utils/exerciseSearch';
+import { DismissibleBottomSheet } from '@/components/common/DismissibleBottomSheet';
 import { ExerciseThumbnail } from '@/components/common/ExerciseThumbnail';
 import { usePreferences } from '@/context/PreferencesContext';
 
@@ -41,8 +39,6 @@ type ExerciseRow = Tables<'exercises'>;
 export default function RoutinesScreen() {
   const { t } = useTranslation();
   const { language } = usePreferences();
-  const isWeb = Platform.OS === 'web';
-  const modalAnimationType: 'fade' | 'slide' = isWeb ? 'fade' : 'slide';
   const [routines, setRoutines] = useState<RoutineSummary[]>([]);
   const [isLoadingRoutines, setIsLoadingRoutines] = useState(true);
   const [routinesError, setRoutinesError] = useState<string | null>(null);
@@ -272,22 +268,11 @@ export default function RoutinesScreen() {
         ))
       )}
 
-      <Modal
+      <DismissibleBottomSheet
         visible={isCreateModalVisible}
-        transparent
-        animationType={modalAnimationType}
-        onRequestClose={() => setIsCreateModalVisible(false)}
+        onClose={() => setIsCreateModalVisible(false)}
+        scrollable
       >
-        <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
-          <Pressable 
-            style={styles.modalDismissArea} 
-            onPress={() => setIsCreateModalVisible(false)} 
-            accessibilityRole="button"
-            accessibilityLabel={t('accessibility.closeModal', { defaultValue: 'Close modal' })}
-          />
-
-          <View style={[styles.modalSheet, isWeb && styles.modalSheetWeb]}>
-            <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>{t('routines.createRoutine')}</Text>
 
             <TextInput
@@ -430,9 +415,7 @@ export default function RoutinesScreen() {
                 )}
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
-      </Modal>
+      </DismissibleBottomSheet>
     </ScrollView>
   );
 }

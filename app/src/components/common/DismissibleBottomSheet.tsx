@@ -1,5 +1,13 @@
 import { type ReactNode, useEffect, useState } from 'react';
-import { Modal, Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
@@ -28,6 +36,11 @@ type DismissibleBottomSheetProps = {
   onClose: () => void;
   children: ReactNode;
   sheetStyle?: StyleProp<ViewStyle>;
+  /**
+   * Sheets with a ScrollView/FlatList inside: only the handle pans to dismiss,
+   * so vertical scrolling still works. Short menus keep the default (whole sheet).
+   */
+  scrollable?: boolean;
 };
 
 /**
@@ -39,6 +52,7 @@ export function DismissibleBottomSheet({
   onClose,
   children,
   sheetStyle,
+  scrollable = false,
 }: DismissibleBottomSheetProps) {
   const { t } = useTranslation();
   const isWeb = Platform.OS === 'web';
@@ -98,7 +112,11 @@ export function DismissibleBottomSheet({
         }
       }
     );
-  }, [backdropOpacity, mounted, translateY, visible]);
+    // Intentionally not depending on `mounted`: including it restarts the enter
+    // animation and can leave gestures dead until the next layout (e.g. after
+    // a slow catalog fetch).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mounted gated inside
+  }, [backdropOpacity, translateY, visible]);
 
   const pan = Gesture.Pan()
     .activeOffsetY(8)
@@ -120,11 +138,27 @@ export function DismissibleBottomSheet({
       backdropOpacity.value = withSpring(1, SNAP_SPRING);
     });
 
-  // Same drag-to-dismiss on the dimmed area; tap still closes.
-  const backdropTap = Gesture.Tap().onEnd(() => {
-    runOnJS(onClose)();
-  });
-  const backdropGesture = Gesture.Exclusive(pan, backdropTap);
+  // Same drag-to-dismiss on the dimmed area; Pressable tap is the reliable close
+  // (RNGH Tap alone can miss the first open on web until a later layout pass).
+  const backdropPan = Gesture.Pan()
+    .activeOffsetY(8)
+    .failOffsetX([-24, 24])
+    .onUpdate((event) => {
+      translateY.value = Math.max(0, event.translationY);
+      backdropOpacity.value = Math.max(0.25, 1 - event.translationY / 280);
+    })
+    .onEnd((event) => {
+      const shouldDismiss =
+        event.translationY > DISMISS_DISTANCE || event.velocityY > DISMISS_VELOCITY;
+
+      if (shouldDismiss) {
+        runOnJS(onClose)();
+        return;
+      }
+
+      translateY.value = withSpring(0, SNAP_SPRING);
+      backdropOpacity.value = withSpring(1, SNAP_SPRING);
+    });
 
   const sheetAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
@@ -138,30 +172,44 @@ export function DismissibleBottomSheet({
     return null;
   }
 
+  const handle = (
+    <Animated.View
+      style={styles.handleHit}
+      accessibilityRole="adjustable"
+      accessibilityLabel={t('common.dragToClose', { defaultValue: 'Drag down to close' })}
+    >
+      <View style={styles.handle} />
+    </Animated.View>
+  );
+
   return (
     <Modal visible transparent animationType="none" onRequestClose={onClose}>
       <GestureHandlerRootView style={styles.flex}>
         <View style={styles.backdropRoot}>
-          <GestureDetector gesture={backdropGesture}>
-            <Animated.View
-              style={[styles.backdropFill, backdropAnimatedStyle]}
-              accessibilityRole="button"
-              accessibilityLabel={t('accessibility.closeModal', { defaultValue: 'Close modal' })}
-            />
-          </GestureDetector>
-
-          <GestureDetector gesture={pan}>
-            <Animated.View style={[styles.sheet, isWeb && styles.sheetWeb, sheetStyle, sheetAnimatedStyle]}>
-              <View
-                style={styles.handleHit}
-                accessibilityRole="adjustable"
-                accessibilityLabel={t('common.dragToClose', { defaultValue: 'Drag down to close' })}
-              >
-                <View style={styles.handle} />
-              </View>
-              {children}
+          <GestureDetector gesture={backdropPan}>
+            <Animated.View style={[styles.backdropFill, backdropAnimatedStyle]}>
+              <Pressable
+                style={StyleSheet.absoluteFill}
+                onPress={onClose}
+                accessibilityRole="button"
+                accessibilityLabel={t('accessibility.closeModal', { defaultValue: 'Close modal' })}
+              />
             </Animated.View>
           </GestureDetector>
+
+          {scrollable ? (
+            <Animated.View style={[styles.sheet, isWeb && styles.sheetWeb, sheetStyle, sheetAnimatedStyle]}>
+              <GestureDetector gesture={pan}>{handle}</GestureDetector>
+              <View style={styles.scrollableBody}>{children}</View>
+            </Animated.View>
+          ) : (
+            <GestureDetector gesture={pan}>
+              <Animated.View style={[styles.sheet, isWeb && styles.sheetWeb, sheetStyle, sheetAnimatedStyle]}>
+                {handle}
+                {children}
+              </Animated.View>
+            </GestureDetector>
+          )}
         </View>
       </GestureHandlerRootView>
     </Modal>
@@ -189,6 +237,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.sm,
     paddingBottom: Spacing.xxl,
+    maxHeight: '92%',
   },
   sheetWeb: {
     alignSelf: 'center',
@@ -203,7 +252,7 @@ const styles = StyleSheet.create({
   },
   handleHit: {
     alignItems: 'center',
-    paddingVertical: Spacing.sm,
+    paddingVertical: Spacing.md,
     marginBottom: Spacing.xs,
   },
   handle: {
@@ -211,5 +260,10 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: Radius.pill,
     backgroundColor: palette.border,
+  },
+  scrollableBody: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minHeight: 0,
   },
 });

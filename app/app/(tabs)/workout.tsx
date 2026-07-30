@@ -4,9 +4,6 @@ import { router, useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
-  Modal,
-  Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -35,6 +32,7 @@ import {
   startWorkoutFromTemplate,
   type TemplateSummary,
 } from '@/services/templateService';
+import { DismissibleBottomSheet } from '@/components/common/DismissibleBottomSheet';
 import { EmptyState } from '@/components/common/EmptyState';
 import { ExerciseThumbnail } from '@/components/common/ExerciseThumbnail';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
@@ -85,8 +83,6 @@ function summarizeExercises(
 export default function WorkoutScreen() {
   const { t } = useTranslation();
   const { language } = usePreferences();
-  const isWeb = Platform.OS === 'web';
-  const modalAnimationType: 'fade' | 'slide' = isWeb ? 'fade' : 'slide';
   const [activeMode, setActiveMode] = useState<WorkoutMode>('start');
 
   const [templates, setTemplates] = useState<TemplateSummary[]>([]);
@@ -902,22 +898,11 @@ export default function WorkoutScreen() {
         </>
       ) : null}
 
-      <Modal
+      <DismissibleBottomSheet
         visible={isCreateTemplateModalVisible}
-        transparent
-        animationType={modalAnimationType}
-        onRequestClose={() => setIsCreateTemplateModalVisible(false)}
+        onClose={() => setIsCreateTemplateModalVisible(false)}
+        scrollable
       >
-        <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
-          <Pressable 
-            style={styles.modalDismissArea} 
-            onPress={() => setIsCreateTemplateModalVisible(false)} 
-            accessibilityRole="button"
-            accessibilityLabel={t('accessibility.closeModal', { defaultValue: 'Close modal' })}
-          />
-
-          <View style={[styles.modalSheet, isWeb && styles.modalSheetWeb]}>
-            <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>{t('workout.createTemplate')}</Text>
 
             <TextInput
@@ -1049,26 +1034,13 @@ export default function WorkoutScreen() {
                 )}
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
-      </Modal>
+      </DismissibleBottomSheet>
 
-      <Modal
+      <DismissibleBottomSheet
         visible={isCreateRoutineModalVisible}
-        transparent
-        animationType={modalAnimationType}
-        onRequestClose={() => setIsCreateRoutineModalVisible(false)}
+        onClose={() => setIsCreateRoutineModalVisible(false)}
+        scrollable
       >
-        <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
-          <Pressable 
-            style={styles.modalDismissArea} 
-            onPress={() => setIsCreateRoutineModalVisible(false)} 
-            accessibilityRole="button"
-            accessibilityLabel={t('accessibility.closeModal', { defaultValue: 'Close modal' })}
-          />
-
-          <View style={[styles.modalSheet, isWeb && styles.modalSheetWeb]}>
-            <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>{t('routines.createRoutine')}</Text>
 
             <TextInput
@@ -1186,26 +1158,12 @@ export default function WorkoutScreen() {
                 )}
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
-      </Modal>
+      </DismissibleBottomSheet>
 
-      <Modal
+      <DismissibleBottomSheet
         visible={isCreateExerciseModalVisible}
-        transparent
-        animationType={modalAnimationType}
-        onRequestClose={() => setIsCreateExerciseModalVisible(false)}
+        onClose={() => setIsCreateExerciseModalVisible(false)}
       >
-        <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
-          <Pressable 
-            style={styles.modalDismissArea} 
-            onPress={() => setIsCreateExerciseModalVisible(false)} 
-            accessibilityRole="button"
-            accessibilityLabel={t('accessibility.closeModal', { defaultValue: 'Close modal' })}
-          />
-
-          <View style={[styles.modalSheet, isWeb && styles.modalSheetWeb]}>
-            <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>{t('workout.createExercise')}</Text>
 
             <TextInput
@@ -1289,9 +1247,7 @@ export default function WorkoutScreen() {
                 )}
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
-      </Modal>
+      </DismissibleBottomSheet>
     </ScrollView>
   );
 }

@@ -4,9 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
-  Modal,
   Platform,
-  Pressable,
   SectionList,
   StyleSheet,
   Text,
@@ -34,6 +32,7 @@ import { createExercise, getErrorMessage, getExercisesCatalog, getRecentExercise
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 import { matchesExerciseSearch } from '@/utils/exerciseSearch';
+import { DismissibleBottomSheet } from '@/components/common/DismissibleBottomSheet';
 import { ExerciseThumbnail } from '@/components/common/ExerciseThumbnail';
 
 type ExerciseRow = Tables<'exercises'>;
@@ -44,7 +43,6 @@ const cardLayoutTransition = LinearTransition.springify().damping(16).stiffness(
 export default function ExercisesScreen() {
   const { t } = useTranslation();
   const { language } = usePreferences();
-  const isWeb = Platform.OS === 'web';
   const [exercises, setExercises] = useState<ExerciseRow[]>([]);
   const [query, setQuery] = useState('');
   const [showRecentOnly, setShowRecentOnly] = useState(false);
@@ -186,16 +184,6 @@ export default function ExercisesScreen() {
       .map(([title, data]) => ({ title, data }));
   }, [language, deferredQuery, exercises, recentExerciseIds, deferredShowRecentOnly, t]);
 
-  const ModalWrapper = isWeb ? View : Modal;
-  const modalProps = isWeb 
-    ? { style: [StyleSheet.absoluteFill, { zIndex: 9999 }] }
-    : {
-        visible: isCreateModalVisible,
-        transparent: true,
-        animationType: 'slide' as const,
-        onRequestClose: () => setIsCreateModalVisible(false),
-      };
-
   const getExerciseEquipmentLabel = (exercise: ExerciseRow) => {
     const equipmentKey = getEquipmentTranslationKey(exercise.equipment);
     return equipmentKey ? t(equipmentKey) : exercise.equipment ?? t('exercise.equipment.bodyweight');
@@ -336,18 +324,10 @@ export default function ExercisesScreen() {
         )}
       />
 
-      {(!isCreateModalVisible && isWeb) ? null : (
-      <ModalWrapper {...modalProps}>
-        <View style={[styles.modalBackdrop, isWeb && styles.modalBackdropWeb]}>
-          <Pressable 
-            style={styles.modalDismissArea} 
-            onPress={() => setIsCreateModalVisible(false)} 
-            accessibilityRole="button"
-            accessibilityLabel={t('accessibility.closeModal', { defaultValue: 'Close modal' })}
-          />
-
-          <View style={[styles.modalSheet, isWeb && styles.modalSheetWeb]}>
-            <View style={styles.modalHandle} />
+      <DismissibleBottomSheet
+        visible={isCreateModalVisible}
+        onClose={() => setIsCreateModalVisible(false)}
+      >
             <Text style={styles.modalTitle}>{t('workout.createExercise')}</Text>
 
             <TextInput
@@ -427,10 +407,7 @@ export default function ExercisesScreen() {
                 )}
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
-      </ModalWrapper>
-      )}
+      </DismissibleBottomSheet>
     </View>
   );
 }

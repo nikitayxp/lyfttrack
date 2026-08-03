@@ -1079,7 +1079,7 @@ export async function getExercisesCatalog(filters: ExerciseCatalogFilters = {}):
   );
 
   const customRows = filteredRows.filter((exercise) => exercise.is_custom);
-  const builtInRows = filteredRows.filter((exercise) => !exercise.is_custom);
+  const builtInRows = filteredRows.filter((exercise) => !exercise.is_custom && exercise.listed !== false);
   const dedupedBuiltIns = dedupeBuiltinCatalogRows(builtInRows);
 
   return [...dedupedBuiltIns, ...customRows].sort((a, b) => a.name.localeCompare(b.name));

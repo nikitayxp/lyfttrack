@@ -9,7 +9,8 @@ export type ExerciseMuscleKey =
   | 'hamstrings'
   | 'glutes'
   | 'calves'
-  | 'core';
+  | 'core'
+  | 'other';
 
 export type ExerciseEquipmentKey =
   | 'barbell'
@@ -31,6 +32,7 @@ export const EXERCISE_MUSCLE_OPTIONS: readonly ExerciseMuscleKey[] = [
   'glutes',
   'calves',
   'core',
+  'other',
 ];
 
 export const EXERCISE_EQUIPMENT_OPTIONS: readonly ExerciseEquipmentKey[] = [
@@ -54,6 +56,7 @@ export const EXERCISE_MUSCLE_TRANSLATION_KEY: Record<ExerciseMuscleKey, string> 
   glutes: 'exercise.muscles.glutes',
   calves: 'exercise.muscles.calves',
   core: 'exercise.muscles.core',
+  other: 'exercise.muscles.other',
 };
 
 export const EXERCISE_MUSCLE_LABELS: Record<ExerciseMuscleKey, { en: string; pt: string }> = {
@@ -68,6 +71,7 @@ export const EXERCISE_MUSCLE_LABELS: Record<ExerciseMuscleKey, { en: string; pt:
   glutes: { en: 'Glutes', pt: 'Gluteos' },
   calves: { en: 'Calves', pt: 'Gemeos' },
   core: { en: 'Core', pt: 'Core' },
+  other: { en: 'Other', pt: 'Outro' },
 };
 
 export const EXERCISE_EQUIPMENT_TRANSLATION_KEY: Record<ExerciseEquipmentKey, string> = {
@@ -140,6 +144,13 @@ const muscleAliasMap: Record<string, ExerciseMuscleKey> = {
   abs: 'core',
   abdominal: 'core',
   abdominais: 'core',
+  other: 'other',
+  outro: 'other',
+  neck: 'other',
+  pescoco: 'other',
+  full_body: 'other',
+  fullbody: 'other',
+  cardio: 'other',
 };
 
 export const EXERCISE_MUSCLE_FILTER_KEYWORDS: Record<ExerciseMuscleKey, readonly string[]> = {
@@ -154,6 +165,23 @@ export const EXERCISE_MUSCLE_FILTER_KEYWORDS: Record<ExerciseMuscleKey, readonly
   glutes: ['glute', 'gluteo', 'gluteos', 'hip_thrust', 'glute_bridge', 'ponte_de_gluteo', 'kickback', 'abducao'],
   calves: ['calf', 'calves', 'gemeo', 'gemeos', 'panturrilha', 'panturrilhas', 'calf_raise', 'elevacao_de_gemeos'],
   core: ['core', 'abs', 'abdominal', 'abdominais', 'prancha', 'plank', 'crunch', 'ab_wheel', 'russian_twist', 'dead_bug', 'mountain_climber'],
+  other: [
+    'other',
+    'outro',
+    'neck',
+    'pescoco',
+    'rotator',
+    'rotacao',
+    'rotation',
+    'external_rotation',
+    'internal_rotation',
+    'cuff',
+    'manguito',
+    'cardio',
+    'full_body',
+    'serratus',
+    'halo',
+  ],
 };
 
 const MUSCLE_INFERENCE_KEYWORDS = EXERCISE_MUSCLE_FILTER_KEYWORDS;
@@ -168,6 +196,7 @@ export const EXERCISE_EQUIPMENT_FILTER_KEYWORDS: Record<ExerciseEquipmentKey, re
 };
 
 const MUSCLE_INFERENCE_PRIORITY: readonly ExerciseMuscleKey[] = [
+  'other',
   'biceps',
   'triceps',
   'forearms',

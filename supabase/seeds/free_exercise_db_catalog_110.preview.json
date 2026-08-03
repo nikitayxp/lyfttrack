@@ -1,0 +1,55 @@
+{
+  "source": "yuhonas/free-exercise-db",
+  "filter": "strength|powerlifting|olympic weightlifting|strongman + mapped equipment",
+  "count": 568,
+  "scottSample": [
+    {
+      "en": "One Arm Preacher Curl (Dumbbell)",
+      "pt": "Rosca Scott Unilateral (Halter)",
+      "equipment": "dumbbell"
+    },
+    {
+      "en": "Preacher Curl (Barbell)",
+      "pt": "Rosca Scott (Barra)",
+      "equipment": "barbell"
+    },
+    {
+      "en": "Preacher Curl (Cable)",
+      "pt": "Rosca Scott (Polia)",
+      "equipment": "cable"
+    },
+    {
+      "en": "Preacher Curl (Machine)",
+      "pt": "Rosca Scott (Maquina)",
+      "equipment": "machine"
+    },
+    {
+      "en": "Preacher Hammer Curl (Dumbbell)",
+      "pt": "Rosca Scott Martelo (Halter)",
+      "equipment": "dumbbell"
+    },
+    {
+      "en": "Reverse Preacher Curl (Barbell)",
+      "pt": "Rosca Scott Invertida (Barra)",
+      "equipment": "barbell"
+    },
+    {
+      "en": "Two Arm Preacher Curl (Dumbbell)",
+      "pt": "Rosca Scott a Dois Bracos (Halter)",
+      "equipment": "dumbbell"
+    },
+    {
+      "en": "Zottman Preacher Curl (Dumbbell)",
+      "pt": "Rosca Scott Zottman (Halter)",
+      "equipment": "dumbbell"
+    }
+  ],
+  "byEquipment": {
+    "bodyweight": 76,
+    "machine": 58,
+    "barbell": 179,
+    "kettlebell": 53,
+    "dumbbell": 121,
+    "cable": 81
+  }
+}

@@ -503,6 +503,7 @@ export const resources = {
           legs: 'Legs',
           arms: 'Arms',
           core: 'Core',
+          other: 'Other',
         },
         equipment: {
           barbell: 'Barbell',
@@ -1241,6 +1242,7 @@ export const resources = {
           legs: 'Pernas',
           arms: 'Bracos',
           core: 'Core',
+          other: 'Outro',
         },
         equipment: {
           barbell: 'Barra',

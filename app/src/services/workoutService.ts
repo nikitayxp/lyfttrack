@@ -30,6 +30,8 @@ export type { WorkoutSetType } from './workoutSession.types';
 export type ExerciseCatalogFilters = {
   muscle?: ExerciseLibraryMuscleFilter;
   equipment?: ExerciseLibraryEquipmentFilter;
+  /** Import matching needs unlisted rows + their aliases; picker keeps them hidden. */
+  includeUnlisted?: boolean;
 };
 export type RoutineRow = Tables<'routines'>;
 export type RoutineExerciseRow = Tables<'routine_exercises'>;
@@ -1079,8 +1081,13 @@ export async function getExercisesCatalog(filters: ExerciseCatalogFilters = {}):
   );
 
   const customRows = filteredRows.filter((exercise) => exercise.is_custom);
-  const builtInRows = filteredRows.filter((exercise) => !exercise.is_custom && exercise.listed !== false);
-  const dedupedBuiltIns = dedupeBuiltinCatalogRows(builtInRows);
+  const builtInRows = filteredRows.filter(
+    (exercise) =>
+      !exercise.is_custom && (filters.includeUnlisted || exercise.listed !== false)
+  );
+  const dedupedBuiltIns = filters.includeUnlisted
+    ? builtInRows
+    : dedupeBuiltinCatalogRows(builtInRows);
 
   return [...dedupedBuiltIns, ...customRows].sort((a, b) => a.name.localeCompare(b.name));
 }

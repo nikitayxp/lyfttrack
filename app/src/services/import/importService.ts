@@ -171,6 +171,7 @@ function inferEquipmentKey(title: string): ExerciseEquipmentKey | null {
 
 function catalogQuality(item: ExerciseCatalogItem): number {
   let score = item.is_custom ? 0 : 80;
+  if (item.listed !== false) score += 50;
   if (item.name_en) score += 20;
   if (item.name_pt) score += 20;
   return score;
@@ -183,6 +184,7 @@ function preferCatalogItem(candidate: ExerciseCatalogItem, current: ExerciseCata
 
 function indexCatalog(catalog: ExerciseCatalogItem[]) {
   const exact = new Map<string, ExerciseCatalogItem>();
+  const byAlias = new Map<string, ExerciseCatalogItem>();
   const byTokens = new Map<string, ExerciseCatalogItem>();
 
   for (const item of catalog) {
@@ -199,16 +201,29 @@ function indexCatalog(catalog: ExerciseCatalogItem[]) {
         byTokens.set(tokenKey, item);
       }
     }
+
+    for (const alias of item.aliases ?? []) {
+      if (!alias) continue;
+      const aliasKey = normalizeTitle(alias);
+      if (aliasKey && preferCatalogItem(item, byAlias.get(aliasKey))) {
+        byAlias.set(aliasKey, item);
+      }
+      const tokenKey = titleTokenKey(alias);
+      if (tokenKey && preferCatalogItem(item, byTokens.get(tokenKey))) {
+        byTokens.set(tokenKey, item);
+      }
+    }
   }
 
-  return { exact, byTokens };
+  return { exact, byAlias, byTokens };
 }
 
 /**
  * Match Hevy titles to the catalogue.
  *
  * 1. Exact letters/digits after normalisation ("Supino - Barra" = "Supino (Barra)").
- * 2. Token alias: same significant words after PT/EN synonyms
+ * 2. Catalogue aliases (listed winners keep unlisted Hevy names).
+ * 3. Token alias: same significant words after PT/EN synonyms
  *    ("Remada na Barra T" = "T-Bar Row"). Still requires the *same* set of
  *    movement+equipment tokens, so "Supino Máquina" never lands on "Supino Barra".
  */
@@ -216,7 +231,7 @@ export function matchExerciseTitles(
   titles: string[],
   catalog: ExerciseCatalogItem[]
 ): ExerciseMatch[] {
-  const { exact, byTokens } = indexCatalog(catalog);
+  const { exact, byAlias, byTokens } = indexCatalog(catalog);
 
   return titles.map((title) => {
     const exactHit = exact.get(normalizeTitle(title));
@@ -226,6 +241,16 @@ export function matchExerciseTitles(
         exerciseId: exactHit.id,
         matchedName: exactHit.name,
         kind: 'exact' as const,
+      };
+    }
+
+    const aliasHit = byAlias.get(normalizeTitle(title));
+    if (aliasHit) {
+      return {
+        title,
+        exerciseId: aliasHit.id,
+        matchedName: aliasHit.name,
+        kind: 'alias' as const,
       };
     }
 
@@ -295,7 +320,7 @@ async function findExistingStartTimes(startTimes: string[]): Promise<Set<string>
 export async function buildImportPlan(csvText: string): Promise<ImportPlan> {
   const parse = parseHevyCsv(csvText);
   const titles = collectExerciseTitles(parse);
-  const catalog = await getExercisesCatalog();
+  const catalog = await getExercisesCatalog({ includeUnlisted: true });
   const matches = matchExerciseTitles(titles, catalog);
 
   const existing = await findExistingStartTimes(parse.workouts.map((workout) => workout.startTime));

@@ -114,15 +114,56 @@ function getWorkoutDurationMinutes(startTimeIso: string | null | undefined, endT
 
 function formatProgressLabel(dateIso: string, localeTag?: string): string {
   const d = new Date(`${dateIso}T12:00:00.000Z`);
+  if (Number.isNaN(d.getTime())) {
+    return dateIso;
+  }
+
   const locale = isPortugueseLocale(localeTag)
     ? 'pt-PT'
     : localeTag && localeTag.length > 2
       ? localeTag
       : 'en-US';
 
+  // PT: numeric day/month/year — avoids ISO and fits the chart axis.
+  if (isPortugueseLocale(localeTag)) {
+    return d.toLocaleDateString(locale, {
+      day: '2-digit',
+      month: '2-digit',
+      year: '2-digit',
+    });
+  }
+
   return d.toLocaleDateString(locale, {
     month: 'short',
     day: 'numeric',
+    year: '2-digit',
+  });
+}
+
+/** Chart axis / tip labels (PT 30/07/26). */
+export function formatExerciseAxisDate(dateIso: string, localeTag?: string): string {
+  return formatProgressLabel(dateIso, localeTag);
+}
+
+/** History / pointer card: full year (PT 30/07/2026). */
+export function formatExerciseHistoryDate(dateIso: string, localeTag?: string): string {
+  const d = new Date(`${dateIso}T12:00:00.000Z`);
+  if (Number.isNaN(d.getTime())) {
+    return dateIso;
+  }
+
+  if (isPortugueseLocale(localeTag)) {
+    return d.toLocaleDateString('pt-PT', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+  }
+
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
   });
 }
 

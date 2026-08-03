@@ -46,12 +46,17 @@ const MOVEMENT_TOKEN_CANONICAL = {
   raises: 'raise',
   scott: 'preacher',
   preacher: 'preacher',
+  ombros: 'shoulder',
+  ombro: 'shoulder',
+  shoulder: 'shoulder',
+  shoulders: 'shoulder',
+  prensa: 'press',
 };
 
 const TITLE_STOP_WORDS = new Set([
   'a', 'an', 'and', 'com', 'da', 'das', 'de', 'do', 'dos', 'e', 'em', 'in',
   'na', 'nas', 'no', 'nos', 'of', 'on', 'para', 'the', 'sentada', 'sentado',
-  'sentadas', 'em', 'pe',
+  'sentadas', 'seated', 'standing', 'em', 'pe',
 ]);
 
 function normalizeTitle(value) {

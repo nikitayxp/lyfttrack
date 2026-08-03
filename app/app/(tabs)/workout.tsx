@@ -24,6 +24,8 @@ import {
   type ExerciseMuscleKey,
   getExerciseMuscleTranslationKey,
   getEquipmentTranslationKey,
+  normalizeEquipmentKey,
+  resolveExerciseMuscleKey,
 } from '@/constants/exerciseCatalog';
 import { usePreferences } from '@/context/PreferencesContext';
 import {
@@ -51,6 +53,8 @@ import {
   getRecentExerciseIds,
   getRoutines,
   orderExercisesByIds,
+  type ExerciseLibraryEquipmentFilter,
+  type ExerciseLibraryMuscleFilter,
   type RoutineSummary,
 } from '@/services/workoutService';
 import type { Tables } from '@/types/database';
@@ -58,6 +62,21 @@ import type { Tables } from '@/types/database';
 const palette = Colors.dark;
 const CARD_BG = palette.surface;
 const cardLayoutTransition = LinearTransition.springify().damping(16).stiffness(180);
+
+const MUSCLE_FILTER_CHIP_KEYS: readonly (ExerciseLibraryMuscleFilter | 'recent')[] = [
+  'all',
+  'recent',
+  ...EXERCISE_MUSCLE_OPTIONS,
+];
+const EQUIPMENT_FILTER_CHIP_KEYS: readonly ExerciseLibraryEquipmentFilter[] = [
+  'all',
+  'barbell',
+  'dumbbell',
+  'machine',
+  'cable',
+  'bodyweight',
+  'kettlebell',
+];
 
 type ExerciseRow = Tables<'exercises'>;
 
@@ -111,9 +130,11 @@ export default function WorkoutScreen() {
   const [catalogError, setCatalogError] = useState<string | null>(null);
 
   const [exerciseQuery, setExerciseQuery] = useState('');
-  const [showRecentOnly, setShowRecentOnly] = useState(false);
+  const [selectedMuscleFilter, setSelectedMuscleFilter] = useState<ExerciseLibraryMuscleFilter | 'recent'>('all');
+  const [selectedEquipmentFilter, setSelectedEquipmentFilter] = useState<ExerciseLibraryEquipmentFilter>('all');
   const [, startFilterTransition] = useTransition();
-  const deferredShowRecentOnly = useDeferredValue(showRecentOnly);
+  const deferredMuscleFilter = useDeferredValue(selectedMuscleFilter);
+  const deferredEquipmentFilter = useDeferredValue(selectedEquipmentFilter);
   const deferredExerciseQuery = useDeferredValue(exerciseQuery);
   const [recentExerciseIds, setRecentExerciseIds] = useState<string[]>([]);
   const [visibleGroupCount, setVisibleGroupCount] = useState(Number.POSITIVE_INFINITY);
@@ -173,8 +194,28 @@ export default function WorkoutScreen() {
     const recentSet = new Set(recentExerciseIds);
 
     const filtered = catalogExercises.filter((exercise) => {
-      if (deferredShowRecentOnly && !recentSet.has(exercise.id)) {
-        return false;
+      if (deferredMuscleFilter === 'recent') {
+        if (!recentSet.has(exercise.id)) {
+          return false;
+        }
+      } else if (deferredMuscleFilter !== 'all') {
+        const muscleKey = resolveExerciseMuscleKey({
+          muscleGroup: exercise.muscle_group,
+          muscleEn: exercise.muscle_en,
+          musclePt: exercise.muscle_pt,
+          name: exercise.name,
+          nameEn: exercise.name_en,
+          namePt: exercise.name_pt,
+        });
+        if (muscleKey !== deferredMuscleFilter) {
+          return false;
+        }
+      }
+
+      if (deferredEquipmentFilter !== 'all') {
+        if (normalizeEquipmentKey(exercise.equipment) !== deferredEquipmentFilter) {
+          return false;
+        }
       }
 
       return matchesExerciseSearch(
@@ -185,7 +226,7 @@ export default function WorkoutScreen() {
       );
     });
 
-    if (deferredShowRecentOnly) {
+    if (deferredMuscleFilter === 'recent') {
       return [[t('exercise.filterRecent'), orderExercisesByIds(filtered, recentExerciseIds)] as const];
     }
 
@@ -203,16 +244,17 @@ export default function WorkoutScreen() {
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
   }, [
     catalogExercises,
+    deferredEquipmentFilter,
     deferredExerciseQuery,
+    deferredMuscleFilter,
     getDisplayExerciseName,
     getDisplayMuscle,
     recentExerciseIds,
-    deferredShowRecentOnly,
     t,
   ]);
 
   useEffect(() => {
-    if (activeMode !== 'exercises' || deferredShowRecentOnly) {
+    if (activeMode !== 'exercises' || deferredMuscleFilter === 'recent') {
       setVisibleGroupCount(Number.POSITIVE_INFINITY);
       return;
     }
@@ -231,7 +273,7 @@ export default function WorkoutScreen() {
     }, 24);
 
     return () => clearInterval(timer);
-  }, [activeMode, deferredShowRecentOnly, groupedExercises.length]);
+  }, [activeMode, deferredMuscleFilter, groupedExercises.length]);
 
   const visibleGroupedExercises = useMemo(
     () =>
@@ -501,6 +543,23 @@ export default function WorkoutScreen() {
     start: t('workout.startModeLabel'),
     templates: t('workout.templatesModeLabel'),
     exercises: t('workout.exercisesModeLabel'),
+  };
+
+  const getMuscleFilterLabel = (filterKey: ExerciseLibraryMuscleFilter | 'recent'): string => {
+    if (filterKey === 'all') {
+      return t('exercise.filterAll');
+    }
+    if (filterKey === 'recent') {
+      return t('exercise.filterRecent');
+    }
+    return t(EXERCISE_MUSCLE_TRANSLATION_KEY[filterKey]);
+  };
+
+  const getEquipmentFilterLabel = (filterKey: ExerciseLibraryEquipmentFilter): string => {
+    if (filterKey === 'all') {
+      return language === 'pt' ? 'Todo equipamento' : 'All equipment';
+    }
+    return t(EXERCISE_EQUIPMENT_TRANSLATION_KEY[filterKey]);
   };
 
   return (
@@ -818,26 +877,61 @@ export default function WorkoutScreen() {
             </View>
           </View>
 
-          <View style={styles.filterChipRow}>
-            <TouchableOpacity
-              style={[styles.filterChip, !showRecentOnly && styles.filterChipActive]}
-              activeOpacity={ACTIVE_OPACITY}
-              onPress={() => startFilterTransition(() => setShowRecentOnly(false))}
-            >
-              <Text style={[styles.filterChipText, !showRecentOnly && styles.filterChipTextActive]}>
-                {t('exercise.filterAll')}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterChip, showRecentOnly && styles.filterChipActive]}
-              activeOpacity={ACTIVE_OPACITY}
-              onPress={() => startFilterTransition(() => setShowRecentOnly(true))}
-            >
-              <Text style={[styles.filterChipText, showRecentOnly && styles.filterChipTextActive]}>
-                {t('exercise.filterRecent')}
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <Text style={styles.filterChipsSectionLabel}>{t('workout.muscleGroup')}</Text>
+          <ScrollView
+            horizontal
+            nestedScrollEnabled
+            showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            style={styles.filterChipsScroll}
+            contentContainerStyle={styles.filterChipsContent}
+          >
+            {MUSCLE_FILTER_CHIP_KEYS.map((filterKey) => {
+              const isSelected = filterKey === selectedMuscleFilter;
+              return (
+                <TouchableOpacity
+                  key={filterKey}
+                  style={[styles.libraryFilterChip, isSelected && styles.libraryFilterChipSelected]}
+                  activeOpacity={ACTIVE_OPACITY}
+                  onPress={() => startFilterTransition(() => setSelectedMuscleFilter(filterKey))}
+                  accessibilityRole="button"
+                  accessibilityLabel={getMuscleFilterLabel(filterKey)}
+                >
+                  <Text style={[styles.libraryFilterChipText, isSelected && styles.libraryFilterChipTextSelected]}>
+                    {getMuscleFilterLabel(filterKey)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          <Text style={styles.filterChipsSectionLabel}>{t('workout.equipment')}</Text>
+          <ScrollView
+            horizontal
+            nestedScrollEnabled
+            showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            style={styles.filterChipsScroll}
+            contentContainerStyle={styles.filterChipsContent}
+          >
+            {EQUIPMENT_FILTER_CHIP_KEYS.map((filterKey) => {
+              const isSelected = filterKey === selectedEquipmentFilter;
+              return (
+                <TouchableOpacity
+                  key={filterKey}
+                  style={[styles.libraryFilterChip, isSelected && styles.libraryFilterChipSelected]}
+                  activeOpacity={ACTIVE_OPACITY}
+                  onPress={() => startFilterTransition(() => setSelectedEquipmentFilter(filterKey))}
+                  accessibilityRole="button"
+                  accessibilityLabel={getEquipmentFilterLabel(filterKey)}
+                >
+                  <Text style={[styles.libraryFilterChipText, isSelected && styles.libraryFilterChipTextSelected]}>
+                    {getEquipmentFilterLabel(filterKey)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
 
           {isLoadingCatalog ? (
             <View style={styles.statusContainer}>
@@ -871,26 +965,31 @@ export default function WorkoutScreen() {
               {visibleGroupedExercises.map(([muscle, groupedItems]) => (
                 <View key={muscle} style={styles.groupSection}>
                   <Text style={styles.groupTitle}>{muscle}</Text>
-                  {groupedItems.map((exercise) => (
-                    <TouchableOpacity
-                      key={exercise.id}
-                      style={styles.exerciseRow}
-                      activeOpacity={ACTIVE_OPACITY}
-                      onPress={() => router.push(`/exercise/${exercise.id}` as any)}
-                      accessibilityRole="button"
-                      accessibilityLabel={t('accessibility.viewExerciseDetails', {
-                        name: getDisplayExerciseName(exercise),
-                        defaultValue: 'View exercise details',
-                      })}
-                    >
-                      <ExerciseThumbnail exercise={exercise} size={40} />
-                      <View style={styles.exerciseTextWrap}>
-                        <Text style={styles.exerciseName}>{getDisplayExerciseName(exercise)}</Text>
-                        <Text style={styles.exerciseMeta}>{getDisplayEquipment(exercise)}</Text>
-                      </View>
-                      <Text style={styles.exerciseMuscle}>{getDisplayMuscle(exercise)}</Text>
-                    </TouchableOpacity>
-                  ))}
+                  {groupedItems.map((exercise) => {
+                    const exerciseLabel = getDisplayExerciseName(exercise);
+                    return (
+                      <TouchableOpacity
+                        key={exercise.id}
+                        style={styles.libraryExerciseRow}
+                        activeOpacity={ACTIVE_OPACITY}
+                        onPress={() => router.push(`/exercise/${exercise.id}` as any)}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('accessibility.viewExerciseDetails', {
+                          name: exerciseLabel,
+                          defaultValue: 'View exercise details',
+                        })}
+                      >
+                        <ExerciseThumbnail exercise={exercise} size={34} />
+                        <View style={styles.libraryExerciseTextWrap}>
+                          <Text style={styles.libraryExerciseName}>{exerciseLabel}</Text>
+                          <Text style={styles.libraryExerciseMeta}>
+                            {getDisplayMuscle(exercise)} - {getDisplayEquipment(exercise)}
+                          </Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               ))}
             </View>
@@ -1572,6 +1671,77 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 8,
+  },
+  filterChipsSectionLabel: {
+    color: palette.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+    marginTop: 2,
+  },
+  filterChipsScroll: {
+    flexGrow: 0,
+    marginBottom: 10,
+  },
+  filterChipsContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 8,
+    paddingRight: 16,
+    paddingVertical: 2,
+  },
+  libraryFilterChip: {
+    flexShrink: 0,
+    minHeight: 34,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: palette.borderStrong,
+    backgroundColor: palette.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  libraryFilterChipSelected: {
+    borderColor: palette.accent,
+    backgroundColor: palette.accent,
+  },
+  libraryFilterChipText: {
+    color: palette.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  libraryFilterChipTextSelected: {
+    color: '#FFFFFF',
+  },
+  libraryExerciseRow: {
+    borderWidth: 1,
+    borderColor: palette.border,
+    borderRadius: Radius.card,
+    backgroundColor: palette.surfaceAlt,
+    paddingLeft: 10,
+    paddingRight: 10,
+    paddingVertical: 8,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  libraryExerciseTextWrap: {
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: 10,
+  },
+  libraryExerciseName: {
+    color: palette.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  libraryExerciseMeta: {
+    color: palette.textSecondary,
+    fontSize: 13,
+    fontWeight: '500',
   },
   filterChipRow: {
     flexDirection: 'row',

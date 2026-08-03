@@ -91,7 +91,7 @@ const MUSCLE_MAP = {
   'middle back': 'back',
   'lower back': 'back',
   traps: 'back',
-  neck: 'shoulders',
+  neck: 'other',
 };
 
 const MUSCLE_LABEL = {
@@ -106,6 +106,7 @@ const MUSCLE_LABEL = {
   glutes: { en: 'Glutes', pt: 'Gluteos' },
   calves: { en: 'Calves', pt: 'Gemeos' },
   core: { en: 'Core', pt: 'Core' },
+  other: { en: 'Other', pt: 'Outro' },
 };
 
 /** Ordered phrase replacements for PT base names (longest first). */
@@ -240,6 +241,9 @@ function translateBaseToPt(enBase) {
     .toLowerCase()
     .normalize('NFD')
     .replace(/\p{M}/gu, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
     .replace(/\bcurls\b/g, 'curl')
     .replace(/\bpresses\b/g, 'press')
     .replace(/\braises\b/g, 'raise')
@@ -273,18 +277,24 @@ function translateBaseToPt(enBase) {
   };
   if (exact[lower]) return exact[lower];
 
+  // Multi-pass: old single-replace left English modifiers ("Wide Grip Supino").
   const sorted = [...PT_PHRASES].sort((a, b) => b[0].length - a[0].length);
   let out = lower;
-  let hit = false;
-  for (const [en, pt] of sorted) {
-    if (out.includes(en)) {
-      out = out.replace(en, ` ${pt.toLowerCase()} `);
-      hit = true;
-      break;
+  let guard = 0;
+  let any = false;
+  while (guard++ < 40) {
+    let hit = false;
+    for (const [en, pt] of sorted) {
+      if (out.includes(en)) {
+        out = out.replace(en, ` ${pt.toLowerCase()} `).replace(/\s+/g, ' ').trim();
+        hit = true;
+        any = true;
+        break;
+      }
     }
+    if (!hit) break;
   }
-  if (!hit) return enBase;
-  out = out.replace(/\s+/g, ' ').trim();
+  if (!any) return enBase;
   return titleCase(out);
 }
 
@@ -299,6 +309,15 @@ function mapMuscle(primaryMuscles) {
   const primary = (primaryMuscles && primaryMuscles[0]) || null;
   if (!primary) return null;
   return MUSCLE_MAP[primary] || null;
+}
+
+function forceOtherMuscle(name, muscle) {
+  const n = String(name || '').toLowerCase();
+  // Isolation only — not "behind the neck" presses / pulldowns / wrist rotations
+  if (/^(external|internal)\s+rotation\b/.test(n)) return 'other';
+  if (/^neck\s+(extension|flexion)\b/.test(n) || /^isometric\s+neck\b/.test(n)) return 'other';
+  if (/^halo\b/.test(n) || /^serratus\b/.test(n)) return 'other';
+  return muscle;
 }
 
 function shouldKeep(entry) {
@@ -337,7 +356,7 @@ function buildRows(fed) {
       EQUIPMENT_OVERRIDE_BY_ID[entry.id] ||
       EQUIPMENT_MAP[(entry.equipment || '').toLowerCase()];
     if (!equipment) continue;
-    const muscle = mapMuscle(entry.primaryMuscles);
+    const muscle = forceOtherMuscle(entry.name, mapMuscle(entry.primaryMuscles));
     if (!muscle) continue;
 
     const baseEn = stripEquipmentFromName(entry.name, equipment);

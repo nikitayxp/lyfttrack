@@ -23,6 +23,8 @@ import { useWorkoutContext } from '@/context/WorkoutContext';
 import type { Tables } from '@/types/database';
 import { getExercisesByIds } from '@/services/workoutService';
 import {
+  formatExerciseAxisDate,
+  formatExerciseHistoryDate,
   getExercisePersonalRecords,
   getExerciseProgress,
   getExerciseWorkoutHistory,
@@ -38,11 +40,13 @@ import type { ActiveExercise } from '@/hooks/useActiveWorkoutState';
 
 const palette = Colors.dark;
 
-const Y_AXIS_LABEL_WIDTH = 44;
+const Y_AXIS_LABEL_WIDTH = 52;
 const CHART_EDGE_SPACING = 20;
 /** Keep points tappable; if they cannot fit, the chart scrolls instead of clipping. */
 const MIN_POINT_SPACING = 48;
 const CHART_PAGE_RATIO = 0.75;
+/** Same pace as a deliberate click while holding Anteriores / Recentes. */
+const CHART_HOLD_INTERVAL_MS = 380;
 
 type ChartRange = '3m' | '1y';
 type ChartMetric = Extract<ProgressMetric, 'weight' | 'e1rm'>;
@@ -69,7 +73,7 @@ function shouldLabelPoint(index: number, total: number): boolean {
   }
 
   const step = Math.ceil(total / 6);
-  return index === total - 1 || index % step === 0;
+  return index === 0 || index === total - 1 || index % step === 0;
 }
 
 function localDateKey(date = new Date()): string {
@@ -106,9 +110,7 @@ if (typeof __DEV__ !== 'undefined' && __DEV__) {
 }
 
 function formatProgressDateLabel(dateIso: string, language: string): string {
-  const d = new Date(`${dateIso}T12:00:00.000Z`);
-  const locale = language.startsWith('pt') ? 'pt-PT' : 'en-US';
-  return d.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
+  return formatExerciseAxisDate(dateIso, language);
 }
 
 function buildActiveProgressPoint(
@@ -233,6 +235,8 @@ export default function ExerciseDetailScreen() {
 
   const chartScrollRef = useRef<ScrollView | null>(null);
   const lastScrollXRef = useRef(0);
+  const chartScrollMaxRef = useRef(0);
+  const chartHoldIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Total space the chart may occupy inside the card, minus its padding.
   //
@@ -307,6 +311,7 @@ export default function ExerciseDetailScreen() {
       event.nativeEvent.contentSize.width - event.nativeEvent.layoutMeasurement.width
     );
     lastScrollXRef.current = x;
+    chartScrollMaxRef.current = max;
     setChartScrollPosition({ x, max });
   }, []);
 
@@ -314,17 +319,50 @@ export default function ExerciseDetailScreen() {
     (direction: -1 | 1) => {
       const next = nextChartScrollX(
         lastScrollXRef.current,
-        chartScrollPosition.max,
+        chartScrollMaxRef.current,
         plotWidth,
         direction
       );
 
       lastScrollXRef.current = next;
       chartScrollRef.current?.scrollTo({ x: next, animated: true });
-      setChartScrollPosition((current) => ({ ...current, x: next }));
+      setChartScrollPosition((current) => ({ ...current, x: next, max: chartScrollMaxRef.current }));
     },
-    [chartScrollPosition.max, plotWidth]
+    [plotWidth]
   );
+
+  const stopChartHold = useCallback(() => {
+    if (chartHoldIntervalRef.current) {
+      clearInterval(chartHoldIntervalRef.current);
+      chartHoldIntervalRef.current = null;
+    }
+  }, []);
+
+  const startChartHold = useCallback(
+    (direction: -1 | 1) => {
+      stopChartHold();
+
+      const step = () => {
+        const x = lastScrollXRef.current;
+        const max = chartScrollMaxRef.current;
+        if (direction < 0 && x <= 1) {
+          stopChartHold();
+          return;
+        }
+        if (direction > 0 && x >= max - 1) {
+          stopChartHold();
+          return;
+        }
+        moveChart(direction);
+      };
+
+      step();
+      chartHoldIntervalRef.current = setInterval(step, CHART_HOLD_INTERVAL_MS);
+    },
+    [moveChart, stopChartHold]
+  );
+
+  useEffect(() => () => stopChartHold(), [stopChartHold]);
 
   const loadExercise = useCallback(async () => {
     if (!exerciseId) {
@@ -609,7 +647,8 @@ export default function ExerciseDetailScreen() {
                     ]}
                     activeOpacity={ACTIVE_OPACITY}
                     disabled={chartScrollPosition.x <= 1}
-                    onPress={() => moveChart(-1)}
+                    onPressIn={() => startChartHold(-1)}
+                    onPressOut={stopChartHold}
                     accessibilityRole="button"
                     accessibilityLabel={t('exercise.detail.chartOlder')}
                   >
@@ -627,7 +666,8 @@ export default function ExerciseDetailScreen() {
                     ]}
                     activeOpacity={ACTIVE_OPACITY}
                     disabled={chartScrollPosition.x >= chartScrollPosition.max - 1}
-                    onPress={() => moveChart(1)}
+                    onPressIn={() => startChartHold(1)}
+                    onPressOut={stopChartHold}
                     accessibilityRole="button"
                     accessibilityLabel={t('exercise.detail.chartNewer')}
                   >
@@ -658,7 +698,7 @@ export default function ExerciseDetailScreen() {
                 yAxisTextStyle={styles.axisText}
                 xAxisLabelTextStyle={styles.xAxisLabelText}
                 rulesColor={palette.inputFill}
-                formatYLabel={(label) => formatCompactNumber(label)}
+                formatYLabel={(label) => `${formatCompactNumber(label)} kg`}
                 // Long histories animate poorly and fight scrollToEnd on mount.
                 isAnimated={lineData.length <= 12}
                 scrollRef={chartScrollRef}
@@ -694,7 +734,9 @@ export default function ExerciseDetailScreen() {
 
                     return (
                       <View style={styles.pointerCard}>
-                        <Text style={styles.pointerDate}>{point.label}</Text>
+                        <Text style={styles.pointerDate}>
+                          {formatExerciseHistoryDate(point.date, language)}
+                        </Text>
                         {point.isActive ? (
                           <Text style={styles.pointerMeta}>{t('exercise.detail.pointerInProgress')}</Text>
                         ) : null}
@@ -759,7 +801,8 @@ export default function ExerciseDetailScreen() {
                   <View style={styles.historyTextWrap}>
                     <Text style={styles.historyName}>{entry.workoutName}</Text>
                     <Text style={styles.historyMeta}>
-                      {entry.date} {' \u2022 '} {t('exercise.detail.workingSets', { count: entry.workingSetCount })}
+                      {formatExerciseHistoryDate(entry.date, language)}{' \u2022 '}
+                      {t('exercise.detail.workingSets', { count: entry.workingSetCount })}
                     </Text>
                   </View>
                   {entry.bestSet ? (
@@ -1017,7 +1060,6 @@ const styles = StyleSheet.create({
     color: palette.textMuted,
     fontSize: 11,
     fontWeight: '700',
-    textTransform: 'uppercase',
   },
   pointerValue: {
     color: palette.textPrimary,
@@ -1030,13 +1072,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   axisText: {
-    color: '#8FA2BA',
+    color: '#C5D0DE',
     fontSize: 11,
+    fontWeight: '600',
   },
   xAxisLabelText: {
-    color: '#94A3B8',
+    color: '#C5D0DE',
     fontSize: 10,
-    width: 48,
+    fontWeight: '600',
+    width: 56,
     textAlign: 'center',
   },
   placeholderText: {

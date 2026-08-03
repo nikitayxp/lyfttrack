@@ -91,7 +91,7 @@ const MUSCLE_MAP = {
   'middle back': 'back',
   'lower back': 'back',
   traps: 'back',
-  neck: 'shoulders',
+  neck: 'other',
 };
 
 const MUSCLE_LABEL = {
@@ -106,6 +106,7 @@ const MUSCLE_LABEL = {
   glutes: { en: 'Glutes', pt: 'Gluteos' },
   calves: { en: 'Calves', pt: 'Gemeos' },
   core: { en: 'Core', pt: 'Core' },
+  other: { en: 'Other', pt: 'Outro' },
 };
 
 /** Ordered phrase replacements for PT base names (longest first). */
@@ -310,6 +311,15 @@ function mapMuscle(primaryMuscles) {
   return MUSCLE_MAP[primary] || null;
 }
 
+function forceOtherMuscle(name, muscle) {
+  const n = String(name || '').toLowerCase();
+  // Isolation only — not "behind the neck" presses / pulldowns / wrist rotations
+  if (/^(external|internal)\s+rotation\b/.test(n)) return 'other';
+  if (/^neck\s+(extension|flexion)\b/.test(n) || /^isometric\s+neck\b/.test(n)) return 'other';
+  if (/^halo\b/.test(n) || /^serratus\b/.test(n)) return 'other';
+  return muscle;
+}
+
 function shouldKeep(entry) {
   const category = (entry.category || '').toLowerCase();
   if (!ALLOWED_CATEGORIES.has(category)) return false;
@@ -346,7 +356,7 @@ function buildRows(fed) {
       EQUIPMENT_OVERRIDE_BY_ID[entry.id] ||
       EQUIPMENT_MAP[(entry.equipment || '').toLowerCase()];
     if (!equipment) continue;
-    const muscle = mapMuscle(entry.primaryMuscles);
+    const muscle = forceOtherMuscle(entry.name, mapMuscle(entry.primaryMuscles));
     if (!muscle) continue;
 
     const baseEn = stripEquipmentFromName(entry.name, equipment);

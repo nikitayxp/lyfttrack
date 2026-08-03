@@ -47,8 +47,7 @@ const MUSCLE_LABEL = {
   hamstrings: { en: 'Hamstrings', pt: 'Posteriores' },
   calves: { en: 'Calves', pt: 'Panturrilhas' },
   glutes: { en: 'Glutes', pt: 'Gluteos' },
-  cardio: { en: 'Cardio', pt: 'Cardio' },
-  full_body: { en: 'Full Body', pt: 'Corpo inteiro' },
+  other: { en: 'Other', pt: 'Outro' },
 };
 
 /** Best-effort FED image ids for common Hevy gaps. */
@@ -216,6 +215,13 @@ function inferEquipment(title) {
 
 function inferMuscle(title) {
   const n = normalizeTitle(title);
+  // Other before shoulders: rotator cuff + neck isolation (not "behind the neck")
+  if (
+    /^(rotacao (externa|interna)|external rotation|internal rotation)\b/.test(n) ||
+    /^(neck (extension|flexion)|isometric neck|pescoco)\b/.test(n) ||
+    /\b(rotator|cuff|manguito|serratus|halo|caminhada|corrida|cardio)\b/.test(n)
+  )
+    return 'other';
   if (/panturrilha|calf/.test(n)) return 'calves';
   if (/triceps|tricep|testa|paralela|mergulho|jm /.test(n)) return 'triceps';
   if (/rosca|bicep|curl|punho|pulso|antebraco/.test(n)) return 'biceps';
@@ -223,14 +229,12 @@ function inferMuscle(title) {
   if (/flexora|isquio|stiff|peso morto|hiperextensao|lombar|hamstring/.test(n)) return 'hamstrings';
   if (/extensora|extensao de perna|leg press|agachamento|lunge|hack|quad/.test(n)) return 'quadriceps';
   if (/supino|peito|crucifixo|voador|chest|pec /.test(n)) return 'chest';
-  if (/ombros|ombro|elevacao lateral|elevacao frontal|desenvolvimento|prensa de ombros|press de ombros|shrug|deltoid|rotacao/.test(n))
+  if (/ombros|ombro|elevacao lateral|elevacao frontal|desenvolvimento|prensa de ombros|press de ombros|shrug|deltoid/.test(n))
     return 'shoulders';
   if (/abdominal|crunch|core|joelhos/.test(n)) return 'core';
   if (/puxada|remada|remo|barra fixa|costas|lat |row|pulldown|tracao/.test(n)) return 'back';
-  if (/pescoco|neck/.test(n)) return 'shoulders';
-  if (/caminhada|corrida/.test(n)) return 'cardio';
   if (/punho|wrist|forearm/.test(n)) return 'forearms';
-  return 'full_body';
+  return 'other';
 }
 
 function toEnglish(title) {
@@ -260,7 +264,7 @@ function buildRows(candidates) {
     }
     const muscle = inferMuscle(title);
     const equipment = inferEquipment(title);
-    const labels = MUSCLE_LABEL[muscle] || MUSCLE_LABEL.full_body;
+    const labels = MUSCLE_LABEL[muscle] || MUSCLE_LABEL.other;
     const nameEn = toEnglish(title);
     rows.push({
       id: uuidFromKey(norm),

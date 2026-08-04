@@ -19,10 +19,12 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  DeviceEventEmitter,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/theme';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
+import { WORKOUTS_IMPORTED_EVENT } from '@/services/import/importEvents';
 import { EmptyState } from '@/components/common/EmptyState';
 import { FeedCommentsModal } from '@/components/feed/FeedCommentsModal';
 import { WorkoutFeedCard } from '@/components/feed/WorkoutFeedCard';
@@ -440,6 +442,16 @@ export default function ProfileScreen() {
       void refreshProfileCard();
     }, [refreshProfileCard])
   );
+
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener(WORKOUTS_IMPORTED_EVENT, () => {
+      void bootstrap();
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [bootstrap]);
 
   const onRefresh = useCallback(async () => {
     if (!targetUserId) {

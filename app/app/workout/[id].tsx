@@ -4,7 +4,9 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import {
   ActivityIndicator,
+  Alert,
   Image,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -23,6 +25,7 @@ import { usePreferences } from '@/context/PreferencesContext';
 import { useAppToast } from '@/context/ToastContext';
 import { useWorkoutShare } from '@/hooks/useWorkoutShare';
 import {
+  deleteWorkout,
   getAuthenticatedUserOrThrow,
   getErrorMessage,
   getWorkoutDetails,
@@ -128,6 +131,7 @@ export default function WorkoutDetailsScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [sheetMode, setSheetMode] = useState<'closed' | 'menu' | 'share'>('closed');
+  const [isDeleting, setIsDeleting] = useState(false);
   const share = useWorkoutShare();
   const { showToast } = useAppToast();
 
@@ -174,6 +178,54 @@ export default function WorkoutDetailsScreen() {
     router.push(`/workout/edit/${encodeURIComponent(workoutId)}` as any);
   }, [workoutId]);
 
+  const confirmDeleteWorkout = useCallback(async (): Promise<boolean> => {
+    const description = t('workoutDetails.deleteConfirmDescription');
+
+    if (Platform.OS === 'web') {
+      const confirmFn = (globalThis as { confirm?: (message?: string) => boolean }).confirm;
+      return confirmFn ? confirmFn(description) : true;
+    }
+
+    return await new Promise((resolve) => {
+      Alert.alert(t('workoutDetails.deleteConfirmTitle'), description, [
+        {
+          text: t('common.cancel'),
+          style: 'cancel',
+          onPress: () => resolve(false),
+        },
+        {
+          text: t('workoutDetails.deleteConfirmAction'),
+          style: 'destructive',
+          onPress: () => resolve(true),
+        },
+      ]);
+    });
+  }, [t]);
+
+  const handleDeleteWorkout = useCallback(async () => {
+    if (!workoutId || isDeleting) {
+      return;
+    }
+
+    const shouldDelete = await confirmDeleteWorkout();
+
+    if (!shouldDelete) {
+      return;
+    }
+
+    setIsDeleting(true);
+
+    try {
+      await deleteWorkout(workoutId);
+      showToast({ message: t('workoutDetails.deleteSuccess'), tone: 'info' });
+      router.back();
+    } catch (error) {
+      showToast({ message: getErrorMessage(error), tone: 'error' });
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [confirmDeleteWorkout, isDeleting, showToast, t, workoutId]);
+
   const handleMenuSelect = useCallback(
     (action: WorkoutMenuAction) => {
       if (action === 'edit') {
@@ -185,6 +237,12 @@ export default function WorkoutDetailsScreen() {
       if (action === 'copy') {
         closeSheet();
         handleCopyWorkout();
+        return;
+      }
+
+      if (action === 'delete') {
+        closeSheet();
+        void handleDeleteWorkout();
         return;
       }
 
@@ -203,7 +261,16 @@ export default function WorkoutDetailsScreen() {
       });
       setSheetMode('share');
     },
-    [closeSheet, countWorkingSetsOnly, details, handleCopyWorkout, handleEditWorkout, share, t]
+    [
+      closeSheet,
+      countWorkingSetsOnly,
+      details,
+      handleCopyWorkout,
+      handleDeleteWorkout,
+      handleEditWorkout,
+      share,
+      t,
+    ]
   );
 
   const loadDetails = useCallback(async () => {

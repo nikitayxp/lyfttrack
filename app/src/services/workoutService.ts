@@ -2268,6 +2268,31 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
   };
 }
 
+export async function deleteWorkout(workoutId: string): Promise<void> {
+  const user = await getAuthenticatedUserOrThrow();
+  const normalizedWorkoutId = normalizeOptionalId(workoutId);
+
+  if (!normalizedWorkoutId) {
+    throw new Error('Workout id is required.');
+  }
+
+  // Sets, workout_exercises, likes and comments all cascade from workouts.
+  const { data: deleted, error } = await supabase
+    .from('workouts')
+    .delete()
+    .eq('id', normalizedWorkoutId)
+    .eq('user_id', user.id)
+    .select('id');
+
+  if (error) {
+    throw new Error(`Unable to delete workout: ${error.message}`);
+  }
+
+  if (!deleted || deleted.length === 0) {
+    throw new Error('Workout not found.');
+  }
+}
+
 export async function getUserWorkouts(userId: string, page = 0, limit = 20): Promise<WorkoutFeedItem[]> {
   const safePage = Number.isFinite(page) ? Math.max(0, Math.trunc(page)) : 0;
   const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.trunc(limit)) : 20;

@@ -6,13 +6,13 @@ import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 
 const palette = Colors.dark;
 
-export type WorkoutMenuAction = 'edit' | 'copy' | 'share';
+export type WorkoutMenuAction = 'edit' | 'copy' | 'share' | 'delete';
 
 type WorkoutActionsMenuProps = {
   /**
-   * Someone else's workout offers sharing and nothing else: editing or copying
-   * a session that is not yours is either impossible or confusing, and showing
-   * disabled rows would just raise the question.
+   * Someone else's workout offers sharing and nothing else: editing, copying or
+   * deleting a session that is not yours is either impossible or confusing, and
+   * showing disabled rows would just raise the question.
    */
   canManage: boolean;
   onSelect: (action: WorkoutMenuAction) => void;
@@ -23,36 +23,48 @@ const ACTION_ICONS: Record<WorkoutMenuAction, keyof typeof Ionicons.glyphMap> = 
   edit: 'create-outline',
   copy: 'copy-outline',
   share: 'share-social-outline',
+  delete: 'trash-outline',
 };
 
 const ACTION_LABEL_KEYS: Record<WorkoutMenuAction, string> = {
   edit: 'workoutDetails.editWorkout',
   copy: 'workoutDetails.copyWorkout',
   share: 'workoutDetails.shareWorkout',
+  delete: 'workoutDetails.deleteWorkout',
 };
 
 /** Content only — parent owns the bottom sheet so menu → share keeps the backdrop. */
 export function WorkoutActionsMenu({ canManage, onSelect, onCancel }: WorkoutActionsMenuProps) {
   const { t } = useTranslation();
-  const actions: WorkoutMenuAction[] = canManage ? ['edit', 'copy', 'share'] : ['share'];
+  const actions: WorkoutMenuAction[] = canManage ? ['edit', 'copy', 'share', 'delete'] : ['share'];
 
   return (
     <View>
-      {actions.map((action) => (
-        <TouchableOpacity
-          key={action}
-          style={styles.row}
-          activeOpacity={ACTIVE_OPACITY}
-          onPress={() => onSelect(action)}
-          accessibilityRole="button"
-          accessibilityLabel={t(ACTION_LABEL_KEYS[action])}
-        >
-          <View style={styles.rowIcon}>
-            <Ionicons name={ACTION_ICONS[action]} size={18} color={palette.accent} />
-          </View>
-          <Text style={styles.rowLabel}>{t(ACTION_LABEL_KEYS[action])}</Text>
-        </TouchableOpacity>
-      ))}
+      {actions.map((action) => {
+        const isDestructive = action === 'delete';
+
+        return (
+          <TouchableOpacity
+            key={action}
+            style={styles.row}
+            activeOpacity={ACTIVE_OPACITY}
+            onPress={() => onSelect(action)}
+            accessibilityRole="button"
+            accessibilityLabel={t(ACTION_LABEL_KEYS[action])}
+          >
+            <View style={[styles.rowIcon, isDestructive && styles.rowIconDanger]}>
+              <Ionicons
+                name={ACTION_ICONS[action]}
+                size={18}
+                color={isDestructive ? palette.error : palette.accent}
+              />
+            </View>
+            <Text style={[styles.rowLabel, isDestructive && styles.rowLabelDanger]}>
+              {t(ACTION_LABEL_KEYS[action])}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
 
       <TouchableOpacity
         style={styles.cancelRow}
@@ -84,11 +96,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  rowIconDanger: {
+    borderColor: palette.dangerBorder,
+    backgroundColor: palette.dangerBg,
+  },
   rowLabel: {
     flex: 1,
     color: palette.textPrimary,
     fontSize: 15,
     fontWeight: '700',
+  },
+  rowLabelDanger: {
+    color: palette.error,
   },
   cancelRow: {
     marginTop: Spacing.sm,

@@ -245,6 +245,7 @@ export default function ExerciseDetailScreen() {
   const chartScrollMaxRef = useRef(0);
   const chartHoldIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pendingScrollFromEndRef = useRef<number | null>(null);
+  const focusedDateRef = useRef<string | null>(null);
 
   // Total space the chart may occupy inside the card, minus its padding.
   //
@@ -274,12 +275,20 @@ export default function ExerciseDetailScreen() {
   }, [activeExercises, exerciseId, hasActiveWorkout, language, metric]);
 
   const chartProgress = useMemo(() => {
+    const since = rangeStartDate(range);
+    const inRange = progress
+      .filter((point) => point.date >= since)
+      .map((point) => ({
+        ...point,
+        value: metric === 'e1rm' ? point.estimated1RMMax : point.maxWeight,
+      }));
+
     const finished = activeProgressPoint
-      ? progress.filter((point) => point.date !== activeProgressPoint.date)
-      : progress;
+      ? inRange.filter((point) => point.date !== activeProgressPoint.date)
+      : inRange;
 
     return activeProgressPoint ? [...finished, activeProgressPoint] : finished;
-  }, [activeProgressPoint, progress]);
+  }, [activeProgressPoint, metric, progress, range]);
 
   // Reserves the axis gutter and both end margins before dividing, otherwise
   // the final point is drawn half outside the plot.
@@ -380,21 +389,16 @@ export default function ExerciseDetailScreen() {
     setPinChartToEnd(false);
   }, []);
 
-  const selectMetric = useCallback(
-    (next: ChartMetric) => {
-      if (next === metric) return;
-      rememberChartScrollFromEnd();
-      setIsLoadingStats(true);
-      setMetric(next);
-    },
-    [metric, rememberChartScrollFromEnd]
-  );
+  const selectMetric = useCallback((next: ChartMetric) => {
+    if (next === metric) return;
+    setMetric(next);
+  }, [metric]);
 
   const selectRange = useCallback(
     (next: ChartRange) => {
       if (next === range) return;
+      // Range changes point count / width — keep distance from the newest end.
       rememberChartScrollFromEnd();
-      setIsLoadingStats(true);
       setRange(next);
     },
     [range, rememberChartScrollFromEnd]
@@ -433,8 +437,10 @@ export default function ExerciseDetailScreen() {
     setIsLoadingStats(true);
 
     try {
+      // Always load the widest window once; metric/range switch client-side so the
+      // chart does not remount / flash when toggling the four filter buttons.
       const [pts, prs, hist] = await Promise.all([
-        getExerciseProgress(exerciseId, metric, language, { sinceDate: rangeStartDate(range) }),
+        getExerciseProgress(exerciseId, 'weight', language, { sinceDate: rangeStartDate('1y') }),
         getExercisePersonalRecords(exerciseId),
         getExerciseWorkoutHistory(exerciseId),
       ]);
@@ -449,7 +455,7 @@ export default function ExerciseDetailScreen() {
     } finally {
       setIsLoadingStats(false);
     }
-  }, [exerciseId, metric, language, range]);
+  }, [exerciseId, language]);
 
   useEffect(() => { void loadExercise(); }, [loadExercise]);
   useEffect(() => { void loadStats(); }, [loadStats]);
@@ -518,10 +524,9 @@ export default function ExerciseDetailScreen() {
     });
   }, [chartProgress, lineSpacing]);
 
-  // After metric/range remounts the chart, put the viewport back where it was
-  // relative to the newest point (scrollToEnd would always jump to Recentes).
+  // After a range change, keep viewport distance from the newest point.
   useEffect(() => {
-    if (isLoadingStats || pinChartToEnd) {
+    if (pinChartToEnd) {
       return;
     }
 
@@ -544,10 +549,7 @@ export default function ExerciseDetailScreen() {
       setChartScrollPosition({ x, max });
     };
 
-    const frame = requestAnimationFrame(() => {
-      apply();
-      // Layout can lag one frame behind gifted-charts remount.
-    });
+    const frame = requestAnimationFrame(apply);
     const timeout = setTimeout(apply, 50);
 
     return () => {
@@ -555,11 +557,19 @@ export default function ExerciseDetailScreen() {
       cancelAnimationFrame(frame);
       clearTimeout(timeout);
     };
-  }, [isLoadingStats, pinChartToEnd, chartContentWidth, plotWidth, lineData.length, metric, range]);
+  }, [pinChartToEnd, chartContentWidth, plotWidth, chartProgress.length, range]);
 
   const initialPointerIndex = useMemo(() => {
     if (lineData.length === 0) {
       return -1;
+    }
+
+    const focusedDate = focusedDateRef.current;
+    if (focusedDate) {
+      const focusedIndex = chartProgress.findIndex((point) => point.date === focusedDate);
+      if (focusedIndex >= 0) {
+        return focusedIndex;
+      }
     }
 
     for (let i = chartProgress.length - 1; i >= 0; i -= 1) {
@@ -752,7 +762,7 @@ export default function ExerciseDetailScreen() {
                 </View>
               ) : null}
               <LineChart
-                key={`${metric}-${range}-${lineData.length}-${needsHorizontalScroll ? 'paged' : 'fit'}`}
+                key={`${exerciseId}-${needsHorizontalScroll ? 'paged' : 'fit'}`}
                 data={lineData}
                 width={plotWidth}
                 height={220}
@@ -774,8 +784,8 @@ export default function ExerciseDetailScreen() {
                 xAxisLabelTextStyle={styles.xAxisLabelText}
                 rulesColor={palette.inputFill}
                 formatYLabel={(label) => `${formatCompactNumber(label)} kg`}
-                // Long histories animate poorly and fight scroll restore on remount.
-                isAnimated={lineData.length <= 12 && pinChartToEnd}
+                // Keep mounted across metric/range toggles — animation remounts feel like a refresh.
+                isAnimated={false}
                 scrollRef={chartScrollRef}
                 disableScroll
                 scrollToEnd={needsHorizontalScroll && pinChartToEnd}
@@ -806,6 +816,8 @@ export default function ExerciseDetailScreen() {
                     if (!point) {
                       return null;
                     }
+
+                    focusedDateRef.current = point.date;
 
                     return (
                       <View style={styles.pointerCard}>

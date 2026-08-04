@@ -1,0 +1,40 @@
+# Dependabot — version updates + security PRs for LyftTrack
+# https://docs.github.com/code-security/dependabot
+
+version: 2
+updates:
+  # Monorepo npm workspaces (root lockfile covers app + site)
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Europe/Lisbon
+    open-pull-requests-limit: 8
+    labels:
+      - dependencies
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      # Fewer PRs: patch/minor together; majors stay separate for review
+      npm-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  # GitHub Actions workflows (when present under .github/workflows)
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Europe/Lisbon
+    open-pull-requests-limit: 4
+    labels:
+      - dependencies
+    commit-message:
+      prefix: chore
+      include: scope

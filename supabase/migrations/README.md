@@ -72,6 +72,10 @@ they run in. The first four here used 8 digits until #149, and two of them colli
     - Adds exercises.listed so unlisted rows stay matchable by import and history
       while being hidden from the picker.
 
+12. 20260804230000_default_profile_visibility_public.sql
+    - Changes profiles.visibility default from 'friends' to 'public' for new accounts.
+      Existing rows are left unchanged.
+
 ## Rollout notes
 
 - Apply first in staging and validate app flows:

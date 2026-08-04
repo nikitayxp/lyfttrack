@@ -1805,7 +1805,7 @@ async function canViewUserContent(targetUserId: string): Promise<boolean> {
     throw new Error(`Unable to validate workout access: ${profileError.message}`);
   }
 
-  const visibility = profile?.visibility ?? 'friends';
+  const visibility = profile?.visibility ?? 'public';
 
   if (visibility === 'public') {
     return true;

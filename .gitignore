@@ -59,7 +59,7 @@ app-example/
 /android
 skills/
 
-# AI / local planning
+# local
 .planning/
 supabase_schema.sql
 supabase/seed_famous_exercises.sql

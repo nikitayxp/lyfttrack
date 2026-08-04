@@ -67,12 +67,26 @@ const POINTER_X_CORRECTION = -CHART_EDGE_SPACING;
 const ACTIVE_POINT_SIZE = 12;
 
 /** At most ~one date label every ~80px so PT dates stay readable while scrolling. */
-function shouldLabelPoint(index: number, total: number, pointSpacing: number): boolean {
+function shouldLabelPoint(
+  index: number,
+  total: number,
+  pointSpacing: number,
+  options?: { hideFirst?: boolean }
+): boolean {
   if (total <= 1) {
     return true;
   }
 
-  if (index === 0 || index === total - 1) {
+  // First label often clips under the Y-axis when the chart is paged.
+  if (options?.hideFirst && index === 0) {
+    return false;
+  }
+
+  if (index === total - 1) {
+    return true;
+  }
+
+  if (index === 0) {
     return true;
   }
 
@@ -80,6 +94,11 @@ function shouldLabelPoint(index: number, total: number, pointSpacing: number): b
   const step = Math.max(1, Math.ceil(minLabelGapPx / Math.max(1, pointSpacing)));
   return index % step === 0;
 }
+
+type ChartScrollAnchor =
+  | { kind: 'end' }
+  | { kind: 'start' }
+  | { kind: 'date'; date: string };
 
 function localDateKey(date = new Date()): string {
   const year = date.getFullYear();
@@ -244,8 +263,11 @@ export default function ExerciseDetailScreen() {
   const lastScrollXRef = useRef(0);
   const chartScrollMaxRef = useRef(0);
   const chartHoldIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pendingScrollFromEndRef = useRef<number | null>(null);
+  const pendingAnchorRef = useRef<ChartScrollAnchor | null>(null);
   const focusedDateRef = useRef<string | null>(null);
+  const chartProgressRef = useRef<ExerciseProgressPoint[]>([]);
+  const lineSpacingRef = useRef(MIN_POINT_SPACING);
+  const needsHorizontalScrollRef = useRef(false);
 
   // Total space the chart may occupy inside the card, minus its padding.
   //
@@ -315,6 +337,21 @@ export default function ExerciseDetailScreen() {
 
   const needsHorizontalScroll = chartContentWidth > plotWidth + 1;
 
+  chartProgressRef.current = chartProgress;
+  lineSpacingRef.current = lineSpacing;
+  needsHorizontalScrollRef.current = needsHorizontalScroll;
+
+  // Fitted charts do not fire onScroll — clear stale x/max so 3m↔1y cannot drift left.
+  useEffect(() => {
+    if (needsHorizontalScroll) {
+      return;
+    }
+
+    lastScrollXRef.current = 0;
+    chartScrollMaxRef.current = 0;
+    setChartScrollPosition({ x: 0, max: 0 });
+  }, [needsHorizontalScroll, chartProgress.length]);
+
   const handleChartScroll = useCallback((event: {
     nativeEvent: {
       contentOffset: { x: number };
@@ -381,12 +418,32 @@ export default function ExerciseDetailScreen() {
 
   useEffect(() => () => stopChartHold(), [stopChartHold]);
 
-  const rememberChartScrollFromEnd = useCallback(() => {
-    pendingScrollFromEndRef.current = Math.max(
-      0,
-      chartScrollMaxRef.current - lastScrollXRef.current
+  const rememberChartScrollAnchor = useCallback(() => {
+    const max = chartScrollMaxRef.current;
+    const x = lastScrollXRef.current;
+    const points = chartProgressRef.current;
+    const spacing = lineSpacingRef.current;
+
+    // No overflow (or already on Recentes): stay pinned to the newest end.
+    if (!needsHorizontalScrollRef.current || max <= 1 || x >= max - 2) {
+      pendingAnchorRef.current = { kind: 'end' };
+      setPinChartToEnd(true);
+      return;
+    }
+
+    if (x <= 2) {
+      pendingAnchorRef.current = { kind: 'start' };
+      setPinChartToEnd(false);
+      return;
+    }
+
+    const leftIndex = Math.min(
+      points.length - 1,
+      Math.max(0, Math.round(x / Math.max(1, spacing)))
     );
-    setPinChartToEnd(false);
+    const date = points[leftIndex]?.date;
+    pendingAnchorRef.current = date ? { kind: 'date', date } : { kind: 'end' };
+    setPinChartToEnd(!date);
   }, []);
 
   const selectMetric = useCallback((next: ChartMetric) => {
@@ -397,11 +454,10 @@ export default function ExerciseDetailScreen() {
   const selectRange = useCallback(
     (next: ChartRange) => {
       if (next === range) return;
-      // Range changes point count / width — keep distance from the newest end.
-      rememberChartScrollFromEnd();
+      rememberChartScrollAnchor();
       setRange(next);
     },
-    [range, rememberChartScrollFromEnd]
+    [range, rememberChartScrollAnchor]
   );
 
   const loadExercise = useCallback(async () => {
@@ -503,7 +559,11 @@ export default function ExerciseDetailScreen() {
         value: Math.max(0, point.value),
         // Only some labels are drawn: one per session turns into a smear of
         // overlapping dates as soon as there is any history.
-        label: shouldLabelPoint(index, chartProgress.length, lineSpacing) ? point.label : '',
+        label: shouldLabelPoint(index, chartProgress.length, lineSpacing, {
+          hideFirst: needsHorizontalScroll,
+        })
+          ? point.label
+          : '',
         // The session you just did is the one you are looking for.
         dataPointColor: isActive ? 'transparent' : isLatestFinished ? palette.textPrimary : CHART_NEON,
         dataPointRadius: isActive || isLatestFinished ? 6 : 4,
@@ -522,25 +582,32 @@ export default function ExerciseDetailScreen() {
         point,
       };
     });
-  }, [chartProgress, lineSpacing]);
+  }, [chartProgress, lineSpacing, needsHorizontalScroll]);
 
-  // After a range change, keep viewport distance from the newest point.
+  // Restore viewport after 3m↔1y using an explicit anchor (end/start/date).
   useEffect(() => {
-    if (pinChartToEnd) {
+    const anchor = pendingAnchorRef.current;
+    if (!anchor) {
       return;
     }
 
-    const fromEnd = pendingScrollFromEndRef.current;
-    if (fromEnd == null) {
-      return;
-    }
-
-    pendingScrollFromEndRef.current = null;
+    pendingAnchorRef.current = null;
 
     const max = Math.max(0, chartContentWidth - plotWidth);
-    const x = Math.max(0, Math.min(max, max - fromEnd));
-    let cancelled = false;
+    let x = max;
 
+    if (anchor.kind === 'start') {
+      x = 0;
+    } else if (anchor.kind === 'date') {
+      const index = chartProgress.findIndex((point) => point.date === anchor.date);
+      if (index >= 0) {
+        x = Math.min(max, Math.max(0, index * lineSpacing));
+      }
+    }
+
+    setPinChartToEnd(anchor.kind === 'end');
+
+    let cancelled = false;
     const apply = () => {
       if (cancelled) return;
       chartScrollRef.current?.scrollTo({ x, animated: false });
@@ -557,7 +624,7 @@ export default function ExerciseDetailScreen() {
       cancelAnimationFrame(frame);
       clearTimeout(timeout);
     };
-  }, [pinChartToEnd, chartContentWidth, plotWidth, chartProgress.length, range]);
+  }, [chartContentWidth, plotWidth, chartProgress, lineSpacing, range]);
 
   const initialPointerIndex = useMemo(() => {
     if (lineData.length === 0) {

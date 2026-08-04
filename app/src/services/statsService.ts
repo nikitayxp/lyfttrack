@@ -112,32 +112,27 @@ function getWorkoutDurationMinutes(startTimeIso: string | null | undefined, endT
   return Math.max(0, Math.round((endMs - startMs) / (1000 * 60)));
 }
 
+function monthShortEn(month: number): string {
+  return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][month - 1] ?? '';
+}
+
 function formatProgressLabel(dateIso: string, localeTag?: string): string {
-  const d = new Date(`${dateIso}T12:00:00.000Z`);
-  if (Number.isNaN(d.getTime())) {
+  const raw = dateIso.trim().slice(0, 10);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (!match) {
     return dateIso;
   }
 
-  const locale = isPortugueseLocale(localeTag)
-    ? 'pt-PT'
-    : localeTag && localeTag.length > 2
-      ? localeTag
-      : 'en-US';
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
 
-  // PT: numeric day/month/year — avoids ISO and fits the chart axis.
+  // Pad manually so web locales cannot emit "6/07/26".
   if (isPortugueseLocale(localeTag)) {
-    return d.toLocaleDateString(locale, {
-      day: '2-digit',
-      month: '2-digit',
-      year: '2-digit',
-    });
+    return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${String(year).slice(2)}`;
   }
 
-  return d.toLocaleDateString(locale, {
-    month: 'short',
-    day: 'numeric',
-    year: '2-digit',
-  });
+  return `${monthShortEn(month)} ${day}, ${String(year).slice(2)}`;
 }
 
 /** Chart axis / tip labels (PT 30/07/26). */
@@ -147,24 +142,21 @@ export function formatExerciseAxisDate(dateIso: string, localeTag?: string): str
 
 /** History / pointer card: full year (PT 30/07/2026). */
 export function formatExerciseHistoryDate(dateIso: string, localeTag?: string): string {
-  const d = new Date(`${dateIso}T12:00:00.000Z`);
-  if (Number.isNaN(d.getTime())) {
+  const raw = dateIso.trim().slice(0, 10);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (!match) {
     return dateIso;
   }
 
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
   if (isPortugueseLocale(localeTag)) {
-    return d.toLocaleDateString('pt-PT', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
+    return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
   }
 
-  return d.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  return `${monthShortEn(month)} ${day}, ${year}`;
 }
 
 function normalizeMuscleLabel(exercise: WeeklyExerciseRef | null | undefined, localeTag?: string): string {

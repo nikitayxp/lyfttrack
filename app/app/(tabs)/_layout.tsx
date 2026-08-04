@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { useMemo } from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { Colors } from '@/constants/Colors';
 import {
   TAB_BAR_TOP_PADDING,
@@ -37,9 +37,7 @@ export default function TabLayout() {
     <Tabs
       initialRouteName="index"
       screenOptions={{
-        headerStyle: styles.header,
-        headerTintColor: palette.textPrimary,
-        headerTitleStyle: styles.headerTitle,
+        header: () => <View style={[styles.headerSafeArea, { height: insets.top }]} />,
         headerShadowVisible: false,
         tabBarStyle,
         tabBarActiveTintColor: palette.accent,
@@ -97,35 +95,30 @@ export default function TabLayout() {
         name="profile/edit"
         options={{
           href: null,
-          title: t('tabs.editProfile'),
         }}
       />
       <Tabs.Screen
         name="profile/settings"
         options={{
           href: null,
-          title: t('tabs.settings'),
         }}
       />
       <Tabs.Screen
         name="profile/import"
         options={{
           href: null,
-          title: t('settings.importData'),
         }}
       />
       <Tabs.Screen
         name="public-profile/[id]"
         options={{
           href: null,
-          title: t('tabs.publicProfile'),
         }}
       />
       <Tabs.Screen
         name="profile/[id]"
         options={{
           href: null,
-          title: t('tabs.publicProfile'),
         }}
       />
     </Tabs>
@@ -133,12 +126,8 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
-  header: {
+  headerSafeArea: {
     backgroundColor: palette.bgPrimary,
-  },
-  headerTitle: {
-    color: palette.textPrimary,
-    fontWeight: '700',
   },
   tabBar: {
     backgroundColor: palette.tabBarBackground,

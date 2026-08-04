@@ -103,6 +103,7 @@ function buildCreateProfileRow(user: User, username: string): TablesInsert<'prof
     full_name: normalizeOptionalText(fullNameFromMetadata, INPUT_LIMITS.nameMax),
     avatar_url: null,
     bio: null,
+    visibility: 'public',
   };
 }
 

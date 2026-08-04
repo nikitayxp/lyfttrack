@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import { File as FileSystemFile } from 'expo-file-system';
 import {
@@ -52,6 +52,17 @@ export default function ImportDataScreen() {
   const { t, i18n } = useTranslation();
   const [stage, setStage] = useState<Stage>({ kind: 'idle' });
   const [error, setError] = useState<string | null>(null);
+
+  // Expo Router keeps this screen mounted under Profile — leaving "done" stuck
+  // blocked "import again" until we reset when the screen blurs.
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        setStage((current) => (current.kind === 'done' ? { kind: 'idle' } : current));
+        setError(null);
+      };
+    }, [])
+  );
 
   const dateFormatter = useMemo(
     () => new Intl.DateTimeFormat(i18n.language === 'pt' ? 'pt-PT' : 'en-GB', { dateStyle: 'medium' }),
@@ -278,9 +289,12 @@ export default function ImportDataScreen() {
             {t('importData.failedTitle', { count: summary.failedWorkouts.length })}
           </Text>
           <Text style={styles.noticeText}>{t('importData.failedText')}</Text>
-          <Text style={styles.noticeList}>
-            {summary.failedWorkouts.slice(0, 5).map((item) => `${item.title} (${formatDate(item.startTime)})`).join(', ')}
-          </Text>
+          {summary.failedWorkouts.slice(0, 5).map((item) => (
+            <Text key={`${item.title}-${item.startTime}`} style={styles.noticeList}>
+              {`${item.title} (${formatDate(item.startTime)})`}
+              {item.reason ? ` — ${item.reason}` : ''}
+            </Text>
+          ))}
         </View>
       ) : null}
 
@@ -288,11 +302,23 @@ export default function ImportDataScreen() {
         style={styles.primaryButton}
         activeOpacity={ACTIVE_OPACITY}
         onPress={() => {
+          setStage({ kind: 'idle' });
           notifyWorkoutsImported();
           router.replace('/(tabs)' as any);
         }}
       >
         <Text style={styles.primaryButtonText}>{t('importData.seeWorkouts')}</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.secondaryButton}
+        activeOpacity={ACTIVE_OPACITY}
+        onPress={() => {
+          setError(null);
+          setStage({ kind: 'idle' });
+        }}
+      >
+        <Text style={styles.secondaryButtonText}>{t('importData.importAgain')}</Text>
       </TouchableOpacity>
     </>
   );

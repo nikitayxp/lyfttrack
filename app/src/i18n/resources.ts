@@ -262,6 +262,7 @@ export const resources = {
         failedTitle: '{{count}} workouts did not import',
         failedText: 'The rest went in. You can run the same file again — what is already here will be skipped.',
         seeWorkouts: 'See my workouts',
+        importAgain: 'Import again',
         errorNoWorkouts: 'No workouts were found in that file. Make sure it is the workout CSV that Hevy exports.',
       },
       settings: {
@@ -1041,6 +1042,7 @@ export const resources = {
         failedTitle: '{{count}} treinos nao entraram',
         failedText: 'Os restantes entraram. Podes correr o mesmo ficheiro outra vez — o que ja ca esta e ignorado.',
         seeWorkouts: 'Ver os meus treinos',
+        importAgain: 'Importar outra vez',
         errorNoWorkouts: 'Nao foram encontrados treinos nesse ficheiro. Confirma que e o CSV de treinos que o Hevy exporta.',
       },
       settings: {

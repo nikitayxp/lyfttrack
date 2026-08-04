@@ -208,7 +208,7 @@ export default function ProfileScreen() {
   const { t, i18n } = useTranslation();
   const { activeExercises } = useWorkoutContext();
   const isWeb = Platform.OS === 'web';
-  const migrationPath = 'supabase/migrations/20260407_fix_body_measurements_rls.sql';
+  const migrationPath = 'supabase/migrations/20260407000000_fix_body_measurements_rls.sql';
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [email, setEmail] = useState('');

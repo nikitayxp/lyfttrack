@@ -22,6 +22,7 @@ import {
   type PersonalRecordSetSample,
 } from '@/utils/personalRecords';
 import { dedupeExerciseNames, type ExerciseNameSource } from '@/utils/exerciseLocalization';
+import { generateId } from '@/utils/uuid';
 
 export type ExerciseCatalogItem = Tables<'exercises'>;
 export type ExerciseLibraryMuscleFilter = 'all' | ExerciseMuscleKey;
@@ -1135,6 +1136,51 @@ export async function createExercise(input: CreateExerciseInput): Promise<Exerci
   }
 
   return data;
+}
+
+/**
+ * Create several custom exercises in a single insert.
+ *
+ * The caller (Hevy import) has already resolved the authenticated user, so this
+ * takes the id instead of re-fetching it per exercise. Each row is given a
+ * client-side id so the returned array lines up with `inputs` by index without
+ * relying on the order Postgres hands rows back.
+ */
+export async function createCustomExercisesForImport(
+  userId: string,
+  inputs: CreateExerciseInput[]
+): Promise<string[]> {
+  if (inputs.length === 0) {
+    return [];
+  }
+
+  const rows: TablesInsert<'exercises'>[] = inputs.map((input) => {
+    const normalizedName = normalizeRequiredName(input.name, 'Exercise name');
+    const normalizedMuscleKey = normalizeMuscleKey(input.muscleGroup);
+    const normalizedEquipmentKey = normalizeEquipmentKey(input.equipment);
+    const muscleLabels = normalizedMuscleKey ? EXERCISE_MUSCLE_LABELS[normalizedMuscleKey] : null;
+
+    return {
+      id: generateId(),
+      name: normalizedName,
+      name_en: normalizedName,
+      name_pt: normalizedName,
+      created_by: userId,
+      is_custom: true,
+      muscle_group: normalizedMuscleKey ?? normalizeWriteText(input.muscleGroup, INPUT_LIMITS.nameMax),
+      muscle_en: muscleLabels?.en ?? null,
+      muscle_pt: muscleLabels?.pt ?? null,
+      equipment: normalizedEquipmentKey ?? normalizeWriteText(input.equipment, INPUT_LIMITS.nameMax),
+    };
+  });
+
+  const { error } = await supabase.from('exercises').insert(rows);
+
+  if (error) {
+    throw new Error(`Unable to create exercises: ${error.message}`);
+  }
+
+  return rows.map((row) => row.id as string);
 }
 
 export async function getLastExerciseRestTimes(exerciseIds: string[]): Promise<Record<string, number>> {

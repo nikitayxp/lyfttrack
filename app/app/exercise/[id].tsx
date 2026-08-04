@@ -648,31 +648,56 @@ export default function ExerciseDetailScreen() {
     return lineData.length - 1;
   }, [chartProgress, lineData.length]);
 
-  // Scaled to the data, not to zero. A progression chart anchored at zero turns
-  // 100 kg to 110 kg into a step you cannot see; the interesting range is
-  // between the values.
+  // Zoom the Y axis like Hevy: fit the *visible* points (not off-screen history),
+  // and keep a modest minimum span so small e1RM steps (30×4 → 30×5) still read.
   const chartRange = useMemo(() => {
-    const values = lineData.map((item) => item.value).filter((value) => Number.isFinite(value));
+    const allValues = lineData.map((item) => item.value).filter((value) => Number.isFinite(value));
 
-    if (values.length === 0) {
+    if (allValues.length === 0) {
       return { min: 0, max: 4 };
+    }
+
+    let values = allValues;
+
+    if (needsHorizontalScroll && lineSpacing > 0 && allValues.length > 1) {
+      const first = Math.max(0, Math.floor(chartScrollPosition.x / lineSpacing) - 1);
+      const visibleCount = Math.max(2, Math.ceil(plotWidth / lineSpacing) + 2);
+      const last = Math.min(allValues.length - 1, first + visibleCount);
+      const sliced = allValues.slice(first, last + 1);
+      if (sliced.length > 0) {
+        values = sliced;
+      }
     }
 
     const highest = Math.max(...values);
     const lowest = Math.min(...values);
+    const mid = (highest + lowest) / 2;
+    const span = highest - lowest;
+    // ~12% of the load level, at least 4 kg — enough room for tiny e1RM deltas.
+    const minSpan = Math.max(4, mid * 0.12);
+    const pad = Math.max(0.5, Math.max(span, minSpan) * 0.1);
 
-    if (highest === lowest) {
-      const pad = Math.max(1, Math.round(highest * 0.1));
-      return { min: Math.max(0, highest - pad), max: highest + pad };
+    if (span < 0.01) {
+      const half = minSpan / 2;
+      return {
+        min: Math.max(0, Math.floor(mid - half)),
+        max: Math.ceil(mid + half),
+      };
     }
 
-    const padding = Math.max(1, (highest - lowest) * 0.15);
+    if (span < minSpan) {
+      const half = (minSpan + pad * 2) / 2;
+      return {
+        min: Math.max(0, Math.floor(mid - half)),
+        max: Math.ceil(mid + half),
+      };
+    }
 
     return {
-      min: Math.max(0, Math.floor(lowest - padding)),
-      max: Math.ceil(highest + padding),
+      min: Math.max(0, Math.floor(lowest - pad)),
+      max: Math.ceil(highest + pad),
     };
-  }, [lineData]);
+  }, [lineData, needsHorizontalScroll, lineSpacing, plotWidth, chartScrollPosition.x]);
 
   if (isLoading) {
     return (

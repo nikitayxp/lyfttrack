@@ -66,14 +66,19 @@ const POINTER_X_CORRECTION = -CHART_EDGE_SPACING;
 /** Must match `styles.activeDataPoint` — gifted-charts centres custom points with dataPointWidth/Height (default 4). */
 const ACTIVE_POINT_SIZE = 12;
 
-/** At most six date labels, evenly spread: one per session overlaps into a smear. */
-function shouldLabelPoint(index: number, total: number): boolean {
-  if (total <= 6) {
+/** At most ~one date label every ~80px so PT dates stay readable while scrolling. */
+function shouldLabelPoint(index: number, total: number, pointSpacing: number): boolean {
+  if (total <= 1) {
     return true;
   }
 
-  const step = Math.ceil(total / 6);
-  return index === 0 || index === total - 1 || index % step === 0;
+  if (index === 0 || index === total - 1) {
+    return true;
+  }
+
+  const minLabelGapPx = 80;
+  const step = Math.max(1, Math.ceil(minLabelGapPx / Math.max(1, pointSpacing)));
+  return index % step === 0;
 }
 
 function localDateKey(date = new Date()): string {
@@ -232,11 +237,14 @@ export default function ExerciseDetailScreen() {
   const [history, setHistory] = useState<ExerciseWorkoutHistoryEntry[]>([]);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [chartScrollPosition, setChartScrollPosition] = useState({ x: 0, max: 0 });
+  /** First open pins to newest; filter changes keep how far back you had scrolled. */
+  const [pinChartToEnd, setPinChartToEnd] = useState(true);
 
   const chartScrollRef = useRef<ScrollView | null>(null);
   const lastScrollXRef = useRef(0);
   const chartScrollMaxRef = useRef(0);
   const chartHoldIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pendingScrollFromEndRef = useRef<number | null>(null);
 
   // Total space the chart may occupy inside the card, minus its padding.
   //
@@ -364,6 +372,34 @@ export default function ExerciseDetailScreen() {
 
   useEffect(() => () => stopChartHold(), [stopChartHold]);
 
+  const rememberChartScrollFromEnd = useCallback(() => {
+    pendingScrollFromEndRef.current = Math.max(
+      0,
+      chartScrollMaxRef.current - lastScrollXRef.current
+    );
+    setPinChartToEnd(false);
+  }, []);
+
+  const selectMetric = useCallback(
+    (next: ChartMetric) => {
+      if (next === metric) return;
+      rememberChartScrollFromEnd();
+      setIsLoadingStats(true);
+      setMetric(next);
+    },
+    [metric, rememberChartScrollFromEnd]
+  );
+
+  const selectRange = useCallback(
+    (next: ChartRange) => {
+      if (next === range) return;
+      rememberChartScrollFromEnd();
+      setIsLoadingStats(true);
+      setRange(next);
+    },
+    [range, rememberChartScrollFromEnd]
+  );
+
   const loadExercise = useCallback(async () => {
     if (!exerciseId) {
       setError(t('exercise.detail.notFound'));
@@ -461,7 +497,7 @@ export default function ExerciseDetailScreen() {
         value: Math.max(0, point.value),
         // Only some labels are drawn: one per session turns into a smear of
         // overlapping dates as soon as there is any history.
-        label: shouldLabelPoint(index, chartProgress.length) ? point.label : '',
+        label: shouldLabelPoint(index, chartProgress.length, lineSpacing) ? point.label : '',
         // The session you just did is the one you are looking for.
         dataPointColor: isActive ? 'transparent' : isLatestFinished ? palette.textPrimary : CHART_NEON,
         dataPointRadius: isActive || isLatestFinished ? 6 : 4,
@@ -480,7 +516,46 @@ export default function ExerciseDetailScreen() {
         point,
       };
     });
-  }, [chartProgress]);
+  }, [chartProgress, lineSpacing]);
+
+  // After metric/range remounts the chart, put the viewport back where it was
+  // relative to the newest point (scrollToEnd would always jump to Recentes).
+  useEffect(() => {
+    if (isLoadingStats || pinChartToEnd) {
+      return;
+    }
+
+    const fromEnd = pendingScrollFromEndRef.current;
+    if (fromEnd == null) {
+      return;
+    }
+
+    pendingScrollFromEndRef.current = null;
+
+    const max = Math.max(0, chartContentWidth - plotWidth);
+    const x = Math.max(0, Math.min(max, max - fromEnd));
+    let cancelled = false;
+
+    const apply = () => {
+      if (cancelled) return;
+      chartScrollRef.current?.scrollTo({ x, animated: false });
+      lastScrollXRef.current = x;
+      chartScrollMaxRef.current = max;
+      setChartScrollPosition({ x, max });
+    };
+
+    const frame = requestAnimationFrame(() => {
+      apply();
+      // Layout can lag one frame behind gifted-charts remount.
+    });
+    const timeout = setTimeout(apply, 50);
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+      clearTimeout(timeout);
+    };
+  }, [isLoadingStats, pinChartToEnd, chartContentWidth, plotWidth, lineData.length, metric, range]);
 
   const initialPointerIndex = useMemo(() => {
     if (lineData.length === 0) {
@@ -600,7 +675,7 @@ export default function ExerciseDetailScreen() {
                   key={opt.key}
                   style={[styles.metricToggle, isActive && styles.metricToggleActive]}
                   activeOpacity={ACTIVE_OPACITY}
-                  onPress={() => setMetric(opt.key)}
+                  onPress={() => selectMetric(opt.key)}
                 >
                   <Text style={[styles.metricToggleText, isActive && styles.metricToggleTextActive]}>
                     {opt.label}
@@ -618,7 +693,7 @@ export default function ExerciseDetailScreen() {
                   key={opt.key}
                   style={[styles.metricToggle, isActive && styles.metricToggleActive]}
                   activeOpacity={ACTIVE_OPACITY}
-                  onPress={() => setRange(opt.key)}
+                  onPress={() => selectRange(opt.key)}
                 >
                   <Text style={[styles.metricToggleText, isActive && styles.metricToggleTextActive]}>
                     {opt.label}
@@ -677,7 +752,7 @@ export default function ExerciseDetailScreen() {
                 </View>
               ) : null}
               <LineChart
-                key={`${metric}-${range}-${lineData.length}-${initialPointerIndex}-${needsHorizontalScroll ? 'paged' : 'fit'}`}
+                key={`${metric}-${range}-${lineData.length}-${needsHorizontalScroll ? 'paged' : 'fit'}`}
                 data={lineData}
                 width={plotWidth}
                 height={220}
@@ -699,11 +774,11 @@ export default function ExerciseDetailScreen() {
                 xAxisLabelTextStyle={styles.xAxisLabelText}
                 rulesColor={palette.inputFill}
                 formatYLabel={(label) => `${formatCompactNumber(label)} kg`}
-                // Long histories animate poorly and fight scrollToEnd on mount.
-                isAnimated={lineData.length <= 12}
+                // Long histories animate poorly and fight scroll restore on remount.
+                isAnimated={lineData.length <= 12 && pinChartToEnd}
                 scrollRef={chartScrollRef}
                 disableScroll
-                scrollToEnd={needsHorizontalScroll}
+                scrollToEnd={needsHorizontalScroll && pinChartToEnd}
                 scrollAnimation={false}
                 showScrollIndicator={false}
                 onScroll={handleChartScroll}
@@ -1078,9 +1153,9 @@ const styles = StyleSheet.create({
   },
   xAxisLabelText: {
     color: '#C5D0DE',
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '600',
-    width: 56,
+    width: 64,
     textAlign: 'center',
   },
   placeholderText: {

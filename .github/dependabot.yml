@@ -17,6 +17,31 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+    ignore:
+      # Expo-managed packages must track the installed SDK — the SDK pins their
+      # versions, so bump them with `npx expo install --fix` on an SDK upgrade,
+      # never via Dependabot. (The #116-#123 wave tried to jump these to SDK 57
+      # / RN 0.86 on an SDK 54 project, which breaks the build.)
+      #
+      # expo itself: allow patch within the SDK, block minor/major.
+      - dependency-name: "expo"
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+      - dependency-name: "expo-*"
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+      - dependency-name: "eslint-config-expo"
+        update-types:
+          - version-update:semver-major
+      # React / React Native and the SDK-pinned native modules: Dependabot must
+      # not touch these at all — the Expo SDK owns their exact versions.
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
+      - dependency-name: "react-native"
+      - dependency-name: "react-native-*"
+      - dependency-name: "@react-native-async-storage/async-storage"
     groups:
       # Fewer PRs: patch/minor together; majors stay separate for review
       npm-minor-and-patch:

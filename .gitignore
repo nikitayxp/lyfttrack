@@ -61,6 +61,7 @@ skills/
 
 # local
 .planning/
+.cursor/
 supabase_schema.sql
 supabase/seed_famous_exercises.sql
 supabase/.temp/

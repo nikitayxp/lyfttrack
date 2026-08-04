@@ -1,12 +1,16 @@
 import { supabase } from '@/services/supabase';
 import {
-  createExercise,
+  buildSetInsertRow,
+  createCustomExercisesForImport,
   getAuthenticatedUserOrThrow,
   getExercisesCatalog,
+  normalizeWriteText,
   type ExerciseCatalogItem,
 } from '@/services/workoutService';
-import { createWorkoutWithSets } from '@/services/sessionRepository';
 import type { WorkoutSetDraft } from '@/services/workoutSession.types';
+import type { TablesInsert } from '@/types/database';
+import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
+import { generateId } from '@/utils/uuid';
 import {
   EXERCISE_EQUIPMENT_FILTER_KEYWORDS,
   resolveExerciseMuscleKey,
@@ -339,10 +343,11 @@ export async function buildImportPlan(csvText: string): Promise<ImportPlan> {
 }
 
 async function resolveExerciseIds(
-  plan: ImportPlan
+  plan: ImportPlan,
+  userId: string
 ): Promise<{ idByTitle: Map<string, string>; created: number }> {
   const idByTitle = new Map<string, string>();
-  let created = 0;
+  const toCreate: { title: string; input: { name: string; muscleGroup: string | null; equipment: ExerciseEquipmentKey | null } }[] = [];
 
   for (const match of plan.matches) {
     if (match.exerciseId) {
@@ -355,36 +360,65 @@ async function resolveExerciseIds(
     const muscleKey = resolveExerciseMuscleKey({ name: match.title });
     const equipmentKey = inferEquipmentKey(match.title);
 
-    const exercise = await createExercise({
-      name: match.title,
-      muscleGroup: muscleKey ?? null,
-      equipment: equipmentKey ?? null,
+    toCreate.push({
+      title: match.title,
+      input: { name: match.title, muscleGroup: muscleKey ?? null, equipment: equipmentKey ?? null },
     });
-
-    idByTitle.set(match.title, exercise.id);
-    created += 1;
   }
 
-  return { idByTitle, created };
+  if (toCreate.length === 0) {
+    return { idByTitle, created: 0 };
+  }
+
+  // One insert for every custom exercise instead of a round-trip each — the old
+  // per-exercise createExercise also re-fetched the user every time.
+  const createdIds = await createCustomExercisesForImport(
+    userId,
+    toCreate.map((entry) => entry.input)
+  );
+
+  toCreate.forEach((entry, index) => {
+    idByTitle.set(entry.title, createdIds[index]);
+  });
+
+  return { idByTitle, created: toCreate.length };
 }
 
-function buildSetDrafts(
+type WorkoutExerciseBlock = {
+  exerciseId: string;
+  notes: string | null;
+  sets: WorkoutSetDraft[];
+};
+
+/**
+ * Group a parsed workout into the exercises it touches, in first-seen order,
+ * merging repeat appearances of the same exercise under one block (mirrors the
+ * single-workout path, where workout_exercises is unique per exercise).
+ */
+function collectWorkoutExercises(
   workout: HevyParsedWorkout,
   idByTitle: Map<string, string>
-): { drafts: WorkoutSetDraft[]; notesByExerciseId: Record<string, string> } {
-  const drafts: WorkoutSetDraft[] = [];
-  const notesByExerciseId: Record<string, string> = {};
+): WorkoutExerciseBlock[] {
+  const blocks: WorkoutExerciseBlock[] = [];
+  const blockByExerciseId = new Map<string, WorkoutExerciseBlock>();
 
   for (const exercise of workout.exercises) {
     const exerciseId = idByTitle.get(exercise.title);
     if (!exerciseId) continue;
 
-    if (exercise.notes && !notesByExerciseId[exerciseId]) {
-      notesByExerciseId[exerciseId] = exercise.notes;
+    let block = blockByExerciseId.get(exerciseId);
+    if (!block) {
+      block = { exerciseId, notes: null, sets: [] };
+      blockByExerciseId.set(exerciseId, block);
+      blocks.push(block);
+    }
+
+    if (exercise.notes && !block.notes) {
+      block.notes = exercise.notes;
     }
 
     for (const set of exercise.sets) {
-      drafts.push({
+      block.sets.push({
         exerciseId,
         setNumber: set.setNumber,
         weight: set.weightKg,
@@ -394,14 +428,153 @@ function buildSetDrafts(
     }
   }
 
-  return { drafts, notesByExerciseId };
+  return blocks;
+}
+
+const IMPORT_BATCH_SIZE = 20;
+const MAX_WRITE_ATTEMPTS = 3;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Transient errors worth another go: network blips, gateway timeouts, rate
+ * limits (429) and statement-timeout style Postgres codes. A schema/constraint
+ * error is not transient and is rethrown immediately.
+ */
+function isTransientError(error: unknown): boolean {
+  const message = (error instanceof Error ? error.message : String(error ?? '')).toLowerCase();
+  const code = (error as { code?: string })?.code ?? '';
+
+  if (/failed to fetch|network|timeout|temporar|too many|rate limit|429|502|503|504/.test(message)) {
+    return true;
+  }
+
+  return ['57014', '08000', '08006', '53300', '53400'].includes(code);
+}
+
+async function withWriteRetry<T>(run: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < MAX_WRITE_ATTEMPTS; attempt += 1) {
+    try {
+      return await run();
+    } catch (error) {
+      lastError = error;
+      if (attempt < MAX_WRITE_ATTEMPTS - 1 && isTransientError(error)) {
+        await delay(500 * 2 ** attempt);
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw lastError;
+}
+
+async function insertRowsOrThrow(
+  table: 'workouts' | 'workout_exercises' | 'sets',
+  rows: TablesInsert<'workouts'>[] | TablesInsert<'workout_exercises'>[] | TablesInsert<'sets'>[]
+): Promise<void> {
+  if (rows.length === 0) return;
+
+  await withWriteRetry(async () => {
+    // Supabase returns errors on the result instead of throwing, so surface it
+    // as a throw with the Postgres code attached for the retry classifier.
+    const { error } = await supabase.from(table).insert(rows as never[]);
+    if (error) {
+      const wrapped = new Error(`${table} insert failed: ${error.message}`);
+      (wrapped as { code?: string }).code = error.code;
+      throw wrapped;
+    }
+  });
+}
+
+/**
+ * Write one batch of workouts with client-generated ids, so workouts, their
+ * exercises and their sets all go in three bulk inserts instead of ~4
+ * round-trips per workout. If any insert fails after the workouts landed, the
+ * batch's workouts are deleted (children cascade) so a re-run re-imports them
+ * cleanly rather than leaving empty sessions the dedup would then skip.
+ */
+async function writeWorkoutBatch(
+  userId: string,
+  batch: HevyParsedWorkout[],
+  idByTitle: Map<string, string>
+): Promise<{ workouts: number; sets: number }> {
+  const workoutRows: TablesInsert<'workouts'>[] = [];
+  const workoutExerciseRows: TablesInsert<'workout_exercises'>[] = [];
+  const setRows: TablesInsert<'sets'>[] = [];
+
+  for (const workout of batch) {
+    const blocks = collectWorkoutExercises(workout, idByTitle);
+    if (blocks.length === 0) continue;
+
+    const workoutId = generateId();
+    workoutRows.push({
+      id: workoutId,
+      user_id: userId,
+      name: sanitizeText(workout.title, { maxLength: INPUT_LIMITS.nameMax, allowEmpty: true }) ?? 'Untitled Workout',
+      notes: normalizeWriteText(workout.description, INPUT_LIMITS.notesMax),
+      start_time: workout.startTime,
+      end_time: workout.endTime,
+    });
+
+    blocks.forEach((block, index) => {
+      const workoutExerciseId = generateId();
+      workoutExerciseRows.push({
+        id: workoutExerciseId,
+        workout_id: workoutId,
+        exercise_id: block.exerciseId,
+        order: index + 1,
+        notes: normalizeWriteText(block.notes, 1000),
+      });
+
+      for (const draft of block.sets) {
+        const row = buildSetInsertRow(workoutId, draft, workoutExerciseId);
+        if (row) setRows.push(row);
+      }
+    });
+  }
+
+  if (workoutRows.length === 0) {
+    return { workouts: 0, sets: 0 };
+  }
+
+  const workoutIds = workoutRows.map((row) => row.id as string);
+
+  try {
+    await insertRowsOrThrow('workouts', workoutRows);
+    await insertRowsOrThrow('workout_exercises', workoutExerciseRows);
+    await insertRowsOrThrow('sets', setRows);
+  } catch (error) {
+    // Best-effort rollback of this batch so the same workouts can be re-imported
+    // without the dedup mistaking a half-written session for one already there.
+    await supabase
+      .from('workouts')
+      .delete()
+      .in('id', workoutIds)
+      .then(
+        () => undefined,
+        () => undefined
+      );
+    throw error;
+  }
+
+  return { workouts: workoutRows.length, sets: setRows.length };
 }
 
 export async function runImport(
   plan: ImportPlan,
   options: { onProgress?: (progress: ImportProgress) => void } = {}
 ): Promise<ImportSummary> {
-  const { idByTitle, created } = await resolveExerciseIds(plan);
+  // Resolve the user once. The old path called supabase.auth.getUser() (a
+  // network round-trip) inside every workout write, which tripped the auth rate
+  // limit part-way through a large import and stranded the rest.
+  const user = await getAuthenticatedUserOrThrow();
+
+  const { idByTitle, created } = await resolveExerciseIds(plan, user.id);
 
   const duplicates = new Set(plan.duplicateStartTimes);
   const pending = plan.parse.workouts.filter((workout) => !duplicates.has(workout.startTime));
@@ -414,39 +587,28 @@ export async function runImport(
     failedWorkouts: [],
   };
 
-  for (let i = 0; i < pending.length; i += 1) {
-    const workout = pending[i];
-    const { drafts, notesByExerciseId } = buildSetDrafts(workout, idByTitle);
+  let done = 0;
 
-    if (drafts.length === 0) {
-      options.onProgress?.({ done: i + 1, total: pending.length });
-      continue;
-    }
+  for (let start = 0; start < pending.length; start += IMPORT_BATCH_SIZE) {
+    const batch = pending.slice(start, start + IMPORT_BATCH_SIZE);
 
     try {
-      // One workout at a time on purpose. A failure part-way leaves the
-      // sessions already written in place instead of losing the whole file,
-      // and the summary says which ones did not make it.
-      const result = await createWorkoutWithSets({
-        name: workout.title,
-        notes: workout.description,
-        startTime: workout.startTime,
-        endTime: workout.endTime,
-        setDrafts: drafts,
-        notesByExerciseId,
-      });
-
-      summary.importedWorkouts += 1;
-      summary.importedSets += result.insertedSetCount;
+      const result = await writeWorkoutBatch(user.id, batch, idByTitle);
+      summary.importedWorkouts += result.workouts;
+      summary.importedSets += result.sets;
     } catch (error) {
-      summary.failedWorkouts.push({
-        title: workout.title,
-        startTime: workout.startTime,
-        reason: error instanceof Error ? error.message : 'Unknown error',
-      });
+      const reason = error instanceof Error ? error.message : 'Unknown error';
+      for (const workout of batch) {
+        summary.failedWorkouts.push({
+          title: workout.title,
+          startTime: workout.startTime,
+          reason,
+        });
+      }
     }
 
-    options.onProgress?.({ done: i + 1, total: pending.length });
+    done += batch.length;
+    options.onProgress?.({ done, total: pending.length });
   }
 
   return summary;

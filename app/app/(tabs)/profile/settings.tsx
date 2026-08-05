@@ -16,6 +16,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/theme';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
+import { BackButton } from '@/components/common/BackButton';
 import { usePreferences } from '@/context/PreferencesContext';
 import type { AppLanguage } from '@/i18n/resources';
 import { supabase } from '@/services/supabase';
@@ -200,16 +201,7 @@ export default function ProfileSettingsScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
-        <TouchableOpacity
-          style={styles.backButton}
-          activeOpacity={ACTIVE_OPACITY}
-          onPress={() => router.replace('/(tabs)/profile' as any)}
-          accessibilityRole="button"
-          accessibilityLabel={t('settings.back')}
-        >
-          <Ionicons name="chevron-back" size={18} color={palette.textPrimary} />
-          <Text style={styles.backButtonText}>{t('settings.back')}</Text>
-        </TouchableOpacity>
+        <BackButton onPress={() => router.replace('/(tabs)/profile' as any)} />
       </View>
 
       <Text style={styles.title}>{t('settings.title')}</Text>
@@ -664,24 +656,6 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     marginBottom: 12,
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-    minHeight: 34,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.surface,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    columnGap: 6,
-    paddingHorizontal: 10,
-  },
-  backButtonText: {
-    color: palette.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
   },
   title: {
     color: palette.textPrimary,

@@ -1,12 +1,9 @@
 import { Stack } from 'expo-router';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useTranslation } from 'react-i18next';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Colors } from '@/constants/Colors';
-import { ACTIVE_OPACITY } from '@/constants/Styles';
 import { PRIVACY_POLICY } from '@/content/legal/privacy-policy';
 import type { LegalLang } from '@/content/legal/terms-of-service';
 import { usePreferences } from '@/context/PreferencesContext';
-import { goBack } from '@/utils/navigation';
 
 const palette = Colors.dark;
 
@@ -15,7 +12,6 @@ function resolveLang(language: string): LegalLang {
 }
 
 export default function PrivacyScreen() {
-  const { t } = useTranslation();
   const { language } = usePreferences();
   const lang = resolveLang(language);
   const doc = PRIVACY_POLICY;
@@ -49,14 +45,6 @@ export default function PrivacyScreen() {
           </View>
         ))}
 
-        <TouchableOpacity
-          style={styles.backButton}
-          activeOpacity={ACTIVE_OPACITY}
-          onPress={() => goBack()}
-          accessibilityRole="button"
-        >
-          <Text style={styles.backButtonText}>{t('common.back')}</Text>
-        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -98,19 +86,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
     marginBottom: 8,
-  },
-  backButton: {
-    marginTop: 8,
-    minHeight: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: palette.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backButtonText: {
-    color: palette.textPrimary,
-    fontSize: 15,
-    fontWeight: '700',
   },
 });

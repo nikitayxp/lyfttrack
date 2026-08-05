@@ -16,12 +16,14 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
+import { useAppToast } from '@/context/ToastContext';
 import {
   acceptRequest,
   getFriends,
   getLiveFriendWorkouts,
   getPendingRequests,
   rejectRequest,
+  removeFriend,
   searchUsers,
   sendFriendRequest,
   type FriendListItem,
@@ -29,6 +31,7 @@ import {
   type PendingFriendRequest,
   type SocialSearchResult,
 } from '@/services/socialService';
+import { confirmAction } from '@/utils/confirmAction';
 
 const palette = Colors.dark;
 const SCREEN_BG = palette.bgPrimary;
@@ -71,6 +74,8 @@ function openPublicProfile(userId: string) {
 
 export default function SocialScreen() {
   const { t } = useTranslation();
+  const { showToast } = useAppToast();
+  const [removingFriendId, setRemovingFriendId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SocialSearchResult[]>([]);
   const [pendingRequests, setPendingRequests] = useState<PendingFriendRequest[]>([]);
@@ -120,6 +125,41 @@ export default function SocialScreen() {
       setSocialError(toErrorMessage(error));
     }
   }, [toErrorMessage]);
+
+  const handleRemoveFriend = useCallback(
+    async (friendUserId: string) => {
+      if (removingFriendId) {
+        return;
+      }
+
+      const confirmed = await confirmAction({
+        title: t('social.actions.removeConfirmTitle'),
+        description: t('social.actions.removeConfirmDescription'),
+        confirmLabel: t('social.actions.removeFriend'),
+        cancelLabel: t('common.cancel'),
+        destructive: true,
+      });
+
+      if (!confirmed) {
+        return;
+      }
+
+      setRemovingFriendId(friendUserId);
+
+      try {
+        await removeFriend(friendUserId);
+        setFriends((currentFriends) =>
+          currentFriends.filter((friend) => friend.profile.id !== friendUserId)
+        );
+        showToast({ message: t('social.success.friendRemoved'), tone: 'info' });
+      } catch (error) {
+        Alert.alert(t('social.errors.removeFriend'), toErrorMessage(error));
+      } finally {
+        setRemovingFriendId(null);
+      }
+    },
+    [removingFriendId, showToast, t, toErrorMessage]
+  );
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -491,6 +531,21 @@ export default function SocialScreen() {
                     size={18}
                     color={isLive ? palette.successLight : palette.textMuted}
                   />
+
+                  <TouchableOpacity
+                    style={styles.removeFriendButton}
+                    activeOpacity={ACTIVE_OPACITY}
+                    onPress={() => void handleRemoveFriend(friend.profile.id)}
+                    disabled={removingFriendId === friend.profile.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('social.actions.removeFriend')}
+                  >
+                    {removingFriendId === friend.profile.id ? (
+                      <ActivityIndicator size="small" color={palette.error} />
+                    ) : (
+                      <Ionicons name="person-remove-outline" size={17} color={palette.error} />
+                    )}
+                  </TouchableOpacity>
                 </TouchableOpacity>
               );
             })
@@ -655,6 +710,17 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  removeFriendButton: {
+    width: 36,
+    height: 36,
+    marginLeft: 8,
+    borderRadius: Radius.button,
+    borderWidth: 1,
+    borderColor: palette.dangerBorder,
+    backgroundColor: palette.dangerBg,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   friendItem: {
     flexDirection: 'row',

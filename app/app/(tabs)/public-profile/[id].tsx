@@ -26,8 +26,18 @@ import {
   type CommentAuthorProfile,
   type WorkoutCommentWithProfile,
 } from '@/services/interactionService';
+import { FriendActions } from '@/components/social/FriendActions';
 import { getPublicProfileById, type PublicProfileView } from '@/services/profileService';
+import {
+  acceptRequest,
+  getRelationWithUser,
+  rejectRequest,
+  removeFriend,
+  sendFriendRequest,
+  type UserRelation,
+} from '@/services/socialService';
 import { getErrorMessage, getUserWorkouts, type WorkoutFeedItem } from '@/services/workoutService';
+import { confirmAction } from '@/utils/confirmAction';
 
 const palette = Colors.dark;
 const SCREEN_BG = palette.bgPrimary;
@@ -112,6 +122,8 @@ export default function PublicProfileScreen() {
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [commentInputValue, setCommentInputValue] = useState('');
   const [currentCommentAuthor, setCurrentCommentAuthor] = useState<CommentAuthorProfile | null>(null);
+  const [relation, setRelation] = useState<UserRelation | null>(null);
+  const [isRelationBusy, setIsRelationBusy] = useState(false);
 
   // An empty list on a non-public profile means "not allowed to see", not
   // "trained nothing" — saying the wrong one is what made the old behaviour
@@ -136,6 +148,12 @@ export default function PublicProfileScreen() {
       }
 
       setError(null);
+
+      // The friend state loads on its own: failing to read it should leave the
+      // actions hidden, not stop the profile from opening.
+      void getRelationWithUser(profileId)
+        .then(setRelation)
+        .catch(() => setRelation(null));
 
       try {
         const [profileData, workoutData] = await Promise.all([
@@ -206,6 +224,76 @@ export default function PublicProfileScreen() {
   useEffect(() => {
     void loadData('initial');
   }, [loadData]);
+
+  const runRelationAction = useCallback(
+    async (action: () => Promise<void>, errorTitleKey: string) => {
+      if (!profileId || isRelationBusy) {
+        return;
+      }
+
+      setIsRelationBusy(true);
+
+      try {
+        await action();
+        setRelation(await getRelationWithUser(profileId));
+      } catch (actionError) {
+        Alert.alert(t(errorTitleKey), getErrorMessage(actionError));
+      } finally {
+        setIsRelationBusy(false);
+      }
+    },
+    [isRelationBusy, profileId, t]
+  );
+
+  const handleAddFriend = useCallback(() => {
+    void runRelationAction(async () => {
+      await sendFriendRequest(profileId as string);
+    }, 'social.errors.sendRequest');
+  }, [profileId, runRelationAction]);
+
+  const handleAcceptRequest = useCallback(() => {
+    const requestId = relation?.requestId;
+
+    if (!requestId) {
+      return;
+    }
+
+    void runRelationAction(async () => {
+      await acceptRequest(requestId);
+    }, 'social.errors.acceptRequest');
+  }, [relation?.requestId, runRelationAction]);
+
+  const handleRejectRequest = useCallback(() => {
+    const requestId = relation?.requestId;
+
+    if (!requestId) {
+      return;
+    }
+
+    void runRelationAction(async () => {
+      await rejectRequest(requestId);
+    }, 'social.errors.rejectRequest');
+  }, [relation?.requestId, runRelationAction]);
+
+  const handleRemoveFriend = useCallback(() => {
+    void (async () => {
+      const confirmed = await confirmAction({
+        title: t('social.actions.removeConfirmTitle'),
+        description: t('social.actions.removeConfirmDescription'),
+        confirmLabel: t('social.actions.removeFriend'),
+        cancelLabel: t('common.cancel'),
+        destructive: true,
+      });
+
+      if (!confirmed) {
+        return;
+      }
+
+      await runRelationAction(async () => {
+        await removeFriend(profileId as string);
+      }, 'social.errors.removeFriend');
+    })();
+  }, [profileId, runRelationAction, t]);
 
   const ensureCurrentCommentAuthor = useCallback(async (): Promise<CommentAuthorProfile | null> => {
     if (currentCommentAuthor) {
@@ -491,6 +579,19 @@ export default function PublicProfileScreen() {
                 <Ionicons name="barbell-outline" size={14} color={palette.accent} />
                 <Text style={styles.metricChipText}>{t('publicProfile.recentWorkouts', { count: workouts.length })}</Text>
               </View>
+
+              {relation ? (
+                <View style={styles.friendActionsWrap}>
+                  <FriendActions
+                    relation={relation.relation}
+                    isBusy={isRelationBusy}
+                    onAdd={handleAddFriend}
+                    onAccept={handleAcceptRequest}
+                    onReject={handleRejectRequest}
+                    onRemove={handleRemoveFriend}
+                  />
+                </View>
+              ) : null}
             </View>
 
             <View style={styles.sectionHeader}>
@@ -643,6 +744,10 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     textAlign: 'center',
     marginBottom: 10,
+  },
+  friendActionsWrap: {
+    alignSelf: 'stretch',
+    marginTop: 14,
   },
   metricChip: {
     flexDirection: 'row',

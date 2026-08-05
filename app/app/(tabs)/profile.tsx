@@ -42,6 +42,7 @@ import { getAllTimePRs, type AllTimePR } from '@/services/statsService';
 import { supabase } from '@/services/supabase';
 import { getErrorMessage, getUserWorkouts, type WorkoutFeedItem } from '@/services/workoutService';
 import { useWorkoutContext } from '@/context/WorkoutContext';
+import { useWorkoutDelete } from '@/hooks/useWorkoutDelete';
 import { getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 import { sanitizeDecimalText } from '@/utils/inputValidation';
 
@@ -208,6 +209,7 @@ export default function ProfileScreen() {
   const { t, i18n } = useTranslation();
   const { activeExercises } = useWorkoutContext();
   const isWeb = Platform.OS === 'web';
+  const { confirmAndDelete } = useWorkoutDelete();
   const migrationPath = 'supabase/migrations/20260407000000_fix_body_measurements_rls.sql';
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
@@ -426,6 +428,21 @@ export default function ProfileScreen() {
   useEffect(() => {
     void bootstrap();
   }, [bootstrap]);
+
+  const handleDeleteWorkout = useCallback(
+    async (workoutId: string) => {
+      if (!(await confirmAndDelete(workoutId))) {
+        return;
+      }
+
+      setWorkouts((currentValue) => currentValue.filter((item) => item.id !== workoutId));
+
+      if (authUserId) {
+        await loadUserHistoryPage(authUserId, 0, 'reset');
+      }
+    },
+    [authUserId, confirmAndDelete, loadUserHistoryPage]
+  );
 
   const refreshProfileCard = useCallback(async () => {
     try {
@@ -1209,6 +1226,7 @@ export default function ProfileScreen() {
                 }
                 router.push(`/workout/active?copyFromWorkoutId=${item.id}` as any);
               }}
+              onDeleteWorkout={() => void handleDeleteWorkout(item.id)}
             />
           );
         }}

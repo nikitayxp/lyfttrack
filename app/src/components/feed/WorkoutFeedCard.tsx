@@ -30,6 +30,8 @@ type WorkoutFeedCardProps = {
   onOpenComments?: () => void;
   onCopyWorkout?: () => void;
   onEditWorkout?: () => void;
+  /** Screens that can refresh their list after a delete pass this in. */
+  onDeleteWorkout?: () => void;
   /** Whether the viewer owns this workout, which decides the menu contents. */
   canManage?: boolean;
   disableInteractions?: boolean;
@@ -81,6 +83,7 @@ export function WorkoutFeedCard({
   onOpenComments,
   onCopyWorkout,
   onEditWorkout,
+  onDeleteWorkout,
   canManage = false,
   disableInteractions = false,
 }: WorkoutFeedCardProps) {
@@ -120,6 +123,12 @@ export function WorkoutFeedCard({
     if (action === 'copy') {
       closeSheet();
       onCopyWorkout?.();
+      return;
+    }
+
+    if (action === 'delete') {
+      closeSheet();
+      onDeleteWorkout?.();
       return;
     }
 
@@ -239,7 +248,12 @@ export function WorkoutFeedCard({
             }}
           />
         ) : (
-          <WorkoutActionsMenu canManage={canManage} onSelect={handleMenuSelect} onCancel={closeSheet} />
+          <WorkoutActionsMenu
+            canManage={canManage}
+            canDelete={Boolean(onDeleteWorkout)}
+            onSelect={handleMenuSelect}
+            onCancel={closeSheet}
+          />
         )}
       </DismissibleBottomSheet>
 

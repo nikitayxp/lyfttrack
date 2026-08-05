@@ -34,6 +34,7 @@ import { WORKOUTS_IMPORTED_EVENT } from '@/services/import/importEvents';
 import { EmptyState } from '@/components/common/EmptyState';
 import { FeedCommentsModal } from '@/components/feed/FeedCommentsModal';
 import { WorkoutFeedCard } from '@/components/feed/WorkoutFeedCard';
+import { useWorkoutDelete } from '@/hooks/useWorkoutDelete';
 
 const palette = Colors.dark;
 const SCREEN_BG = palette.bgPrimary;
@@ -49,6 +50,8 @@ type FeedLikeInteractionState = {
 
 export default function FeedScreen() {
   const { t } = useTranslation();
+
+  const { confirmAndDelete } = useWorkoutDelete();
 
   const [workouts, setWorkouts] = useState<WorkoutFeedItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -180,6 +183,18 @@ export default function FeedScreen() {
   const openAthletesExplorer = useCallback(() => {
     router.push('/athletes' as any);
   }, []);
+
+  const handleDeleteWorkout = useCallback(
+    async (workoutId: string) => {
+      if (!(await confirmAndDelete(workoutId))) {
+        return;
+      }
+
+      setWorkouts((currentState) => currentState.filter((item) => item.id !== workoutId));
+      await loadFeedPage(0, 'reset');
+    },
+    [confirmAndDelete, loadFeedPage]
+  );
 
   const ensureCurrentCommentAuthor = useCallback(async (): Promise<CommentAuthorProfile | null> => {
     if (currentCommentAuthor) {
@@ -558,6 +573,11 @@ export default function FeedScreen() {
                 canManage={Boolean(currentUserId) && item.user_id === currentUserId}
                 onEditWorkout={() => router.push(`/workout/edit/${item.id}` as any)}
                 onCopyWorkout={() => router.push(`/workout/active?copyFromWorkoutId=${item.id}` as any)}
+                onDeleteWorkout={
+                  Boolean(currentUserId) && item.user_id === currentUserId
+                    ? () => void handleDeleteWorkout(item.id)
+                    : undefined
+                }
               />
             </Animated.View>
           );

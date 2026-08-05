@@ -21,6 +21,7 @@ import { ShareWorkoutSheet } from '@/components/workout/ShareWorkoutSheet';
 import { WorkoutActionsMenu, type WorkoutMenuAction } from '@/components/workout/WorkoutActionsMenu';
 import { usePreferences } from '@/context/PreferencesContext';
 import { useAppToast } from '@/context/ToastContext';
+import { useWorkoutDelete } from '@/hooks/useWorkoutDelete';
 import { useWorkoutShare } from '@/hooks/useWorkoutShare';
 import {
   getAuthenticatedUserOrThrow,
@@ -129,6 +130,7 @@ export default function WorkoutDetailsScreen() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [sheetMode, setSheetMode] = useState<'closed' | 'menu' | 'share'>('closed');
   const share = useWorkoutShare();
+  const { confirmAndDelete } = useWorkoutDelete();
   const { showToast } = useAppToast();
 
   useEffect(() => {
@@ -174,6 +176,25 @@ export default function WorkoutDetailsScreen() {
     router.push(`/workout/edit/${encodeURIComponent(workoutId)}` as any);
   }, [workoutId]);
 
+  const handleDeleteWorkout = useCallback(async () => {
+    if (!workoutId) {
+      return;
+    }
+
+    if (!(await confirmAndDelete(workoutId))) {
+      return;
+    }
+
+    // Opening this screen from a link leaves nothing to go back to, and the
+    // deleted workout would stay on screen.
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace('/(tabs)/profile' as any);
+  }, [confirmAndDelete, workoutId]);
+
   const handleMenuSelect = useCallback(
     (action: WorkoutMenuAction) => {
       if (action === 'edit') {
@@ -185,6 +206,12 @@ export default function WorkoutDetailsScreen() {
       if (action === 'copy') {
         closeSheet();
         handleCopyWorkout();
+        return;
+      }
+
+      if (action === 'delete') {
+        closeSheet();
+        void handleDeleteWorkout();
         return;
       }
 
@@ -203,7 +230,16 @@ export default function WorkoutDetailsScreen() {
       });
       setSheetMode('share');
     },
-    [closeSheet, countWorkingSetsOnly, details, handleCopyWorkout, handleEditWorkout, share, t]
+    [
+      closeSheet,
+      countWorkingSetsOnly,
+      details,
+      handleCopyWorkout,
+      handleDeleteWorkout,
+      handleEditWorkout,
+      share,
+      t,
+    ]
   );
 
   const loadDetails = useCallback(async () => {
@@ -286,6 +322,7 @@ export default function WorkoutDetailsScreen() {
         ) : (
           <WorkoutActionsMenu
             canManage={isOwnWorkout}
+            canDelete={isOwnWorkout}
             onSelect={handleMenuSelect}
             onCancel={closeSheet}
           />

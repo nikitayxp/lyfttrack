@@ -15,6 +15,11 @@ type WorkoutActionsMenuProps = {
    * showing disabled rows would just raise the question.
    */
   canManage: boolean;
+  /**
+   * Deleting only shows up where the screen actually handles it. Without this
+   * the row would appear everywhere the menu does and fall through to sharing.
+   */
+  canDelete?: boolean;
   onSelect: (action: WorkoutMenuAction) => void;
   onCancel: () => void;
 };
@@ -34,9 +39,19 @@ const ACTION_LABEL_KEYS: Record<WorkoutMenuAction, string> = {
 };
 
 /** Content only — parent owns the bottom sheet so menu → share keeps the backdrop. */
-export function WorkoutActionsMenu({ canManage, onSelect, onCancel }: WorkoutActionsMenuProps) {
+export function WorkoutActionsMenu({
+  canManage,
+  canDelete = false,
+  onSelect,
+  onCancel,
+}: WorkoutActionsMenuProps) {
   const { t } = useTranslation();
-  const actions: WorkoutMenuAction[] = canManage ? ['edit', 'copy', 'share', 'delete'] : ['share'];
+  const ownerActions: WorkoutMenuAction[] = ['edit', 'copy', 'share'];
+  const actions: WorkoutMenuAction[] = canManage
+    ? canDelete
+      ? [...ownerActions, 'delete']
+      : ownerActions
+    : ['share'];
 
   return (
     <View>

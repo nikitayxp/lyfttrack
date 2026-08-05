@@ -4,9 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import {
   ActivityIndicator,
-  Alert,
   Image,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -23,9 +21,9 @@ import { ShareWorkoutSheet } from '@/components/workout/ShareWorkoutSheet';
 import { WorkoutActionsMenu, type WorkoutMenuAction } from '@/components/workout/WorkoutActionsMenu';
 import { usePreferences } from '@/context/PreferencesContext';
 import { useAppToast } from '@/context/ToastContext';
+import { useWorkoutDelete } from '@/hooks/useWorkoutDelete';
 import { useWorkoutShare } from '@/hooks/useWorkoutShare';
 import {
-  deleteWorkout,
   getAuthenticatedUserOrThrow,
   getErrorMessage,
   getWorkoutDetails,
@@ -131,8 +129,8 @@ export default function WorkoutDetailsScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [sheetMode, setSheetMode] = useState<'closed' | 'menu' | 'share'>('closed');
-  const [isDeleting, setIsDeleting] = useState(false);
   const share = useWorkoutShare();
+  const { confirmAndDelete } = useWorkoutDelete();
   const { showToast } = useAppToast();
 
   useEffect(() => {
@@ -178,53 +176,24 @@ export default function WorkoutDetailsScreen() {
     router.push(`/workout/edit/${encodeURIComponent(workoutId)}` as any);
   }, [workoutId]);
 
-  const confirmDeleteWorkout = useCallback(async (): Promise<boolean> => {
-    const description = t('workoutDetails.deleteConfirmDescription');
-
-    if (Platform.OS === 'web') {
-      const confirmFn = (globalThis as { confirm?: (message?: string) => boolean }).confirm;
-      return confirmFn ? confirmFn(description) : true;
-    }
-
-    return await new Promise((resolve) => {
-      Alert.alert(t('workoutDetails.deleteConfirmTitle'), description, [
-        {
-          text: t('common.cancel'),
-          style: 'cancel',
-          onPress: () => resolve(false),
-        },
-        {
-          text: t('workoutDetails.deleteConfirmAction'),
-          style: 'destructive',
-          onPress: () => resolve(true),
-        },
-      ]);
-    });
-  }, [t]);
-
   const handleDeleteWorkout = useCallback(async () => {
-    if (!workoutId || isDeleting) {
+    if (!workoutId) {
       return;
     }
 
-    const shouldDelete = await confirmDeleteWorkout();
-
-    if (!shouldDelete) {
+    if (!(await confirmAndDelete(workoutId))) {
       return;
     }
 
-    setIsDeleting(true);
-
-    try {
-      await deleteWorkout(workoutId);
-      showToast({ message: t('workoutDetails.deleteSuccess'), tone: 'info' });
+    // Opening this screen from a link leaves nothing to go back to, and the
+    // deleted workout would stay on screen.
+    if (router.canGoBack()) {
       router.back();
-    } catch (error) {
-      showToast({ message: getErrorMessage(error), tone: 'error' });
-    } finally {
-      setIsDeleting(false);
+      return;
     }
-  }, [confirmDeleteWorkout, isDeleting, showToast, t, workoutId]);
+
+    router.replace('/(tabs)/profile' as any);
+  }, [confirmAndDelete, workoutId]);
 
   const handleMenuSelect = useCallback(
     (action: WorkoutMenuAction) => {
@@ -353,6 +322,7 @@ export default function WorkoutDetailsScreen() {
         ) : (
           <WorkoutActionsMenu
             canManage={isOwnWorkout}
+            canDelete={isOwnWorkout}
             onSelect={handleMenuSelect}
             onCancel={closeSheet}
           />

@@ -42,6 +42,12 @@ export const resources = {
         unknownError: 'Unknown error.',
         ok: 'OK',
         back: 'Back',
+        relativeTime: {
+          justNow: 'Just now',
+          minutes: '{{count}}m',
+          hours: '{{count}}h',
+          days: '{{count}}d',
+        },
       },
       language: {
         title: 'Language',
@@ -842,6 +848,12 @@ export const resources = {
         unknownError: 'Erro desconhecido.',
         ok: 'OK',
         back: 'Voltar',
+        relativeTime: {
+          justNow: 'Agora mesmo',
+          minutes: '{{count}}m',
+          hours: '{{count}}h',
+          days: '{{count}}d',
+        },
       },
       language: {
         title: 'Idioma',

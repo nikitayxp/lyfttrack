@@ -48,7 +48,7 @@ const CHART_PAGE_RATIO = 0.75;
 /** Same pace as a deliberate click while holding Anteriores / Recentes. */
 const CHART_HOLD_INTERVAL_MS = 380;
 
-type ChartRange = '3m' | '1y';
+type ChartRange = '3m' | '1y' | 'all';
 type ChartMetric = Extract<ProgressMetric, 'weight' | 'e1rm'>;
 
 // gifted-charts places the pointer overlay one `initialSpacing` to the right of
@@ -63,8 +63,38 @@ type ChartMetric = Extract<ProgressMetric, 'weight' | 'e1rm'>;
 // `shiftPointerLabelX` is not one of them — it is ignored outright while
 // `autoAdjustPointerLabelPosition` is on, which we want for the edge clamping.
 const POINTER_X_CORRECTION = -CHART_EDGE_SPACING;
+/**
+ * The chart clamps the label against the plot edges using this number, so the
+ * card has to actually be this wide. Letting it size to its text made it wider
+ * than the chart believed, and the extra hung off the right edge, cut in half.
+ */
+const POINTER_LABEL_WIDTH = 150;
 /** Must match `styles.activeDataPoint` — gifted-charts centres custom points with dataPointWidth/Height (default 4). */
 const ACTIVE_POINT_SIZE = 12;
+
+const CHART_SECTIONS = 4;
+
+/**
+ * Rounds a step up to something a person reads without thinking: 1, 2, 2.5 or 5
+ * times a power of ten. Dividing the raw spread by the number of sections gives
+ * axis labels like 24, 62, 101 — correct, and useless at a glance.
+ */
+function niceAxisStep(rawStep: number): number {
+  if (!Number.isFinite(rawStep) || rawStep <= 0) {
+    return 1;
+  }
+
+  const magnitude = 10 ** Math.floor(Math.log10(rawStep));
+  const normalized = rawStep / magnitude;
+
+  for (const candidate of [1, 2, 2.5, 5]) {
+    if (normalized <= candidate) {
+      return candidate * magnitude;
+    }
+  }
+
+  return 10 * magnitude;
+}
 
 /** At most ~one date label every ~80px so PT dates stay readable while scrolling. */
 function shouldLabelPoint(
@@ -107,7 +137,12 @@ function localDateKey(date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
-function rangeStartDate(range: ChartRange): string {
+/** Null means no cut-off: every session the exercise has. */
+function rangeStartDate(range: ChartRange): string | null {
+  if (range === 'all') {
+    return null;
+  }
+
   const date = new Date();
   if (range === '3m') {
     date.setMonth(date.getMonth() - 3);
@@ -235,6 +270,7 @@ export default function ExerciseDetailScreen() {
       [
         { key: '3m' as const, label: t('exercise.detail.range3m') },
         { key: '1y' as const, label: t('exercise.detail.range1y') },
+        { key: 'all' as const, label: t('exercise.detail.rangeAll') },
       ] as const,
     [t]
   );
@@ -298,8 +334,7 @@ export default function ExerciseDetailScreen() {
 
   const chartProgress = useMemo(() => {
     const since = rangeStartDate(range);
-    const inRange = progress
-      .filter((point) => point.date >= since)
+    const inRange = (since ? progress.filter((point) => point.date >= since) : progress)
       .map((point) => ({
         ...point,
         value: metric === 'e1rm' ? point.estimated1RMMax : point.maxWeight,
@@ -341,7 +376,7 @@ export default function ExerciseDetailScreen() {
   lineSpacingRef.current = lineSpacing;
   needsHorizontalScrollRef.current = needsHorizontalScroll;
 
-  // Fitted charts do not fire onScroll — clear stale x/max so 3m↔1y cannot drift left.
+  // Fitted charts do not fire onScroll — clear stale x/max so a range change cannot drift left.
   useEffect(() => {
     if (needsHorizontalScroll) {
       return;
@@ -493,10 +528,12 @@ export default function ExerciseDetailScreen() {
     setIsLoadingStats(true);
 
     try {
-      // Always load the widest window once; metric/range switch client-side so the
-      // chart does not remount / flash when toggling the four filter buttons.
+      // Load the whole history once; metric and range switch client-side so the
+      // chart does not remount and flash when toggling the filter buttons. The
+      // service reads every set for the exercise either way, so dropping the
+      // cut-off costs nothing and is what makes "all time" possible.
       const [pts, prs, hist] = await Promise.all([
-        getExerciseProgress(exerciseId, 'weight', language, { sinceDate: rangeStartDate('1y') }),
+        getExerciseProgress(exerciseId, 'weight', language),
         getExercisePersonalRecords(exerciseId),
         getExerciseWorkoutHistory(exerciseId),
       ]);
@@ -584,7 +621,7 @@ export default function ExerciseDetailScreen() {
     });
   }, [chartProgress, lineSpacing, needsHorizontalScroll]);
 
-  // Restore viewport after 3m↔1y using an explicit anchor (end/start/date).
+  // Restore viewport after a range change using an explicit anchor (end/start/date).
   useEffect(() => {
     const anchor = pendingAnchorRef.current;
     if (!anchor) {
@@ -655,23 +692,27 @@ export default function ExerciseDetailScreen() {
     const values = lineData.map((item) => item.value).filter((value) => Number.isFinite(value));
 
     if (values.length === 0) {
-      return { min: 0, max: 4 };
+      return { min: 0, max: CHART_SECTIONS };
     }
 
     const highest = Math.max(...values);
     const lowest = Math.min(...values);
+    const spread = highest - lowest;
+    const padding = spread === 0 ? Math.max(1, highest * 0.1) : spread * 0.15;
 
-    if (highest === lowest) {
-      const pad = Math.max(1, Math.round(highest * 0.1));
-      return { min: Math.max(0, highest - pad), max: highest + pad };
+    // Snap the bottom to a multiple of the step and count sections up from
+    // there, so every label lands on a round number. Widening the step until
+    // the top clears the highest point covers the case where snapping down
+    // eats into the headroom.
+    let step = niceAxisStep((spread + padding * 2) / CHART_SECTIONS);
+    let min = Math.max(0, Math.floor((lowest - padding) / step) * step);
+
+    for (let attempt = 0; attempt < 8 && min + step * CHART_SECTIONS < highest; attempt += 1) {
+      step = niceAxisStep(step * 1.5);
+      min = Math.max(0, Math.floor((lowest - padding) / step) * step);
     }
 
-    const padding = Math.max(1, (highest - lowest) * 0.15);
-
-    return {
-      min: Math.max(0, Math.floor(lowest - padding)),
-      max: Math.ceil(highest + padding),
-    };
+    return { min, max: min + step * CHART_SECTIONS };
   }, [lineData]);
 
   if (isLoading) {
@@ -843,7 +884,7 @@ export default function ExerciseDetailScreen() {
                 dataPointsColor={CHART_NEON}
                 yAxisOffset={chartRange.min}
                 maxValue={chartRange.max - chartRange.min}
-                noOfSections={4}
+                noOfSections={CHART_SECTIONS}
                 yAxisColor={palette.borderStrong}
                 xAxisColor={palette.borderStrong}
                 yAxisLabelWidth={Y_AXIS_LABEL_WIDTH}
@@ -868,7 +909,7 @@ export default function ExerciseDetailScreen() {
                   pointerStripWidth: 1,
                   pointerColor: palette.textPrimary,
                   radius: 5,
-                  pointerLabelWidth: 140,
+                  pointerLabelWidth: POINTER_LABEL_WIDTH,
                   pointerLabelHeight: 84,
                   activatePointersOnLongPress: false,
                   activatePointersInstantlyOnTouch: true,
@@ -886,8 +927,18 @@ export default function ExerciseDetailScreen() {
 
                     focusedDateRef.current = point.date;
 
+                    // The last point sits against the right edge and the pointer
+                    // starts there, so the card hung off it, cut in half. The
+                    // library's own clamping does not catch it, so the card
+                    // flips to the other side of the pointer. With a single
+                    // point there is no right edge to speak of — it sits at the
+                    // start, and flipping would push the card off the left.
+                    const isLastPoint =
+                      chartProgress.length > 1 &&
+                      point.date === chartProgress[chartProgress.length - 1]?.date;
+
                     return (
-                      <View style={styles.pointerCard}>
+                      <View style={[styles.pointerCard, isLastPoint && styles.pointerCardFlipped]}>
                         <Text style={styles.pointerDate}>
                           {formatExerciseHistoryDate(point.date, language)}
                         </Text>
@@ -1185,6 +1236,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   pointerCard: {
+    width: POINTER_LABEL_WIDTH,
     borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.borderStrong,
@@ -1193,6 +1245,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     rowGap: 2,
     transform: [{ translateX: POINTER_X_CORRECTION }],
+  },
+  pointerCardFlipped: {
+    transform: [{ translateX: POINTER_X_CORRECTION - POINTER_LABEL_WIDTH + ACTIVE_POINT_SIZE }],
   },
   pointerDot: {
     width: 10,

@@ -14,6 +14,12 @@ export type SocialSearchResult = SocialProfile & {
 
 type SocialRelation = SocialSearchResult['relation'];
 
+export type UserRelation = {
+  relation: SocialRelation | 'self';
+  /** Set only for request_received, so the profile can accept or reject there. */
+  requestId: string | null;
+};
+
 export type PendingFriendRequest = Pick<
   FriendRequestRow,
   'id' | 'from_user_id' | 'to_user_id' | 'status' | 'created_at'
@@ -523,6 +529,67 @@ export async function acceptRequest(requestId: string): Promise<FriendRequestRow
 
 export async function rejectRequest(requestId: string): Promise<FriendRequestRow> {
   return respondToPendingRequest(requestId, 'rejected');
+}
+
+export async function getRelationWithUser(userId: string): Promise<UserRelation> {
+  const user = await getAuthenticatedUserOrThrow();
+  const targetUserId = normalizeOptionalId(userId);
+
+  if (!targetUserId) {
+    throw new Error('Target user id is required.');
+  }
+
+  if (targetUserId === user.id) {
+    return { relation: 'self', requestId: null };
+  }
+
+  const relationByUserId = await getRelationsByUserIds(user.id, [targetUserId]);
+  const relation = relationByUserId.get(targetUserId) ?? 'none';
+
+  if (relation !== 'request_received') {
+    return { relation, requestId: null };
+  }
+
+  const { data: request, error } = await supabase
+    .from('friend_requests')
+    .select('id')
+    .eq('status', 'pending')
+    .eq('from_user_id', targetUserId)
+    .eq('to_user_id', user.id)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Unable to load the pending request: ${error.message}`);
+  }
+
+  return { relation, requestId: request?.id ?? null };
+}
+
+export async function removeFriend(userId: string): Promise<void> {
+  const user = await getAuthenticatedUserOrThrow();
+  const targetUserId = normalizeOptionalId(userId);
+
+  if (!targetUserId) {
+    throw new Error('Target user id is required.');
+  }
+
+  const pair = sortCanonicalPair(user.id, targetUserId);
+
+  const { data: removed, error } = await supabase
+    .from('friends')
+    .delete()
+    .eq('user_low_id', pair.user_low_id)
+    .eq('user_high_id', pair.user_high_id)
+    .select('id');
+
+  if (error) {
+    throw new Error(`Unable to remove friend: ${error.message}`);
+  }
+
+  // A delete the policy refuses removes no rows and raises nothing.
+  if (!removed || removed.length === 0) {
+    throw new Error('You are not friends with this user.');
+  }
 }
 
 export async function getFriends(): Promise<FriendListItem[]> {

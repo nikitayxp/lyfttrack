@@ -597,6 +597,8 @@ export const resources = {
           sendRequest: 'Unable to send request',
           acceptRequest: 'Unable to accept request',
           rejectRequest: 'Unable to reject request',
+          removeFriend: 'Unable to remove friend',
+          loadRelation: 'Unable to load your connection with this athlete',
         },
         success: {
           requestSentTitle: 'Request sent',
@@ -605,6 +607,17 @@ export const resources = {
           requestAcceptedDescription: 'You are now connected as friends.',
           requestRejectedTitle: 'Request rejected',
           requestRejectedDescription: 'The friend request was rejected.',
+          friendRemoved: 'Friend removed.',
+        },
+        actions: {
+          addFriend: 'Add friend',
+          requestSent: 'Request sent',
+          respondPrompt: 'Sent you a friend request',
+          friends: 'Friends',
+          removeFriend: 'Remove',
+          removeConfirmTitle: 'Remove this friend?',
+          removeConfirmDescription:
+            'You stop seeing each other in the feed. You can send a new request later.',
         },
       },
       feed: {
@@ -1377,6 +1390,8 @@ export const resources = {
           sendRequest: 'Nao foi possivel enviar o pedido',
           acceptRequest: 'Nao foi possivel aceitar o pedido',
           rejectRequest: 'Nao foi possivel rejeitar o pedido',
+          removeFriend: 'Nao foi possivel remover o amigo',
+          loadRelation: 'Nao foi possivel saber a tua ligacao a este atleta',
         },
         success: {
           requestSentTitle: 'Pedido enviado',
@@ -1385,6 +1400,17 @@ export const resources = {
           requestAcceptedDescription: 'Agora estao ligados como amigos.',
           requestRejectedTitle: 'Pedido rejeitado',
           requestRejectedDescription: 'O pedido de amizade foi rejeitado.',
+          friendRemoved: 'Amigo removido.',
+        },
+        actions: {
+          addFriend: 'Adicionar amigo',
+          requestSent: 'Pedido enviado',
+          respondPrompt: 'Enviou-te um pedido de amizade',
+          friends: 'Amigos',
+          removeFriend: 'Remover',
+          removeConfirmTitle: 'Remover este amigo?',
+          removeConfirmDescription:
+            'Deixam de se ver no feed um do outro. Podes enviar um novo pedido mais tarde.',
         },
       },
       feed: {

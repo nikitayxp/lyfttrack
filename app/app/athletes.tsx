@@ -16,6 +16,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
+import { useAppToast } from '@/context/ToastContext';
 import {
   getAllAthletes,
   searchUsers,
@@ -58,6 +59,7 @@ function openPublicProfile(userId: string) {
 
 export default function AthletesScreen() {
   const { t } = useTranslation();
+  const { showToast } = useAppToast();
   const [query, setQuery] = useState('');
   const [athletes, setAthletes] = useState<SocialSearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -140,14 +142,22 @@ export default function AthletesScreen() {
 
     try {
       await sendFriendRequest(userId);
-      await loadAthletes(query);
-      Alert.alert(t('social.success.requestSentTitle'), t('social.success.requestSentDescription'));
+
+      // Only this row changes. Reloading the whole list threw away the scroll
+      // position and made the request look slow to register.
+      setAthletes((currentAthletes) =>
+        currentAthletes.map((athlete) =>
+          athlete.id === userId ? { ...athlete, relation: 'request_sent' } : athlete
+        )
+      );
+
+      showToast({ message: t('social.success.requestSentDescription'), tone: 'info' });
     } catch (error) {
       Alert.alert(t('social.errors.sendRequest'), toErrorMessage(error));
     } finally {
       setSendingUserId(null);
     }
-  }, [loadAthletes, query, t, toErrorMessage]);
+  }, [showToast, t, toErrorMessage]);
 
   return (
     <ScrollView

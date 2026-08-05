@@ -16,6 +16,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
+import { BackButton } from '@/components/common/BackButton';
 import { useAppToast } from '@/context/ToastContext';
 import {
   getAllAthletes,
@@ -172,10 +173,7 @@ export default function AthletesScreen() {
       }
     >
       <View style={styles.headerRow}>
-        <TouchableOpacity style={styles.backButton} activeOpacity={ACTIVE_OPACITY} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={18} color={palette.textPrimary} />
-          <Text style={styles.backButtonText}>{t('common.back')}</Text>
-        </TouchableOpacity>
+        <BackButton fallback="/(tabs)/social" />
       </View>
 
       <Text style={styles.title}>{t('feed.exploreAthletes')}</Text>
@@ -288,22 +286,6 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    columnGap: 6,
-    minHeight: 34,
-    paddingHorizontal: 10,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: palette.borderStrong,
-    backgroundColor: palette.surfaceAlt,
-  },
-  backButtonText: {
-    color: palette.textPrimary,
-    fontSize: 13,
-    fontWeight: '700',
   },
   title: {
     color: palette.textPrimary,

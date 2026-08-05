@@ -16,6 +16,7 @@ import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
 import { supabase } from '@/services/supabase';
+import { goBack } from '@/utils/navigation';
 
 const palette = Colors.dark;
 
@@ -173,7 +174,7 @@ export default function VerifyEmailChangeScreen() {
 
             <TouchableOpacity
               style={styles.switchAction}
-              onPress={() => router.back()}
+              onPress={() => goBack('/(tabs)/profile')}
               disabled={loading}
               activeOpacity={ACTIVE_OPACITY}
               accessibilityRole="button"

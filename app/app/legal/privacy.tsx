@@ -1,4 +1,4 @@
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
@@ -6,6 +6,7 @@ import { ACTIVE_OPACITY } from '@/constants/Styles';
 import { PRIVACY_POLICY } from '@/content/legal/privacy-policy';
 import type { LegalLang } from '@/content/legal/terms-of-service';
 import { usePreferences } from '@/context/PreferencesContext';
+import { goBack } from '@/utils/navigation';
 
 const palette = Colors.dark;
 
@@ -14,7 +15,6 @@ function resolveLang(language: string): LegalLang {
 }
 
 export default function PrivacyScreen() {
-  const router = useRouter();
   const { t } = useTranslation();
   const { language } = usePreferences();
   const lang = resolveLang(language);
@@ -52,7 +52,7 @@ export default function PrivacyScreen() {
         <TouchableOpacity
           style={styles.backButton}
           activeOpacity={ACTIVE_OPACITY}
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           accessibilityRole="button"
         >
           <Text style={styles.backButtonText}>{t('common.back')}</Text>

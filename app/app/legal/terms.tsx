@@ -1,10 +1,11 @@
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY } from '@/constants/Styles';
 import { TERMS_OF_SERVICE, type LegalLang } from '@/content/legal/terms-of-service';
 import { usePreferences } from '@/context/PreferencesContext';
+import { goBack } from '@/utils/navigation';
 
 const palette = Colors.dark;
 
@@ -13,7 +14,6 @@ function resolveLang(language: string): LegalLang {
 }
 
 export default function TermsScreen() {
-  const router = useRouter();
   const { t } = useTranslation();
   const { language } = usePreferences();
   const lang = resolveLang(language);
@@ -51,7 +51,7 @@ export default function TermsScreen() {
         <TouchableOpacity
           style={styles.backButton}
           activeOpacity={ACTIVE_OPACITY}
-          onPress={() => router.back()}
+          onPress={() => goBack()}
           accessibilityRole="button"
         >
           <Text style={styles.backButtonText}>{t('common.back', { defaultValue: lang === 'pt' ? 'Voltar' : 'Back' })}</Text>

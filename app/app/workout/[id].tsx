@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
+import { BackButton } from '@/components/common/BackButton';
 import { ExerciseThumbnail } from '@/components/common/ExerciseThumbnail';
 import { DismissibleBottomSheet } from '@/components/common/DismissibleBottomSheet';
 import { ShareWorkoutSheet } from '@/components/workout/ShareWorkoutSheet';
@@ -283,14 +284,12 @@ export default function WorkoutDetailsScreen() {
       <StatusBar style="light" />
 
       <View style={styles.headerRow}>
-        <TouchableOpacity style={styles.backButton} activeOpacity={ACTIVE_OPACITY} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={21} color={palette.textPrimary} />
-        </TouchableOpacity>
+        <BackButton fallback="/(tabs)/profile" />
 
         <Text style={styles.headerTitle}>{t('workoutDetails.headerTitle')}</Text>
 
         <TouchableOpacity
-          style={styles.backButton}
+          style={styles.headerButton}
           activeOpacity={ACTIVE_OPACITY}
           onPress={() => setSheetMode('menu')}
           disabled={!details}
@@ -525,7 +524,7 @@ const styles = StyleSheet.create({
     borderBottomColor: palette.inputFill,
     backgroundColor: SCREEN_BG,
   },
-  backButton: {
+  headerButton: {
     width: 36,
     height: 36,
     borderRadius: Radius.button,

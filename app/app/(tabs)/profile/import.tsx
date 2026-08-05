@@ -24,6 +24,7 @@ import {
   type ImportSummary,
 } from '@/services/import/importService';
 import { notifyWorkoutsImported } from '@/services/import/importEvents';
+import { goBack } from '@/utils/navigation';
 
 const palette = Colors.dark;
 
@@ -331,7 +332,7 @@ export default function ImportDataScreen() {
           <TouchableOpacity
             style={styles.backButton}
             activeOpacity={ACTIVE_OPACITY}
-            onPress={() => router.back()}
+            onPress={() => goBack('/(tabs)/profile/settings')}
             accessibilityRole="button"
             accessibilityLabel={t('settings.back')}
           >

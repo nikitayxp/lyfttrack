@@ -18,6 +18,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Colors } from '@/constants/theme';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import { getExerciseMuscleTranslationKey, getEquipmentTranslationKey } from '@/constants/exerciseCatalog';
+import { BackButton } from '@/components/common/BackButton';
 import { usePreferences } from '@/context/PreferencesContext';
 import { useWorkoutContext } from '@/context/WorkoutContext';
 import type { Tables } from '@/types/database';
@@ -691,9 +692,7 @@ export default function ExerciseDetailScreen() {
       <SafeAreaView style={styles.screen} edges={['top']}>
         <StatusBar style="light" />
         <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.backButton} activeOpacity={ACTIVE_OPACITY} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={18} color={palette.textPrimary} />
-          </TouchableOpacity>
+          <BackButton fallback="/(tabs)/exercises" />
         </View>
         <View style={styles.centered}>
           <Text style={styles.errorText}>{error ?? t('exercise.detail.notFound')}</Text>
@@ -710,9 +709,7 @@ export default function ExerciseDetailScreen() {
       <StatusBar style="light" />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.backButton} activeOpacity={ACTIVE_OPACITY} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={18} color={palette.textPrimary} />
-          </TouchableOpacity>
+          <BackButton fallback="/(tabs)/exercises" />
         </View>
 
         {imageUrl ? (
@@ -1027,16 +1024,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.button,
-    borderWidth: 1,
-    borderColor: palette.borderStrong,
-    backgroundColor: palette.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   imageContainer: {
     borderRadius: Radius.card,

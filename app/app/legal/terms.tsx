@@ -1,8 +1,6 @@
-import { Stack, useRouter } from 'expo-router';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useTranslation } from 'react-i18next';
+import { Stack } from 'expo-router';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Colors } from '@/constants/Colors';
-import { ACTIVE_OPACITY } from '@/constants/Styles';
 import { TERMS_OF_SERVICE, type LegalLang } from '@/content/legal/terms-of-service';
 import { usePreferences } from '@/context/PreferencesContext';
 
@@ -13,8 +11,6 @@ function resolveLang(language: string): LegalLang {
 }
 
 export default function TermsScreen() {
-  const router = useRouter();
-  const { t } = useTranslation();
   const { language } = usePreferences();
   const lang = resolveLang(language);
   const doc = TERMS_OF_SERVICE;
@@ -48,14 +44,6 @@ export default function TermsScreen() {
           </View>
         ))}
 
-        <TouchableOpacity
-          style={styles.backButton}
-          activeOpacity={ACTIVE_OPACITY}
-          onPress={() => router.back()}
-          accessibilityRole="button"
-        >
-          <Text style={styles.backButtonText}>{t('common.back', { defaultValue: lang === 'pt' ? 'Voltar' : 'Back' })}</Text>
-        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -97,19 +85,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
     marginBottom: 8,
-  },
-  backButton: {
-    marginTop: 8,
-    minHeight: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: palette.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backButtonText: {
-    color: palette.textPrimary,
-    fontSize: 15,
-    fontWeight: '700',
   },
 });

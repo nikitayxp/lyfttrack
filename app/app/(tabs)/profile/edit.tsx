@@ -24,6 +24,7 @@ import {
   uploadAvatar,
   withAvatarCacheBuster,
 } from '@/services/profileService';
+import { BackButton } from '@/components/common/BackButton';
 import { getEmailChangeRedirectTo, getPasswordResetRedirectTo, supabase } from '@/services/supabase';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 import { ConfirmModal } from '@/components/common/ConfirmModal';
@@ -425,16 +426,7 @@ export default function EditProfileScreen() {
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={styles.backButton}
-            activeOpacity={ACTIVE_OPACITY}
-            onPress={() => router.replace('/(tabs)/profile' as any)}
-            accessibilityRole="button"
-            accessibilityLabel={t('profileEdit.back')}
-          >
-            <Ionicons name="chevron-back" size={18} color={palette.textPrimary} />
-            <Text style={styles.backButtonText}>{t('profileEdit.back')}</Text>
-          </TouchableOpacity>
+          <BackButton onPress={() => router.replace('/(tabs)/profile' as any)} />
         </View>
 
         <Text style={styles.title}>{t('profileEdit.title')}</Text>
@@ -686,24 +678,6 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     marginBottom: 14,
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-    minHeight: 34,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.surface,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    columnGap: 6,
-    paddingHorizontal: 10,
-  },
-  backButtonText: {
-    color: palette.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
   },
   title: {
     color: palette.textPrimary,

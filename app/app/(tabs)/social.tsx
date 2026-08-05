@@ -16,6 +16,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
+import { BackButton } from '@/components/common/BackButton';
 import { useAppToast } from '@/context/ToastContext';
 import {
   acceptRequest,
@@ -291,16 +292,7 @@ export default function SocialScreen() {
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void refreshAll()} tintColor={palette.accent} />}
     >
       <View style={styles.headerRow}>
-        <TouchableOpacity
-          style={styles.backButton}
-          activeOpacity={ACTIVE_OPACITY}
-          onPress={() => router.replace('/(tabs)/profile' as any)}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-        >
-          <Ionicons name="arrow-back" size={18} color={palette.textPrimary} />
-          <Text style={styles.backButtonText}>{t('common.back')}</Text>
-        </TouchableOpacity>
+        <BackButton onPress={() => router.replace('/(tabs)/profile' as any)} />
       </View>
 
       <Text style={styles.title}>{t('social.title')}</Text>
@@ -569,22 +561,6 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    columnGap: 6,
-    minHeight: 34,
-    paddingHorizontal: 10,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: palette.borderStrong,
-    backgroundColor: palette.surfaceAlt,
-  },
-  backButtonText: {
-    color: palette.textPrimary,
-    fontSize: 13,
-    fontWeight: '700',
   },
   title: {
     color: palette.textPrimary,

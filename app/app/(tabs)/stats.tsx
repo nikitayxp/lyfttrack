@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
 import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { BarChart } from 'react-native-gifted-charts';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +11,7 @@ import {
 } from '@/services/statsService';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
+import { BackButton } from '@/components/common/BackButton';
 
 const palette = Colors.dark;
 const SCREEN_BG = palette.bgPrimary;
@@ -208,10 +207,7 @@ export default function StatsScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
-        <TouchableOpacity style={styles.backButton} activeOpacity={ACTIVE_OPACITY} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={18} color={palette.textPrimary} />
-          <Text style={styles.backButtonText}>{t('common.back')}</Text>
-        </TouchableOpacity>
+        <BackButton fallback="/(tabs)/profile" />
       </View>
 
       <Text style={styles.title}>{t('stats.title')}</Text>
@@ -370,23 +366,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 2,
-  },
-  backButton: {
-    minHeight: 34,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: palette.borderStrong,
-    backgroundColor: palette.surfaceAlt,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    columnGap: 6,
-    paddingHorizontal: 10,
-  },
-  backButtonText: {
-    color: palette.textPrimary,
-    fontSize: 13,
-    fontWeight: '700',
   },
   title: {
     color: palette.textPrimary,

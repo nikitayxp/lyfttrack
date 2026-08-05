@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
+import { BackButton } from '@/components/common/BackButton';
 import {
   getErrorMessage,
   getWorkoutDetails,
@@ -239,9 +240,7 @@ export default function WorkoutEditScreen() {
       <StatusBar style="light" />
 
       <View style={styles.headerRow}>
-        <TouchableOpacity style={styles.backButton} activeOpacity={ACTIVE_OPACITY} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={21} color={palette.textPrimary} />
-        </TouchableOpacity>
+        <BackButton fallback="/(tabs)/profile" />
 
         <Text style={styles.headerTitle}>{t('workoutDetails.editScreenTitle')}</Text>
 
@@ -417,16 +416,6 @@ const styles = StyleSheet.create({
     borderBottomColor: palette.inputFill,
     backgroundColor: SCREEN_BG,
     gap: 10,
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.button,
-    borderWidth: 1,
-    borderColor: palette.inputStroke,
-    backgroundColor: palette.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   headerTitle: {
     flex: 1,

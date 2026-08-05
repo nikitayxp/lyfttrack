@@ -23,6 +23,7 @@ import {
   type ImportPlan,
   type ImportSummary,
 } from '@/services/import/importService';
+import { BackButton } from '@/components/common/BackButton';
 import { notifyWorkoutsImported } from '@/services/import/importEvents';
 
 const palette = Colors.dark;
@@ -328,16 +329,7 @@ export default function ImportDataScreen() {
       <StatusBar style="light" />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={styles.backButton}
-            activeOpacity={ACTIVE_OPACITY}
-            onPress={() => router.back()}
-            accessibilityRole="button"
-            accessibilityLabel={t('settings.back')}
-          >
-            <Ionicons name="chevron-back" size={18} color={palette.textPrimary} />
-            <Text style={styles.backButtonText}>{t('settings.back')}</Text>
-          </TouchableOpacity>
+          <BackButton fallback="/(tabs)/profile/settings" />
         </View>
 
         <Text style={styles.title}>{t('importData.title')}</Text>
@@ -380,8 +372,6 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: palette.bgPrimary },
   content: { padding: Spacing.lg, paddingBottom: Spacing.section, rowGap: Spacing.md },
   headerRow: { flexDirection: 'row', alignItems: 'center' },
-  backButton: { flexDirection: 'row', alignItems: 'center', columnGap: Spacing.xs },
-  backButtonText: { color: palette.textPrimary, fontSize: 15 },
   title: { color: palette.textPrimary, fontSize: 24, fontWeight: '700' },
   subtitle: { color: palette.textSecondary, fontSize: 13, lineHeight: 19 },
   card: {

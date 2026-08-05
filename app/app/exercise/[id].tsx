@@ -37,6 +37,7 @@ import {
 import { estimateOneRepMax } from '@/utils/estimateOneRepMax';
 import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 import { getExerciseImageUrl } from '@/utils/exerciseImage';
+import { usableScreenWidth } from '@/utils/screenWidth';
 import type { ActiveExercise } from '@/hooks/useActiveWorkoutState';
 
 const palette = Colors.dark;
@@ -75,6 +76,10 @@ const ACTIVE_POINT_SIZE = 12;
 
 /** Must match `styles.chartWrap` — the plot gets what is left after it. */
 const CHART_WRAP_PADDING = 8;
+/** Must match `styles.content` and `styles.card`, which sit between screen and chart. */
+const SCREEN_PADDING = 18;
+const CARD_PADDING = 12;
+const CHART_HORIZONTAL_INSETS = (SCREEN_PADDING + CARD_PADDING + CHART_WRAP_PADDING) * 2;
 /** Starting point for the axis step; the count grows from here to leave headroom. */
 const CHART_SECTIONS = 4;
 /** More lines than this and the axis turns into noise. */
@@ -311,21 +316,22 @@ export default function ExerciseDetailScreen() {
   const lineSpacingRef = useRef(MIN_POINT_SPACING);
   const needsHorizontalScrollRef = useRef(false);
 
-  // Total space the chart may occupy inside the card, minus its padding.
-  //
-  // The old floor of 280 was larger than the room available on a 320px phone,
-  // so the card overflowed the screen there regardless of the chart. Capped at
-  // what the window actually offers instead.
+  // What is left for the chart after the screen's own padding. It used to be
+  // measured against the window, which on a desktop browser is the whole page
+  // while the app draws inside a phone-sized frame — so the chart was built
+  // ~60px wider than the card and the newest point was drawn past its edge,
+  // present but never visible.
   const chartWidth = useMemo(
-    () => Math.min(Math.max(240, windowWidth - 72), 360),
+    () => Math.min(Math.max(200, usableScreenWidth(windowWidth) - CHART_HORIZONTAL_INSETS), 360),
     [windowWidth]
   );
 
   // What gifted-charts calls `width` is the plot only — the y-axis labels are
-  // drawn outside it and added on top. Passing the full width here is what made
-  // the chart run past the card and clip the last point.
+  // drawn outside it and added on top, and the spacing at each end on top of
+  // that. Counting only one end is what still let the last point sit past the
+  // right edge once the width itself was right.
   const plotWidth = useMemo(
-    () => Math.max(180, chartWidth - Y_AXIS_LABEL_WIDTH - CHART_EDGE_SPACING),
+    () => Math.max(160, chartWidth - Y_AXIS_LABEL_WIDTH - CHART_EDGE_SPACING * 2),
     [chartWidth]
   );
 
@@ -932,18 +938,8 @@ export default function ExerciseDetailScreen() {
 
                     focusedDateRef.current = point.date;
 
-                    // The last point sits against the right edge and the pointer
-                    // starts there, so the card hung off it, cut in half. The
-                    // library's own clamping does not catch it, so the card
-                    // flips to the other side of the pointer. With a single
-                    // point there is no right edge to speak of — it sits at the
-                    // start, and flipping would push the card off the left.
-                    const isLastPoint =
-                      chartProgress.length > 1 &&
-                      point.date === chartProgress[chartProgress.length - 1]?.date;
-
                     return (
-                      <View style={[styles.pointerCard, isLastPoint && styles.pointerCardFlipped]}>
+                      <View style={styles.pointerCard}>
                         <Text style={styles.pointerDate}>
                           {formatExerciseHistoryDate(point.date, language)}
                         </Text>
@@ -1232,6 +1228,7 @@ const styles = StyleSheet.create({
   },
   pointerCard: {
     width: POINTER_LABEL_WIDTH,
+    transform: [{ translateX: POINTER_X_CORRECTION }],
     borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.borderStrong,
@@ -1239,10 +1236,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     rowGap: 2,
-    transform: [{ translateX: POINTER_X_CORRECTION }],
-  },
-  pointerCardFlipped: {
-    transform: [{ translateX: POINTER_X_CORRECTION - POINTER_LABEL_WIDTH + ACTIVE_POINT_SIZE }],
   },
   pointerDot: {
     width: 10,

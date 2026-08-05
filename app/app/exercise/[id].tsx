@@ -72,7 +72,12 @@ const POINTER_LABEL_WIDTH = 150;
 /** Must match `styles.activeDataPoint` — gifted-charts centres custom points with dataPointWidth/Height (default 4). */
 const ACTIVE_POINT_SIZE = 12;
 
+/** Must match `styles.chartWrap` — the plot gets what is left after it. */
+const CHART_WRAP_PADDING = 8;
+/** Starting point for the axis step; the count grows from here to leave headroom. */
 const CHART_SECTIONS = 4;
+/** More lines than this and the axis turns into noise. */
+const MAX_CHART_SECTIONS = 6;
 
 /**
  * Rounds a step up to something a person reads without thinking: 1, 2, 2.5 or 5
@@ -692,7 +697,7 @@ export default function ExerciseDetailScreen() {
     const values = lineData.map((item) => item.value).filter((value) => Number.isFinite(value));
 
     if (values.length === 0) {
-      return { min: 0, max: CHART_SECTIONS };
+      return { min: 0, max: CHART_SECTIONS, sections: CHART_SECTIONS };
     }
 
     const highest = Math.max(...values);
@@ -700,19 +705,22 @@ export default function ExerciseDetailScreen() {
     const spread = highest - lowest;
     const padding = spread === 0 ? Math.max(1, highest * 0.1) : spread * 0.15;
 
-    // Snap the bottom to a multiple of the step and count sections up from
-    // there, so every label lands on a round number. Widening the step until
-    // the top clears the highest point covers the case where snapping down
-    // eats into the headroom.
-    let step = niceAxisStep((spread + padding * 2) / CHART_SECTIONS);
-    let min = Math.max(0, Math.floor((lowest - padding) / step) * step);
+    // Snap the bottom to a multiple of the step so every label lands on a round
+    // number, then count whole steps up until the top clears the highest point.
+    // The count has to be free to grow: fixing it at four put the top of the
+    // axis exactly on the best set, which drew it on the ceiling with its
+    // marker cut off by the edge.
+    const step = niceAxisStep((spread + padding * 2) / CHART_SECTIONS);
+    const min = Math.max(0, Math.floor((lowest - padding) / step) * step);
 
-    for (let attempt = 0; attempt < 8 && min + step * CHART_SECTIONS < highest; attempt += 1) {
-      step = niceAxisStep(step * 1.5);
-      min = Math.max(0, Math.floor((lowest - padding) / step) * step);
+    let sections = Math.ceil((highest + padding - min) / step);
+    sections = Math.min(MAX_CHART_SECTIONS, Math.max(2, sections));
+
+    if (min + step * sections <= highest) {
+      sections += 1;
     }
 
-    return { min, max: min + step * CHART_SECTIONS };
+    return { min, max: min + step * sections, sections };
   }, [lineData]);
 
   if (isLoading) {
@@ -884,7 +892,7 @@ export default function ExerciseDetailScreen() {
                 dataPointsColor={CHART_NEON}
                 yAxisOffset={chartRange.min}
                 maxValue={chartRange.max - chartRange.min}
-                noOfSections={CHART_SECTIONS}
+                noOfSections={chartRange.sections}
                 yAxisColor={palette.borderStrong}
                 xAxisColor={palette.borderStrong}
                 yAxisLabelWidth={Y_AXIS_LABEL_WIDTH}
@@ -1197,7 +1205,7 @@ const styles = StyleSheet.create({
     minHeight: 300,
     paddingTop: 12,
     paddingBottom: 28,
-    paddingHorizontal: 8,
+    paddingHorizontal: CHART_WRAP_PADDING,
     // Was 'visible', which let the plot spill past the card edge.
     overflow: 'hidden',
   },

@@ -449,14 +449,14 @@ export default function RootLayout() {
   );
 
   if (isWeb) {
-    const mobileWebBottomPad =
+    const mobileWebBottomPad: ViewStyle | null =
       !isDesktopWeb && webBrowserBottomInset > 0
-        ? ({
+        ? {
             paddingBottom: webBrowserBottomInset,
             // Keep the shell inside the visible viewport (border-box) so the compact tab bar isn't pushed under browser chrome.
             boxSizing: 'border-box',
-            maxHeight: '100dvh',
-          } as ViewStyle)
+            maxHeight: '100dvh' as ViewStyle['maxHeight'],
+          }
         : null;
 
     return (

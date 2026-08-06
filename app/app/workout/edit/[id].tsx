@@ -291,7 +291,7 @@ export default function WorkoutEditScreen() {
 
           <View style={styles.heroCard}>
             <Text style={styles.sectionTitle}>{t('workoutDetails.editScreenTitle')}</Text>
-            <Text style={styles.sectionMeta}>{formatRelativeTime(details.start_time)}</Text>
+            <Text style={styles.sectionMeta}>{formatRelativeTime(details.start_time, t, language)}</Text>
 
             <Text style={styles.inputLabel}>{t('workoutDetails.editWorkoutNameLabel')}</Text>
             <TextInput

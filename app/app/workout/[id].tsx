@@ -360,7 +360,7 @@ export default function WorkoutDetailsScreen() {
 
               <View style={styles.profileTextWrap}>
                 <Text style={styles.profileName}>{topDisplayName}</Text>
-                <Text style={styles.profileMeta}>{formatRelativeTime(details.start_time)}</Text>
+                <Text style={styles.profileMeta}>{formatRelativeTime(details.start_time, t, language)}</Text>
               </View>
             </View>
 

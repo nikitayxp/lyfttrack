@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
+import { usePreferences } from '@/context/PreferencesContext';
 import type { WorkoutCommentWithProfile } from '@/services/interactionService';
 import { formatRelativeTime } from '@/utils/dateUtils';
 
@@ -66,6 +67,7 @@ export function FeedCommentsModal({
   onRetry,
 }: FeedCommentsModalProps) {
   const { t } = useTranslation();
+  const { language } = usePreferences();
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === 'web';
   const athleteFallback = t('publicProfile.athleteFallback');
@@ -158,7 +160,7 @@ export function FeedCommentsModal({
                   <View style={styles.commentTextWrap}>
                     <View style={styles.commentHeaderRow}>
                       <Text style={styles.commentAuthor}>{displayNameOf(item, athleteFallback)}</Text>
-                      <Text style={styles.commentTime}>{formatRelativeTime(item.created_at)}</Text>
+                      <Text style={styles.commentTime}>{formatRelativeTime(item.created_at, t, language)}</Text>
                     </View>
                     <Text style={styles.commentBody}>{item.content}</Text>
                   </View>

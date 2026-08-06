@@ -169,7 +169,7 @@ export function WorkoutFeedCard({
 
             <View style={styles.authorTextWrap}>
               <Text style={styles.authorName}>{displayName}</Text>
-              <Text style={styles.authorMeta}>{formatRelativeTime(workout.start_time)}</Text>
+              <Text style={styles.authorMeta}>{formatRelativeTime(workout.start_time, t, language)}</Text>
             </View>
           </View>
 

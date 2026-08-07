@@ -3,7 +3,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   RefreshControl,
   ScrollView,
@@ -33,6 +32,7 @@ import {
   type SocialSearchResult,
 } from '@/services/socialService';
 import { confirmAction } from '@/utils/confirmAction';
+import { showAlert } from '@/utils/showAlert';
 
 const palette = Colors.dark;
 const SCREEN_BG = palette.bgPrimary;
@@ -154,7 +154,7 @@ export default function SocialScreen() {
         );
         showToast({ message: t('social.success.friendRemoved'), tone: 'info' });
       } catch (error) {
-        Alert.alert(t('social.errors.removeFriend'), toErrorMessage(error));
+        showAlert(showToast, t('social.errors.removeFriend'), toErrorMessage(error), 'error');
       } finally {
         setRemovingFriendId(null);
       }
@@ -241,14 +241,14 @@ export default function SocialScreen() {
       try {
         await sendFriendRequest(userId);
         await Promise.all([loadSocialState(), runSearch(query)]);
-        Alert.alert(t('social.success.requestSentTitle'), t('social.success.requestSentDescription'));
+        showAlert(showToast, t('social.success.requestSentTitle'), t('social.success.requestSentDescription'));
       } catch (error) {
-        Alert.alert(t('social.errors.sendRequest'), toErrorMessage(error));
+        showAlert(showToast, t('social.errors.sendRequest'), toErrorMessage(error), 'error');
       } finally {
         setSendingUserId(null);
       }
     },
-    [loadSocialState, query, runSearch, t, toErrorMessage]
+    [loadSocialState, query, runSearch, showToast, t, toErrorMessage]
   );
 
   const handleAccept = useCallback(
@@ -258,14 +258,14 @@ export default function SocialScreen() {
       try {
         await acceptRequest(requestId);
         await Promise.all([loadSocialState(), runSearch(query)]);
-        Alert.alert(t('social.success.requestAcceptedTitle'), t('social.success.requestAcceptedDescription'));
+        showAlert(showToast, t('social.success.requestAcceptedTitle'), t('social.success.requestAcceptedDescription'));
       } catch (error) {
-        Alert.alert(t('social.errors.acceptRequest'), toErrorMessage(error));
+        showAlert(showToast, t('social.errors.acceptRequest'), toErrorMessage(error), 'error');
       } finally {
         setProcessingRequestId(null);
       }
     },
-    [loadSocialState, query, runSearch, t, toErrorMessage]
+    [loadSocialState, query, runSearch, showToast, t, toErrorMessage]
   );
 
   const handleReject = useCallback(
@@ -275,14 +275,14 @@ export default function SocialScreen() {
       try {
         await rejectRequest(requestId);
         await Promise.all([loadSocialState(), runSearch(query)]);
-        Alert.alert(t('social.success.requestRejectedTitle'), t('social.success.requestRejectedDescription'));
+        showAlert(showToast, t('social.success.requestRejectedTitle'), t('social.success.requestRejectedDescription'));
       } catch (error) {
-        Alert.alert(t('social.errors.rejectRequest'), toErrorMessage(error));
+        showAlert(showToast, t('social.errors.rejectRequest'), toErrorMessage(error), 'error');
       } finally {
         setProcessingRequestId(null);
       }
     },
-    [loadSocialState, query, runSearch, t, toErrorMessage]
+    [loadSocialState, query, runSearch, showToast, t, toErrorMessage]
   );
 
   return (

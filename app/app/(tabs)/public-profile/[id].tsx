@@ -3,7 +3,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   RefreshControl,
   ScrollView,
@@ -37,7 +36,9 @@ import {
   type UserRelation,
 } from '@/services/socialService';
 import { getErrorMessage, getUserWorkouts, type WorkoutFeedItem } from '@/services/workoutService';
+import { useAppToast } from '@/context/ToastContext';
 import { confirmAction } from '@/utils/confirmAction';
+import { showAlert } from '@/utils/showAlert';
 
 const palette = Colors.dark;
 const SCREEN_BG = palette.bgPrimary;
@@ -84,6 +85,7 @@ function initialsFromName(value: string): string {
 
 export default function PublicProfileScreen() {
   const { t } = useTranslation();
+  const { showToast } = useAppToast();
   const params = useLocalSearchParams<{ id?: string | string[]; from?: string | string[] }>();
   const profileId = useMemo(() => readRouteId(params.id), [params.id]);
   const openedFrom = useMemo(() => readRouteId(params.from), [params.from]);
@@ -237,12 +239,12 @@ export default function PublicProfileScreen() {
         await action();
         setRelation(await getRelationWithUser(profileId));
       } catch (actionError) {
-        Alert.alert(t(errorTitleKey), getErrorMessage(actionError));
+        showAlert(showToast, t(errorTitleKey), getErrorMessage(actionError), 'error');
       } finally {
         setIsRelationBusy(false);
       }
     },
-    [isRelationBusy, profileId, t]
+    [isRelationBusy, profileId, showToast, t]
   );
 
   const handleAddFriend = useCallback(() => {
@@ -440,7 +442,7 @@ export default function PublicProfileScreen() {
       });
 
       setCommentInputValue(trimmedComment);
-      Alert.alert(t('publicProfile.commentPublishError'), getErrorMessage(sendError));
+      showAlert(showToast, t('publicProfile.commentPublishError'), getErrorMessage(sendError), 'error');
     } finally {
       setIsSendingComment(false);
     }
@@ -451,6 +453,7 @@ export default function PublicProfileScreen() {
     isSendingComment,
     loadCommentsForWorkout,
     selectedWorkoutForComments,
+    showToast,
     t,
   ]);
 
@@ -522,9 +525,9 @@ export default function PublicProfileScreen() {
         return nextState;
       });
 
-      Alert.alert(t('publicProfile.likeUpdateError'), getErrorMessage(toggleError));
+      showAlert(showToast, t('publicProfile.likeUpdateError'), getErrorMessage(toggleError), 'error');
     }
-  }, [t]);
+  }, [showToast, t]);
 
   const displayName = useMemo(() => profileDisplayName(profile, t('publicProfile.athleteFallback')), [profile, t]);
 

@@ -3,7 +3,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -16,11 +15,13 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/theme';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import { BackButton } from '@/components/common/BackButton';
+import { useAppToast } from '@/context/ToastContext';
 import { usePreferences } from '@/context/PreferencesContext';
 import type { AppLanguage } from '@/i18n/resources';
 import { supabase } from '@/services/supabase';
 import { deleteOwnAccount, getProfile, updateProfile } from '@/services/profileService';
 import { confirmAction } from '@/utils/confirmAction';
+import { showAlert } from '@/utils/showAlert';
 
 const palette = Colors.dark;
 
@@ -61,6 +62,7 @@ export default function ProfileSettingsScreen() {
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isUpdatingLanguage, setIsUpdatingLanguage] = useState(false);
   const { t } = useTranslation();
+  const { showToast } = useAppToast();
   const { language, setLanguage, countWorkingSetsOnly, setCountWorkingSetsOnly } = usePreferences();
   const [visibility, setVisibility] = useState<'public' | 'friends' | 'private'>('public');
   const [isUpdatingPrivacy, setIsUpdatingPrivacy] = useState(false);
@@ -98,11 +100,11 @@ export default function ProfileSettingsScreen() {
       await updateProfile({ visibility: nextVisibility });
       setVisibility(nextVisibility);
     } catch (error) {
-      Alert.alert(t('settings.title'), toErrorMessage(error, t('common.unknownError')));
+      showAlert(showToast, t('settings.title'), toErrorMessage(error, t('common.unknownError')), 'error');
     } finally {
       setIsUpdatingPrivacy(false);
     }
-  }, [isUpdatingPrivacy, visibility, t]);
+  }, [isUpdatingPrivacy, showToast, visibility, t]);
 
   // Typing the word is the guard the issue asks for: an irreversible action
   // should not be one mis-tap away. The word follows the app language so the
@@ -150,11 +152,11 @@ export default function ProfileSettingsScreen() {
     try {
       await setLanguage(nextLanguage);
     } catch (error) {
-      Alert.alert(t('settings.title'), toErrorMessage(error, t('common.unknownError')));
+      showAlert(showToast, t('settings.title'), toErrorMessage(error, t('common.unknownError')), 'error');
     } finally {
       setIsUpdatingLanguage(false);
     }
-  }, [isUpdatingLanguage, language, setLanguage, t]);
+  }, [isUpdatingLanguage, language, setLanguage, showToast, t]);
 
   const handleSignOut = useCallback(async () => {
     if (isSigningOut) {
@@ -178,11 +180,11 @@ export default function ProfileSettingsScreen() {
 
       router.replace('/(auth)' as any);
     } catch (error) {
-      Alert.alert(t('settings.signOutError'), toErrorMessage(error, t('common.unknownError')));
+      showAlert(showToast, t('settings.signOutError'), toErrorMessage(error, t('common.unknownError')), 'error');
     } finally {
       setIsSigningOut(false);
     }
-  }, [confirmSignOut, isSigningOut, t]);
+  }, [confirmSignOut, isSigningOut, showToast, t]);
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>

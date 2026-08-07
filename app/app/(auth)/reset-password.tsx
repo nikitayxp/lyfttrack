@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -15,7 +14,9 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
+import { useAppToast } from '@/context/ToastContext';
 import { supabase } from '@/services/supabase';
+import { showAlert } from '@/utils/showAlert';
 
 const palette = Colors.dark;
 
@@ -29,6 +30,7 @@ function readRouteValue(value: string | string[] | undefined): string {
 
 export default function ResetPasswordScreen() {
   const { t } = useTranslation();
+  const { showToast } = useAppToast();
   const params = useLocalSearchParams<{ email?: string | string[] }>();
   const routeEmail = readRouteValue(params.email);
 
@@ -53,10 +55,7 @@ export default function ResetPasswordScreen() {
     const normalizedCode = code.trim();
 
     if (!normalizedEmail || !normalizedCode) {
-      Alert.alert(
-        t('auth.resetPassword.title'),
-        t('auth.resetPassword.missingCodeFields'),
-      );
+      showAlert(showToast, t('auth.resetPassword.title'), t('auth.resetPassword.missingCodeFields'), 'error');
       return;
     }
 
@@ -70,10 +69,7 @@ export default function ResetPasswordScreen() {
       });
 
       if (error) {
-        Alert.alert(
-          t('auth.resetPassword.invalidCodeTitle'),
-          t('auth.resetPassword.invalidCodeDescription'),
-        );
+        showAlert(showToast, t('auth.resetPassword.invalidCodeTitle'), t('auth.resetPassword.invalidCodeDescription'), 'error');
         return;
       }
 
@@ -88,26 +84,17 @@ export default function ResetPasswordScreen() {
     const confirmValue = confirmPassword.trim();
 
     if (!passwordValue || !confirmValue) {
-      Alert.alert(
-        t('auth.resetPassword.title'),
-        t('auth.resetPassword.missingFields'),
-      );
+      showAlert(showToast, t('auth.resetPassword.title'), t('auth.resetPassword.missingFields'), 'error');
       return;
     }
 
     if (passwordValue.length < 6) {
-      Alert.alert(
-        t('auth.resetPassword.title'),
-        t('auth.resetPassword.passwordTooShort'),
-      );
+      showAlert(showToast, t('auth.resetPassword.title'), t('auth.resetPassword.passwordTooShort'), 'error');
       return;
     }
 
     if (passwordValue !== confirmValue) {
-      Alert.alert(
-        t('auth.resetPassword.title'),
-        t('auth.resetPassword.passwordMismatch'),
-      );
+      showAlert(showToast, t('auth.resetPassword.title'), t('auth.resetPassword.passwordMismatch'), 'error');
       return;
     }
 
@@ -123,13 +110,9 @@ export default function ResetPasswordScreen() {
       }
 
       setIsDone(true);
-      Alert.alert(
-        t('auth.resetPassword.successTitle'),
-        t('auth.resetPassword.passwordUpdated'),
-      );
     } catch (error) {
       const message = error instanceof Error ? error.message : t('common.unknownError');
-      Alert.alert(t('auth.resetPassword.title'), message);
+      showAlert(showToast, t('auth.resetPassword.title'), message, 'error');
     } finally {
       setLoading(false);
     }

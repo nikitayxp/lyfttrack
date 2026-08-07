@@ -127,7 +127,8 @@ export function WorkoutFeedCard({
     }
 
     if (action === 'delete') {
-      closeSheet();
+      // Leave the menu open behind the confirm modal — the card itself
+      // disappears from the list once the delete actually goes through.
       onDeleteWorkout?.();
       return;
     }

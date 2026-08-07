@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
-import { Alert, Platform } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useAppToast } from '@/context/ToastContext';
+import { confirmAction } from '@/utils/confirmAction';
 import { deleteWorkout, getErrorMessage } from '@/services/workoutService';
 
 /**
@@ -15,27 +15,12 @@ export function useWorkoutDelete() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const confirmDelete = useCallback(async (): Promise<boolean> => {
-    const description = t('workoutDetails.deleteConfirmDescription');
-
-    // An Alert with buttons is ignored on web, so the browser prompt stands in.
-    if (Platform.OS === 'web') {
-      const confirmFn = (globalThis as { confirm?: (message?: string) => boolean }).confirm;
-      return confirmFn ? confirmFn(description) : true;
-    }
-
-    return await new Promise((resolve) => {
-      Alert.alert(t('workoutDetails.deleteConfirmTitle'), description, [
-        {
-          text: t('common.cancel'),
-          style: 'cancel',
-          onPress: () => resolve(false),
-        },
-        {
-          text: t('workoutDetails.deleteConfirmAction'),
-          style: 'destructive',
-          onPress: () => resolve(true),
-        },
-      ]);
+    return confirmAction({
+      title: t('workoutDetails.deleteConfirmTitle'),
+      description: t('workoutDetails.deleteConfirmDescription'),
+      confirmLabel: t('workoutDetails.deleteConfirmAction'),
+      cancelLabel: t('common.cancel'),
+      destructive: true,
     });
   }, [t]);
 

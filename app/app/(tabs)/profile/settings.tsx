@@ -5,7 +5,6 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,6 +20,7 @@ import { usePreferences } from '@/context/PreferencesContext';
 import type { AppLanguage } from '@/i18n/resources';
 import { supabase } from '@/services/supabase';
 import { deleteOwnAccount, getProfile, updateProfile } from '@/services/profileService';
+import { confirmAction } from '@/utils/confirmAction';
 
 const palette = Colors.dark;
 
@@ -131,26 +131,12 @@ export default function ProfileSettingsScreen() {
   }, [isDeletingAccount, t]);
 
   const confirmSignOut = useCallback(async (): Promise<boolean> => {
-    const confirmDescription = t('settings.signOutConfirmDescription');
-
-    if (Platform.OS === 'web') {
-      const confirmFn = (globalThis as { confirm?: (message?: string) => boolean }).confirm;
-      return confirmFn ? confirmFn(confirmDescription) : true;
-    }
-
-    return await new Promise((resolve) => {
-      Alert.alert(t('settings.signOutConfirmTitle'), confirmDescription, [
-        {
-          text: t('common.cancel'),
-          style: 'cancel',
-          onPress: () => resolve(false),
-        },
-        {
-          text: t('settings.signOut'),
-          style: 'destructive',
-          onPress: () => resolve(true),
-        },
-      ]);
+    return confirmAction({
+      title: t('settings.signOutConfirmTitle'),
+      description: t('settings.signOutConfirmDescription'),
+      confirmLabel: t('settings.signOut'),
+      cancelLabel: t('common.cancel'),
+      destructive: true,
     });
   }, [t]);
 

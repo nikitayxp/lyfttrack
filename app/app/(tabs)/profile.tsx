@@ -6,7 +6,6 @@ import ViewShot from 'react-native-view-shot';
 import {
   ActivityIndicator,
   Animated,
-  Alert,
   FlatList,
   Image,
   Modal,
@@ -41,10 +40,12 @@ import { addWeight, getWeightHistory, parseBodyWeightInput, type BodyMeasurement
 import { getAllTimePRs, type AllTimePR } from '@/services/statsService';
 import { supabase } from '@/services/supabase';
 import { getErrorMessage, getUserWorkouts, type WorkoutFeedItem } from '@/services/workoutService';
+import { useAppToast } from '@/context/ToastContext';
 import { useWorkoutContext } from '@/context/WorkoutContext';
 import { useWorkoutDelete } from '@/hooks/useWorkoutDelete';
 import { getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 import { sanitizeDecimalText } from '@/utils/inputValidation';
+import { showAlert } from '@/utils/showAlert';
 
 const palette = Colors.dark;
 const SCREEN_BG = palette.bgPrimary;
@@ -207,6 +208,7 @@ function SkeletonCard({ compact = false, lines = 3 }: SkeletonCardProps) {
 
 export default function ProfileScreen() {
   const { t, i18n } = useTranslation();
+  const { showToast } = useAppToast();
   const { activeExercises } = useWorkoutContext();
   const isWeb = Platform.OS === 'web';
   const { confirmAndDelete } = useWorkoutDelete();
@@ -659,7 +661,7 @@ export default function ProfileScreen() {
       });
 
       setCommentInputValue(trimmedComment);
-      Alert.alert(t('profile.commentAddError'), getErrorMessage(error));
+      showAlert(showToast, t('profile.commentAddError'), getErrorMessage(error), 'error');
     } finally {
       setIsSendingComment(false);
     }
@@ -670,6 +672,7 @@ export default function ProfileScreen() {
     isSendingComment,
     loadCommentsForWorkout,
     selectedWorkoutForComments,
+    showToast,
     t,
   ]);
 
@@ -741,9 +744,9 @@ export default function ProfileScreen() {
         return nextState;
       });
 
-      Alert.alert(t('profile.likeUpdateError'), getErrorMessage(error));
+      showAlert(showToast, t('profile.likeUpdateError'), getErrorMessage(error), 'error');
     }
-  }, [t]);
+  }, [showToast, t]);
 
   const openWeightModal = useCallback(() => {
     const initialValue = latestWeightEntry ? formatWeightKg(latestWeightEntry.weight) : '';
@@ -787,7 +790,7 @@ export default function ProfileScreen() {
         message: error?.message ?? 'unknown',
       });
 
-      Alert.alert(t('profile.validationTitle'), error?.message || t('profile.invalidWeight'));
+      showAlert(showToast, t('profile.validationTitle'), error?.message || t('profile.invalidWeight'), 'error');
       return;
     }
 
@@ -825,7 +828,7 @@ export default function ProfileScreen() {
         return mergeWeightEntryIntoHistory(withoutOptimistic, savedEntry);
       });
 
-      Alert.alert(t('profile.weightSavedTitle'), t('profile.weightSavedDescription'));
+      showAlert(showToast, t('profile.weightSavedTitle'), t('profile.weightSavedDescription'));
 
       void (async () => {
         try {
@@ -865,11 +868,13 @@ export default function ProfileScreen() {
       setWeightHistory((currentHistory) => currentHistory.filter((entry) => entry.id !== optimisticEntry.id));
       setWeightInput(submittedWeightInput);
 
-      Alert.alert(
+      showAlert(
+        showToast,
         isRlsFailure ? t('profile.rlsMissingTitle') : t('profile.weightSaveError'),
         isRlsFailure
           ? t('profile.rlsMissingDescription', { message, migrationPath })
-          : message
+          : message,
+        'error'
       );
     } finally {
       console.info('[weight-save-trace] profile_submit_end', {
@@ -878,7 +883,7 @@ export default function ProfileScreen() {
 
       setIsSavingWeight(false);
     }
-  }, [authUserId, isSavingWeight, latestWeightEntry?.user_id, migrationPath, profile?.id, t, weightInput]);
+  }, [authUserId, isSavingWeight, latestWeightEntry?.user_id, migrationPath, profile?.id, showToast, t, weightInput]);
 
   const handleShareTrophyCard = useCallback(
     async (pr: AllTimePR) => {
@@ -892,7 +897,7 @@ export default function ProfileScreen() {
         const isSharingAvailable = await Sharing.isAvailableAsync();
 
         if (!isSharingAvailable) {
-          Alert.alert(t('profile.shareUnavailableTitle'), t('profile.shareUnavailableDescription'));
+          showAlert(showToast, t('profile.shareUnavailableTitle'), t('profile.shareUnavailableDescription'), 'error');
           return;
         }
 
@@ -914,12 +919,12 @@ export default function ProfileScreen() {
           UTI: 'public.png',
         });
       } catch (error) {
-        Alert.alert(t('profile.sharePrCardError'), getErrorMessage(error));
+        showAlert(showToast, t('profile.sharePrCardError'), getErrorMessage(error), 'error');
       } finally {
         setSharingExerciseId(null);
       }
     },
-    [sharingExerciseId, t, trophyCardRefsByExerciseId, uiLanguage]
+    [showToast, sharingExerciseId, t, trophyCardRefsByExerciseId, uiLanguage]
   );
 
   const headerComponent = useMemo(() => {
@@ -1216,11 +1221,13 @@ export default function ProfileScreen() {
               onEditWorkout={() => router.push(`/workout/edit/${item.id}` as any)}
               onCopyWorkout={() => {
                 if (activeExercises.length > 0) {
-                  Alert.alert(
+                  showAlert(
+                    showToast,
                     uiLanguage.startsWith('pt') ? 'Treino em progresso' : 'Workout in progress',
                     uiLanguage.startsWith('pt')
                       ? 'Termina ou cancela o treino atual antes de copiar outro.'
                       : 'Finish or cancel the current workout before copying another.',
+                    'error'
                   );
                   return;
                 }

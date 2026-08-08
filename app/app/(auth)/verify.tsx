@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -16,8 +15,10 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius, Spacing, Typography } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
+import { useAppToast } from '@/context/ToastContext';
 import { clearSignUpDraft } from '@/services/signUpDraft';
 import { supabase } from '@/services/supabase';
+import { showAlert } from '@/utils/showAlert';
 
 const palette = Colors.dark;
 const VERIFY_EMAIL_KEY = 'lyfttrack_verify_email';
@@ -32,6 +33,7 @@ function readRouteValue(value: string | string[] | undefined): string {
 
 export default function VerifyScreen() {
   const { t } = useTranslation();
+  const { showToast } = useAppToast();
   const params = useLocalSearchParams<{ email?: string | string[] }>();
   const routeEmail = useMemo(() => readRouteValue(params.email), [params.email]);
 
@@ -83,7 +85,7 @@ export default function VerifyScreen() {
     const normalizedCode = code.trim();
 
     if (!normalizedEmail || !normalizedCode) {
-      Alert.alert(t('auth.verify.missingDataTitle'), t('auth.verify.missingDataDescription'));
+      showAlert(showToast, t('auth.verify.missingDataTitle'), t('auth.verify.missingDataDescription'), 'error');
       return;
     }
 
@@ -97,12 +99,11 @@ export default function VerifyScreen() {
       });
 
       if (error) {
-        Alert.alert(t('auth.verify.invalidCodeTitle'), t('auth.verify.invalidCodeDescription'));
+        showAlert(showToast, t('auth.verify.invalidCodeTitle'), t('auth.verify.invalidCodeDescription'), 'error');
         return;
       }
 
       await clearStoredEmail();
-      Alert.alert(t('auth.verify.verifiedTitle'), t('auth.verify.verifiedDescription'));
       router.replace('/(auth)/onboarding' as any);
     } finally {
       setLoading(false);

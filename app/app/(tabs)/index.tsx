@@ -3,7 +3,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
-  Alert,
   DeviceEventEmitter,
   FlatList,
   RefreshControl,
@@ -34,7 +33,9 @@ import { WORKOUTS_IMPORTED_EVENT } from '@/services/import/importEvents';
 import { EmptyState } from '@/components/common/EmptyState';
 import { FeedCommentsModal } from '@/components/feed/FeedCommentsModal';
 import { WorkoutFeedCard } from '@/components/feed/WorkoutFeedCard';
+import { useAppToast } from '@/context/ToastContext';
 import { useWorkoutDelete } from '@/hooks/useWorkoutDelete';
+import { showAlert } from '@/utils/showAlert';
 
 const palette = Colors.dark;
 const SCREEN_BG = palette.bgPrimary;
@@ -50,6 +51,7 @@ type FeedLikeInteractionState = {
 
 export default function FeedScreen() {
   const { t } = useTranslation();
+  const { showToast } = useAppToast();
 
   const { confirmAndDelete } = useWorkoutDelete();
 
@@ -383,7 +385,7 @@ export default function FeedScreen() {
       });
 
       setCommentInputValue(trimmedComment);
-      Alert.alert(t('feed.commentPublishError'), getErrorMessage(error));
+      showAlert(showToast, t('feed.commentPublishError'), getErrorMessage(error), 'error');
     } finally {
       setIsSendingComment(false);
     }
@@ -394,6 +396,7 @@ export default function FeedScreen() {
     isSendingComment,
     loadCommentsForWorkout,
     selectedWorkoutForComments,
+    showToast,
     t,
   ]);
 
@@ -465,9 +468,9 @@ export default function FeedScreen() {
         return nextState;
       });
 
-      Alert.alert(t('feed.likeUpdateError'), getErrorMessage(error));
+      showAlert(showToast, t('feed.likeUpdateError'), getErrorMessage(error), 'error');
     }
-  }, [t]);
+  }, [showToast, t]);
 
   const headerTitle = useMemo(() => {
     return (

@@ -3,7 +3,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   SectionList,
   StyleSheet,
@@ -26,6 +25,7 @@ import {
   getExerciseMuscleTranslationKey,
   getEquipmentTranslationKey,
 } from '@/constants/exerciseCatalog';
+import { useAppToast } from '@/context/ToastContext';
 import { usePreferences } from '@/context/PreferencesContext';
 import type { Tables } from '@/types/database';
 import { createExercise, getErrorMessage, getExercisesCatalog, getRecentExerciseIds, orderExercisesByIds } from '@/services/workoutService';
@@ -34,6 +34,7 @@ import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/ex
 import { matchesExerciseSearch } from '@/utils/exerciseSearch';
 import { DismissibleBottomSheet } from '@/components/common/DismissibleBottomSheet';
 import { ExerciseThumbnail } from '@/components/common/ExerciseThumbnail';
+import { showAlert } from '@/utils/showAlert';
 
 type ExerciseRow = Tables<'exercises'>;
 type ExerciseSection = { title: string; data: ExerciseRow[] };
@@ -42,6 +43,7 @@ const cardLayoutTransition = LinearTransition.springify().damping(16).stiffness(
 
 export default function ExercisesScreen() {
   const { t } = useTranslation();
+  const { showToast } = useAppToast();
   const { language } = usePreferences();
   const [exercises, setExercises] = useState<ExerciseRow[]>([]);
   const [query, setQuery] = useState('');
@@ -91,17 +93,17 @@ export default function ExercisesScreen() {
     });
 
     if (!normalizedName) {
-      Alert.alert(t('validation.title'), t('validation.exerciseNameRequired'));
+      showAlert(showToast, t('validation.title'), t('validation.exerciseNameRequired'), 'error');
       return;
     }
 
     if (!selectedMuscleKey) {
-      Alert.alert(t('validation.title'), t('validation.selectMuscleGroup'));
+      showAlert(showToast, t('validation.title'), t('validation.selectMuscleGroup'), 'error');
       return;
     }
 
     if (!selectedEquipmentKey) {
-      Alert.alert(t('validation.title'), t('validation.selectEquipment'));
+      showAlert(showToast, t('validation.title'), t('validation.selectEquipment'), 'error');
       return;
     }
 
@@ -119,9 +121,9 @@ export default function ExercisesScreen() {
       setSelectedEquipmentKey(null);
       setIsCreateModalVisible(false);
       await loadExercises();
-      Alert.alert(t('exercise.success.createdTitle'), t('exercise.success.createdDescription'));
+      showAlert(showToast, t('exercise.success.createdTitle'), t('exercise.success.createdDescription'));
     } catch (error) {
-      Alert.alert(t('exercise.errors.create'), getErrorMessage(error));
+      showAlert(showToast, t('exercise.errors.create'), getErrorMessage(error), 'error');
     } finally {
       setIsCreatingExercise(false);
     }

@@ -3,7 +3,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Platform,
   Pressable,
@@ -28,6 +27,7 @@ import {
   getExerciseMuscleTranslationKey,
   getEquipmentTranslationKey,
 } from '@/constants/exerciseCatalog';
+import { useAppToast } from '@/context/ToastContext';
 import { usePreferences } from '@/context/PreferencesContext';
 import {
   createExercise,
@@ -92,6 +92,7 @@ import {
   type PersonalBest,
 } from '@/utils/personalRecords';
 import { formatPreviousSetLabel, previousColumnWidthForSets, previousLabelFontSize, previousSetForRow } from '@/utils/previousPerformance';
+import { showAlert } from '@/utils/showAlert';
 
 const palette = Colors.dark;
 const DESKTOP_WEB_MIN_WIDTH = 768;
@@ -175,6 +176,7 @@ function buildCatalogCacheKey(filters: ExerciseCatalogFilters): string {
 
 export default function ActiveWorkout() {
   const { t } = useTranslation();
+  const { showToast } = useAppToast();
   const { language } = usePreferences();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
@@ -714,17 +716,17 @@ export default function ActiveWorkout() {
     });
 
     if (!normalizedName) {
-      Alert.alert(t('validation.title'), t('validation.exerciseNameRequired'));
+      showAlert(showToast, t('validation.title'), t('validation.exerciseNameRequired'), 'error');
       return;
     }
 
     if (!newExerciseMuscleGroup) {
-      Alert.alert(t('validation.title'), t('validation.selectMuscleGroup'));
+      showAlert(showToast, t('validation.title'), t('validation.selectMuscleGroup'), 'error');
       return;
     }
 
     if (!newExerciseEquipment) {
-      Alert.alert(t('validation.title'), t('validation.selectEquipment'));
+      showAlert(showToast, t('validation.title'), t('validation.selectEquipment'), 'error');
       return;
     }
 
@@ -748,7 +750,7 @@ export default function ActiveWorkout() {
       addExercise(createdExercise);
       setExercisePickerVisible(false);
     } catch (error) {
-      Alert.alert(t('exercise.errors.create'), getErrorMessage(error));
+      showAlert(showToast, t('exercise.errors.create'), getErrorMessage(error), 'error');
     } finally {
       setIsCreatingExercise(false);
     }
@@ -795,7 +797,7 @@ export default function ActiveWorkout() {
       const completedSetCount = setDrafts.filter((draft) => draft.completed === true).length;
 
       if (completedSetCount === 0) {
-        Alert.alert(t('workout.noCompletedSetsTitle'), t('workout.noCompletedSetsDescription'));
+        showAlert(showToast, t('workout.noCompletedSetsTitle'), t('workout.noCompletedSetsDescription'), 'error');
         return;
       }
 
@@ -813,7 +815,7 @@ export default function ActiveWorkout() {
       });
 
       if (result.insertedSetCount <= 0) {
-        Alert.alert(t('workout.notSavedTitle'), t('workout.notSavedDescription'));
+        showAlert(showToast, t('workout.notSavedTitle'), t('workout.notSavedDescription'), 'error');
         return;
       }
 
@@ -823,11 +825,11 @@ export default function ActiveWorkout() {
       await clearDraft();
     } catch (error) {
       if (error instanceof WorkoutSaveValidationError) {
-        Alert.alert(t('workout.notSavedTitle'), error.message);
+        showAlert(showToast, t('workout.notSavedTitle'), error.message, 'error');
         return;
       }
 
-      Alert.alert(t('workout.unableToFinish'), getErrorMessage(error));
+      showAlert(showToast, t('workout.unableToFinish'), getErrorMessage(error), 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -1243,7 +1245,7 @@ export default function ActiveWorkout() {
                           ]}
                           onLongPress={() => {
                             if (exercise.sets.length <= 1) {
-                              Alert.alert(t('workout.deleteSetTitle'), t('workout.deleteSetKeepOne'));
+                              showAlert(showToast, t('workout.deleteSetTitle'), t('workout.deleteSetKeepOne'), 'error');
                               return;
                             }
                             setPendingDeleteSet({
@@ -1261,7 +1263,7 @@ export default function ActiveWorkout() {
                             onPress={() => updateSetType(exercise.id, setItem.id, nextSetType)}
                             onLongPress={() => {
                               if (exercise.sets.length <= 1) {
-                                Alert.alert(t('workout.deleteSetTitle'), t('workout.deleteSetKeepOne'));
+                                showAlert(showToast, t('workout.deleteSetTitle'), t('workout.deleteSetKeepOne'), 'error');
                                 return;
                               }
                               setPendingDeleteSet({

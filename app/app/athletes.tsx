@@ -3,7 +3,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   RefreshControl,
   ScrollView,
@@ -24,6 +23,7 @@ import {
   sendFriendRequest,
   type SocialSearchResult,
 } from '@/services/socialService';
+import { showAlert } from '@/utils/showAlert';
 
 const palette = Colors.dark;
 const SCREEN_BG = palette.bgPrimary;
@@ -154,7 +154,7 @@ export default function AthletesScreen() {
 
       showToast({ message: t('social.success.requestSentDescription'), tone: 'info' });
     } catch (error) {
-      Alert.alert(t('social.errors.sendRequest'), toErrorMessage(error));
+      showAlert(showToast, t('social.errors.sendRequest'), toErrorMessage(error), 'error');
     } finally {
       setSendingUserId(null);
     }

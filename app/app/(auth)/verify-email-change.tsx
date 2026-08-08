@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -15,8 +14,10 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
+import { useAppToast } from '@/context/ToastContext';
 import { supabase } from '@/services/supabase';
 import { goBack } from '@/utils/navigation';
+import { showAlert } from '@/utils/showAlert';
 
 const palette = Colors.dark;
 
@@ -30,6 +31,7 @@ function readRouteValue(value: string | string[] | undefined): string {
 
 export default function VerifyEmailChangeScreen() {
   const { t } = useTranslation();
+  const { showToast } = useAppToast();
   const params = useLocalSearchParams<{ newEmail?: string | string[] }>();
   const routeEmail = readRouteValue(params.newEmail);
 
@@ -49,10 +51,7 @@ export default function VerifyEmailChangeScreen() {
     const normalizedCode = code.trim();
 
     if (!normalizedEmail || !normalizedCode) {
-      Alert.alert(
-        t('auth.verifyEmailChange.title'),
-        t('auth.verifyEmailChange.missingFields'),
-      );
+      showAlert(showToast, t('auth.verifyEmailChange.title'), t('auth.verifyEmailChange.missingFields'), 'error');
       return;
     }
 
@@ -66,18 +65,11 @@ export default function VerifyEmailChangeScreen() {
       });
 
       if (error) {
-        Alert.alert(
-          t('auth.verifyEmailChange.invalidCodeTitle'),
-          t('auth.verifyEmailChange.invalidCodeDescription'),
-        );
+        showAlert(showToast, t('auth.verifyEmailChange.invalidCodeTitle'), t('auth.verifyEmailChange.invalidCodeDescription'), 'error');
         return;
       }
 
       setIsDone(true);
-      Alert.alert(
-        t('auth.verifyEmailChange.successTitle'),
-        t('auth.verifyEmailChange.successDescription'),
-      );
     } finally {
       setLoading(false);
     }

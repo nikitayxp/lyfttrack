@@ -3,7 +3,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -29,7 +28,9 @@ import { getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 import { matchesExerciseSearch } from '@/utils/exerciseSearch';
 import { DismissibleBottomSheet } from '@/components/common/DismissibleBottomSheet';
 import { ExerciseThumbnail } from '@/components/common/ExerciseThumbnail';
+import { useAppToast } from '@/context/ToastContext';
 import { usePreferences } from '@/context/PreferencesContext';
+import { showAlert } from '@/utils/showAlert';
 
 const palette = Colors.dark;
 const cardLayoutTransition = LinearTransition.springify().damping(16).stiffness(180);
@@ -38,6 +39,7 @@ type ExerciseRow = Tables<'exercises'>;
 
 export default function RoutinesScreen() {
   const { t } = useTranslation();
+  const { showToast } = useAppToast();
   const { language } = usePreferences();
   const [routines, setRoutines] = useState<RoutineSummary[]>([]);
   const [isLoadingRoutines, setIsLoadingRoutines] = useState(true);
@@ -170,12 +172,12 @@ export default function RoutinesScreen() {
     });
 
     if (!normalizedName) {
-      Alert.alert(t('validation.title'), t('validation.routineNameRequired'));
+      showAlert(showToast, t('validation.title'), t('validation.routineNameRequired'), 'error');
       return;
     }
 
     if (selectedExerciseIds.length === 0) {
-      Alert.alert(t('validation.title'), t('validation.routineExerciseRequired'));
+      showAlert(showToast, t('validation.title'), t('validation.routineExerciseRequired'), 'error');
       return;
     }
 
@@ -186,9 +188,9 @@ export default function RoutinesScreen() {
       setIsCreateModalVisible(false);
       resetRoutineForm();
       await loadRoutines();
-      Alert.alert(t('routines.createRoutineSuccessTitle'), t('routines.createRoutineSuccessDescription'));
+      showAlert(showToast, t('routines.createRoutineSuccessTitle'), t('routines.createRoutineSuccessDescription'));
     } catch (error) {
-      Alert.alert(t('routines.createRoutineError'), getErrorMessage(error));
+      showAlert(showToast, t('routines.createRoutineError'), getErrorMessage(error), 'error');
     } finally {
       setIsCreatingRoutine(false);
     }

@@ -3,7 +3,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -27,6 +26,7 @@ import {
   normalizeEquipmentKey,
   resolveExerciseMuscleKey,
 } from '@/constants/exerciseCatalog';
+import { useAppToast } from '@/context/ToastContext';
 import { usePreferences } from '@/context/PreferencesContext';
 import {
   getTemplates,
@@ -58,6 +58,7 @@ import {
   type RoutineSummary,
 } from '@/services/workoutService';
 import type { Tables } from '@/types/database';
+import { showAlert } from '@/utils/showAlert';
 
 const palette = Colors.dark;
 const CARD_BG = palette.surface;
@@ -101,6 +102,7 @@ function summarizeExercises(
 
 export default function WorkoutScreen() {
   const { t } = useTranslation();
+  const { showToast } = useAppToast();
   const { language } = usePreferences();
   const [activeMode, setActiveMode] = useState<WorkoutMode>('start');
 
@@ -378,7 +380,7 @@ export default function WorkoutScreen() {
     try {
       await startWorkoutFromTemplate(templateId);
     } catch (error) {
-      Alert.alert(t('workout.unableToStartTemplate'), getErrorMessage(error));
+      showAlert(showToast, t('workout.unableToStartTemplate'), getErrorMessage(error), 'error');
     } finally {
       setStartingTemplateId(null);
     }
@@ -441,12 +443,12 @@ export default function WorkoutScreen() {
     });
 
     if (!normalizedName) {
-      Alert.alert(t('validation.title'), t('validation.routineNameRequired'));
+      showAlert(showToast, t('validation.title'), t('validation.routineNameRequired'), 'error');
       return;
     }
 
     if (selectedRoutineExerciseIds.length === 0) {
-      Alert.alert(t('validation.title'), t('validation.routineExerciseRequired'));
+      showAlert(showToast, t('validation.title'), t('validation.routineExerciseRequired'), 'error');
       return;
     }
 
@@ -458,9 +460,9 @@ export default function WorkoutScreen() {
       resetRoutineForm();
       setHasLoadedRoutines(false);
       await loadRoutines();
-      Alert.alert(t('routines.createRoutineSuccessTitle'), t('routines.createRoutineSuccessDescription'));
+      showAlert(showToast, t('routines.createRoutineSuccessTitle'), t('routines.createRoutineSuccessDescription'));
     } catch (error) {
-      Alert.alert(t('routines.createRoutineError'), getErrorMessage(error));
+      showAlert(showToast, t('routines.createRoutineError'), getErrorMessage(error), 'error');
     } finally {
       setIsCreatingRoutine(false);
     }
@@ -473,17 +475,17 @@ export default function WorkoutScreen() {
     });
 
     if (!normalizedName) {
-      Alert.alert(t('validation.title'), t('validation.exerciseNameRequired'));
+      showAlert(showToast, t('validation.title'), t('validation.exerciseNameRequired'), 'error');
       return;
     }
 
     if (!selectedMuscleKey) {
-      Alert.alert(t('validation.title'), t('validation.selectMuscleGroup'));
+      showAlert(showToast, t('validation.title'), t('validation.selectMuscleGroup'), 'error');
       return;
     }
 
     if (!selectedEquipmentKey) {
-      Alert.alert(t('validation.title'), t('validation.selectEquipment'));
+      showAlert(showToast, t('validation.title'), t('validation.selectEquipment'), 'error');
       return;
     }
 
@@ -500,9 +502,9 @@ export default function WorkoutScreen() {
       resetExerciseForm();
       setHasLoadedCatalog(false);
       await loadCatalogExercises();
-      Alert.alert(t('exercise.success.createdTitle'), t('exercise.success.createdDescription'));
+      showAlert(showToast, t('exercise.success.createdTitle'), t('exercise.success.createdDescription'));
     } catch (error) {
-      Alert.alert(t('exercise.errors.create'), getErrorMessage(error));
+      showAlert(showToast, t('exercise.errors.create'), getErrorMessage(error), 'error');
     } finally {
       setIsCreatingExercise(false);
     }
@@ -515,12 +517,12 @@ export default function WorkoutScreen() {
     });
 
     if (!normalizedName) {
-      Alert.alert(t('validation.title'), t('validation.templateNameRequired'));
+      showAlert(showToast, t('validation.title'), t('validation.templateNameRequired'), 'error');
       return;
     }
 
     if (selectedTemplateExercises.length === 0) {
-      Alert.alert(t('validation.title'), t('validation.templateExerciseRequired'));
+      showAlert(showToast, t('validation.title'), t('validation.templateExerciseRequired'), 'error');
       return;
     }
 
@@ -531,9 +533,9 @@ export default function WorkoutScreen() {
       setIsCreateTemplateModalVisible(false);
       resetTemplateForm();
       await loadTemplates();
-      Alert.alert(t('workout.templateSavedTitle'), t('workout.templateSavedDescription'));
+      showAlert(showToast, t('workout.templateSavedTitle'), t('workout.templateSavedDescription'));
     } catch (error) {
-      Alert.alert(t('workout.unableToCreateTemplate'), getErrorMessage(error));
+      showAlert(showToast, t('workout.unableToCreateTemplate'), getErrorMessage(error), 'error');
     } finally {
       setIsSavingTemplate(false);
     }

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
@@ -46,6 +46,13 @@ export function ConfirmModal({
   tone = 'danger',
   icon,
 }: ConfirmModalProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setMounted(true);
+    }
+  }, [visible]);
   const toneStyles = useMemo(() => {
     switch (tone) {
       case 'primary':
@@ -75,8 +82,18 @@ export function ConfirmModal({
   const resolvedIcon: keyof typeof Ionicons.glyphMap =
     icon ?? (tone === 'danger' ? 'warning-outline' : tone === 'warning' ? 'alert-circle-outline' : 'help-circle-outline');
 
+  if (!mounted) {
+    return null;
+  }
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onCancel}
+      onDismiss={() => setMounted(false)}
+    >
       <Pressable style={styles.backdrop} onPress={busy ? undefined : onCancel}>
         <Pressable style={styles.card} onPress={(e) => e.stopPropagation()}>
           <View style={[styles.iconWrap, { backgroundColor: toneStyles.iconBg }]}>

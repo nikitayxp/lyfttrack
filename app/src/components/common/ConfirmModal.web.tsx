@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useLayoutEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -42,13 +42,31 @@ export function ConfirmModal({
   icon,
 }: ConfirmModalProps) {
   const portalNodeRef = useRef<HTMLDivElement | null>(null);
+
   if (typeof document !== 'undefined' && !portalNodeRef.current) {
-    const el = document.createElement('div');
-    el.style.position = 'fixed';
-    el.style.inset = '0';
-    el.style.zIndex = '99998';
-    portalNodeRef.current = el;
+    portalNodeRef.current = document.createElement('div');
   }
+
+  useLayoutEffect(() => {
+    const node = portalNodeRef.current;
+    if (!node || typeof document === 'undefined') {
+      return;
+    }
+
+    if (visible) {
+      node.style.position = 'fixed';
+      node.style.inset = '0';
+      node.style.zIndex = '2147483647';
+      node.style.pointerEvents = 'auto';
+      document.body.appendChild(node);
+    }
+
+    return () => {
+      if (node.parentNode) {
+        node.parentNode.removeChild(node);
+      }
+    };
+  }, [visible]);
 
   const toneStyles = useMemo(() => {
     switch (tone) {
@@ -79,20 +97,14 @@ export function ConfirmModal({
   const resolvedIcon: keyof typeof Ionicons.glyphMap =
     icon ?? (tone === 'danger' ? 'warning-outline' : tone === 'warning' ? 'alert-circle-outline' : 'help-circle-outline');
 
-  if (!visible) {
-    if (portalNodeRef.current?.parentNode) {
-      portalNodeRef.current.parentNode.removeChild(portalNodeRef.current);
-    }
+  if (!visible || !portalNodeRef.current) {
     return null;
   }
 
-  if (portalNodeRef.current && !portalNodeRef.current.parentNode) {
-    document.body.appendChild(portalNodeRef.current);
-  }
-
-  const content = (
-    <Pressable style={styles.backdrop} onPress={busy ? undefined : onCancel}>
-      <Pressable style={styles.card} onPress={(e) => e.stopPropagation()}>
+  return createPortal(
+    <View style={styles.backdrop}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={busy ? undefined : onCancel} />
+      <View style={styles.card}>
         <View style={[styles.iconWrap, { backgroundColor: toneStyles.iconBg }]}>
           <Ionicons name={resolvedIcon} size={26} color={toneStyles.iconColor} />
         </View>
@@ -134,20 +146,19 @@ export function ConfirmModal({
             )}
           </TouchableOpacity>
         </View>
-      </Pressable>
-    </Pressable>
+      </View>
+    </View>,
+    portalNodeRef.current
   );
-
-  if (!portalNodeRef.current) {
-    return content;
-  }
-
-  return createPortal(content, portalNodeRef.current);
 }
 
 const styles = StyleSheet.create({
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'rgba(4, 9, 20, 0.74)',
     justifyContent: 'center',
     alignItems: 'center',

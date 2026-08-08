@@ -5,7 +5,6 @@ import { StatusBar } from 'expo-status-bar';
 import {
   ActivityIndicator,
   Image,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -212,9 +211,6 @@ export default function WorkoutDetailsScreen() {
       }
 
       if (action === 'delete') {
-        if (Platform.OS === 'web') {
-          closeSheet();
-        }
         void handleDeleteWorkout();
         return;
       }

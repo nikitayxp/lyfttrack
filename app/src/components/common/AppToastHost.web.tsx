@@ -44,7 +44,12 @@ export function AppToastHost({ aboveTabBar = false }: AppToastHostProps) {
 
   const portalNodeRef = useRef<HTMLDivElement | null>(null);
   if (typeof document !== 'undefined' && !portalNodeRef.current) {
-    portalNodeRef.current = document.createElement('div');
+    const el = document.createElement('div');
+    el.style.position = 'fixed';
+    el.style.inset = '0';
+    el.style.zIndex = '99999';
+    el.style.pointerEvents = 'none';
+    portalNodeRef.current = el;
   }
 
   useLayoutEffect(() => {
@@ -130,7 +135,7 @@ export function AppToastHost({ aboveTabBar = false }: AppToastHostProps) {
   return createPortal(
     <View pointerEvents="box-none" style={styles.overlay}>
       <GestureDetector gesture={pan}>
-        <Animated.View style={[styles.toast, tone === 'error' && styles.toastError, { bottom: bottomOffset }, cardStyle]}>
+        <Animated.View style={[styles.toast, tone === 'error' && styles.toastError, { bottom: bottomOffset, pointerEvents: 'auto' }, cardStyle]}>
           <Pressable
             onPress={finishDismiss}
             style={styles.pressRow}

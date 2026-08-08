@@ -25,9 +25,11 @@ import {
   withAvatarCacheBuster,
 } from '@/services/profileService';
 import { BackButton } from '@/components/common/BackButton';
+import { useAppToast } from '@/context/ToastContext';
 import { getEmailChangeRedirectTo, getPasswordResetRedirectTo, supabase } from '@/services/supabase';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 import { ConfirmModal } from '@/components/common/ConfirmModal';
+import { showAlert } from '@/utils/showAlert';
 
 const palette = Colors.dark;
 
@@ -57,6 +59,7 @@ function initialsFromName(value: string): string {
 
 export default function EditProfileScreen() {
   const { t } = useTranslation();
+  const { showToast } = useAppToast();
   const [usernameInput, setUsernameInput] = useState('');
   const [fullNameInput, setFullNameInput] = useState('');
   const [bioInput, setBioInput] = useState('');
@@ -135,7 +138,7 @@ export default function EditProfileScreen() {
     });
 
     if (!normalizedUsername) {
-      Alert.alert(t('validation.title'), t('validation.usernameRequired'));
+      showAlert(showToast, t('validation.title'), t('validation.usernameRequired'), 'error');
       return;
     }
 
@@ -170,7 +173,7 @@ export default function EditProfileScreen() {
     } finally {
       setIsSaving(false);
     }
-  }, [bioInput, fullNameInput, isSaving, t, usernameInput]);
+  }, [bioInput, fullNameInput, isSaving, showToast, t, usernameInput]);
 
   const handleChangeAvatar = useCallback(async () => {
     if (isUploadingAvatar || isRemovingAvatar) {
@@ -260,12 +263,12 @@ export default function EditProfileScreen() {
     const normalizedEmail = pendingEmailInput.trim().toLowerCase();
 
     if (!normalizedEmail) {
-      Alert.alert(t('validation.title'), t('validation.emailRequired'));
+      showAlert(showToast, t('validation.title'), t('validation.emailRequired'), 'error');
       return;
     }
 
     if (normalizedEmail === currentEmail.trim().toLowerCase()) {
-      Alert.alert(t('profileEdit.alerts.noEmailChangeTitle'), t('profileEdit.alerts.noEmailChangeDescription'));
+      showAlert(showToast, t('profileEdit.alerts.noEmailChangeTitle'), t('profileEdit.alerts.noEmailChangeDescription'));
       return;
     }
 
@@ -308,7 +311,7 @@ export default function EditProfileScreen() {
     } finally {
       setIsUpdatingEmail(false);
     }
-  }, [currentEmail, isUpdatingEmail, pendingEmailInput, t]);
+  }, [currentEmail, isUpdatingEmail, pendingEmailInput, showToast, t]);
 
   const handlePasswordReset = useCallback(async () => {
     if (isSendingPasswordReset) {
@@ -318,7 +321,7 @@ export default function EditProfileScreen() {
     const targetEmail = currentEmail.trim() || pendingEmailInput.trim();
 
     if (!targetEmail) {
-      Alert.alert(t('profileEdit.alerts.passwordResetMissingEmailTitle'), t('profileEdit.alerts.passwordResetMissingEmailDescription'));
+      showAlert(showToast, t('profileEdit.alerts.passwordResetMissingEmailTitle'), t('profileEdit.alerts.passwordResetMissingEmailDescription'), 'error');
       return;
     }
 
@@ -359,7 +362,7 @@ export default function EditProfileScreen() {
     } finally {
       setIsSendingPasswordReset(false);
     }
-  }, [currentEmail, isSendingPasswordReset, pendingEmailInput, t]);
+  }, [currentEmail, isSendingPasswordReset, pendingEmailInput, showToast, t]);
 
   const handleLogoutRequest = useCallback(() => {
     if (isLoggingOut) {

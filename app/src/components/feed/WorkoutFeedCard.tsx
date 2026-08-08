@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { ActivityIndicator, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
@@ -127,7 +127,9 @@ export function WorkoutFeedCard({
     }
 
     if (action === 'delete') {
-      closeSheet();
+      if (Platform.OS === 'web') {
+        closeSheet();
+      }
       onDeleteWorkout?.();
       return;
     }

@@ -1,8 +1,8 @@
-import { useLayoutEffect, useMemo, useRef } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useMemo, useRef } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -41,31 +41,31 @@ export function ConfirmModal({
   tone = 'danger',
   icon,
 }: ConfirmModalProps) {
-  const portalNodeRef = useRef<HTMLDivElement | null>(null);
+  const bumpedRef = useRef(false);
 
-  if (typeof document !== 'undefined' && !portalNodeRef.current) {
-    portalNodeRef.current = document.createElement('div');
-  }
-
-  useLayoutEffect(() => {
-    const node = portalNodeRef.current;
-    if (!node || typeof document === 'undefined') {
+  useEffect(() => {
+    if (!visible || typeof document === 'undefined') {
+      bumpedRef.current = false;
       return;
     }
 
-    if (visible) {
-      node.style.position = 'fixed';
-      node.style.inset = '0';
-      node.style.zIndex = '2147483647';
-      node.style.pointerEvents = 'auto';
-      document.body.appendChild(node);
-    }
-
-    return () => {
-      if (node.parentNode) {
-        node.parentNode.removeChild(node);
+    const bump = () => {
+      const portals = document.querySelectorAll('body > div[aria-modal="true"], body > div:has([aria-modal="true"])');
+      if (portals.length < 2) {
+        return;
+      }
+      const last = portals[portals.length - 1];
+      if (last && last.parentNode) {
+        last.parentNode.appendChild(last);
       }
     };
+
+    const raf = requestAnimationFrame(() => {
+      bump();
+      bumpedRef.current = true;
+    });
+
+    return () => cancelAnimationFrame(raf);
   }, [visible]);
 
   const toneStyles = useMemo(() => {
@@ -97,68 +97,60 @@ export function ConfirmModal({
   const resolvedIcon: keyof typeof Ionicons.glyphMap =
     icon ?? (tone === 'danger' ? 'warning-outline' : tone === 'warning' ? 'alert-circle-outline' : 'help-circle-outline');
 
-  if (!visible || !portalNodeRef.current) {
-    return null;
-  }
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+      <Pressable style={styles.backdrop} onPress={busy ? undefined : onCancel}>
+        <Pressable style={styles.card} onPress={(e) => e.stopPropagation()}>
+          <View style={[styles.iconWrap, { backgroundColor: toneStyles.iconBg }]}>
+            <Ionicons name={resolvedIcon} size={26} color={toneStyles.iconColor} />
+          </View>
 
-  return createPortal(
-    <View style={styles.backdrop}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={busy ? undefined : onCancel} />
-      <View style={styles.card}>
-        <View style={[styles.iconWrap, { backgroundColor: toneStyles.iconBg }]}>
-          <Ionicons name={resolvedIcon} size={26} color={toneStyles.iconColor} />
-        </View>
+          <Text style={styles.title}>{title}</Text>
 
-        <Text style={styles.title}>{title}</Text>
+          {description ? <Text style={styles.description}>{description}</Text> : null}
 
-        {description ? <Text style={styles.description}>{description}</Text> : null}
+          <View style={styles.actions}>
+            <TouchableOpacity
+              style={[styles.button, styles.cancelButton, busy && styles.buttonDisabled]}
+              activeOpacity={ACTIVE_OPACITY}
+              onPress={onCancel}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel={cancelLabel}
+            >
+              <Text style={styles.cancelText}>{cancelLabel}</Text>
+            </TouchableOpacity>
 
-        <View style={styles.actions}>
-          <TouchableOpacity
-            style={[styles.button, styles.cancelButton, busy && styles.buttonDisabled]}
-            activeOpacity={ACTIVE_OPACITY}
-            onPress={onCancel}
-            disabled={busy}
-            accessibilityRole="button"
-            accessibilityLabel={cancelLabel}
-          >
-            <Text style={styles.cancelText}>{cancelLabel}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.button,
-              { backgroundColor: toneStyles.confirmBg },
-              busy && styles.buttonDisabled,
-            ]}
-            activeOpacity={ACTIVE_OPACITY}
-            onPress={onConfirm}
-            disabled={busy}
-            accessibilityRole="button"
-            accessibilityLabel={confirmLabel}
-          >
-            {busy ? (
-              <ActivityIndicator size="small" color={toneStyles.confirmText} />
-            ) : (
-              <Text style={[styles.confirmText, { color: toneStyles.confirmText }]}>
-                {confirmLabel}
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>,
-    portalNodeRef.current
+            <TouchableOpacity
+              style={[
+                styles.button,
+                { backgroundColor: toneStyles.confirmBg },
+                busy && styles.buttonDisabled,
+              ]}
+              activeOpacity={ACTIVE_OPACITY}
+              onPress={onConfirm}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel={confirmLabel}
+            >
+              {busy ? (
+                <ActivityIndicator size="small" color={toneStyles.confirmText} />
+              ) : (
+                <Text style={[styles.confirmText, { color: toneStyles.confirmText }]}>
+                  {confirmLabel}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   backdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    flex: 1,
     backgroundColor: 'rgba(4, 9, 20, 0.74)',
     justifyContent: 'center',
     alignItems: 'center',

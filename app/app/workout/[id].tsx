@@ -211,8 +211,7 @@ export default function WorkoutDetailsScreen() {
       }
 
       if (action === 'delete') {
-        // Leave the menu open behind the confirm modal — it only closes once
-        // the delete actually goes through (the screen then navigates away).
+        closeSheet();
         void handleDeleteWorkout();
         return;
       }

@@ -34,7 +34,7 @@ import { EmptyState } from '@/components/common/EmptyState';
 import { FeedCommentsModal } from '@/components/feed/FeedCommentsModal';
 import { WorkoutFeedCard } from '@/components/feed/WorkoutFeedCard';
 import { useAppToast } from '@/context/ToastContext';
-import { useWorkoutDelete } from '@/hooks/useWorkoutDelete';
+import { useWorkoutDelete, WORKOUT_DELETED_EVENT } from '@/hooks/useWorkoutDelete';
 import { showAlert } from '@/utils/showAlert';
 
 const palette = Colors.dark;
@@ -252,8 +252,16 @@ export default function FeedScreen() {
       })();
     });
 
+    const deleteSub = DeviceEventEmitter.addListener(
+      WORKOUT_DELETED_EVENT,
+      ({ workoutId }: { workoutId: string }) => {
+        setWorkouts((prev) => prev.filter((w) => w.id !== workoutId));
+      }
+    );
+
     return () => {
       subscription.remove();
+      deleteSub.remove();
     };
   }, [loadFeedPage]);
 

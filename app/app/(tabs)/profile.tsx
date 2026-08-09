@@ -42,7 +42,7 @@ import { supabase } from '@/services/supabase';
 import { getErrorMessage, getUserWorkouts, type WorkoutFeedItem } from '@/services/workoutService';
 import { useAppToast } from '@/context/ToastContext';
 import { useWorkoutContext } from '@/context/WorkoutContext';
-import { useWorkoutDelete } from '@/hooks/useWorkoutDelete';
+import { useWorkoutDelete, WORKOUT_DELETED_EVENT } from '@/hooks/useWorkoutDelete';
 import { getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 import { sanitizeDecimalText } from '@/utils/inputValidation';
 import { showAlert } from '@/utils/showAlert';
@@ -467,8 +467,16 @@ export default function ProfileScreen() {
       void bootstrap();
     });
 
+    const deleteSub = DeviceEventEmitter.addListener(
+      WORKOUT_DELETED_EVENT,
+      ({ workoutId }: { workoutId: string }) => {
+        setWorkouts((prev) => prev.filter((w) => w.id !== workoutId));
+      }
+    );
+
     return () => {
       subscription.remove();
+      deleteSub.remove();
     };
   }, [bootstrap]);
 

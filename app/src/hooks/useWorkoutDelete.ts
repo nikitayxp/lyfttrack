@@ -1,8 +1,11 @@
 import { useCallback, useState } from 'react';
+import { DeviceEventEmitter } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useAppToast } from '@/context/ToastContext';
 import { confirmAction } from '@/utils/confirmAction';
 import { deleteWorkout, getErrorMessage } from '@/services/workoutService';
+
+export const WORKOUT_DELETED_EVENT = 'lyfttrack:workout-deleted';
 
 /**
  * Confirm, delete, and report. Lives in a hook because the menu that offers
@@ -40,6 +43,7 @@ export function useWorkoutDelete() {
 
       try {
         await deleteWorkout(workoutId);
+        DeviceEventEmitter.emit(WORKOUT_DELETED_EVENT, { workoutId });
         showToast({ message: t('workoutDetails.deleteSuccess'), tone: 'info' });
         return true;
       } catch (error) {

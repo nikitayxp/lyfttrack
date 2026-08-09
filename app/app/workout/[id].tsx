@@ -211,7 +211,8 @@ export default function WorkoutDetailsScreen() {
       }
 
       if (action === 'delete') {
-        void handleDeleteWorkout();
+        closeSheet();
+        setTimeout(() => void handleDeleteWorkout(), 200);
         return;
       }
 

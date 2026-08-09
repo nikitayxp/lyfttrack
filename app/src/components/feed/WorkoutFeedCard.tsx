@@ -127,7 +127,8 @@ export function WorkoutFeedCard({
     }
 
     if (action === 'delete') {
-      onDeleteWorkout?.();
+      closeSheet();
+      setTimeout(() => onDeleteWorkout?.(), 200);
       return;
     }
 

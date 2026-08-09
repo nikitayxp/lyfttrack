@@ -1,14 +1,19 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
-  Modal,
   Pressable,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import type { ConfirmModalProps } from './ConfirmModal.types';
@@ -16,12 +21,9 @@ import type { ConfirmModalProps } from './ConfirmModal.types';
 export type { ConfirmModalTone, ConfirmModalProps } from './ConfirmModal.types';
 
 const palette = Colors.dark;
+const FADE_IN_MS = 180;
+const FADE_OUT_MS = 140;
 
-/**
- * Polished confirmation modal used in place of native Alert.alert when we
- * want the prompt to match the rest of the LyftTrack UI (same palette,
- * typography and animated backdrop).
- */
 export function ConfirmModal({
   visible,
   title,
@@ -35,12 +37,44 @@ export function ConfirmModal({
   icon,
 }: ConfirmModalProps) {
   const [mounted, setMounted] = useState(false);
+  const opacity = useSharedValue(0);
+
+  const portalRef = useRef<HTMLDivElement | null>(null);
+  if (!portalRef.current) {
+    const el = document.createElement('div');
+    el.style.position = 'fixed';
+    el.style.inset = '0';
+    el.style.zIndex = '10000';
+    el.style.pointerEvents = 'none';
+    el.setAttribute('role', 'dialog');
+    portalRef.current = el;
+  }
 
   useEffect(() => {
     if (visible) {
       setMounted(true);
     }
   }, [visible]);
+
+  useLayoutEffect(() => {
+    const node = portalRef.current;
+    if (!node || !mounted) return;
+    document.body.appendChild(node);
+    return () => {
+      if (node.parentNode) node.parentNode.removeChild(node);
+    };
+  }, [mounted]);
+
+  useEffect(() => {
+    if (visible && mounted) {
+      opacity.value = withTiming(1, { duration: FADE_IN_MS });
+    } else if (!visible && mounted) {
+      opacity.value = withTiming(0, { duration: FADE_OUT_MS }, () => {});
+      const timer = setTimeout(() => setMounted(false), FADE_OUT_MS);
+      return () => clearTimeout(timer);
+    }
+  }, [visible, mounted, opacity]);
+
   const toneStyles = useMemo(() => {
     switch (tone) {
       case 'primary':
@@ -70,19 +104,17 @@ export function ConfirmModal({
   const resolvedIcon: keyof typeof Ionicons.glyphMap =
     icon ?? (tone === 'danger' ? 'warning-outline' : tone === 'warning' ? 'alert-circle-outline' : 'help-circle-outline');
 
-  if (!mounted) {
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+
+  if (!mounted || !portalRef.current) {
     return null;
   }
 
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onCancel}
-      onDismiss={() => setMounted(false)}
-    >
-      <Pressable style={styles.backdrop} onPress={busy ? undefined : onCancel}>
+  return createPortal(
+    <Animated.View style={[styles.backdrop, animatedStyle]} pointerEvents={visible ? 'auto' : 'none'}>
+      <Pressable style={styles.backdropPress} onPress={busy ? undefined : onCancel}>
         <Pressable style={styles.card} onPress={(e) => e.stopPropagation()}>
           <View style={[styles.iconWrap, { backgroundColor: toneStyles.iconBg }]}>
             <Ionicons name={resolvedIcon} size={26} color={toneStyles.iconColor} />
@@ -101,10 +133,10 @@ export function ConfirmModal({
               accessibilityRole="button"
               accessibilityLabel={cancelLabel}
             >
-            <Text style={styles.cancelText}>{cancelLabel}</Text>
-          </TouchableOpacity>
+              <Text style={styles.cancelText}>{cancelLabel}</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
+            <TouchableOpacity
               style={[
                 styles.button,
                 { backgroundColor: toneStyles.confirmBg },
@@ -127,17 +159,24 @@ export function ConfirmModal({
           </View>
         </Pressable>
       </Pressable>
-    </Modal>
+    </Animated.View>,
+    portalRef.current
   );
 }
 
 const styles = StyleSheet.create({
   backdrop: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(4, 9, 20, 0.74)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
+  },
+  backdropPress: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   card: {
     width: '100%',

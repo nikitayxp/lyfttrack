@@ -41,7 +41,6 @@ import {
   getRecentExerciseIds,
   getExercisePersonalBests,
   getPreviousExercisePerformance,
-  getRoutineById,
   getWorkoutDetails,
   orderExercisesByIds,
   type PreviousExercisePerformanceSet,
@@ -183,20 +182,9 @@ export default function ActiveWorkout() {
   const isWeb = Platform.OS === 'web';
   const isDesktopWeb = isWeb && windowWidth > DESKTOP_WEB_MIN_WIDTH;
   const searchParams = useLocalSearchParams<{
-    routineId?: string | string[];
     templateId?: string | string[];
     copyFromWorkoutId?: string | string[];
   }>();
-
-  const routeRoutineId = useMemo(() => {
-    const rawRoutineId = searchParams.routineId;
-
-    if (Array.isArray(rawRoutineId)) {
-      return rawRoutineId[0];
-    }
-
-    return rawRoutineId;
-  }, [searchParams.routineId]);
 
   const routeTemplateId = useMemo(() => {
     const rawTemplateId = searchParams.templateId;
@@ -261,13 +249,10 @@ export default function ActiveWorkout() {
   const [createExerciseVisible, setCreateExerciseVisible] = useState(false);
   const [catalogExercises, setCatalogExercises] = useState<ExerciseRow[]>([]);
   const [recentExerciseIds, setRecentExerciseIds] = useState<string[]>([]);
-  const [preloadedRoutineId, setPreloadedRoutineId] = useState<string | null>(null);
   const [preloadedTemplateId, setPreloadedTemplateId] = useState<string | null>(null);
   const [preloadedCopyWorkoutId, setPreloadedCopyWorkoutId] = useState<string | null>(null);
-  const [isPreloadingRoutine, setIsPreloadingRoutine] = useState(false);
   const [isPreloadingTemplate, setIsPreloadingTemplate] = useState(false);
   const [isPreloadingCopyWorkout, setIsPreloadingCopyWorkout] = useState(false);
-  const [routinePreloadError, setRoutinePreloadError] = useState<string | null>(null);
   const [templatePreloadError, setTemplatePreloadError] = useState<string | null>(null);
   const [copyWorkoutPreloadError, setCopyWorkoutPreloadError] = useState<string | null>(null);
   const [isLoadingExercises, setIsLoadingExercises] = useState(true);
@@ -542,37 +527,6 @@ export default function ActiveWorkout() {
     }, [])
   );
 
-  const preloadRoutine = useCallback(
-    async (routineId: string, force = false) => {
-      const normalizedRoutineId = routineId.trim();
-
-      if (!normalizedRoutineId) {
-        return;
-      }
-
-      if (!force && preloadedRoutineId === normalizedRoutineId) {
-        return;
-      }
-
-      setIsPreloadingRoutine(true);
-      setRoutinePreloadError(null);
-      setActiveTemplateId(null);
-
-      try {
-        const routine = await getRoutineById(normalizedRoutineId);
-
-        setActiveExercisesWithRef(routine.exercises.map((entry) => createExerciseBlock(entry.exercise)));
-        setPreloadedRoutineId(routine.id);
-        applySuggestedWorkoutTitle(routine.name);
-      } catch (error) {
-        setRoutinePreloadError(getErrorMessage(error));
-      } finally {
-        setIsPreloadingRoutine(false);
-      }
-    },
-    [applySuggestedWorkoutTitle, preloadedRoutineId, setActiveExercisesWithRef, setActiveTemplateId]
-  );
-
   const preloadTemplate = useCallback(
     async (templateId: string, force = false) => {
       const normalizedTemplateId = templateId.trim();
@@ -685,20 +639,13 @@ export default function ActiveWorkout() {
 
     if (routeTemplateId) {
       void preloadTemplate(routeTemplateId);
-      return;
-    }
-
-    if (routeRoutineId) {
-      void preloadRoutine(routeRoutineId);
     }
   }, [
     didRestoreDraft,
     isDraftRecoveryPending,
     preloadFromPastWorkout,
-    preloadRoutine,
     preloadTemplate,
     routeCopyFromWorkoutId,
-    routeRoutineId,
     routeTemplateId,
   ]);
 
@@ -894,19 +841,13 @@ export default function ActiveWorkout() {
 
   const routePreloadLabel = routeCopyFromWorkoutId
     ? t('workout.routeCopyLabel')
-    : routeTemplateId
-      ? t('workout.routeTemplateLabel')
-      : t('workout.routeRoutineLabel');
+    : t('workout.routeTemplateLabel');
   const isPreloadingRoute = routeCopyFromWorkoutId
     ? isPreloadingCopyWorkout
-    : routeTemplateId
-      ? isPreloadingTemplate
-      : isPreloadingRoutine;
+    : isPreloadingTemplate;
   const routePreloadError = routeCopyFromWorkoutId
     ? copyWorkoutPreloadError
-    : routeTemplateId
-      ? templatePreloadError
-      : routinePreloadError;
+    : templatePreloadError;
 
   const getExerciseMuscleLabel = (exercise: ExerciseRow): string => {
     const muscleKey = getExerciseMuscleTranslationKey({
@@ -1068,21 +1009,14 @@ export default function ActiveWorkout() {
             <View style={styles.statusCard}>
               <Text style={styles.statusTitle}>{t('workout.unableToLoadRoute', { label: routePreloadLabel })}</Text>
               <Text style={styles.statusSubtitle}>{routePreloadError}</Text>
-              {(routeTemplateId || routeRoutineId) ? (
+              {routeTemplateId ? (
                 <TouchableOpacity
                   style={styles.statusRetryButton}
                   activeOpacity={ACTIVE_OPACITY}
                   accessibilityRole="button"
                   accessibilityLabel={t('common.retry')}
                   onPress={() => {
-                    if (routeTemplateId) {
-                      void preloadTemplate(routeTemplateId, true);
-                      return;
-                    }
-
-                    if (routeRoutineId) {
-                      void preloadRoutine(routeRoutineId, true);
-                    }
+                    void preloadTemplate(routeTemplateId, true);
                   }}
                 >
                   <Text style={styles.statusRetryButtonText}>{t('common.retry')}</Text>

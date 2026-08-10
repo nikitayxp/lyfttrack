@@ -40,8 +40,8 @@ export const PRIVACY_POLICY: LegalDocument = {
           en: 'Profile data: username, display name, bio, profile photo (if you upload one), and profile visibility preference (public / friends / private).',
         },
         {
-          pt: 'Dados de treino: treinos, exercícios, séries (peso, repetições, RIR e metadados associados), rotinas, templates, notas, datas e duração, e medições corporais que registares (ex.: peso corporal).',
-          en: 'Workout data: workouts, exercises, sets (weight, reps, RIR and related metadata), routines, templates, notes, dates and duration, and body measurements you log (e.g. body weight).',
+          pt: 'Dados de treino: treinos, exercícios, séries (peso, repetições, RIR e metadados associados), templates, notas, datas e duração, e medições corporais que registares (ex.: peso corporal).',
+          en: 'Workout data: workouts, exercises, sets (weight, reps, RIR and related metadata), templates, notes, dates and duration, and body measurements you log (e.g. body weight).',
         },
         {
           pt: 'Dados sociais na app: amigos / pedidos de amizade, likes e comentários em treinos partilhados, conforme as funcionalidades que uses.',
@@ -116,8 +116,8 @@ export const PRIVACY_POLICY: LegalDocument = {
           en: 'Where applicable, you may request: access to a copy of your data; rectification of inaccurate information; and deletion of your account and associated data.',
         },
         {
-          pt: 'Podes exercer estes direitos contactando nikitayxp@gmail.com. Tens também, nas definições da app (zona de perigo), a opção «Eliminar conta», que apaga de imediato e de forma definitiva a conta de autenticação e os dados associados: treinos, séries, rotinas, medições, perfil, gostos e comentários.',
-          en: 'You can exercise these rights by contacting nikitayxp@gmail.com. You also have a "Delete account" option in the app settings (danger zone), which immediately and permanently deletes your auth account and associated data: workouts, sets, routines, measurements, profile, likes and comments.',
+          pt: 'Podes exercer estes direitos contactando nikitayxp@gmail.com. Tens também, nas definições da app (zona de perigo), a opção «Eliminar conta», que apaga de imediato e de forma definitiva a conta de autenticação e os dados associados: treinos, séries, templates, medições, perfil, gostos e comentários.',
+          en: 'You can exercise these rights by contacting nikitayxp@gmail.com. You also have a "Delete account" option in the app settings (danger zone), which immediately and permanently deletes your auth account and associated data: workouts, sets, templates, measurements, profile, likes and comments.',
         },
         {
           pt: 'Tens ainda o direito de apresentar reclamação junto da autoridade de controlo competente (em Portugal, a CNPD), se considerares que o tratamento viola a legislação de proteção de dados.',

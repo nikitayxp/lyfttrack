@@ -47,15 +47,12 @@ import type { AppLanguage } from '@/i18n/resources';
 import { matchesExerciseSearch } from '@/utils/exerciseSearch';
 import {
   createExercise,
-  createRoutine,
   getErrorMessage,
   getExercisesCatalog,
   getRecentExerciseIds,
-  getRoutines,
   orderExercisesByIds,
   type ExerciseLibraryEquipmentFilter,
   type ExerciseLibraryMuscleFilter,
-  type RoutineSummary,
 } from '@/services/workoutService';
 import type { Tables } from '@/types/database';
 import { showAlert } from '@/utils/showAlert';
@@ -116,16 +113,6 @@ export default function WorkoutScreen() {
   const [templateNameInput, setTemplateNameInput] = useState('');
   const [selectedTemplateExercises, setSelectedTemplateExercises] = useState<string[]>([]);
 
-  const [routines, setRoutines] = useState<RoutineSummary[]>([]);
-  const [isLoadingRoutines, setIsLoadingRoutines] = useState(false);
-  const [hasLoadedRoutines, setHasLoadedRoutines] = useState(false);
-  const [routinesError, setRoutinesError] = useState<string | null>(null);
-  const [isCreateRoutineModalVisible, setIsCreateRoutineModalVisible] = useState(false);
-  const [isCreatingRoutine, setIsCreatingRoutine] = useState(false);
-  const [routineNameInput, setRoutineNameInput] = useState('');
-  const [routineNotesInput, setRoutineNotesInput] = useState('');
-  const [selectedRoutineExerciseIds, setSelectedRoutineExerciseIds] = useState<string[]>([]);
-
   const [catalogExercises, setCatalogExercises] = useState<ExerciseRow[]>([]);
   const [isLoadingCatalog, setIsLoadingCatalog] = useState(false);
   const [hasLoadedCatalog, setHasLoadedCatalog] = useState(false);
@@ -156,10 +143,6 @@ export default function WorkoutScreen() {
   const selectionOrder = useMemo(() => {
     return new Map(selectedTemplateExercises.map((exerciseId, index) => [exerciseId, index + 1]));
   }, [selectedTemplateExercises]);
-
-  const routineSelectionOrder = useMemo(() => {
-    return new Map(selectedRoutineExerciseIds.map((exerciseId, index) => [exerciseId, index + 1]));
-  }, [selectedRoutineExerciseIds]);
 
   const getDisplayExerciseName = useCallback((exercise: ExerciseRow) => {
     return getLocalizedExerciseName(exercise, language);
@@ -289,10 +272,9 @@ export default function WorkoutScreen() {
     return (
       activeMode === 'exercises' ||
       isCreateTemplateModalVisible ||
-      isCreateRoutineModalVisible ||
       isCreateExerciseModalVisible
     );
-  }, [activeMode, isCreateExerciseModalVisible, isCreateRoutineModalVisible, isCreateTemplateModalVisible]);
+  }, [activeMode, isCreateExerciseModalVisible, isCreateTemplateModalVisible]);
 
   const loadTemplates = useCallback(async () => {
     setIsLoadingTemplates(true);
@@ -305,21 +287,6 @@ export default function WorkoutScreen() {
       setTemplatesError(getErrorMessage(error));
     } finally {
       setIsLoadingTemplates(false);
-    }
-  }, []);
-
-  const loadRoutines = useCallback(async () => {
-    setIsLoadingRoutines(true);
-    setRoutinesError(null);
-
-    try {
-      const routineList = await getRoutines();
-      setRoutines(routineList);
-      setHasLoadedRoutines(true);
-    } catch (error) {
-      setRoutinesError(getErrorMessage(error));
-    } finally {
-      setIsLoadingRoutines(false);
     }
   }, []);
 
@@ -342,14 +309,6 @@ export default function WorkoutScreen() {
   useEffect(() => {
     void loadTemplates();
   }, [loadTemplates]);
-
-  useEffect(() => {
-    if (activeMode !== 'templates' || hasLoadedRoutines || isLoadingRoutines) {
-      return;
-    }
-
-    void loadRoutines();
-  }, [activeMode, hasLoadedRoutines, isLoadingRoutines, loadRoutines]);
 
   useEffect(() => {
     if (!shouldLoadCatalog) {
@@ -386,10 +345,6 @@ export default function WorkoutScreen() {
     }
   }
 
-  function handleStartRoutine(routineId: string) {
-    router.push({ pathname: '/workout/active', params: { routineId } } as any);
-  }
-
   const openCreateTemplateFlow = useCallback(() => {
     setActiveMode('templates');
     setIsCreateTemplateModalVisible(true);
@@ -405,67 +360,15 @@ export default function WorkoutScreen() {
     });
   }
 
-  function toggleRoutineExerciseSelection(exerciseId: string) {
-    setSelectedRoutineExerciseIds((currentValue) => {
-      if (currentValue.includes(exerciseId)) {
-        return currentValue.filter((id) => id !== exerciseId);
-      }
-
-      return [...currentValue, exerciseId];
-    });
-  }
-
   function resetTemplateForm() {
     setTemplateNameInput('');
     setSelectedTemplateExercises([]);
-  }
-
-  function resetRoutineForm() {
-    setRoutineNameInput('');
-    setRoutineNotesInput('');
-    setSelectedRoutineExerciseIds([]);
   }
 
   function resetExerciseForm() {
     setExerciseNameInput('');
     setSelectedMuscleKey(null);
     setSelectedEquipmentKey(null);
-  }
-
-  async function handleCreateRoutine() {
-    const normalizedName = sanitizeText(routineNameInput, {
-      maxLength: INPUT_LIMITS.nameMax,
-      allowEmpty: false,
-    });
-    const normalizedNotes = sanitizeText(routineNotesInput, {
-      maxLength: INPUT_LIMITS.notesMax,
-      allowEmpty: true,
-    });
-
-    if (!normalizedName) {
-      showAlert(showToast, t('validation.title'), t('validation.routineNameRequired'), 'error');
-      return;
-    }
-
-    if (selectedRoutineExerciseIds.length === 0) {
-      showAlert(showToast, t('validation.title'), t('validation.routineExerciseRequired'), 'error');
-      return;
-    }
-
-    setIsCreatingRoutine(true);
-
-    try {
-      await createRoutine(normalizedName, normalizedNotes, selectedRoutineExerciseIds);
-      setIsCreateRoutineModalVisible(false);
-      resetRoutineForm();
-      setHasLoadedRoutines(false);
-      await loadRoutines();
-      showAlert(showToast, t('routines.createRoutineSuccessTitle'), t('routines.createRoutineSuccessDescription'));
-    } catch (error) {
-      showAlert(showToast, t('routines.createRoutineError'), getErrorMessage(error), 'error');
-    } finally {
-      setIsCreatingRoutine(false);
-    }
   }
 
   async function handleCreateExercise() {
@@ -761,80 +664,6 @@ export default function WorkoutScreen() {
             )}
           </View>
 
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>{t('workout.createRoutine')}</Text>
-            <TouchableOpacity
-              style={styles.createTemplateButton}
-              activeOpacity={ACTIVE_OPACITY}
-              onPress={() => setIsCreateRoutineModalVisible(true)}
-              accessibilityRole="button"
-              accessibilityLabel={t('workout.newRoutine')}
-            >
-              <Ionicons name="add" size={16} color={palette.textPrimary} />
-              <Text style={styles.createTemplateButtonText}>{t('workout.newRoutine')}</Text>
-            </TouchableOpacity>
-          </View>
-
-          <Text style={styles.sectionCaption}>{t('workout.routinesCaption')}</Text>
-
-          <View style={styles.quickStartSection}>
-            {isLoadingRoutines ? (
-              <View style={styles.statusContainer}>
-                <ActivityIndicator size="small" color={palette.accent} />
-                <Text style={styles.statusText}>{t('workout.loadingRoutines')}</Text>
-              </View>
-            ) : routinesError ? (
-              <View style={styles.statusContainer}>
-                <Text style={styles.statusTitle}>{t('workout.unableToLoadRoutines')}</Text>
-                <Text style={styles.statusText}>{routinesError}</Text>
-                <TouchableOpacity
-                  style={styles.retryButton}
-                  onPress={() => {
-                    setHasLoadedRoutines(false);
-                    void loadRoutines();
-                  }}
-                  activeOpacity={ACTIVE_OPACITY}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('common.retry')}
-                >
-                  <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
-                </TouchableOpacity>
-              </View>
-            ) : routines.length === 0 ? (
-              <View style={styles.statusContainer}>
-                <Text style={styles.statusTitle}>{t('workout.noRoutinesTitle')}</Text>
-                <Text style={styles.statusText}>{t('workout.noRoutinesDescription')}</Text>
-              </View>
-            ) : (
-              routines.map((routine, index) => (
-                <Animated.View
-                  key={`${routine.id}-${animationEpoch}`}
-                  entering={FadeInDown.delay(Math.min(index * 45, 280)).duration(320)}
-                  layout={cardLayoutTransition}
-                >
-                  <View style={styles.routineCard}>
-                    <View style={styles.cardHead}>
-                      <Text style={styles.routineName}>{routine.name}</Text>
-                      <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
-                    </View>
-                    <Text style={styles.routineMeta}>{`${routine.exerciseCount} ${t('workout.templateExercises').toLowerCase()}`}</Text>
-                    <Text style={styles.routineNotes}>{routine.notes ?? t('workout.noRoutineNotes')}</Text>
-
-                    <TouchableOpacity
-                      style={styles.startRoutineButton}
-                      activeOpacity={ACTIVE_OPACITY}
-                      onPress={() => handleStartRoutine(routine.id)}
-                      accessibilityRole="button"
-                      accessibilityLabel={t('workout.startRoutine')}
-                    >
-                      <Ionicons name="play" size={15} color={palette.textPrimary} />
-                      <Text style={styles.startRoutineButtonText}>{t('workout.startRoutine')}</Text>
-                    </TouchableOpacity>
-                  </View>
-                </Animated.View>
-              ))
-            )}
-          </View>
         </>
       ) : null}
 
@@ -1138,130 +967,6 @@ export default function WorkoutScreen() {
       </DismissibleBottomSheet>
 
       <DismissibleBottomSheet
-        visible={isCreateRoutineModalVisible}
-        onClose={() => setIsCreateRoutineModalVisible(false)}
-        scrollable
-      >
-            <Text style={styles.modalTitle}>{t('routines.createRoutine')}</Text>
-
-            <TextInput
-              accessibilityLabel={t('accessibility.routineName', { defaultValue: 'Routine name' })}
-              value={routineNameInput}
-              onChangeText={(value) => setRoutineNameInput(value.substring(0, INPUT_LIMITS.nameMax))}
-              style={styles.modalInput}
-              placeholder={t('routines.routineName')}
-              placeholderTextColor={palette.textMuted}
-              autoCapitalize="words"
-              maxLength={INPUT_LIMITS.nameMax}
-            />
-            <TextInput
-              accessibilityLabel={t('accessibility.routineNotes', { defaultValue: 'Routine notes' })}
-              value={routineNotesInput}
-              onChangeText={(value) => setRoutineNotesInput(value.substring(0, INPUT_LIMITS.notesMax))}
-              style={[styles.modalInput, styles.modalNotesInput]}
-              placeholder={t('routines.notesOptional')}
-              placeholderTextColor={palette.textMuted}
-              autoCapitalize="sentences"
-              multiline
-              textAlignVertical="top"
-              maxLength={INPUT_LIMITS.notesMax}
-            />
-
-            <Text style={styles.modalSectionTitle}>{`${t('routines.exercises')} (${selectedRoutineExerciseIds.length})`}</Text>
-
-            {isLoadingCatalog ? (
-              <View style={styles.modalStatusContainer}>
-                <ActivityIndicator size="small" color={palette.accent} />
-                <Text style={styles.modalStatusText}>{t('routines.loadingCatalog')}</Text>
-              </View>
-            ) : catalogError ? (
-              <View style={styles.modalStatusContainer}>
-                <Text style={styles.modalStatusTitle}>{t('routines.unableToLoadExercises')}</Text>
-                <Text style={styles.modalStatusText}>{catalogError}</Text>
-                <TouchableOpacity
-                  style={styles.modalRetryButton}
-                  onPress={() => {
-                    setHasLoadedCatalog(false);
-                    void loadCatalogExercises();
-                  }}
-                  activeOpacity={ACTIVE_OPACITY}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('common.retry')}
-                >
-                  <Text style={styles.modalRetryButtonText}>{t('common.retry')}</Text>
-                </TouchableOpacity>
-              </View>
-            ) : catalogExercises.length === 0 ? (
-              <View style={styles.modalStatusContainer}>
-                <Text style={styles.modalStatusTitle}>{t('routines.noExercisesAvailable')}</Text>
-                <Text style={styles.modalStatusText}>{t('routines.noExercisesHint')}</Text>
-              </View>
-            ) : (
-              <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
-                {catalogExercises.map((exercise) => {
-                  const selectedOrder = routineSelectionOrder.get(exercise.id);
-                  const isSelected = selectedOrder !== undefined;
-
-                  return (
-                    <TouchableOpacity
-                      key={exercise.id}
-                      style={[styles.modalExerciseRow, isSelected && styles.modalExerciseRowSelected]}
-                      activeOpacity={ACTIVE_OPACITY}
-                      onPress={() => toggleRoutineExerciseSelection(exercise.id)}
-                      accessibilityRole="button"
-                      accessibilityLabel={t('accessibility.toggleSpecificExercise', { name: getDisplayExerciseName(exercise), defaultValue: 'Toggle exercise' })}
-                    >
-                      <View style={styles.modalExerciseTextWrap}>
-                        <Text style={styles.modalExerciseName}>{getDisplayExerciseName(exercise)}</Text>
-                        <Text style={styles.modalExerciseMeta}>
-                          {getDisplayMuscle(exercise)} - {getDisplayEquipment(exercise)}
-                        </Text>
-                      </View>
-
-                      {isSelected ? (
-                        <View style={styles.orderBadge}>
-                          <Text style={styles.orderBadgeText}>{selectedOrder}</Text>
-                        </View>
-                      ) : (
-                        <View style={styles.addActionButton}>
-                          <Ionicons name="add" size={16} color={palette.accent} />
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            )}
-
-            <View style={styles.modalButtonRow}>
-              <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={() => setIsCreateRoutineModalVisible(false)}
-                activeOpacity={ACTIVE_OPACITY}
-                accessibilityRole="button"
-                accessibilityLabel={t('common.cancel')}
-              >
-                <Text style={styles.modalCancelButtonText}>{t('common.cancel')}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.modalCreateButton, isCreatingRoutine && styles.modalCreateButtonDisabled]}
-                onPress={() => void handleCreateRoutine()}
-                activeOpacity={ACTIVE_OPACITY}
-                disabled={isCreatingRoutine}
-                accessibilityRole="button"
-                accessibilityLabel={t('routines.createRoutine')}
-              >
-                {isCreatingRoutine ? (
-                  <ActivityIndicator size="small" color={palette.textPrimary} />
-                ) : (
-                  <Text style={styles.modalCreateButtonText}>{t('routines.createRoutine')}</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-      </DismissibleBottomSheet>
-
-      <DismissibleBottomSheet
         visible={isCreateExerciseModalVisible}
         onClose={() => setIsCreateExerciseModalVisible(false)}
       >
@@ -1522,56 +1227,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     marginTop: 4,
-  },
-  routineCard: {
-    borderRadius: Radius.card,
-    borderWidth: 1,
-    borderColor: palette.inputFill,
-    backgroundColor: CARD_BG,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 10,
-  },
-  cardHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  routineName: {
-    color: palette.textPrimary,
-    fontSize: 16,
-    fontWeight: '800',
-    flex: 1,
-    paddingRight: 10,
-  },
-  routineMeta: {
-    color: palette.labelMuted,
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 6,
-  },
-  routineNotes: {
-    color: palette.chipText,
-    fontSize: 13,
-    lineHeight: 19,
-    marginBottom: 10,
-  },
-  startRoutineButton: {
-    minHeight: 38,
-    borderRadius: Radius.button,
-    borderWidth: 1,
-    borderColor: palette.accent,
-    backgroundColor: palette.accentStrong,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    columnGap: 8,
-  },
-  startRoutineButtonText: {
-    color: palette.textPrimary,
-    fontSize: 13,
-    fontWeight: '800',
   },
   toolbarRow: {
     marginTop: 10,

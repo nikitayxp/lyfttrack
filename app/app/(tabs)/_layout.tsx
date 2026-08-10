@@ -86,12 +86,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="routines"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
         name="profile/edit"
         options={{
           href: null,

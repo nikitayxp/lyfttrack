@@ -61,9 +61,10 @@ const palette = Colors.dark;
 const CARD_BG = palette.surface;
 const cardLayoutTransition = LinearTransition.springify().damping(16).stiffness(180);
 
-const MUSCLE_FILTER_CHIP_KEYS: readonly (ExerciseLibraryMuscleFilter | 'recent')[] = [
+const MUSCLE_FILTER_CHIP_KEYS: readonly (ExerciseLibraryMuscleFilter | 'recent' | 'custom')[] = [
   'all',
   'recent',
+  'custom',
   ...EXERCISE_MUSCLE_OPTIONS,
 ];
 const EQUIPMENT_FILTER_CHIP_KEYS: readonly ExerciseLibraryEquipmentFilter[] = [
@@ -119,7 +120,7 @@ export default function WorkoutScreen() {
   const [catalogError, setCatalogError] = useState<string | null>(null);
 
   const [exerciseQuery, setExerciseQuery] = useState('');
-  const [selectedMuscleFilter, setSelectedMuscleFilter] = useState<ExerciseLibraryMuscleFilter | 'recent'>('all');
+  const [selectedMuscleFilter, setSelectedMuscleFilter] = useState<ExerciseLibraryMuscleFilter | 'recent' | 'custom'>('all');
   const [selectedEquipmentFilter, setSelectedEquipmentFilter] = useState<ExerciseLibraryEquipmentFilter>('all');
   const [, startFilterTransition] = useTransition();
   const deferredMuscleFilter = useDeferredValue(selectedMuscleFilter);
@@ -183,6 +184,10 @@ export default function WorkoutScreen() {
         if (!recentSet.has(exercise.id)) {
           return false;
         }
+      } else if (deferredMuscleFilter === 'custom') {
+        if (!exercise.is_custom) {
+          return false;
+        }
       } else if (deferredMuscleFilter !== 'all') {
         const muscleKey = resolveExerciseMuscleKey({
           muscleGroup: exercise.muscle_group,
@@ -215,6 +220,10 @@ export default function WorkoutScreen() {
       return [[t('exercise.filterRecent'), orderExercisesByIds(filtered, recentExerciseIds)] as const];
     }
 
+    if (deferredMuscleFilter === 'custom') {
+      return [[t('exercise.filterMyExercises'), filtered] as const];
+    }
+
     const groups = filtered.reduce<Record<string, ExerciseRow[]>>((acc, exercise) => {
       const groupKey = getDisplayMuscle(exercise);
 
@@ -239,7 +248,7 @@ export default function WorkoutScreen() {
   ]);
 
   useEffect(() => {
-    if (activeMode !== 'exercises' || deferredMuscleFilter === 'recent') {
+    if (activeMode !== 'exercises' || deferredMuscleFilter === 'recent' || deferredMuscleFilter === 'custom') {
       setVisibleGroupCount(Number.POSITIVE_INFINITY);
       return;
     }
@@ -450,12 +459,15 @@ export default function WorkoutScreen() {
     exercises: t('workout.exercisesModeLabel'),
   };
 
-  const getMuscleFilterLabel = (filterKey: ExerciseLibraryMuscleFilter | 'recent'): string => {
+  const getMuscleFilterLabel = (filterKey: ExerciseLibraryMuscleFilter | 'recent' | 'custom'): string => {
     if (filterKey === 'all') {
       return t('exercise.filterAll');
     }
     if (filterKey === 'recent') {
       return t('exercise.filterRecent');
+    }
+    if (filterKey === 'custom') {
+      return t('exercise.filterMyExercises');
     }
     return t(EXERCISE_MUSCLE_TRANSLATION_KEY[filterKey]);
   };

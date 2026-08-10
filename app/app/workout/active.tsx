@@ -100,9 +100,10 @@ const ROOT_SCREEN_BG = palette.bgPrimary;
 // an empty promise.
 const PICKER_RECENT_LIMIT = 5;
 
-const MUSCLE_FILTER_CHIP_KEYS: readonly (ExerciseLibraryMuscleFilter | 'recent')[] = [
+const MUSCLE_FILTER_CHIP_KEYS: readonly (ExerciseLibraryMuscleFilter | 'recent' | 'custom')[] = [
   'all',
   'recent',
+  'custom',
   ...EXERCISE_MUSCLE_OPTIONS,
 ];
 const EQUIPMENT_FILTER_CHIP_KEYS: readonly ExerciseLibraryEquipmentFilter[] = [
@@ -244,7 +245,7 @@ export default function ActiveWorkout() {
 
   const [exercisePickerVisible, setExercisePickerVisible] = useState(false);
   const [exercisePickerQuery, setExercisePickerQuery] = useState('');
-  const [selectedMuscleFilter, setSelectedMuscleFilter] = useState<ExerciseLibraryMuscleFilter | 'recent'>('all');
+  const [selectedMuscleFilter, setSelectedMuscleFilter] = useState<ExerciseLibraryMuscleFilter | 'recent' | 'custom'>('all');
   const [selectedEquipmentFilter, setSelectedEquipmentFilter] = useState<ExerciseLibraryEquipmentFilter>('all');
   const [createExerciseVisible, setCreateExerciseVisible] = useState(false);
   const [catalogExercises, setCatalogExercises] = useState<ExerciseRow[]>([]);
@@ -467,6 +468,20 @@ export default function ActiveWorkout() {
     }
   }, [selectedEquipmentFilter]);
 
+  const loadCustomExercises = useCallback(async () => {
+    setIsLoadingExercises(true);
+    setExerciseLoadError(null);
+
+    try {
+      const catalog = await getExercisesCatalog({ equipment: selectedEquipmentFilter });
+      setCatalogExercises(catalog.filter((e) => e.is_custom));
+    } catch (err) {
+      setExerciseLoadError(getErrorMessage(err));
+    } finally {
+      setIsLoadingExercises(false);
+    }
+  }, [selectedEquipmentFilter]);
+
   // Carregado sempre que o picker abre, e nao apenas no filtro Recentes: a
   // lista por omissao passa a comecar por eles.
   useEffect(() => {
@@ -501,8 +516,13 @@ export default function ActiveWorkout() {
       return;
     }
 
+    if (selectedMuscleFilter === 'custom') {
+      void loadCustomExercises();
+      return;
+    }
+
     void loadExercises({ muscle: selectedMuscleFilter, equipment: selectedEquipmentFilter });
-  }, [exercisePickerVisible, loadExercises, loadRecentExercises, selectedEquipmentFilter, selectedMuscleFilter]);
+  }, [exercisePickerVisible, loadCustomExercises, loadExercises, loadRecentExercises, selectedEquipmentFilter, selectedMuscleFilter]);
 
   const closeExercisePicker = useCallback(() => {
     setExercisePickerVisible(false);
@@ -692,7 +712,7 @@ export default function ActiveWorkout() {
       setCreateExerciseVisible(false);
 
       exerciseCatalogByFilterRef.current.clear();
-      const muscleParam = selectedMuscleFilter === 'recent' ? 'all' : selectedMuscleFilter;
+      const muscleParam = (selectedMuscleFilter === 'recent' || selectedMuscleFilter === 'custom') ? 'all' : selectedMuscleFilter;
       await loadExercises({ muscle: muscleParam, equipment: selectedEquipmentFilter }, true);
       addExercise(createdExercise);
       setExercisePickerVisible(false);
@@ -909,12 +929,15 @@ export default function ActiveWorkout() {
     ];
   }, [exercisePickerQuery, filteredCatalogExercises, recentExerciseIds, selectedMuscleFilter]);
 
-  const getMuscleFilterLabel = (filterKey: ExerciseLibraryMuscleFilter | 'recent'): string => {
+  const getMuscleFilterLabel = (filterKey: ExerciseLibraryMuscleFilter | 'recent' | 'custom'): string => {
     if (filterKey === 'all') {
       return language === 'pt' ? 'Todos' : 'All';
     }
     if (filterKey === 'recent') {
       return language === 'pt' ? 'Recentes' : 'Recent';
+    }
+    if (filterKey === 'custom') {
+      return t('exercise.filterMyExercises');
     }
 
     return t(EXERCISE_MUSCLE_TRANSLATION_KEY[filterKey]);
@@ -1552,6 +1575,11 @@ export default function ActiveWorkout() {
                       onPress={() => {
                         if (selectedMuscleFilter === 'recent') {
                           void loadRecentExercises();
+                          return;
+                        }
+
+                        if (selectedMuscleFilter === 'custom') {
+                          void loadCustomExercises();
                           return;
                         }
 

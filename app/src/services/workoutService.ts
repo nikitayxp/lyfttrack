@@ -34,8 +34,6 @@ export type ExerciseCatalogFilters = {
   /** Import matching needs unlisted rows + their aliases; picker keeps them hidden. */
   includeUnlisted?: boolean;
 };
-export type RoutineRow = Tables<'routines'>;
-export type RoutineExerciseRow = Tables<'routine_exercises'>;
 export type WorkoutExerciseRow = Tables<'workout_exercises'>;
 export type ProfileRow = Tables<'profiles'>;
 
@@ -46,18 +44,6 @@ export type CreateExerciseInput = {
 };
 
 
-
-export type RoutineSummary = Pick<RoutineRow, 'id' | 'name' | 'notes'> & {
-  exerciseCount: number;
-};
-
-export type RoutineDetailExercise = Pick<RoutineExerciseRow, 'id' | 'order'> & {
-  exercise: ExerciseCatalogItem;
-};
-
-export type RoutineDetail = Pick<RoutineRow, 'id' | 'name' | 'notes'> & {
-  exercises: RoutineDetailExercise[];
-};
 
 // ---------- Workout History Types ----------
 
@@ -122,11 +108,6 @@ export type WorkoutFeedExerciseGroup = {
   name_en: string | null;
   name_pt: string | null;
   sets: WorkoutFeedExerciseSet[];
-};
-
-export type RoutineFeedItem = Pick<Tables<'routines'>, 'id' | 'name' | 'notes' | 'created_at' | 'user_id'> & {
-  profile: PublicProfile | null;
-  exerciseCount: number;
 };
 
 export type PreviousExercisePerformanceSet = {
@@ -1223,191 +1204,6 @@ export async function getLastExerciseRestTimes(exerciseIds: string[]): Promise<R
   return latestByExerciseId;
 }
 
-// ---------- Routines ----------
-
-export async function getRoutines(): Promise<RoutineSummary[]> {
-  const user = await getAuthenticatedUserOrThrow();
-
-  const { data: routines, error: routinesError } = await supabase
-    .from('routines')
-    .select('id, name, notes')
-    .eq('user_id', user.id)
-    .order('name', { ascending: true });
-
-  if (routinesError) {
-    throw new Error(`Unable to load routines: ${routinesError.message}`);
-  }
-
-  if (!routines || routines.length === 0) {
-    return [];
-  }
-
-  const routineIds = routines.map((routine) => routine.id);
-
-  const { data: routineExercises, error: routineExercisesError } = await supabase
-    .from('routine_exercises')
-    .select('routine_id')
-    .in('routine_id', routineIds);
-
-  if (routineExercisesError) {
-    throw new Error(`Unable to load routine exercises: ${routineExercisesError.message}`);
-  }
-
-  const exerciseCountByRoutine = new Map<string, number>();
-
-  for (const relation of routineExercises ?? []) {
-    const currentCount = exerciseCountByRoutine.get(relation.routine_id) ?? 0;
-    exerciseCountByRoutine.set(relation.routine_id, currentCount + 1);
-  }
-
-  return routines.map((routine) => ({
-    id: routine.id,
-    name: routine.name,
-    notes: routine.notes,
-    exerciseCount: exerciseCountByRoutine.get(routine.id) ?? 0,
-  }));
-}
-
-export async function getRoutineById(routineId: string): Promise<RoutineDetail> {
-  const normalizedRoutineId = routineId.trim();
-
-  if (!normalizedRoutineId) {
-    throw new Error('Routine id is required.');
-  }
-
-  const user = await getAuthenticatedUserOrThrow();
-
-  const { data: routine, error: routineError } = await supabase
-    .from('routines')
-    .select('id, name, notes')
-    .eq('id', normalizedRoutineId)
-    .eq('user_id', user.id)
-    .maybeSingle();
-
-  if (routineError) {
-    throw new Error(`Unable to load routine: ${routineError.message}`);
-  }
-
-  if (!routine) {
-    throw new Error('Routine not found.');
-  }
-
-  const { data: routineExercises, error: routineExercisesError } = await supabase
-    .from('routine_exercises')
-    .select('id, order, exercise_id')
-    .eq('routine_id', routine.id)
-    .order('order', { ascending: true });
-
-  if (routineExercisesError) {
-    throw new Error(`Unable to load routine exercises: ${routineExercisesError.message}`);
-  }
-
-  if (!routineExercises || routineExercises.length === 0) {
-    return {
-      id: routine.id,
-      name: routine.name,
-      notes: routine.notes,
-      exercises: [],
-    };
-  }
-
-  const exerciseIds = routineExercises.map((entry) => entry.exercise_id);
-
-  const { data: exercises, error: exercisesError } = await supabase
-    .from('exercises')
-    .select('*')
-    .in('id', exerciseIds);
-
-  if (exercisesError) {
-    throw new Error(`Unable to load routine exercise details: ${exercisesError.message}`);
-  }
-
-  const exerciseById = new Map((exercises ?? []).map((exercise) => [exercise.id, exercise]));
-
-  const orderedExercises: RoutineDetailExercise[] = routineExercises.flatMap((entry) => {
-    const exercise = exerciseById.get(entry.exercise_id);
-
-    if (!exercise) {
-      return [];
-    }
-
-    return [
-      {
-        id: entry.id,
-        order: entry.order,
-        exercise,
-      },
-    ];
-  });
-
-  return {
-    id: routine.id,
-    name: routine.name,
-    notes: routine.notes,
-    exercises: orderedExercises,
-  };
-}
-
-export async function createRoutine(
-  name: string,
-  notes: string | null | undefined,
-  exerciseIds: string[]
-): Promise<RoutineRow> {
-  const user = await getAuthenticatedUserOrThrow();
-
-  const normalizedName = normalizeRequiredName(name, 'Routine name');
-
-  const normalizedExerciseIds = normalizeExerciseIdList(exerciseIds);
-  if (normalizedExerciseIds.length === 0) {
-    throw new Error('Select at least one exercise to create a routine.');
-  }
-
-  const routineInsert: TablesInsert<'routines'> = {
-    user_id: user.id,
-    name: normalizedName,
-    notes: normalizeWriteText(notes, INPUT_LIMITS.notesMax),
-  };
-
-  const { data: createdRoutine, error: routineError } = await supabase
-    .from('routines')
-    .insert(routineInsert)
-    .select('*')
-    .single();
-
-  if (routineError || !createdRoutine) {
-    throw new Error(`Unable to create routine: ${routineError?.message ?? 'Unknown error'}`);
-  }
-
-  const routineExerciseRows: TablesInsert<'routine_exercises'>[] = normalizedExerciseIds.map((exerciseId, index) => ({
-    routine_id: createdRoutine.id,
-    exercise_id: exerciseId,
-    order: index + 1,
-  }));
-
-  const { error: routineExercisesError } = await supabase.from('routine_exercises').insert(routineExerciseRows);
-
-  if (!routineExercisesError) {
-    return createdRoutine;
-  }
-
-  const { error: rollbackError } = await supabase
-    .from('routines')
-    .delete()
-    .eq('id', createdRoutine.id)
-    .eq('user_id', user.id);
-
-  if (rollbackError) {
-    throw new Error(
-      `Unable to save routine exercises: ${routineExercisesError.message}. Rollback failed for routine ${createdRoutine.id}: ${rollbackError.message}`
-    );
-  }
-
-  throw new Error(
-    `Unable to save routine exercises: ${routineExercisesError.message}. Routine ${createdRoutine.id} was rolled back successfully.`
-  );
-}
-
-
 
 // ---------- Workout History ----------
 
@@ -2396,51 +2192,6 @@ export async function getUserWorkouts(userId: string, page = 0, limit = 20): Pro
 
 export async function getWorkoutFeed(page = 0, limit = 20): Promise<WorkoutFeedItem[]> {
   return getFeedWorkouts(page, limit);
-}
-
-export async function getRoutineFeed(limit = 30): Promise<RoutineFeedItem[]> {
-  const { data: routines, error: routinesError } = await supabase
-    .from('routines')
-    .select('id, user_id, name, notes, created_at')
-    .order('created_at', { ascending: false })
-    .limit(limit);
-
-  if (routinesError) {
-    throw new Error(`Unable to load routine feed: ${routinesError.message}`);
-  }
-
-  if (!routines || routines.length === 0) {
-    return [];
-  }
-
-  const routineIds = routines.map((routine) => routine.id);
-  const profileByUserId = await getPublicProfilesByIds(routines.map((routine) => routine.user_id));
-
-  const { data: routineExercises, error: routineExercisesError } = await supabase
-    .from('routine_exercises')
-    .select('routine_id')
-    .in('routine_id', routineIds);
-
-  if (routineExercisesError) {
-    throw new Error(`Unable to load routine feed exercises: ${routineExercisesError.message}`);
-  }
-
-  const exerciseCountByRoutine = new Map<string, number>();
-
-  for (const relation of routineExercises ?? []) {
-    const currentCount = exerciseCountByRoutine.get(relation.routine_id) ?? 0;
-    exerciseCountByRoutine.set(relation.routine_id, currentCount + 1);
-  }
-
-  return routines.map((routine) => ({
-    id: routine.id,
-    user_id: routine.user_id,
-    name: routine.name,
-    notes: routine.notes,
-    created_at: routine.created_at,
-    profile: profileByUserId.get(routine.user_id) ?? null,
-    exerciseCount: exerciseCountByRoutine.get(routine.id) ?? 0,
-  }));
 }
 
 export function getErrorMessage(error: unknown): string {

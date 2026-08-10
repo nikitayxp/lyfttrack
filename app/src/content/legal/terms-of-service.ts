@@ -33,8 +33,8 @@ export const TERMS_OF_SERVICE: LegalDocument = {
       },
       paragraphs: [
         {
-          pt: 'O LyftTrack é uma ferramenta digital de registo de treinos — um «caderno digital» para guardares exercícios, séries, pesos, rotinas e progresso.',
-          en: 'LyftTrack is a digital workout logging tool — a “digital notebook” for recording exercises, sets, weights, routines and progress.',
+          pt: 'O LyftTrack é uma ferramenta digital de registo de treinos — um «caderno digital» para guardares exercícios, séries, pesos, templates e progresso.',
+          en: 'LyftTrack is a digital workout logging tool — a “digital notebook” for recording exercises, sets, weights, templates and progress.',
         },
         {
           pt: 'O LyftTrack não presta aconselhamento médico, desportivo, nutricional ou de saúde. Não substitui um profissional de saúde, treinador certificado ou qualquer orientação clínica. Qualquer decisão sobre treino, carga ou recuperação é da tua exclusiva responsabilidade.',
@@ -85,8 +85,8 @@ export const TERMS_OF_SERVICE: LegalDocument = {
       },
       paragraphs: [
         {
-          pt: 'És o único responsável pelo conteúdo que cries ou partilhes no LyftTrack (incluindo nomes de rotinas, notas de exercícios, comentários, bio e outros textos ou imagens).',
-          en: 'You are solely responsible for content you create or share on LyftTrack (including routine names, exercise notes, comments, bio and other text or images).',
+          pt: 'És o único responsável pelo conteúdo que cries ou partilhes no LyftTrack (incluindo nomes de templates, notas de exercícios, comentários, bio e outros textos ou imagens).',
+          en: 'You are solely responsible for content you create or share on LyftTrack (including template names, exercise notes, comments, bio and other text or images).',
         },
         {
           pt: 'Comprometes-te a não utilizar a plataforma para guardar ou partilhar conteúdo ilegal, abusivo, difamatório, discriminatório, que viole direitos de terceiros, ou spam.',

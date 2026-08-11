@@ -61,10 +61,7 @@ type WorkoutContextValue = {
   ensureWorkoutStarted: () => number;
   resetWorkoutSession: () => void;
   safeDeactivateKeepAwake: () => void;
-  isExerciseStopwatchRunning: (exerciseId: string) => boolean;
-  getExerciseStopwatchSeconds: (exerciseId: string) => number;
   getExerciseRestSecondsByExerciseId: () => Record<string, number>;
-  toggleExerciseStopwatch: (exerciseId: string) => void;
   hasActiveWorkout: boolean;
   latestExerciseName: string | null;
 };
@@ -83,7 +80,6 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
   const [pausedElapsedSeconds, setPausedElapsedSeconds] = useState<number | null>(null);
   const [exerciseStopwatchById, setExerciseStopwatchById] = useState<Record<string, ExerciseStopwatchEntry>>({});
   const [exerciseRestSnapshotById, setExerciseRestSnapshotById] = useState<Record<string, number>>({});
-  const [stopwatchNowMs, setStopwatchNowMs] = useState(() => Date.now());
   const keepAwakeStateRef = useRef<{ activated: boolean; deactivated: boolean }>({
     activated: false,
     deactivated: false,
@@ -172,7 +168,6 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
     setDidRestoreDraft(false);
     setExerciseStopwatchById({});
     setExerciseRestSnapshotById({});
-    setStopwatchNowMs(Date.now());
   }, []);
 
   useEffect(() => {
@@ -323,71 +318,6 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
     });
   }, [activeExercises]);
 
-  const runningStopwatchCount = useMemo(() => Object.keys(exerciseStopwatchById).length, [exerciseStopwatchById]);
-
-  useEffect(() => {
-    if (runningStopwatchCount === 0) {
-      return;
-    }
-
-    const intervalId = setInterval(() => {
-      setStopwatchNowMs(Date.now());
-    }, 250);
-
-    return () => {
-      clearInterval(intervalId);
-    };
-  }, [runningStopwatchCount]);
-
-  const isExerciseStopwatchRunning = useCallback(
-    (exerciseId: string) => Boolean(exerciseStopwatchById[exerciseId]),
-    [exerciseStopwatchById]
-  );
-
-  const getExerciseStopwatchSeconds = useCallback(
-    (exerciseId: string) => {
-      const entry = exerciseStopwatchById[exerciseId];
-
-      if (!entry) {
-        return Math.max(0, Math.trunc(exerciseRestSnapshotById[exerciseId] ?? 0));
-      }
-
-      return Math.max(0, entry.startOffsetSeconds + Math.floor((stopwatchNowMs - entry.startedAtMs) / 1000));
-    },
-    [exerciseRestSnapshotById, exerciseStopwatchById, stopwatchNowMs]
-  );
-
-  const toggleExerciseStopwatch = useCallback((exerciseId: string) => {
-    setStopwatchNowMs(Date.now());
-
-    setExerciseStopwatchById((currentValue) => {
-      const currentEntry = currentValue[exerciseId];
-
-      if (currentEntry) {
-        const elapsedSeconds = Math.max(0, Math.floor((Date.now() - currentEntry.startedAtMs) / 1000));
-        const nextSnapshotSeconds = Math.max(0, currentEntry.startOffsetSeconds + elapsedSeconds);
-
-        setExerciseRestSnapshotById((currentSnapshotValue) => ({
-          ...currentSnapshotValue,
-          [exerciseId]: nextSnapshotSeconds,
-        }));
-
-        const nextValue = { ...currentValue };
-        delete nextValue[exerciseId];
-        return nextValue;
-      }
-
-      const startOffsetSeconds = Math.max(0, Math.trunc(exerciseRestSnapshotById[exerciseId] ?? 0));
-
-      return {
-        ...currentValue,
-        [exerciseId]: {
-          startedAtMs: Date.now(),
-          startOffsetSeconds,
-        },
-      };
-    });
-  }, [exerciseRestSnapshotById]);
 
   const getExerciseRestSecondsByExerciseId = useCallback(() => {
     const restByExerciseId: Record<string, number> = {};
@@ -564,10 +494,7 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
     ensureWorkoutStarted,
     resetWorkoutSession,
     safeDeactivateKeepAwake,
-    isExerciseStopwatchRunning,
-    getExerciseStopwatchSeconds,
     getExerciseRestSecondsByExerciseId,
-    toggleExerciseStopwatch,
     hasActiveWorkout,
     latestExerciseName,
   }), [
@@ -585,10 +512,8 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
     ensureWorkoutStarted,
     getExerciseCompletionGlowValue,
     getExerciseRestSecondsByExerciseId,
-    getExerciseStopwatchSeconds,
     handleSetCompletionToggle,
     hasActiveWorkout,
-    isExerciseStopwatchRunning,
     latestExerciseName,
     moveExercise,
     recoveredDraft,
@@ -601,7 +526,6 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
     setActiveTemplateId,
     setWorkoutName,
     setActiveExercisesWithRef,
-    toggleExerciseStopwatch,
     updateSetInput,
     updateSetSide,
     updateSetType,

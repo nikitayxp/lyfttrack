@@ -19,6 +19,7 @@ import {
   type RecoveredDraftState,
 } from '@/hooks/useActiveWorkoutState';
 import { supabase } from '@/services/supabase';
+import { getPreviousExercisePerformance } from '@/services/workoutService';
 
 type ExerciseStopwatchEntry = {
   startedAtMs: number;
@@ -403,7 +404,16 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
   const addExerciseToWorkout = useCallback(
     (exercise: ExerciseRow) => {
       ensureWorkoutStarted();
-      addExercise(exercise);
+      getPreviousExercisePerformance(exercise.id, null)
+        .then((previousSets) => {
+          const seeds = previousSets.map((s) => ({
+            setType: s.setType,
+          }));
+          addExercise(exercise, seeds);
+        })
+        .catch(() => {
+          addExercise(exercise);
+        });
     },
     [addExercise, ensureWorkoutStarted]
   );

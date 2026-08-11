@@ -605,8 +605,11 @@ export function useActiveWorkoutState({
     );
   }, [setActiveExercisesWithRef]);
 
-  const addExercise = useCallback((exercise: ExerciseRow) => {
-    setActiveExercisesWithRef((currentValue) => [...currentValue, createExerciseBlock(exercise)]);
+  const addExercise = useCallback((exercise: ExerciseRow, historicalSets?: CopySetSeed[]) => {
+    const block = historicalSets && historicalSets.length > 0
+      ? createExerciseBlockFromSets(exercise, historicalSets)
+      : createExerciseBlock(exercise);
+    setActiveExercisesWithRef((currentValue) => [...currentValue, block]);
   }, [setActiveExercisesWithRef]);
 
   const clearExercises = useCallback(() => {

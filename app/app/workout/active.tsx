@@ -232,10 +232,7 @@ export default function ActiveWorkout() {
     setWorkoutName,
     isDraftRecoveryPending,
     didRestoreDraft,
-    isExerciseStopwatchRunning,
-    getExerciseStopwatchSeconds,
     getExerciseRestSecondsByExerciseId,
-    toggleExerciseStopwatch,
     removeExercise,
     moveExercise,
     updateSetType,
@@ -1053,8 +1050,6 @@ export default function ActiveWorkout() {
             </View>
           ) : (
             activeExercises.map((exercise, exerciseIndex) => {
-              const exerciseStopwatchSeconds = getExerciseStopwatchSeconds(exercise.id);
-              const isExerciseStopwatchActive = isExerciseStopwatchRunning(exercise.id);
               const previousColumnWidth = previousColumnWidthForSets(
                 previousPerformanceByExerciseId[exercise.exercise.id],
                 exercise.sets.length,
@@ -2035,32 +2030,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     columnGap: 5,
     flexShrink: 0,
-  },
-  exerciseStopwatchButton: {
-    minWidth: 70,
-    height: 32,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: palette.inputStroke,
-    backgroundColor: palette.stopwatchBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    columnGap: 4,
-    paddingHorizontal: 8,
-  },
-  exerciseStopwatchButtonActive: {
-    borderColor: palette.stopwatchBorderActive,
-    backgroundColor: palette.stopwatchBgActive,
-  },
-  exerciseStopwatchText: {
-    color: palette.stopwatchText,
-    fontSize: 11,
-    fontWeight: '800',
-    fontVariant: ['tabular-nums'],
-  },
-  exerciseStopwatchTextActive: {
-    color: palette.stopwatchTextActive,
   },
   exerciseActionButton: {
     width: 32,

@@ -51,11 +51,6 @@ export type Palette = {
   dangerRemoveBorder: string;
   dangerRemoveBg: string;
   glowCyan: string;
-  stopwatchBg: string;
-  stopwatchBgActive: string;
-  stopwatchBorderActive: string;
-  stopwatchText: string;
-  stopwatchTextActive: string;
   setTypeWarmup: string;
   setTypeDrop: string;
   setTypeFailure: string;
@@ -117,11 +112,6 @@ const heavyPalette: Palette = {
   dangerRemoveBorder: '#EF4444',
   dangerRemoveBg: '#7F1D1D',
   glowCyan: '#67E8F9',
-  stopwatchBg: '#0E2238',
-  stopwatchBgActive: '#0D2A45',
-  stopwatchBorderActive: '#0EA5E9',
-  stopwatchText: '#93C5FD',
-  stopwatchTextActive: '#BAE6FD',
   setTypeWarmup: '#FBBF24',
   setTypeDrop: '#F97316',
   setTypeFailure: '#EF4444',

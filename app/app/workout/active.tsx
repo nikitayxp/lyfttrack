@@ -316,7 +316,7 @@ export default function ActiveWorkout() {
   }, [activeExerciseIdsKey]);
 
   const toggleSetAndCheckRecord = useCallback(
-    (exercise: ActiveExercise, setItem: ActiveSet) => {
+    (exercise: ActiveExercise, setItem: ActiveSet, previousSet?: PreviousExercisePerformanceSet) => {
       const isCompleting = !setItem.completed;
       const exerciseId = exercise.exercise.id;
 
@@ -335,17 +335,30 @@ export default function ActiveWorkout() {
         return;
       }
 
+      if (previousSet) {
+        if (!setItem.weightInput && previousSet.weight != null && previousSet.weight > 0) {
+          updateSetInput(exercise.id, setItem.id, 'weightInput', String(previousSet.weight));
+        }
+        if (!setItem.repsInput && previousSet.reps != null && previousSet.reps > 0) {
+          updateSetInput(exercise.id, setItem.id, 'repsInput', String(Math.trunc(previousSet.reps)));
+        }
+        if (!setItem.rirInput && previousSet.rir != null && previousSet.rir >= 0) {
+          updateSetInput(exercise.id, setItem.id, 'rirInput', String(previousSet.rir));
+        }
+      }
+
+      const effectiveWeightInput = setItem.weightInput || (previousSet?.weight != null && previousSet.weight > 0 ? String(previousSet.weight) : '');
+      const effectiveRepsInput = setItem.repsInput || (previousSet?.reps != null && previousSet.reps > 0 ? String(Math.trunc(previousSet.reps)) : '');
+
       const best = personalBestsByExerciseId[exerciseId] ?? EMPTY_PERSONAL_BEST;
       const sample = {
-        weight: toSafeNumber(setItem.weightInput, { min: 0, max: INPUT_LIMITS.weightMax, decimals: 2 }),
-        reps: toSafeInteger(setItem.repsInput, { min: 0, max: INPUT_LIMITS.repsMax }),
+        weight: toSafeNumber(effectiveWeightInput, { min: 0, max: INPUT_LIMITS.weightMax, decimals: 2 }),
+        reps: toSafeInteger(effectiveRepsInput, { min: 0, max: INPUT_LIMITS.repsMax }),
       };
 
       if (isRecordSet(sample, best)) {
         setRecordSetIds((current) => new Set(current).add(setItem.id));
 
-        // Raise the bar so a lighter set later in the same exercise does not
-        // also claim the record.
         setPersonalBestsByExerciseId((current) => ({
           ...current,
           [exerciseId]: mergePersonalBest(current[exerciseId] ?? EMPTY_PERSONAL_BEST, sample),
@@ -354,7 +367,7 @@ export default function ActiveWorkout() {
 
       handleSetCompletionToggle(exercise.id, setItem.id);
     },
-    [handleSetCompletionToggle, personalBestsByExerciseId]
+    [handleSetCompletionToggle, personalBestsByExerciseId, updateSetInput]
   );
 
   const activeExerciseIds = useMemo(
@@ -1308,7 +1321,7 @@ export default function ActiveWorkout() {
                             <TouchableOpacity
                               style={[styles.checkButton, setItem.completed && styles.checkButtonCompleted]}
                               activeOpacity={ACTIVE_OPACITY}
-                              onPress={() => toggleSetAndCheckRecord(exercise, setItem)}
+                              onPress={() => toggleSetAndCheckRecord(exercise, setItem, previousSet)}
                               accessibilityRole="button"
                               accessibilityLabel={setItem.completed ? t('accessibility.markSetIncomplete', { defaultValue: 'Mark set incomplete' }) : t('accessibility.markSetComplete', { defaultValue: 'Mark set complete' })}
                               hitSlop={HIT_SLOP}

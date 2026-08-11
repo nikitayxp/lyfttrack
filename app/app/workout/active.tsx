@@ -1280,7 +1280,7 @@ export default function ActiveWorkout() {
                             onChangeText={(value) => updateSetInput(exercise.id, setItem.id, 'weightInput', value)}
                             style={[styles.numericInput, styles.kgInput, setItem.completed && styles.numericInputCompleted]}
                             keyboardType="decimal-pad"
-                            placeholder="0"
+                            placeholder={previousSet?.weight != null && previousSet.weight > 0 ? String(previousSet.weight) : '0'}
                             placeholderTextColor={palette.textMuted}
                           />
 
@@ -1290,7 +1290,7 @@ export default function ActiveWorkout() {
                             onChangeText={(value) => updateSetInput(exercise.id, setItem.id, 'repsInput', value)}
                             style={[styles.numericInput, styles.cellReps, setItem.completed && styles.numericInputCompleted]}
                             keyboardType="numeric"
-                            placeholder="0"
+                            placeholder={previousSet?.reps != null && previousSet.reps > 0 ? String(Math.trunc(previousSet.reps)) : '0'}
                             placeholderTextColor={palette.textMuted}
                           />
 
@@ -1300,7 +1300,7 @@ export default function ActiveWorkout() {
                             onChangeText={(value) => updateSetInput(exercise.id, setItem.id, 'rirInput', value)}
                             style={[styles.numericInput, styles.cellRir, setItem.completed && styles.numericInputCompleted]}
                             keyboardType="decimal-pad"
-                            placeholder="0"
+                            placeholder={previousSet?.rir != null && previousSet.rir >= 0 ? String(previousSet.rir) : '0'}
                             placeholderTextColor={palette.textMuted}
                           />
 

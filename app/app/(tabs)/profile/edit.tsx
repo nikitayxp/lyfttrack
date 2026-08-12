@@ -29,6 +29,7 @@ import { useAppToast } from '@/context/ToastContext';
 import { getEmailChangeRedirectTo, getPasswordResetRedirectTo, supabase } from '@/services/supabase';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 import { ConfirmModal } from '@/components/common/ConfirmModal';
+import { RESET_PASSWORD_EDIT_PROFILE_FROM } from '@/utils/resetPasswordOrigin';
 import { showAlert } from '@/utils/showAlert';
 
 const palette = Colors.dark;
@@ -347,7 +348,7 @@ export default function EditProfileScreen() {
       // Navigate to reset-password screen with email pre-filled
       router.push({
         pathname: '/(auth)/reset-password',
-        params: { email: targetEmail },
+        params: { email: targetEmail, from: RESET_PASSWORD_EDIT_PROFILE_FROM },
       });
     } catch (error) {
       const message = toErrorMessage(error, t('common.unknownError'));

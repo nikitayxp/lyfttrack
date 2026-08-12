@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -16,6 +16,11 @@ import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
 import { useAppToast } from '@/context/ToastContext';
 import { supabase } from '@/services/supabase';
+import { goBack } from '@/utils/navigation';
+import {
+  resetPasswordCameFromKnownOrigin,
+  resolveResetPasswordBackRoute,
+} from '@/utils/resetPasswordOrigin';
 import { showAlert } from '@/utils/showAlert';
 
 const palette = Colors.dark;
@@ -31,8 +36,17 @@ function readRouteValue(value: string | string[] | undefined): string {
 export default function ResetPasswordScreen() {
   const { t } = useTranslation();
   const { showToast } = useAppToast();
-  const params = useLocalSearchParams<{ email?: string | string[] }>();
+  const params = useLocalSearchParams<{ email?: string | string[]; from?: string | string[] }>();
   const routeEmail = readRouteValue(params.email);
+  const origin = readRouteValue(params.from);
+  const backRoute = resolveResetPasswordBackRoute(origin);
+  const backLabel = resetPasswordCameFromKnownOrigin(origin)
+    ? t('auth.resetPassword.backToEditProfile')
+    : t('auth.resetPassword.backToSignIn');
+
+  function handleBack() {
+    goBack(backRoute);
+  }
 
   const [email, setEmail] = useState(routeEmail);
   const [code, setCode] = useState('');
@@ -135,12 +149,12 @@ export default function ResetPasswordScreen() {
           <View style={styles.formCard}>
             <TouchableOpacity
               style={styles.primaryButton}
-              onPress={() => router.replace('/(auth)/sign-in' as any)}
+              onPress={handleBack}
               activeOpacity={ACTIVE_OPACITY}
               accessibilityRole="button"
-              accessibilityLabel={t('auth.resetPassword.backToSignIn')}
+              accessibilityLabel={backLabel}
             >
-              <Text style={styles.primaryButtonText}>{t('auth.resetPassword.backToSignIn')}</Text>
+              <Text style={styles.primaryButtonText}>{backLabel}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -211,13 +225,13 @@ export default function ResetPasswordScreen() {
 
               <TouchableOpacity
                 style={styles.switchAction}
-                onPress={() => router.replace('/(auth)/sign-in' as any)}
+                onPress={handleBack}
                 disabled={loading}
                 activeOpacity={ACTIVE_OPACITY}
                 accessibilityRole="button"
-                accessibilityLabel={t('auth.resetPassword.backToSignIn')}
+                accessibilityLabel={backLabel}
               >
-                <Text style={styles.switchActionText}>{t('auth.resetPassword.backToSignIn')}</Text>
+                <Text style={styles.switchActionText}>{backLabel}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -289,13 +303,13 @@ export default function ResetPasswordScreen() {
 
             <TouchableOpacity
               style={styles.switchAction}
-              onPress={() => router.replace('/(auth)/sign-in' as any)}
+              onPress={handleBack}
               disabled={loading}
               activeOpacity={ACTIVE_OPACITY}
               accessibilityRole="button"
-              accessibilityLabel={t('auth.resetPassword.backToSignIn')}
+              accessibilityLabel={backLabel}
             >
-              <Text style={styles.switchActionText}>{t('auth.resetPassword.backToSignIn')}</Text>
+              <Text style={styles.switchActionText}>{backLabel}</Text>
             </TouchableOpacity>
           </View>
         </View>

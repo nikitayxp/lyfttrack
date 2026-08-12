@@ -4,6 +4,7 @@ import { decode as decodeBase64 } from 'base64-arraybuffer';
 import { supabase } from '@/services/supabase';
 import { getAuthenticatedUserOrThrow } from '@/services/workoutService';
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/database';
+import { resolveAuthAvatarUrl } from '@/utils/authAvatarUrl';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 
 export type ProfileRow = Tables<'profiles'>;
@@ -101,7 +102,7 @@ function buildCreateProfileRow(user: User, username: string): TablesInsert<'prof
     id: user.id,
     username,
     full_name: normalizeOptionalText(fullNameFromMetadata, INPUT_LIMITS.nameMax),
-    avatar_url: null,
+    avatar_url: resolveAuthAvatarUrl(user.user_metadata),
     bio: null,
     visibility: 'public',
   };

@@ -684,8 +684,6 @@ export default function ExerciseDetailScreen() {
         // The session you just did is the one you are looking for.
         dataPointColor: isActive ? 'transparent' : isLatestFinished ? palette.textPrimary : CHART_NEON,
         dataPointRadius: isActive || isLatestFinished ? 6 : 4,
-        // Pulls the pointer strip back onto the point. See POINTER_X_CORRECTION.
-        pointerShiftX: POINTER_X_CORRECTION,
         ...(isActive
           ? {
               // Library anchors customDataPoint at getX/getY minus half of these.
@@ -928,14 +926,6 @@ export default function ExerciseDetailScreen() {
                     <Text style={styles.chartNavigationText}>{t('exercise.detail.chartOlder')}</Text>
                   </TouchableOpacity>
 
-                  <Text style={styles.chartScrollHint}>
-                    {t(
-                      Platform.OS === 'web'
-                        ? 'exercise.detail.chartScrollHintWeb'
-                        : 'exercise.detail.chartScrollHint'
-                    )}
-                  </Text>
-
                   <TouchableOpacity
                     style={[
                       styles.chartNavigationButton,
@@ -988,9 +978,7 @@ export default function ExerciseDetailScreen() {
                 // Paging history is kept on explicit buttons above, so it never
                 // steals the page's vertical scroll gesture.
                 pointerConfig={{
-                  pointerStripHeight: 200,
-                  pointerStripColor: palette.borderStrong,
-                  pointerStripWidth: 1,
+                  showPointerStrip: false,
                   pointerColor: palette.textPrimary,
                   radius: 5,
                   pointerLabelWidth: POINTER_LABEL_WIDTH,
@@ -1305,13 +1293,6 @@ const styles = StyleSheet.create({
     color: palette.textPrimary,
     fontSize: 11,
     fontWeight: '700',
-  },
-  chartScrollHint: {
-    flex: 1,
-    color: palette.labelMuted,
-    fontSize: 10,
-    fontWeight: '600',
-    textAlign: 'center',
   },
   pointerCard: {
     width: POINTER_LABEL_WIDTH,

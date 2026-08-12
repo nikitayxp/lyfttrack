@@ -38,6 +38,11 @@ import { estimateOneRepMax } from '@/utils/estimateOneRepMax';
 import { getLocalizedExerciseMuscle, getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 import { getExerciseImageUrl } from '@/utils/exerciseImage';
 import { usableScreenWidth } from '@/utils/screenWidth';
+import {
+  isChartAtNewestEnd,
+  resolveChartScrollMax,
+  resolveInitialPointerIndex,
+} from '@/utils/chartViewport';
 import type { ActiveExercise } from '@/hooks/useActiveWorkoutState';
 
 const palette = Colors.dark;
@@ -383,6 +388,11 @@ export default function ExerciseDetailScreen() {
   }, [chartProgress.length, lineSpacing, plotWidth]);
 
   const needsHorizontalScroll = chartContentWidth > plotWidth + 1;
+  const computedScrollMax = useMemo(
+    () => resolveChartScrollMax(chartContentWidth, plotWidth),
+    [chartContentWidth, plotWidth]
+  );
+  const atNewestEnd = isChartAtNewestEnd(chartScrollPosition.x, chartScrollPosition.max);
 
   chartProgressRef.current = chartProgress;
   lineSpacingRef.current = lineSpacing;
@@ -399,22 +409,23 @@ export default function ExerciseDetailScreen() {
     setChartScrollPosition({ x: 0, max: 0 });
   }, [needsHorizontalScroll, chartProgress.length]);
 
+  useEffect(() => {
+    chartScrollMaxRef.current = computedScrollMax;
+    setChartScrollPosition((current) =>
+      current.max === computedScrollMax ? current : { ...current, max: computedScrollMax }
+    );
+  }, [computedScrollMax]);
+
   const handleChartScroll = useCallback((event: {
     nativeEvent: {
       contentOffset: { x: number };
-      contentSize: { width: number };
-      layoutMeasurement: { width: number };
     };
   }) => {
     const x = Math.max(0, event.nativeEvent.contentOffset.x);
-    const max = Math.max(
-      0,
-      event.nativeEvent.contentSize.width - event.nativeEvent.layoutMeasurement.width
-    );
     lastScrollXRef.current = x;
-    chartScrollMaxRef.current = max;
-    setChartScrollPosition({ x, max });
-  }, []);
+    chartScrollMaxRef.current = computedScrollMax;
+    setChartScrollPosition({ x, max: computedScrollMax });
+  }, [computedScrollMax]);
 
   const moveChart = useCallback(
     (direction: -1 | 1) => {
@@ -642,7 +653,7 @@ export default function ExerciseDetailScreen() {
 
     pendingAnchorRef.current = null;
 
-    const max = Math.max(0, chartContentWidth - plotWidth);
+    const max = resolveChartScrollMax(chartContentWidth, plotWidth);
     let x = max;
 
     if (anchor.kind === 'start') {
@@ -676,10 +687,6 @@ export default function ExerciseDetailScreen() {
   }, [chartContentWidth, plotWidth, chartProgress, lineSpacing, range]);
 
   const initialPointerIndex = useMemo(() => {
-    if (lineData.length === 0) {
-      return -1;
-    }
-
     const focusedDate = focusedDateRef.current;
     if (focusedDate) {
       const focusedIndex = chartProgress.findIndex((point) => point.date === focusedDate);
@@ -688,14 +695,8 @@ export default function ExerciseDetailScreen() {
       }
     }
 
-    for (let i = chartProgress.length - 1; i >= 0; i -= 1) {
-      if (!chartProgress[i]?.isActive) {
-        return i;
-      }
-    }
-
-    return lineData.length - 1;
-  }, [chartProgress, lineData.length]);
+    return resolveInitialPointerIndex(chartProgress);
+  }, [chartProgress]);
 
   // Scaled to the data, not to zero. A progression chart anchored at zero turns
   // 100 kg to 110 kg into a step you cannot see; the interesting range is
@@ -865,11 +866,10 @@ export default function ExerciseDetailScreen() {
                   <TouchableOpacity
                     style={[
                       styles.chartNavigationButton,
-                      chartScrollPosition.x >= chartScrollPosition.max - 1 &&
-                        styles.chartNavigationButtonDisabled,
+                      atNewestEnd && styles.chartNavigationButtonDisabled,
                     ]}
                     activeOpacity={ACTIVE_OPACITY}
-                    disabled={chartScrollPosition.x >= chartScrollPosition.max - 1}
+                    disabled={atNewestEnd}
                     onPressIn={() => startChartHold(1)}
                     onPressOut={stopChartHold}
                     accessibilityRole="button"

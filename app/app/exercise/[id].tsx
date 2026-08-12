@@ -5,6 +5,7 @@ import { LineChart } from 'react-native-gifted-charts';
 import {
   ActivityIndicator,
   Image,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -42,6 +43,9 @@ import {
   isChartAtNewestEnd,
   resolveChartScrollMax,
   resolveInitialPointerIndex,
+  resolvePointerCardEdge,
+  resolvePointerCardShiftX,
+  resolveDragScrollX,
 } from '@/utils/chartViewport';
 import type { ActiveExercise } from '@/hooks/useActiveWorkoutState';
 
@@ -308,6 +312,7 @@ export default function ExerciseDetailScreen() {
   const [history, setHistory] = useState<ExerciseWorkoutHistoryEntry[]>([]);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [chartScrollPosition, setChartScrollPosition] = useState({ x: 0, max: 0 });
+  const [chartDragging, setChartDragging] = useState(false);
   /** First open pins to newest; filter changes keep how far back you had scrolled. */
   const [pinChartToEnd, setPinChartToEnd] = useState(true);
 
@@ -315,6 +320,7 @@ export default function ExerciseDetailScreen() {
   const lastScrollXRef = useRef(0);
   const chartScrollMaxRef = useRef(0);
   const chartHoldIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const chartDragRef = useRef<{ startX: number; startScrollX: number } | null>(null);
   const pendingAnchorRef = useRef<ChartScrollAnchor | null>(null);
   const focusedDateRef = useRef<string | null>(null);
   const chartProgressRef = useRef<ExerciseProgressPoint[]>([]);
@@ -475,6 +481,57 @@ export default function ExerciseDetailScreen() {
   );
 
   useEffect(() => () => stopChartHold(), [stopChartHold]);
+
+  const handleChartMouseDown = useCallback((event: { button?: number; clientX?: number; nativeEvent?: { button?: number; clientX?: number } }) => {
+    if (Platform.OS !== 'web') {
+      return;
+    }
+
+    const button = event.button ?? event.nativeEvent?.button ?? 0;
+    if (button !== 0 || !needsHorizontalScrollRef.current) {
+      return;
+    }
+
+    const clientX = event.clientX ?? event.nativeEvent?.clientX ?? 0;
+    chartDragRef.current = { startX: clientX, startScrollX: lastScrollXRef.current };
+    setChartDragging(true);
+  }, []);
+
+  useEffect(() => {
+    if (!chartDragging || Platform.OS !== 'web') {
+      return;
+    }
+
+    const onMove = (event: MouseEvent) => {
+      const drag = chartDragRef.current;
+      if (!drag) {
+        return;
+      }
+
+      event.preventDefault();
+      const next = resolveDragScrollX(
+        drag.startScrollX,
+        drag.startX,
+        event.clientX,
+        chartScrollMaxRef.current
+      );
+      lastScrollXRef.current = next;
+      chartScrollRef.current?.scrollTo({ x: next, animated: false });
+      setChartScrollPosition({ x: next, max: chartScrollMaxRef.current });
+    };
+
+    const onUp = () => {
+      chartDragRef.current = null;
+      setChartDragging(false);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [chartDragging]);
 
   const rememberChartScrollAnchor = useCallback(() => {
     const max = chartScrollMaxRef.current;
@@ -842,7 +899,17 @@ export default function ExerciseDetailScreen() {
               <Text style={styles.placeholderText}>{t('exercise.detail.noProgress')}</Text>
             </View>
           ) : (
-            <View style={styles.chartWrap}>
+            <View
+              style={[
+                styles.chartWrap,
+                Platform.OS === 'web' && needsHorizontalScroll
+                  ? chartDragging
+                    ? styles.chartWrapDragging
+                    : styles.chartWrapDraggable
+                  : null,
+              ]}
+              {...(Platform.OS === 'web' ? { onMouseDown: handleChartMouseDown } : null)}
+            >
               {needsHorizontalScroll ? (
                 <View style={styles.chartNavigation}>
                   <TouchableOpacity
@@ -861,7 +928,13 @@ export default function ExerciseDetailScreen() {
                     <Text style={styles.chartNavigationText}>{t('exercise.detail.chartOlder')}</Text>
                   </TouchableOpacity>
 
-                  <Text style={styles.chartScrollHint}>{t('exercise.detail.chartScrollHint')}</Text>
+                  <Text style={styles.chartScrollHint}>
+                    {t(
+                      Platform.OS === 'web'
+                        ? 'exercise.detail.chartScrollHintWeb'
+                        : 'exercise.detail.chartScrollHint'
+                    )}
+                  </Text>
 
                   <TouchableOpacity
                     style={[
@@ -929,7 +1002,11 @@ export default function ExerciseDetailScreen() {
                   resetPointerOnDataChange: true,
                   initialPointerIndex,
                   pointerComponent: () => <View style={styles.pointerDot} />,
-                  pointerLabelComponent: (items: { point?: ExerciseProgressPoint }[]) => {
+                  pointerLabelComponent: (
+                    items: { point?: ExerciseProgressPoint }[],
+                    _secondary: unknown,
+                    pointerIndex: number
+                  ) => {
                     const point = items?.[0]?.point;
 
                     if (!point) {
@@ -937,9 +1014,13 @@ export default function ExerciseDetailScreen() {
                     }
 
                     focusedDateRef.current = point.date;
+                    const shiftX = resolvePointerCardShiftX(
+                      resolvePointerCardEdge(pointerIndex, lineData.length),
+                      POINTER_X_CORRECTION
+                    );
 
                     return (
-                      <View style={styles.pointerCard}>
+                      <View style={[styles.pointerCard, { transform: [{ translateX: shiftX }] }]}>
                         <Text style={styles.pointerDate}>
                           {formatExerciseHistoryDate(point.date, language)}
                         </Text>
@@ -1192,6 +1273,12 @@ const styles = StyleSheet.create({
     // Was 'visible', which let the plot spill past the card edge.
     overflow: 'hidden',
   },
+  chartWrapDraggable: {
+    cursor: 'grab',
+  },
+  chartWrapDragging: {
+    cursor: 'grabbing',
+  },
   chartNavigation: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1228,7 +1315,6 @@ const styles = StyleSheet.create({
   },
   pointerCard: {
     width: POINTER_LABEL_WIDTH,
-    transform: [{ translateX: POINTER_X_CORRECTION }],
     borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.borderStrong,

@@ -43,6 +43,7 @@ import { getErrorMessage, getUserWorkouts, type WorkoutFeedItem } from '@/servic
 import { useAppToast } from '@/context/ToastContext';
 import { useWorkoutContext } from '@/context/WorkoutContext';
 import { useWorkoutDelete, WORKOUT_DELETED_EVENT } from '@/hooks/useWorkoutDelete';
+import { BodyWeightChart } from '@/components/profile/BodyWeightChart';
 import { getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 import { sanitizeDecimalText } from '@/utils/inputValidation';
 import { showAlert } from '@/utils/showAlert';
@@ -1069,6 +1070,8 @@ export default function ProfileScreen() {
             />
             <Text style={styles.bodyTrendText}>{weightTrendText}</Text>
           </View>
+
+          <BodyWeightChart entries={weightHistory} language={uiLanguage} />
         </View>
 
         <View style={styles.hallWrap}>
@@ -1169,6 +1172,7 @@ export default function ProfileScreen() {
     uiLanguage,
     weightTrendText,
     usernameHandle,
+    weightHistory,
     weightTrend,
   ]);
 

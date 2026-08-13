@@ -37,6 +37,7 @@ import {
   updateTemplate,
   type TemplateSummary,
 } from '@/services/templateService';
+import { Chip } from '@/components/ui/Chip';
 import { DismissibleBottomSheet } from '@/components/common/DismissibleBottomSheet';
 import { EmptyState } from '@/components/common/EmptyState';
 import { ExerciseThumbnail } from '@/components/common/ExerciseThumbnail';
@@ -846,23 +847,14 @@ export default function WorkoutScreen() {
             style={styles.filterChipsScroll}
             contentContainerStyle={styles.filterChipsContent}
           >
-            {MUSCLE_FILTER_CHIP_KEYS.map((filterKey) => {
-              const isSelected = filterKey === selectedMuscleFilter;
-              return (
-                <TouchableOpacity
-                  key={filterKey}
-                  style={[styles.libraryFilterChip, isSelected && styles.libraryFilterChipSelected]}
-                  activeOpacity={ACTIVE_OPACITY}
-                  onPress={() => startFilterTransition(() => setSelectedMuscleFilter(filterKey))}
-                  accessibilityRole="button"
-                  accessibilityLabel={getMuscleFilterLabel(filterKey)}
-                >
-                  <Text style={[styles.libraryFilterChipText, isSelected && styles.libraryFilterChipTextSelected]}>
-                    {getMuscleFilterLabel(filterKey)}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+            {MUSCLE_FILTER_CHIP_KEYS.map((filterKey) => (
+              <Chip
+                key={filterKey}
+                label={getMuscleFilterLabel(filterKey)}
+                selected={filterKey === selectedMuscleFilter}
+                onPress={() => startFilterTransition(() => setSelectedMuscleFilter(filterKey))}
+              />
+            ))}
           </ScrollView>
 
           <Text style={styles.filterChipsSectionLabel}>{t('workout.equipment')}</Text>
@@ -874,23 +866,14 @@ export default function WorkoutScreen() {
             style={styles.filterChipsScroll}
             contentContainerStyle={styles.filterChipsContent}
           >
-            {EQUIPMENT_FILTER_CHIP_KEYS.map((filterKey) => {
-              const isSelected = filterKey === selectedEquipmentFilter;
-              return (
-                <TouchableOpacity
-                  key={filterKey}
-                  style={[styles.libraryFilterChip, isSelected && styles.libraryFilterChipSelected]}
-                  activeOpacity={ACTIVE_OPACITY}
-                  onPress={() => startFilterTransition(() => setSelectedEquipmentFilter(filterKey))}
-                  accessibilityRole="button"
-                  accessibilityLabel={getEquipmentFilterLabel(filterKey)}
-                >
-                  <Text style={[styles.libraryFilterChipText, isSelected && styles.libraryFilterChipTextSelected]}>
-                    {getEquipmentFilterLabel(filterKey)}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+            {EQUIPMENT_FILTER_CHIP_KEYS.map((filterKey) => (
+              <Chip
+                key={filterKey}
+                label={getEquipmentFilterLabel(filterKey)}
+                selected={filterKey === selectedEquipmentFilter}
+                onPress={() => startFilterTransition(() => setSelectedEquipmentFilter(filterKey))}
+              />
+            ))}
           </ScrollView>
 
           {isLoadingCatalog ? (
@@ -1505,29 +1488,6 @@ const styles = StyleSheet.create({
     paddingRight: 16,
     paddingVertical: 2,
   },
-  libraryFilterChip: {
-    flexShrink: 0,
-    minHeight: 34,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: palette.borderStrong,
-    backgroundColor: palette.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-  },
-  libraryFilterChipSelected: {
-    borderColor: palette.accent,
-    backgroundColor: palette.accent,
-  },
-  libraryFilterChipText: {
-    color: palette.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  libraryFilterChipTextSelected: {
-    color: '#FFFFFF',
-  },
   libraryExerciseRow: {
     borderWidth: 1,
     borderColor: palette.border,
@@ -1555,33 +1515,6 @@ const styles = StyleSheet.create({
     color: palette.textSecondary,
     fontSize: 13,
     fontWeight: '500',
-  },
-  filterChipRow: {
-    flexDirection: 'row',
-    columnGap: 8,
-    marginBottom: 12,
-  },
-  filterChip: {
-    minHeight: 32,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: palette.borderStrong,
-    backgroundColor: palette.surfaceAlt,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterChipActive: {
-    borderColor: palette.accent,
-    backgroundColor: palette.accent,
-  },
-  filterChipText: {
-    color: palette.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  filterChipTextActive: {
-    color: palette.textPrimary,
   },
   exerciseTextWrap: {
     flex: 1,

@@ -7,15 +7,15 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
-import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
+import { Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
 import { AuthFeedback, type AuthFeedbackValue } from '@/components/auth/AuthFeedback';
+import { AppButton } from '@/components/ui/AppButton';
 import {
   markUsernameConfirmed,
   suggestDisplayNameFromGoogle,
@@ -227,20 +227,13 @@ export default function CompleteProfileScreen() {
                 </View>
               </View>
 
-              <TouchableOpacity
-                style={styles.primaryButton}
-                activeOpacity={ACTIVE_OPACITY}
+              <AppButton
+                label={t('auth.completeProfile.continueAction')}
                 onPress={() => void handleContinue()}
-                disabled={loading || usernameChecking}
-                accessibilityRole="button"
-                accessibilityLabel={t('auth.completeProfile.continueAction')}
-              >
-                {loading ? (
-                  <ActivityIndicator color={palette.textPrimary} />
-                ) : (
-                  <Text style={styles.primaryButtonText}>{t('auth.completeProfile.continueAction')}</Text>
-                )}
-              </TouchableOpacity>
+                disabled={usernameChecking}
+                loading={loading}
+                style={styles.submitButton}
+              />
             </View>
           </View>
         </ScrollView>
@@ -283,13 +276,7 @@ const styles = StyleSheet.create({
   usernameStatus: { minWidth: 64, alignItems: 'flex-end' },
   usernameAvailableText: { color: palette.success, fontSize: 12, fontWeight: '700' },
   usernameTakenText: { color: palette.error, fontSize: 12, fontWeight: '700' },
-  primaryButton: {
+  submitButton: {
     marginTop: Spacing.sm,
-    minHeight: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: Radius.md,
-    backgroundColor: palette.accent,
   },
-  primaryButtonText: { color: palette.textPrimary, fontSize: 15, fontWeight: '900' },
 });

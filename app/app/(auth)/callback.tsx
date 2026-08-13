@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
-import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
+import { Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
+import { AppButton } from '@/components/ui/AppButton';
 import { isAllowedLanReturn } from '@/services/oauthLanReturn';
 import { supabase } from '@/services/supabase';
 
@@ -197,15 +198,11 @@ export default function OAuthCallbackScreen() {
           <Text style={styles.subtitle}>{message}</Text>
 
           {isError ? (
-            <TouchableOpacity 
-              style={styles.primaryButton} 
-              activeOpacity={ACTIVE_OPACITY} 
+            <AppButton
+              label={t('auth.callback.backAction')}
               onPress={() => router.replace('/(auth)/sign-in' as any)}
-              accessibilityRole="button"
-              accessibilityLabel={t('auth.callback.backAction')}
-            >
-              <Text style={styles.primaryButtonText}>{t('auth.callback.backAction')}</Text>
-            </TouchableOpacity>
+              style={styles.submitButton}
+            />
           ) : null}
         </View>
       </View>
@@ -257,18 +254,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
-  primaryButton: {
+  submitButton: {
     marginTop: Spacing.sm,
-    minHeight: 50,
-    alignSelf: 'stretch',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: Radius.md,
-    backgroundColor: palette.accent,
-  },
-  primaryButtonText: {
-    color: palette.textPrimary,
-    fontSize: 15,
-    fontWeight: '900',
   },
 });

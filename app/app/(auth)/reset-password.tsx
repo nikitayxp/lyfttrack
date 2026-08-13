@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -14,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
+import { AppButton } from '@/components/ui/AppButton';
 import { useAppToast } from '@/context/ToastContext';
 import { supabase } from '@/services/supabase';
 import { goBack } from '@/utils/navigation';
@@ -147,15 +147,11 @@ export default function ResetPasswordScreen() {
           </View>
 
           <View style={styles.formCard}>
-            <TouchableOpacity
-              style={styles.primaryButton}
+            <AppButton
+              label={backLabel}
               onPress={handleBack}
-              activeOpacity={ACTIVE_OPACITY}
-              accessibilityRole="button"
-              accessibilityLabel={backLabel}
-            >
-              <Text style={styles.primaryButtonText}>{backLabel}</Text>
-            </TouchableOpacity>
+              style={styles.submitButton}
+            />
           </View>
         </View>
       </AuthAmbientGlow>
@@ -208,20 +204,12 @@ export default function ResetPasswordScreen() {
 
               <Text style={styles.codeHint}>{t('auth.resetPassword.passwordHint')}</Text>
 
-              <TouchableOpacity
-                style={styles.primaryButton}
+              <AppButton
+                label={t('auth.resetPassword.updateAction')}
                 onPress={() => void handleUpdatePassword()}
-                disabled={loading}
-                activeOpacity={ACTIVE_OPACITY}
-                accessibilityRole="button"
-                accessibilityLabel={t('auth.resetPassword.updateAction')}
-              >
-                {loading ? (
-                  <ActivityIndicator color={palette.textPrimary} />
-                ) : (
-                  <Text style={styles.primaryButtonText}>{t('auth.resetPassword.updateAction')}</Text>
-                )}
-              </TouchableOpacity>
+                loading={loading}
+                style={styles.submitButton}
+              />
 
               <TouchableOpacity
                 style={styles.switchAction}
@@ -286,20 +274,12 @@ export default function ResetPasswordScreen() {
             </View>
             <Text style={styles.codeHint}>{t('auth.verify.codeHint')}</Text>
 
-            <TouchableOpacity
-              style={styles.primaryButton}
+            <AppButton
+              label={t('auth.resetPassword.verifyCodeAction')}
               onPress={() => void handleVerifyCode()}
-              disabled={loading}
-              activeOpacity={ACTIVE_OPACITY}
-              accessibilityRole="button"
-              accessibilityLabel={t('auth.resetPassword.verifyCodeAction')}
-            >
-              {loading ? (
-                <ActivityIndicator color={palette.textPrimary} />
-              ) : (
-                <Text style={styles.primaryButtonText}>{t('auth.resetPassword.verifyCodeAction')}</Text>
-              )}
-            </TouchableOpacity>
+              loading={loading}
+              style={styles.submitButton}
+            />
 
             <TouchableOpacity
               style={styles.switchAction}
@@ -407,19 +387,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginTop: -2,
   },
-  primaryButton: {
+  submitButton: {
     marginTop: Spacing.md,
-    backgroundColor: palette.accent,
-    borderRadius: Radius.md,
-    minHeight: 54,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryButtonText: {
-    color: palette.textPrimary,
-    fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: 0.4,
   },
   switchAction: {
     marginTop: Spacing.sm,

@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { AntDesign, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -17,6 +16,7 @@ import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
 import { AuthLanguageToggle } from '@/components/auth/AuthLanguageToggle';
+import { AppButton } from '@/components/ui/AppButton';
 import { markTermsAcceptedForOAuth, startGoogleOAuth } from '@/services/authService';
 import { getPasswordResetRedirectTo, supabase } from '@/services/supabase';
 
@@ -180,19 +180,13 @@ export default function SignInScreen() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity 
-              style={styles.primaryButton} 
-              onPress={() => void handleSignIn()} 
+            <AppButton
+              label={t('auth.signIn.signInAction')}
+              onPress={() => void handleSignIn()}
               disabled={loading}
-              accessibilityRole="button"
-              accessibilityLabel={t('auth.signIn.signInAction')}
-            >
-              {loading ? (
-                <ActivityIndicator color={palette.textPrimary} />
-              ) : (
-                <Text style={styles.primaryButtonText}>{t('auth.signIn.signInAction')}</Text>
-              )}
-            </TouchableOpacity>
+              loading={loading}
+              style={styles.submitButton}
+            />
 
             <View style={styles.dividerRow}>
               <View style={styles.dividerLine} />
@@ -368,19 +362,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  primaryButton: {
+  submitButton: {
     marginTop: Spacing.md,
-    backgroundColor: palette.accent,
-    borderRadius: Radius.md,
-    minHeight: 54,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryButtonText: {
-    color: palette.textPrimary,
-    fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: 0.4,
   },
   dividerRow: {
     marginTop: Spacing.md,

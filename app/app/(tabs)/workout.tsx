@@ -30,9 +30,11 @@ import { useAppToast } from '@/context/ToastContext';
 import { usePreferences } from '@/context/PreferencesContext';
 import {
   deleteTemplate,
+  getTemplateById,
   getTemplates,
   saveTemplate,
   startWorkoutFromTemplate,
+  updateTemplate,
   type TemplateSummary,
 } from '@/services/templateService';
 import { DismissibleBottomSheet } from '@/components/common/DismissibleBottomSheet';
@@ -111,6 +113,8 @@ export default function WorkoutScreen() {
   const [templatesError, setTemplatesError] = useState<string | null>(null);
   const [startingTemplateId, setStartingTemplateId] = useState<string | null>(null);
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [restSecondsByExerciseId, setRestSecondsByExerciseId] = useState<Record<string, number>>({});
 
   const [isCreateTemplateModalVisible, setIsCreateTemplateModalVisible] = useState(false);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
@@ -389,6 +393,10 @@ export default function WorkoutScreen() {
 
   const openCreateTemplateFlow = useCallback(() => {
     setActiveMode('templates');
+    setTemplateNameInput('');
+    setSelectedTemplateExercises([]);
+    setEditingTemplateId(null);
+    setRestSecondsByExerciseId({});
     setIsCreateTemplateModalVisible(true);
   }, []);
 
@@ -405,6 +413,8 @@ export default function WorkoutScreen() {
   function resetTemplateForm() {
     setTemplateNameInput('');
     setSelectedTemplateExercises([]);
+    setEditingTemplateId(null);
+    setRestSecondsByExerciseId({});
   }
 
   function resetExerciseForm() {
@@ -455,7 +465,7 @@ export default function WorkoutScreen() {
     }
   }
 
-  async function handleCreateTemplate() {
+  async function handleSaveTemplate() {
     const normalizedName = sanitizeText(templateNameInput, {
       maxLength: INPUT_LIMITS.nameMax,
       allowEmpty: false,
@@ -474,15 +484,56 @@ export default function WorkoutScreen() {
     setIsSavingTemplate(true);
 
     try {
-      await saveTemplate(normalizedName, selectedTemplateExercises);
+      if (editingTemplateId) {
+        await updateTemplate(
+          editingTemplateId,
+          normalizedName,
+          selectedTemplateExercises.map((exerciseId) => ({
+            exerciseId,
+            restSeconds: restSecondsByExerciseId[exerciseId],
+          }))
+        );
+        showAlert(showToast, t('workout.editTemplateSuccess'));
+      } else {
+        await saveTemplate(normalizedName, selectedTemplateExercises);
+        showAlert(showToast, t('workout.templateSavedTitle'), t('workout.templateSavedDescription'));
+      }
+
       setIsCreateTemplateModalVisible(false);
       resetTemplateForm();
       await loadTemplates();
-      showAlert(showToast, t('workout.templateSavedTitle'), t('workout.templateSavedDescription'));
     } catch (error) {
-      showAlert(showToast, t('workout.unableToCreateTemplate'), getErrorMessage(error), 'error');
+      showAlert(
+        showToast,
+        editingTemplateId ? t('workout.unableToUpdateTemplate') : t('workout.unableToCreateTemplate'),
+        getErrorMessage(error),
+        'error'
+      );
     } finally {
       setIsSavingTemplate(false);
+    }
+  }
+
+  async function handleEditTemplate(templateId: string) {
+    if (deletingTemplateId || startingTemplateId || isSavingTemplate) {
+      return;
+    }
+
+    try {
+      const detail = await getTemplateById(templateId);
+      const restById: Record<string, number> = {};
+      const exerciseIds = detail.exercises.map((entry) => {
+        restById[entry.exercise.id] = entry.rest_seconds;
+        return entry.exercise.id;
+      });
+
+      setEditingTemplateId(detail.id);
+      setTemplateNameInput(detail.name);
+      setSelectedTemplateExercises(exerciseIds);
+      setRestSecondsByExerciseId(restById);
+      setIsCreateTemplateModalVisible(true);
+    } catch (error) {
+      showAlert(showToast, t('workout.unableToLoadTemplate'), getErrorMessage(error), 'error');
     }
   }
 
@@ -636,7 +687,10 @@ export default function WorkoutScreen() {
             <TouchableOpacity
               style={styles.createTemplateButton}
               activeOpacity={ACTIVE_OPACITY}
-              onPress={() => setIsCreateTemplateModalVisible(true)}
+              onPress={() => {
+                resetTemplateForm();
+                setIsCreateTemplateModalVisible(true);
+              }}
               accessibilityRole="button"
               accessibilityLabel={t('workout.createTemplate')}
             >
@@ -704,6 +758,18 @@ export default function WorkoutScreen() {
                       ) : (
                         <Ionicons name="play-circle-outline" size={20} color={palette.accent} />
                       )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.templateDeleteButton}
+                      activeOpacity={ACTIVE_OPACITY}
+                      onPress={() => void handleEditTemplate(template.id)}
+                      disabled={startingTemplateId !== null || deletingTemplateId !== null}
+                      hitSlop={HIT_SLOP}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('workout.editTemplateA11y', { name: template.name })}
+                    >
+                      <Ionicons name="create-outline" size={18} color={palette.textPrimary} />
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -893,10 +959,15 @@ export default function WorkoutScreen() {
 
       <DismissibleBottomSheet
         visible={isCreateTemplateModalVisible}
-        onClose={() => setIsCreateTemplateModalVisible(false)}
+        onClose={() => {
+          setIsCreateTemplateModalVisible(false);
+          resetTemplateForm();
+        }}
         scrollable
       >
-            <Text style={styles.modalTitle}>{t('workout.createTemplate')}</Text>
+            <Text style={styles.modalTitle}>
+              {editingTemplateId ? t('workout.editTemplate') : t('workout.createTemplate')}
+            </Text>
 
             <TextInput
               accessibilityLabel={t('accessibility.templateName', { defaultValue: 'Template name' })}
@@ -1004,7 +1075,10 @@ export default function WorkoutScreen() {
             <View style={styles.modalButtonRow}>
               <TouchableOpacity
                 style={styles.modalCancelButton}
-                onPress={() => setIsCreateTemplateModalVisible(false)}
+                onPress={() => {
+                  setIsCreateTemplateModalVisible(false);
+                  resetTemplateForm();
+                }}
                 activeOpacity={ACTIVE_OPACITY}
                 accessibilityRole="button"
                 accessibilityLabel={t('common.cancel')}
@@ -1014,16 +1088,18 @@ export default function WorkoutScreen() {
 
               <TouchableOpacity
                 style={[styles.modalCreateButton, isSavingTemplate && styles.modalCreateButtonDisabled]}
-                onPress={() => void handleCreateTemplate()}
+                onPress={() => void handleSaveTemplate()}
                 activeOpacity={ACTIVE_OPACITY}
                 disabled={isSavingTemplate}
                 accessibilityRole="button"
-                accessibilityLabel={t('workout.saveTemplate')}
+                accessibilityLabel={editingTemplateId ? t('workout.editTemplate') : t('workout.saveTemplate')}
               >
                 {isSavingTemplate ? (
                   <ActivityIndicator size="small" color={palette.textPrimary} />
                 ) : (
-                  <Text style={styles.modalCreateButtonText}>{t('workout.saveTemplate')}</Text>
+                  <Text style={styles.modalCreateButtonText}>
+                    {editingTemplateId ? t('workout.editTemplate') : t('workout.saveTemplate')}
+                  </Text>
                 )}
               </TouchableOpacity>
             </View>

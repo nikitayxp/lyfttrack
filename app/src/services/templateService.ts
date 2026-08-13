@@ -296,6 +296,76 @@ export async function saveTemplate(
   );
 }
 
+export async function updateTemplate(
+  templateId: string,
+  name: string,
+  exercises: (string | TemplateExerciseSaveInput)[]
+): Promise<TemplateDetail> {
+  const user = await getAuthenticatedUserOrThrow();
+  const normalizedTemplateId = normalizeOptionalId(templateId);
+
+  if (!normalizedTemplateId) {
+    throw new Error('Template id is required.');
+  }
+
+  const existing = await getTemplateById(normalizedTemplateId);
+  const normalizedName = normalizeTemplateName(name);
+  const normalizedExercises = normalizeTemplateExerciseInputs(exercises);
+
+  if (normalizedExercises.length === 0) {
+    throw new Error('Select at least one exercise to save a template.');
+  }
+
+  const { error: nameError } = await supabase
+    .from('workout_templates')
+    .update({ name: normalizedName })
+    .eq('id', normalizedTemplateId)
+    .eq('user_id', user.id);
+
+  if (nameError) {
+    throw new Error(`Unable to update template: ${nameError.message}`);
+  }
+
+  const { error: deleteError } = await supabase
+    .from('template_exercises')
+    .delete()
+    .eq('template_id', normalizedTemplateId);
+
+  if (deleteError) {
+    throw new Error(`Unable to update template exercises: ${deleteError.message}`);
+  }
+
+  const templateExerciseRows: TablesInsert<'template_exercises'>[] = normalizedExercises.map((entry, index) => ({
+    template_id: normalizedTemplateId,
+    exercise_id: entry.exerciseId,
+    order_index: index + 1,
+    rest_seconds: normalizeTemplateRestSeconds(entry.restSeconds),
+  }));
+
+  const { error: insertError } = await supabase.from('template_exercises').insert(templateExerciseRows);
+
+  if (!insertError) {
+    return getTemplateById(normalizedTemplateId);
+  }
+
+  const restoreRows: TablesInsert<'template_exercises'>[] = existing.exercises.map((entry) => ({
+    template_id: normalizedTemplateId,
+    exercise_id: entry.exercise.id,
+    order_index: entry.order_index,
+    rest_seconds: entry.rest_seconds,
+  }));
+
+  const { error: restoreError } = await supabase.from('template_exercises').insert(restoreRows);
+
+  if (restoreError) {
+    throw new Error(
+      `Unable to update template exercises: ${insertError.message}. Restore failed: ${restoreError.message}`
+    );
+  }
+
+  throw new Error(`Unable to update template exercises: ${insertError.message}`);
+}
+
 export async function deleteTemplate(templateId: string): Promise<void> {
   const user = await getAuthenticatedUserOrThrow();
   const normalizedTemplateId = normalizeOptionalId(templateId);

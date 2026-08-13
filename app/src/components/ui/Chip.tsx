@@ -1,6 +1,6 @@
 import { StyleSheet, Text, TouchableOpacity, type StyleProp, type ViewStyle } from 'react-native';
 import { Colors } from '@/constants/Colors';
-import { ACTIVE_OPACITY, Radius, Typography } from '@/constants/Styles';
+import { ACTIVE_OPACITY, HIT_SLOP, Radius, Typography } from '@/constants/Styles';
 
 const palette = Colors.dark;
 
@@ -18,6 +18,7 @@ export function Chip({ label, selected = false, onPress, style }: ChipProps) {
       accessibilityLabel={label}
       accessibilityState={{ selected }}
       activeOpacity={ACTIVE_OPACITY}
+      hitSlop={HIT_SLOP}
       onPress={onPress}
       style={[
         styles.chip,

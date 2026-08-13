@@ -152,6 +152,22 @@ export function titleTokenKey(value: string): string {
   return [...new Set(tokens)].sort().join(' ');
 }
 
+function isShortenedTokenKey(aliasKey: string, canonicalKey: string): boolean {
+  if (!aliasKey || !canonicalKey || aliasKey === canonicalKey) {
+    return false;
+  }
+
+  const aliasTokens = aliasKey.split(' ');
+  const canonicalTokens = canonicalKey.split(' ');
+
+  if (aliasTokens.length >= canonicalTokens.length) {
+    return false;
+  }
+
+  const canonicalSet = new Set(canonicalTokens);
+  return aliasTokens.every((token) => canonicalSet.has(token));
+}
+
 function inferEquipmentKey(title: string): ExerciseEquipmentKey | null {
   const normalized = applyEquipmentSynonyms(normalizeTitle(title));
 
@@ -206,20 +222,85 @@ function indexCatalog(catalog: ExerciseCatalogItem[]) {
       }
     }
 
+    const ownTokenKeys = [item.name, item.name_en, item.name_pt]
+      .filter((name): name is string => Boolean(name))
+      .map((name) => titleTokenKey(name))
+      .filter(Boolean);
+
     for (const alias of item.aliases ?? []) {
       if (!alias) continue;
+      const aliasTokenKey = titleTokenKey(alias);
+      if (ownTokenKeys.some((key) => isShortenedTokenKey(aliasTokenKey, key))) {
+        continue;
+      }
       const aliasKey = normalizeTitle(alias);
       if (aliasKey && preferCatalogItem(item, byAlias.get(aliasKey))) {
         byAlias.set(aliasKey, item);
       }
-      const tokenKey = titleTokenKey(alias);
-      if (tokenKey && preferCatalogItem(item, byTokens.get(tokenKey))) {
-        byTokens.set(tokenKey, item);
+      if (aliasTokenKey && preferCatalogItem(item, byTokens.get(aliasTokenKey))) {
+        byTokens.set(aliasTokenKey, item);
       }
     }
   }
 
   return { exact, byAlias, byTokens };
+}
+
+function splitCollapsedHevyTitles(matches: ExerciseMatch[]): ExerciseMatch[] {
+  const indicesByExerciseId = new Map<string, number[]>();
+
+  matches.forEach((match, index) => {
+    if (!match.exerciseId) {
+      return;
+    }
+
+    const indices = indicesByExerciseId.get(match.exerciseId) ?? [];
+    indices.push(index);
+    indicesByExerciseId.set(match.exerciseId, indices);
+  });
+
+  const result = matches.map((match) => ({ ...match }));
+
+  for (const indices of indicesByExerciseId.values()) {
+    const tokenKeys = new Set(indices.map((index) => titleTokenKey(result[index].title)));
+    if (tokenKeys.size <= 1) {
+      continue;
+    }
+
+    let keepIndex = indices[0];
+    let keepScore = -1;
+
+    for (const index of indices) {
+      const titleKey = titleTokenKey(result[index].title);
+      const catalogKey = result[index].matchedName ? titleTokenKey(result[index].matchedName as string) : '';
+      const score =
+        (result[index].kind === 'exact' ? 100 : 0) +
+        (titleKey === catalogKey ? 50 : 0) +
+        titleKey.split(' ').length;
+
+      if (score > keepScore) {
+        keepScore = score;
+        keepIndex = index;
+      }
+    }
+
+    const keepTokenKey = titleTokenKey(result[keepIndex].title);
+
+    for (const index of indices) {
+      if (titleTokenKey(result[index].title) === keepTokenKey) {
+        continue;
+      }
+
+      result[index] = {
+        title: result[index].title,
+        exerciseId: null,
+        matchedName: null,
+        kind: 'none',
+      };
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -237,7 +318,7 @@ export function matchExerciseTitles(
 ): ExerciseMatch[] {
   const { exact, byAlias, byTokens } = indexCatalog(catalog);
 
-  return titles.map((title) => {
+  const matches = titles.map((title) => {
     const exactHit = exact.get(normalizeTitle(title));
     if (exactHit) {
       return {
@@ -270,6 +351,8 @@ export function matchExerciseTitles(
 
     return { title, exerciseId: null, matchedName: null, kind: 'none' as const };
   });
+
+  return splitCollapsedHevyTitles(matches);
 }
 
 // ponytail: import matching checks (no test runner in app/)
@@ -285,6 +368,48 @@ if (typeof __DEV__ !== 'undefined' && __DEV__) {
   console.assert(
     titleTokenKey('Supino Maquina') !== titleTokenKey('Supino Barra'),
     'machine bench must not equal barbell bench'
+  );
+  console.assert(
+    titleTokenKey('Puxada alta na polia (maquina)') !== titleTokenKey('Puxada alta (maquina)'),
+    'polia machine pulldown must not equal machine pulldown'
+  );
+
+  const latPulldown = {
+    id: 'lat-pulldown-machine',
+    name: 'Lat Pulldown (Machine)',
+    name_en: 'Lat Pulldown (Machine)',
+    name_pt: 'Puxada Alta na Polia (Máquina)',
+    aliases: ['Puxada Alta (Máquina)', 'Puxada Alta (Maquina)'],
+    is_custom: false,
+    listed: true,
+  } as ExerciseCatalogItem;
+
+  const pulldownMatches = matchExerciseTitles(
+    ['Puxada alta na polia (maquina)', 'Puxada alta (maquina)'],
+    [latPulldown]
+  );
+  console.assert(
+    pulldownMatches[0]?.exerciseId === latPulldown.id && pulldownMatches[0]?.kind === 'exact',
+    'full polia title still maps to lat pulldown'
+  );
+  console.assert(
+    pulldownMatches[1]?.kind === 'none' && pulldownMatches[1]?.exerciseId === null,
+    'short machine pulldown must not collapse onto the polia row'
+  );
+
+  const tBar = {
+    id: 't-bar',
+    name: 'T-Bar Row',
+    name_en: 'T-Bar Row',
+    name_pt: 'Remada na Barra T',
+    aliases: ['Remada T-Bar'],
+    is_custom: false,
+    listed: true,
+  } as ExerciseCatalogItem;
+  const tBarMatches = matchExerciseTitles(['Remada na Barra T', 'T-Bar Row'], [tBar]);
+  console.assert(
+    tBarMatches.every((match) => match.exerciseId === tBar.id),
+    'PT and EN t-bar titles stay the same exercise'
   );
 }
 

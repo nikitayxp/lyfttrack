@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeInUp, LinearTransition } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/theme';
@@ -64,6 +66,7 @@ import { showAlert } from '@/utils/showAlert';
 
 const palette = Colors.dark;
 const CARD_BG = palette.surface;
+const isWeb = Platform.OS === 'web';
 const cardLayoutTransition = LinearTransition.springify().damping(16).stiffness(180);
 
 const MUSCLE_FILTER_CHIP_KEYS: readonly (ExerciseLibraryMuscleFilter | 'recent' | 'custom')[] = [
@@ -256,7 +259,8 @@ export default function WorkoutScreen() {
   ]);
 
   useEffect(() => {
-    if (activeMode !== 'exercises' || deferredMuscleFilter === 'recent' || deferredMuscleFilter === 'custom') {
+    const isExercisePickerOpen = activeMode === 'exercises' || isCreateTemplateModalVisible;
+    if (!isExercisePickerOpen || deferredMuscleFilter === 'recent' || deferredMuscleFilter === 'custom') {
       setVisibleGroupCount(Number.POSITIVE_INFINITY);
       return;
     }
@@ -275,7 +279,7 @@ export default function WorkoutScreen() {
     }, 24);
 
     return () => clearInterval(timer);
-  }, [activeMode, deferredMuscleFilter, groupedExercises.length]);
+  }, [activeMode, deferredMuscleFilter, groupedExercises.length, isCreateTemplateModalVisible]);
 
   const visibleGroupedExercises = useMemo(
     () =>
@@ -398,6 +402,9 @@ export default function WorkoutScreen() {
     setSelectedTemplateExercises([]);
     setEditingTemplateId(null);
     setRestSecondsByExerciseId({});
+    setExerciseQuery('');
+    setSelectedMuscleFilter('all');
+    setSelectedEquipmentFilter('all');
     setIsCreateTemplateModalVisible(true);
   }, []);
 
@@ -416,6 +423,9 @@ export default function WorkoutScreen() {
     setSelectedTemplateExercises([]);
     setEditingTemplateId(null);
     setRestSecondsByExerciseId({});
+    setExerciseQuery('');
+    setSelectedMuscleFilter('all');
+    setSelectedEquipmentFilter('all');
   }
 
   function resetExerciseForm() {
@@ -532,6 +542,9 @@ export default function WorkoutScreen() {
       setTemplateNameInput(detail.name);
       setSelectedTemplateExercises(exerciseIds);
       setRestSecondsByExerciseId(restById);
+      setExerciseQuery('');
+      setSelectedMuscleFilter('all');
+      setSelectedEquipmentFilter('all');
       setIsCreateTemplateModalVisible(true);
     } catch (error) {
       showAlert(showToast, t('workout.unableToLoadTemplate'), getErrorMessage(error), 'error');
@@ -563,6 +576,71 @@ export default function WorkoutScreen() {
     }
     return t(EXERCISE_EQUIPMENT_TRANSLATION_KEY[filterKey]);
   };
+
+  const selectedExerciseRows = useMemo(() => {
+    const catalogById = new Map(catalogExercises.map((exercise) => [exercise.id, exercise]));
+    return selectedTemplateExercises
+      .map((exerciseId) => catalogById.get(exerciseId))
+      .filter((exercise): exercise is ExerciseRow => Boolean(exercise));
+  }, [catalogExercises, selectedTemplateExercises]);
+
+  const exerciseLibraryFilters = (
+    <>
+      <View style={styles.toolbarRow}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={18} color={palette.textMuted} />
+          <TextInput
+            accessibilityLabel={t('accessibility.searchExercises', { defaultValue: 'Search exercises' })}
+            value={exerciseQuery}
+            onChangeText={setExerciseQuery}
+            placeholder={t('workout.searchExercisesPlaceholder')}
+            placeholderTextColor={palette.textMuted}
+            style={styles.searchInput}
+            autoCorrect={false}
+            autoCapitalize="none"
+          />
+        </View>
+      </View>
+
+      <Text style={styles.filterChipsSectionLabel}>{t('workout.muscleGroup')}</Text>
+      <ScrollView
+        horizontal
+        nestedScrollEnabled
+        showsHorizontalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        style={[styles.filterChipsScroll, isWeb && styles.filterChipsScrollWeb]}
+        contentContainerStyle={styles.filterChipsContent}
+      >
+        {MUSCLE_FILTER_CHIP_KEYS.map((filterKey) => (
+          <Chip
+            key={filterKey}
+            label={getMuscleFilterLabel(filterKey)}
+            selected={filterKey === selectedMuscleFilter}
+            onPress={() => startFilterTransition(() => setSelectedMuscleFilter(filterKey))}
+          />
+        ))}
+      </ScrollView>
+
+      <Text style={styles.filterChipsSectionLabel}>{t('workout.equipment')}</Text>
+      <ScrollView
+        horizontal
+        nestedScrollEnabled
+        showsHorizontalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        style={[styles.filterChipsScroll, isWeb && styles.filterChipsScrollWeb]}
+        contentContainerStyle={styles.filterChipsContent}
+      >
+        {EQUIPMENT_FILTER_CHIP_KEYS.map((filterKey) => (
+          <Chip
+            key={filterKey}
+            label={getEquipmentFilterLabel(filterKey)}
+            selected={filterKey === selectedEquipmentFilter}
+            onPress={() => startFilterTransition(() => setSelectedEquipmentFilter(filterKey))}
+          />
+        ))}
+      </ScrollView>
+    </>
+  );
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -822,59 +900,7 @@ export default function WorkoutScreen() {
             <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
           </TouchableOpacity>
 
-          <View style={styles.toolbarRow}>
-            <View style={styles.searchBar}>
-              <Ionicons name="search" size={18} color={palette.textMuted} />
-              <TextInput
-                accessibilityLabel={t('accessibility.searchExercises', { defaultValue: 'Search exercises' })}
-                value={exerciseQuery}
-                onChangeText={setExerciseQuery}
-                placeholder={t('workout.searchExercisesPlaceholder')}
-                placeholderTextColor={palette.textMuted}
-                style={styles.searchInput}
-                autoCorrect={false}
-                autoCapitalize="none"
-              />
-            </View>
-          </View>
-
-          <Text style={styles.filterChipsSectionLabel}>{t('workout.muscleGroup')}</Text>
-          <ScrollView
-            horizontal
-            nestedScrollEnabled
-            showsHorizontalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            style={styles.filterChipsScroll}
-            contentContainerStyle={styles.filterChipsContent}
-          >
-            {MUSCLE_FILTER_CHIP_KEYS.map((filterKey) => (
-              <Chip
-                key={filterKey}
-                label={getMuscleFilterLabel(filterKey)}
-                selected={filterKey === selectedMuscleFilter}
-                onPress={() => startFilterTransition(() => setSelectedMuscleFilter(filterKey))}
-              />
-            ))}
-          </ScrollView>
-
-          <Text style={styles.filterChipsSectionLabel}>{t('workout.equipment')}</Text>
-          <ScrollView
-            horizontal
-            nestedScrollEnabled
-            showsHorizontalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            style={styles.filterChipsScroll}
-            contentContainerStyle={styles.filterChipsContent}
-          >
-            {EQUIPMENT_FILTER_CHIP_KEYS.map((filterKey) => (
-              <Chip
-                key={filterKey}
-                label={getEquipmentFilterLabel(filterKey)}
-                selected={filterKey === selectedEquipmentFilter}
-                onPress={() => startFilterTransition(() => setSelectedEquipmentFilter(filterKey))}
-              />
-            ))}
-          </ScrollView>
+          {exerciseLibraryFilters}
 
           {isLoadingCatalog ? (
             <View style={styles.statusContainer}>
@@ -947,7 +973,9 @@ export default function WorkoutScreen() {
           resetTemplateForm();
         }}
         scrollable
+        sheetStyle={styles.templatePickerSheet}
       >
+        <SafeAreaView edges={['bottom']} style={styles.templateSheetBody}>
             <Text style={styles.modalTitle}>
               {editingTemplateId ? t('workout.editTemplate') : t('workout.createTemplate')}
             </Text>
@@ -965,95 +993,128 @@ export default function WorkoutScreen() {
 
             <Text style={styles.modalSectionTitle}>{`${t('workout.templateExercises')} (${selectedTemplateExercises.length})`}</Text>
 
-            {isLoadingCatalog ? (
-              <View style={styles.modalStatusContainer}>
-                <ActivityIndicator size="small" color={palette.accent} />
-                <Text style={styles.modalStatusText}>{t('workout.loadingExerciseCatalog')}</Text>
-              </View>
-            ) : catalogError ? (
-              <View style={styles.modalStatusContainer}>
-                <Text style={styles.modalStatusTitle}>{t('workout.unableToLoadExercises')}</Text>
-                <Text style={styles.modalStatusText}>{catalogError}</Text>
-                <TouchableOpacity
-                  style={styles.modalRetryButton}
-                  onPress={() => void loadCatalogExercises()}
-                  activeOpacity={ACTIVE_OPACITY}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('common.retry')}
-                >
-                  <Text style={styles.modalRetryButtonText}>{t('common.retry')}</Text>
-                </TouchableOpacity>
-              </View>
-            ) : catalogExercises.length === 0 ? (
-              <View style={styles.modalStatusContainer}>
-                <Text style={styles.modalStatusTitle}>{t('workout.noExercisesAvailable')}</Text>
-                <Text style={styles.modalStatusText}>{t('workout.createExercisesHint')}</Text>
-              </View>
-            ) : (
-              <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
-                {catalogExercises.map((exercise) => {
+            {selectedExerciseRows.length > 0 ? (
+              <ScrollView
+                style={styles.templateSelectedList}
+                contentContainerStyle={styles.templateSelectedListContent}
+                nestedScrollEnabled
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                {selectedExerciseRows.map((exercise) => {
                   const selectedOrder = selectionOrder.get(exercise.id);
-                  const isSelected = selectedOrder !== undefined;
-
-                  if (isSelected) {
-                    return (
-                      <View key={exercise.id} style={[styles.modalExerciseRow, styles.modalExerciseRowSelected]}>
-                        <View style={styles.modalExerciseTextWrap}>
-                          <Text style={styles.modalExerciseName}>{getDisplayExerciseName(exercise)}</Text>
-                          <Text style={styles.modalExerciseMeta}>
-                            {getDisplayMuscle(exercise)} - {getDisplayEquipment(exercise)}
-                          </Text>
-                        </View>
-
-                        <View style={styles.selectedActionsWrap}>
-                          <View style={styles.orderBadge}>
-                            <Text style={styles.orderBadgeText}>{selectedOrder}</Text>
-                          </View>
-
-                          <TouchableOpacity
-                            style={styles.removeSelectedButton}
-                            activeOpacity={ACTIVE_OPACITY}
-                            onPress={() => toggleExerciseSelection(exercise.id)}
-                            accessibilityRole="button"
-                            accessibilityLabel={t('accessibility.removeSelectedExercise', { defaultValue: 'Remove exercise' })}
-                          >
-                            <Ionicons name="remove" size={14} color={palette.textPrimary} />
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    );
-                  }
-
                   return (
-                    <TouchableOpacity
-                      key={exercise.id}
-                      style={styles.modalExerciseRow}
-                      activeOpacity={ACTIVE_OPACITY}
-                      onPress={() => toggleExerciseSelection(exercise.id)}
-                      accessibilityRole="button"
-                      accessibilityLabel={t('accessibility.addSpecificExercise', { name: getDisplayExerciseName(exercise), defaultValue: 'Add exercise' })}
-                    >
-                      <View style={styles.modalExerciseTextWrap}>
-                        <Text style={styles.modalExerciseName}>{getDisplayExerciseName(exercise)}</Text>
-                        <Text style={styles.modalExerciseMeta}>
+                    <View key={exercise.id} style={[styles.libraryExerciseRow, styles.modalExerciseRowSelected]}>
+                      <ExerciseThumbnail exercise={exercise} size={34} />
+                      <View style={styles.libraryExerciseTextWrap}>
+                        <Text style={styles.libraryExerciseName} numberOfLines={1}>
+                          {getDisplayExerciseName(exercise)}
+                        </Text>
+                        <Text style={styles.libraryExerciseMeta} numberOfLines={1}>
                           {getDisplayMuscle(exercise)} - {getDisplayEquipment(exercise)}
                         </Text>
                       </View>
-
-                      {isSelected ? (
+                      <View style={styles.selectedActionsWrap}>
                         <View style={styles.orderBadge}>
                           <Text style={styles.orderBadgeText}>{selectedOrder}</Text>
                         </View>
-                      ) : (
-                        <View style={styles.addActionButton}>
-                          <Ionicons name="add" size={16} color={palette.accent} />
-                        </View>
-                      )}
-                    </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.removeSelectedButton}
+                          activeOpacity={ACTIVE_OPACITY}
+                          hitSlop={HIT_SLOP}
+                          onPress={() => toggleExerciseSelection(exercise.id)}
+                          accessibilityRole="button"
+                          accessibilityLabel={t('accessibility.removeSelectedExercise', { defaultValue: 'Remove exercise' })}
+                        >
+                          <Ionicons name="remove" size={14} color={palette.textPrimary} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   );
                 })}
               </ScrollView>
-            )}
+            ) : null}
+
+            {exerciseLibraryFilters}
+
+            <ScrollView
+              style={styles.templateCatalogList}
+              contentContainerStyle={styles.templateCatalogListContent}
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {isLoadingCatalog ? (
+                <View style={styles.modalStatusContainer}>
+                  <ActivityIndicator size="small" color={palette.accent} />
+                  <Text style={styles.modalStatusText}>{t('workout.loadingExerciseCatalog')}</Text>
+                </View>
+              ) : catalogError ? (
+                <View style={styles.modalStatusContainer}>
+                  <Text style={styles.modalStatusTitle}>{t('workout.unableToLoadExercises')}</Text>
+                  <Text style={styles.modalStatusText}>{catalogError}</Text>
+                  <TouchableOpacity
+                    style={styles.modalRetryButton}
+                    onPress={() => void loadCatalogExercises()}
+                    activeOpacity={ACTIVE_OPACITY}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('common.retry')}
+                  >
+                    <Text style={styles.modalRetryButtonText}>{t('common.retry')}</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : catalogExercises.length === 0 ? (
+                <View style={styles.modalStatusContainer}>
+                  <Text style={styles.modalStatusTitle}>{t('workout.noExercisesAvailable')}</Text>
+                  <Text style={styles.modalStatusText}>{t('workout.createExercisesHint')}</Text>
+                </View>
+              ) : groupedExercises.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyTitle}>{t('exercise.emptySearchTitle')}</Text>
+                  <Text style={styles.emptySubtitle}>{t('exercise.emptySearchSubtitle')}</Text>
+                </View>
+              ) : (
+                visibleGroupedExercises.map(([muscle, groupedItems]) => {
+                  const unselected = groupedItems.filter((exercise) => !selectionOrder.has(exercise.id));
+                  if (unselected.length === 0) {
+                    return null;
+                  }
+
+                  return (
+                    <View key={muscle} style={styles.groupSection}>
+                      <Text style={styles.groupTitle}>{muscle}</Text>
+                      {unselected.map((exercise) => {
+                        const exerciseLabel = getDisplayExerciseName(exercise);
+
+                        return (
+                          <TouchableOpacity
+                            key={exercise.id}
+                            style={styles.libraryExerciseRow}
+                            activeOpacity={ACTIVE_OPACITY}
+                            onPress={() => toggleExerciseSelection(exercise.id)}
+                            accessibilityRole="button"
+                            accessibilityLabel={t('accessibility.addSpecificExercise', { name: exerciseLabel, defaultValue: 'Add exercise' })}
+                          >
+                            <ExerciseThumbnail exercise={exercise} size={34} />
+                            <View style={styles.libraryExerciseTextWrap}>
+                              <Text style={styles.libraryExerciseName} numberOfLines={1}>
+                                {exerciseLabel}
+                              </Text>
+                              <Text style={styles.libraryExerciseMeta} numberOfLines={1}>
+                                {getDisplayMuscle(exercise)} - {getDisplayEquipment(exercise)}
+                              </Text>
+                            </View>
+                            <View style={styles.addActionButton}>
+                              <Ionicons name="add" size={16} color={palette.accent} />
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
 
             <View style={styles.modalButtonRow}>
               <TouchableOpacity
@@ -1086,6 +1147,7 @@ export default function WorkoutScreen() {
                 )}
               </TouchableOpacity>
             </View>
+        </SafeAreaView>
       </DismissibleBottomSheet>
 
       <DismissibleBottomSheet
@@ -1474,19 +1536,25 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 6,
-    marginTop: 2,
+    marginBottom: 8,
+    marginTop: 4,
   },
   filterChipsScroll: {
     flexGrow: 0,
+    flexShrink: 0,
+    minHeight: 38,
     marginBottom: 10,
   },
+  filterChipsScrollWeb: {
+    scrollbarWidth: 'none',
+    msOverflowStyle: 'none',
+  } as object,
   filterChipsContent: {
     flexDirection: 'row',
     alignItems: 'center',
     columnGap: 8,
     paddingRight: 16,
-    paddingVertical: 2,
+    paddingVertical: 4,
   },
   libraryExerciseRow: {
     borderWidth: 1,
@@ -1587,6 +1655,33 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginBottom: 12,
   },
+  templatePickerSheet: {
+    minHeight: '78%',
+    maxHeight: '92%',
+    paddingBottom: Spacing.md,
+  },
+  templateSheetBody: {
+    flexGrow: 1,
+    minHeight: 0,
+    maxHeight: '100%',
+  },
+  templateSelectedList: {
+    flexGrow: 0,
+    flexShrink: 1,
+    maxHeight: 128,
+    marginBottom: 4,
+  },
+  templateSelectedListContent: {
+    paddingBottom: 2,
+  },
+  templateCatalogList: {
+    flex: 1,
+    minHeight: 140,
+    marginTop: 2,
+  },
+  templateCatalogListContent: {
+    paddingBottom: 8,
+  },
   modalInput: {
     backgroundColor: palette.inputBackground,
     borderWidth: 1,
@@ -1647,9 +1742,6 @@ const styles = StyleSheet.create({
   optionChipTextSelected: {
     color: palette.chipTextSelected,
   },
-  modalList: {
-    maxHeight: 260,
-  },
   modalStatusContainer: {
     borderWidth: 1,
     borderColor: palette.border,
@@ -1685,42 +1777,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
-  modalExerciseRow: {
-    borderWidth: 1,
-    borderColor: palette.border,
-    borderRadius: Radius.card,
-    backgroundColor: palette.surfaceAlt,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    minHeight: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
   modalExerciseRowSelected: {
     borderColor: palette.accent,
     backgroundColor: palette.accentSoft,
   },
-  modalExerciseTextWrap: {
-    flex: 1,
-    paddingRight: 14,
-  },
-  modalExerciseName: {
-    color: palette.textPrimary,
-    fontSize: 16,
-    fontWeight: '800',
-    marginBottom: 4,
-    lineHeight: 22,
-  },
-  modalExerciseMeta: {
-    color: palette.textMuted,
-    fontSize: 12,
-    fontWeight: '500',
-  },
   selectedActionsWrap: {
+    flexDirection: 'row',
     alignItems: 'center',
-    rowGap: 8,
+    columnGap: 6,
+    flexShrink: 0,
   },
   orderBadge: {
     minWidth: 32,
@@ -1759,7 +1824,8 @@ const styles = StyleSheet.create({
   modalButtonRow: {
     flexDirection: 'row',
     columnGap: 10,
-    marginTop: 14,
+    marginTop: 10,
+    paddingTop: 4,
   },
   modalCancelButton: {
     flex: 1,

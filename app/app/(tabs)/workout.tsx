@@ -13,7 +13,7 @@ import {
 import Animated, { FadeInDown, FadeInUp, LinearTransition } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/theme';
-import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
+import { ACTIVE_OPACITY, HIT_SLOP, Radius, Spacing } from '@/constants/Styles';
 import {
   EXERCISE_EQUIPMENT_OPTIONS,
   EXERCISE_EQUIPMENT_TRANSLATION_KEY,
@@ -29,6 +29,7 @@ import {
 import { useAppToast } from '@/context/ToastContext';
 import { usePreferences } from '@/context/PreferencesContext';
 import {
+  deleteTemplate,
   getTemplates,
   saveTemplate,
   startWorkoutFromTemplate,
@@ -55,6 +56,7 @@ import {
   type ExerciseLibraryMuscleFilter,
 } from '@/services/workoutService';
 import type { Tables } from '@/types/database';
+import { confirmAction } from '@/utils/confirmAction';
 import { showAlert } from '@/utils/showAlert';
 
 const palette = Colors.dark;
@@ -108,6 +110,7 @@ export default function WorkoutScreen() {
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(true);
   const [templatesError, setTemplatesError] = useState<string | null>(null);
   const [startingTemplateId, setStartingTemplateId] = useState<string | null>(null);
+  const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
 
   const [isCreateTemplateModalVisible, setIsCreateTemplateModalVisible] = useState(false);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
@@ -351,6 +354,36 @@ export default function WorkoutScreen() {
       showAlert(showToast, t('workout.unableToStartTemplate'), getErrorMessage(error), 'error');
     } finally {
       setStartingTemplateId(null);
+    }
+  }
+
+  async function handleDeleteTemplate(templateId: string) {
+    if (deletingTemplateId || startingTemplateId) {
+      return;
+    }
+
+    const confirmed = await confirmAction({
+      title: t('workout.deleteTemplateTitle'),
+      description: t('workout.deleteTemplateDescription'),
+      confirmLabel: t('workout.deleteTemplateConfirm'),
+      cancelLabel: t('common.cancel'),
+      destructive: true,
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingTemplateId(templateId);
+
+    try {
+      await deleteTemplate(templateId);
+      setTemplates((current) => current.filter((item) => item.id !== templateId));
+      showAlert(showToast, t('workout.deleteTemplateSuccess'));
+    } catch (error) {
+      showAlert(showToast, t('workout.unableToDeleteTemplate'), getErrorMessage(error), 'error');
+    } finally {
+      setDeletingTemplateId(null);
     }
   }
 
@@ -651,26 +684,44 @@ export default function WorkoutScreen() {
                   entering={FadeInDown.delay(Math.min(index * 45, 260)).duration(320)}
                   layout={cardLayoutTransition}
                 >
-                  <TouchableOpacity
-                    style={styles.quickStartCard}
-                    activeOpacity={ACTIVE_OPACITY}
-                    onPress={() => void handleStartTemplate(template.id)}
-                    disabled={startingTemplateId !== null}
-                    accessibilityRole="button"
-                    accessibilityLabel={template.name}
-                  >
-                    <View style={styles.quickStartCardTextWrap}>
-                      <Text style={styles.quickStartTitle}>{template.name}</Text>
-                      <Text style={styles.quickStartMeta}>{`${template.exerciseCount} ${t('workout.templateExercises').toLowerCase()}`}</Text>
-                      <Text style={styles.quickStartSummary}>{summarizeExercises(template.exerciseNames, t('workout.noExercisesSummary'), language)}</Text>
-                    </View>
+                  <View style={styles.quickStartCard}>
+                    <TouchableOpacity
+                      style={styles.quickStartCardMain}
+                      activeOpacity={ACTIVE_OPACITY}
+                      onPress={() => void handleStartTemplate(template.id)}
+                      disabled={startingTemplateId !== null || deletingTemplateId !== null}
+                      accessibilityRole="button"
+                      accessibilityLabel={template.name}
+                    >
+                      <View style={styles.quickStartCardTextWrap}>
+                        <Text style={styles.quickStartTitle}>{template.name}</Text>
+                        <Text style={styles.quickStartMeta}>{`${template.exerciseCount} ${t('workout.templateExercises').toLowerCase()}`}</Text>
+                        <Text style={styles.quickStartSummary}>{summarizeExercises(template.exerciseNames, t('workout.noExercisesSummary'), language)}</Text>
+                      </View>
 
-                    {startingTemplateId === template.id ? (
-                      <ActivityIndicator size="small" color={palette.accent} />
-                    ) : (
-                      <Ionicons name="play-circle-outline" size={20} color={palette.accent} />
-                    )}
-                  </TouchableOpacity>
+                      {startingTemplateId === template.id ? (
+                        <ActivityIndicator size="small" color={palette.accent} />
+                      ) : (
+                        <Ionicons name="play-circle-outline" size={20} color={palette.accent} />
+                      )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.templateDeleteButton}
+                      activeOpacity={ACTIVE_OPACITY}
+                      onPress={() => void handleDeleteTemplate(template.id)}
+                      disabled={startingTemplateId !== null || deletingTemplateId !== null}
+                      hitSlop={HIT_SLOP}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('workout.deleteTemplateA11y', { name: template.name })}
+                    >
+                      {deletingTemplateId === template.id ? (
+                        <ActivityIndicator size="small" color={palette.error} />
+                      ) : (
+                        <Ionicons name="trash-outline" size={18} color={palette.error} />
+                      )}
+                    </TouchableOpacity>
+                  </View>
                 </Animated.View>
               ))
             )}
@@ -1218,6 +1269,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
+  },
+  quickStartCardMain: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  templateDeleteButton: {
+    width: 30,
+    height: 30,
+    marginLeft: 8,
+    borderRadius: Radius.xs,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.bgPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   quickStartCardTextWrap: {
     flex: 1,

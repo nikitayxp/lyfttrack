@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -15,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius, Spacing, Typography } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
+import { AppButton } from '@/components/ui/AppButton';
 import { useAppToast } from '@/context/ToastContext';
 import { clearSignUpDraft } from '@/services/signUpDraft';
 import { supabase } from '@/services/supabase';
@@ -155,20 +155,12 @@ export default function VerifyScreen() {
             </View>
             <Text style={styles.codeHint}>{t('auth.verify.codeHint')}</Text>
 
-            <TouchableOpacity 
-              style={styles.primaryButton} 
-              onPress={() => void handleVerify()} 
-              disabled={loading}
-              activeOpacity={ACTIVE_OPACITY}
-              accessibilityRole="button"
-              accessibilityLabel={t('auth.verify.confirmAction')}
-            >
-              {loading ? (
-                <ActivityIndicator color={palette.textPrimary} />
-              ) : (
-                <Text style={styles.primaryButtonText}>{t('auth.verify.confirmAction')}</Text>
-              )}
-            </TouchableOpacity>
+            <AppButton
+              label={t('auth.verify.confirmAction')}
+              onPress={() => void handleVerify()}
+              loading={loading}
+              style={styles.submitButton}
+            />
 
             <TouchableOpacity
               style={styles.switchAction}
@@ -274,19 +266,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginTop: -2,
   },
-  primaryButton: {
+  submitButton: {
     marginTop: Spacing.md,
-    backgroundColor: palette.accent,
-    borderRadius: Radius.md,
-    minHeight: 54,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryButtonText: {
-    color: palette.textPrimary,
-    fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: 0.4,
   },
   switchAction: {
     marginTop: Spacing.sm,

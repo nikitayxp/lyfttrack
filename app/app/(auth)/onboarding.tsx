@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -17,6 +16,7 @@ import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
 import { AuthFeedback, type AuthFeedbackValue } from '@/components/auth/AuthFeedback';
+import { AppButton } from '@/components/ui/AppButton';
 import { markOnboardingCompleted } from '@/services/authSetup';
 import { addWeight, parseBodyWeightInput } from '@/services/measurementService';
 import {
@@ -222,20 +222,12 @@ export default function OnboardingScreen() {
                 <Text style={styles.unitSuffix}>cm</Text>
               </View>
 
-              <TouchableOpacity
-                style={styles.primaryButton}
-                activeOpacity={ACTIVE_OPACITY}
+              <AppButton
+                label={t('auth.onboarding.continueAction')}
                 onPress={() => void handleContinue()}
-                disabled={loading}
-                accessibilityRole="button"
-                accessibilityLabel={t('auth.onboarding.continueAction')}
-              >
-                {loading ? (
-                  <ActivityIndicator color={palette.textPrimary} />
-                ) : (
-                  <Text style={styles.primaryButtonText}>{t('auth.onboarding.continueAction')}</Text>
-                )}
-              </TouchableOpacity>
+                loading={loading}
+                style={styles.submitButton}
+              />
             </View>
           </View>
         </ScrollView>
@@ -294,13 +286,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     paddingRight: Spacing.xs,
   },
-  primaryButton: {
+  submitButton: {
     marginTop: Spacing.sm,
-    minHeight: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: Radius.md,
-    backgroundColor: palette.accent,
   },
-  primaryButtonText: { color: palette.textPrimary, fontSize: 15, fontWeight: '900' },
 });

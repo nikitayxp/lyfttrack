@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import Animated, { FadeInUp, LinearTransition } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
+import { Chip } from '@/components/ui/Chip';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import {
@@ -255,24 +256,16 @@ export default function ExercisesScreen() {
             </Animated.View>
 
             <View style={styles.filterChipRow}>
-              <TouchableOpacity
-                style={[styles.filterChip, !showRecentOnly && styles.filterChipActive]}
-                activeOpacity={ACTIVE_OPACITY}
+              <Chip
+                label={t('exercise.filterAll')}
+                selected={!showRecentOnly}
                 onPress={() => startFilterTransition(() => setShowRecentOnly(false))}
-              >
-                <Text style={[styles.filterChipText, !showRecentOnly && styles.filterChipTextActive]}>
-                  {t('exercise.filterAll')}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.filterChip, showRecentOnly && styles.filterChipActive]}
-                activeOpacity={ACTIVE_OPACITY}
+              />
+              <Chip
+                label={t('exercise.filterRecent')}
+                selected={showRecentOnly}
                 onPress={() => startFilterTransition(() => setShowRecentOnly(true))}
-              >
-                <Text style={[styles.filterChipText, showRecentOnly && styles.filterChipTextActive]}>
-                  {t('exercise.filterRecent')}
-                </Text>
-              </TouchableOpacity>
+              />
             </View>
 
             {isLoading ? (
@@ -434,28 +427,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     columnGap: 8,
     marginBottom: 16,
-  },
-  filterChip: {
-    minHeight: 32,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: palette.borderStrong,
-    backgroundColor: palette.surfaceAlt,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterChipActive: {
-    borderColor: palette.accent,
-    backgroundColor: palette.accent,
-  },
-  filterChipText: {
-    color: palette.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  filterChipTextActive: {
-    color: '#FFFFFF',
   },
   searchBar: {
     flex: 1,

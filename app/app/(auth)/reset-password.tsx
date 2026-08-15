@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -14,8 +13,14 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
+import { AppButton } from '@/components/ui/AppButton';
 import { useAppToast } from '@/context/ToastContext';
 import { supabase } from '@/services/supabase';
+import { goBack } from '@/utils/navigation';
+import {
+  resetPasswordCameFromKnownOrigin,
+  resolveResetPasswordBackRoute,
+} from '@/utils/resetPasswordOrigin';
 import { showAlert } from '@/utils/showAlert';
 
 const palette = Colors.dark;
@@ -31,8 +36,17 @@ function readRouteValue(value: string | string[] | undefined): string {
 export default function ResetPasswordScreen() {
   const { t } = useTranslation();
   const { showToast } = useAppToast();
-  const params = useLocalSearchParams<{ email?: string | string[] }>();
+  const params = useLocalSearchParams<{ email?: string | string[]; from?: string | string[] }>();
   const routeEmail = readRouteValue(params.email);
+  const origin = readRouteValue(params.from);
+  const backRoute = resolveResetPasswordBackRoute(origin);
+  const backLabel = resetPasswordCameFromKnownOrigin(origin)
+    ? t('auth.resetPassword.backToEditProfile')
+    : t('auth.resetPassword.backToSignIn');
+
+  function handleBack() {
+    goBack(backRoute);
+  }
 
   const [email, setEmail] = useState(routeEmail);
   const [code, setCode] = useState('');
@@ -133,15 +147,11 @@ export default function ResetPasswordScreen() {
           </View>
 
           <View style={styles.formCard}>
-            <TouchableOpacity
-              style={styles.primaryButton}
-              onPress={() => router.replace('/(auth)/sign-in' as any)}
-              activeOpacity={ACTIVE_OPACITY}
-              accessibilityRole="button"
-              accessibilityLabel={t('auth.resetPassword.backToSignIn')}
-            >
-              <Text style={styles.primaryButtonText}>{t('auth.resetPassword.backToSignIn')}</Text>
-            </TouchableOpacity>
+            <AppButton
+              label={backLabel}
+              onPress={handleBack}
+              style={styles.submitButton}
+            />
           </View>
         </View>
       </AuthAmbientGlow>
@@ -194,30 +204,22 @@ export default function ResetPasswordScreen() {
 
               <Text style={styles.codeHint}>{t('auth.resetPassword.passwordHint')}</Text>
 
-              <TouchableOpacity
-                style={styles.primaryButton}
+              <AppButton
+                label={t('auth.resetPassword.updateAction')}
                 onPress={() => void handleUpdatePassword()}
-                disabled={loading}
-                activeOpacity={ACTIVE_OPACITY}
-                accessibilityRole="button"
-                accessibilityLabel={t('auth.resetPassword.updateAction')}
-              >
-                {loading ? (
-                  <ActivityIndicator color={palette.textPrimary} />
-                ) : (
-                  <Text style={styles.primaryButtonText}>{t('auth.resetPassword.updateAction')}</Text>
-                )}
-              </TouchableOpacity>
+                loading={loading}
+                style={styles.submitButton}
+              />
 
               <TouchableOpacity
                 style={styles.switchAction}
-                onPress={() => router.replace('/(auth)/sign-in' as any)}
+                onPress={handleBack}
                 disabled={loading}
                 activeOpacity={ACTIVE_OPACITY}
                 accessibilityRole="button"
-                accessibilityLabel={t('auth.resetPassword.backToSignIn')}
+                accessibilityLabel={backLabel}
               >
-                <Text style={styles.switchActionText}>{t('auth.resetPassword.backToSignIn')}</Text>
+                <Text style={styles.switchActionText}>{backLabel}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -272,30 +274,22 @@ export default function ResetPasswordScreen() {
             </View>
             <Text style={styles.codeHint}>{t('auth.verify.codeHint')}</Text>
 
-            <TouchableOpacity
-              style={styles.primaryButton}
+            <AppButton
+              label={t('auth.resetPassword.verifyCodeAction')}
               onPress={() => void handleVerifyCode()}
-              disabled={loading}
-              activeOpacity={ACTIVE_OPACITY}
-              accessibilityRole="button"
-              accessibilityLabel={t('auth.resetPassword.verifyCodeAction')}
-            >
-              {loading ? (
-                <ActivityIndicator color={palette.textPrimary} />
-              ) : (
-                <Text style={styles.primaryButtonText}>{t('auth.resetPassword.verifyCodeAction')}</Text>
-              )}
-            </TouchableOpacity>
+              loading={loading}
+              style={styles.submitButton}
+            />
 
             <TouchableOpacity
               style={styles.switchAction}
-              onPress={() => router.replace('/(auth)/sign-in' as any)}
+              onPress={handleBack}
               disabled={loading}
               activeOpacity={ACTIVE_OPACITY}
               accessibilityRole="button"
-              accessibilityLabel={t('auth.resetPassword.backToSignIn')}
+              accessibilityLabel={backLabel}
             >
-              <Text style={styles.switchActionText}>{t('auth.resetPassword.backToSignIn')}</Text>
+              <Text style={styles.switchActionText}>{backLabel}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -393,19 +387,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginTop: -2,
   },
-  primaryButton: {
+  submitButton: {
     marginTop: Spacing.md,
-    backgroundColor: palette.accent,
-    borderRadius: Radius.md,
-    minHeight: 54,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryButtonText: {
-    color: palette.textPrimary,
-    fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: 0.4,
   },
   switchAction: {
     marginTop: Spacing.sm,

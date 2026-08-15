@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,10 +11,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeInUp, LinearTransition } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/theme';
-import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
+import { ACTIVE_OPACITY, HIT_SLOP, Radius, Spacing } from '@/constants/Styles';
 import {
   EXERCISE_EQUIPMENT_OPTIONS,
   EXERCISE_EQUIPMENT_TRANSLATION_KEY,
@@ -29,11 +31,15 @@ import {
 import { useAppToast } from '@/context/ToastContext';
 import { usePreferences } from '@/context/PreferencesContext';
 import {
+  deleteTemplate,
+  getTemplateById,
   getTemplates,
   saveTemplate,
   startWorkoutFromTemplate,
+  updateTemplate,
   type TemplateSummary,
 } from '@/services/templateService';
+import { Chip } from '@/components/ui/Chip';
 import { DismissibleBottomSheet } from '@/components/common/DismissibleBottomSheet';
 import { EmptyState } from '@/components/common/EmptyState';
 import { ExerciseThumbnail } from '@/components/common/ExerciseThumbnail';
@@ -55,10 +61,12 @@ import {
   type ExerciseLibraryMuscleFilter,
 } from '@/services/workoutService';
 import type { Tables } from '@/types/database';
+import { confirmAction } from '@/utils/confirmAction';
 import { showAlert } from '@/utils/showAlert';
 
 const palette = Colors.dark;
 const CARD_BG = palette.surface;
+const isWeb = Platform.OS === 'web';
 const cardLayoutTransition = LinearTransition.springify().damping(16).stiffness(180);
 
 const MUSCLE_FILTER_CHIP_KEYS: readonly (ExerciseLibraryMuscleFilter | 'recent' | 'custom')[] = [
@@ -108,6 +116,9 @@ export default function WorkoutScreen() {
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(true);
   const [templatesError, setTemplatesError] = useState<string | null>(null);
   const [startingTemplateId, setStartingTemplateId] = useState<string | null>(null);
+  const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [restSecondsByExerciseId, setRestSecondsByExerciseId] = useState<Record<string, number>>({});
 
   const [isCreateTemplateModalVisible, setIsCreateTemplateModalVisible] = useState(false);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
@@ -248,7 +259,8 @@ export default function WorkoutScreen() {
   ]);
 
   useEffect(() => {
-    if (activeMode !== 'exercises' || deferredMuscleFilter === 'recent' || deferredMuscleFilter === 'custom') {
+    const isExercisePickerOpen = activeMode === 'exercises' || isCreateTemplateModalVisible;
+    if (!isExercisePickerOpen || deferredMuscleFilter === 'recent' || deferredMuscleFilter === 'custom') {
       setVisibleGroupCount(Number.POSITIVE_INFINITY);
       return;
     }
@@ -267,7 +279,7 @@ export default function WorkoutScreen() {
     }, 24);
 
     return () => clearInterval(timer);
-  }, [activeMode, deferredMuscleFilter, groupedExercises.length]);
+  }, [activeMode, deferredMuscleFilter, groupedExercises.length, isCreateTemplateModalVisible]);
 
   const visibleGroupedExercises = useMemo(
     () =>
@@ -354,8 +366,45 @@ export default function WorkoutScreen() {
     }
   }
 
+  async function handleDeleteTemplate(templateId: string) {
+    if (deletingTemplateId || startingTemplateId) {
+      return;
+    }
+
+    const confirmed = await confirmAction({
+      title: t('workout.deleteTemplateTitle'),
+      description: t('workout.deleteTemplateDescription'),
+      confirmLabel: t('workout.deleteTemplateConfirm'),
+      cancelLabel: t('common.cancel'),
+      destructive: true,
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingTemplateId(templateId);
+
+    try {
+      await deleteTemplate(templateId);
+      setTemplates((current) => current.filter((item) => item.id !== templateId));
+      showAlert(showToast, t('workout.deleteTemplateSuccess'));
+    } catch (error) {
+      showAlert(showToast, t('workout.unableToDeleteTemplate'), getErrorMessage(error), 'error');
+    } finally {
+      setDeletingTemplateId(null);
+    }
+  }
+
   const openCreateTemplateFlow = useCallback(() => {
     setActiveMode('templates');
+    setTemplateNameInput('');
+    setSelectedTemplateExercises([]);
+    setEditingTemplateId(null);
+    setRestSecondsByExerciseId({});
+    setExerciseQuery('');
+    setSelectedMuscleFilter('all');
+    setSelectedEquipmentFilter('all');
     setIsCreateTemplateModalVisible(true);
   }, []);
 
@@ -372,6 +421,11 @@ export default function WorkoutScreen() {
   function resetTemplateForm() {
     setTemplateNameInput('');
     setSelectedTemplateExercises([]);
+    setEditingTemplateId(null);
+    setRestSecondsByExerciseId({});
+    setExerciseQuery('');
+    setSelectedMuscleFilter('all');
+    setSelectedEquipmentFilter('all');
   }
 
   function resetExerciseForm() {
@@ -422,7 +476,7 @@ export default function WorkoutScreen() {
     }
   }
 
-  async function handleCreateTemplate() {
+  async function handleSaveTemplate() {
     const normalizedName = sanitizeText(templateNameInput, {
       maxLength: INPUT_LIMITS.nameMax,
       allowEmpty: false,
@@ -441,15 +495,59 @@ export default function WorkoutScreen() {
     setIsSavingTemplate(true);
 
     try {
-      await saveTemplate(normalizedName, selectedTemplateExercises);
+      if (editingTemplateId) {
+        await updateTemplate(
+          editingTemplateId,
+          normalizedName,
+          selectedTemplateExercises.map((exerciseId) => ({
+            exerciseId,
+            restSeconds: restSecondsByExerciseId[exerciseId],
+          }))
+        );
+        showAlert(showToast, t('workout.editTemplateSuccess'));
+      } else {
+        await saveTemplate(normalizedName, selectedTemplateExercises);
+        showAlert(showToast, t('workout.templateSavedTitle'), t('workout.templateSavedDescription'));
+      }
+
       setIsCreateTemplateModalVisible(false);
       resetTemplateForm();
       await loadTemplates();
-      showAlert(showToast, t('workout.templateSavedTitle'), t('workout.templateSavedDescription'));
     } catch (error) {
-      showAlert(showToast, t('workout.unableToCreateTemplate'), getErrorMessage(error), 'error');
+      showAlert(
+        showToast,
+        editingTemplateId ? t('workout.unableToUpdateTemplate') : t('workout.unableToCreateTemplate'),
+        getErrorMessage(error),
+        'error'
+      );
     } finally {
       setIsSavingTemplate(false);
+    }
+  }
+
+  async function handleEditTemplate(templateId: string) {
+    if (deletingTemplateId || startingTemplateId || isSavingTemplate) {
+      return;
+    }
+
+    try {
+      const detail = await getTemplateById(templateId);
+      const restById: Record<string, number> = {};
+      const exerciseIds = detail.exercises.map((entry) => {
+        restById[entry.exercise.id] = entry.rest_seconds;
+        return entry.exercise.id;
+      });
+
+      setEditingTemplateId(detail.id);
+      setTemplateNameInput(detail.name);
+      setSelectedTemplateExercises(exerciseIds);
+      setRestSecondsByExerciseId(restById);
+      setExerciseQuery('');
+      setSelectedMuscleFilter('all');
+      setSelectedEquipmentFilter('all');
+      setIsCreateTemplateModalVisible(true);
+    } catch (error) {
+      showAlert(showToast, t('workout.unableToLoadTemplate'), getErrorMessage(error), 'error');
     }
   }
 
@@ -478,6 +576,71 @@ export default function WorkoutScreen() {
     }
     return t(EXERCISE_EQUIPMENT_TRANSLATION_KEY[filterKey]);
   };
+
+  const selectedExerciseRows = useMemo(() => {
+    const catalogById = new Map(catalogExercises.map((exercise) => [exercise.id, exercise]));
+    return selectedTemplateExercises
+      .map((exerciseId) => catalogById.get(exerciseId))
+      .filter((exercise): exercise is ExerciseRow => Boolean(exercise));
+  }, [catalogExercises, selectedTemplateExercises]);
+
+  const exerciseLibraryFilters = (
+    <>
+      <View style={styles.toolbarRow}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={18} color={palette.textMuted} />
+          <TextInput
+            accessibilityLabel={t('accessibility.searchExercises', { defaultValue: 'Search exercises' })}
+            value={exerciseQuery}
+            onChangeText={setExerciseQuery}
+            placeholder={t('workout.searchExercisesPlaceholder')}
+            placeholderTextColor={palette.textMuted}
+            style={styles.searchInput}
+            autoCorrect={false}
+            autoCapitalize="none"
+          />
+        </View>
+      </View>
+
+      <Text style={styles.filterChipsSectionLabel}>{t('workout.muscleGroup')}</Text>
+      <ScrollView
+        horizontal
+        nestedScrollEnabled
+        showsHorizontalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        style={[styles.filterChipsScroll, isWeb && styles.filterChipsScrollWeb]}
+        contentContainerStyle={styles.filterChipsContent}
+      >
+        {MUSCLE_FILTER_CHIP_KEYS.map((filterKey) => (
+          <Chip
+            key={filterKey}
+            label={getMuscleFilterLabel(filterKey)}
+            selected={filterKey === selectedMuscleFilter}
+            onPress={() => startFilterTransition(() => setSelectedMuscleFilter(filterKey))}
+          />
+        ))}
+      </ScrollView>
+
+      <Text style={styles.filterChipsSectionLabel}>{t('workout.equipment')}</Text>
+      <ScrollView
+        horizontal
+        nestedScrollEnabled
+        showsHorizontalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        style={[styles.filterChipsScroll, isWeb && styles.filterChipsScrollWeb]}
+        contentContainerStyle={styles.filterChipsContent}
+      >
+        {EQUIPMENT_FILTER_CHIP_KEYS.map((filterKey) => (
+          <Chip
+            key={filterKey}
+            label={getEquipmentFilterLabel(filterKey)}
+            selected={filterKey === selectedEquipmentFilter}
+            onPress={() => startFilterTransition(() => setSelectedEquipmentFilter(filterKey))}
+          />
+        ))}
+      </ScrollView>
+    </>
+  );
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -603,7 +766,10 @@ export default function WorkoutScreen() {
             <TouchableOpacity
               style={styles.createTemplateButton}
               activeOpacity={ACTIVE_OPACITY}
-              onPress={() => setIsCreateTemplateModalVisible(true)}
+              onPress={() => {
+                resetTemplateForm();
+                setIsCreateTemplateModalVisible(true);
+              }}
               accessibilityRole="button"
               accessibilityLabel={t('workout.createTemplate')}
             >
@@ -651,26 +817,56 @@ export default function WorkoutScreen() {
                   entering={FadeInDown.delay(Math.min(index * 45, 260)).duration(320)}
                   layout={cardLayoutTransition}
                 >
-                  <TouchableOpacity
-                    style={styles.quickStartCard}
-                    activeOpacity={ACTIVE_OPACITY}
-                    onPress={() => void handleStartTemplate(template.id)}
-                    disabled={startingTemplateId !== null}
-                    accessibilityRole="button"
-                    accessibilityLabel={template.name}
-                  >
-                    <View style={styles.quickStartCardTextWrap}>
-                      <Text style={styles.quickStartTitle}>{template.name}</Text>
-                      <Text style={styles.quickStartMeta}>{`${template.exerciseCount} ${t('workout.templateExercises').toLowerCase()}`}</Text>
-                      <Text style={styles.quickStartSummary}>{summarizeExercises(template.exerciseNames, t('workout.noExercisesSummary'), language)}</Text>
-                    </View>
+                  <View style={styles.quickStartCard}>
+                    <TouchableOpacity
+                      style={styles.quickStartCardMain}
+                      activeOpacity={ACTIVE_OPACITY}
+                      onPress={() => void handleStartTemplate(template.id)}
+                      disabled={startingTemplateId !== null || deletingTemplateId !== null}
+                      accessibilityRole="button"
+                      accessibilityLabel={template.name}
+                    >
+                      <View style={styles.quickStartCardTextWrap}>
+                        <Text style={styles.quickStartTitle}>{template.name}</Text>
+                        <Text style={styles.quickStartMeta}>{`${template.exerciseCount} ${t('workout.templateExercises').toLowerCase()}`}</Text>
+                        <Text style={styles.quickStartSummary}>{summarizeExercises(template.exerciseNames, t('workout.noExercisesSummary'), language)}</Text>
+                      </View>
 
-                    {startingTemplateId === template.id ? (
-                      <ActivityIndicator size="small" color={palette.accent} />
-                    ) : (
-                      <Ionicons name="play-circle-outline" size={20} color={palette.accent} />
-                    )}
-                  </TouchableOpacity>
+                      {startingTemplateId === template.id ? (
+                        <ActivityIndicator size="small" color={palette.accent} />
+                      ) : (
+                        <Ionicons name="play-circle-outline" size={20} color={palette.accent} />
+                      )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.templateDeleteButton}
+                      activeOpacity={ACTIVE_OPACITY}
+                      onPress={() => void handleEditTemplate(template.id)}
+                      disabled={startingTemplateId !== null || deletingTemplateId !== null}
+                      hitSlop={HIT_SLOP}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('workout.editTemplateA11y', { name: template.name })}
+                    >
+                      <Ionicons name="create-outline" size={18} color={palette.textPrimary} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.templateDeleteButton}
+                      activeOpacity={ACTIVE_OPACITY}
+                      onPress={() => void handleDeleteTemplate(template.id)}
+                      disabled={startingTemplateId !== null || deletingTemplateId !== null}
+                      hitSlop={HIT_SLOP}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('workout.deleteTemplateA11y', { name: template.name })}
+                    >
+                      {deletingTemplateId === template.id ? (
+                        <ActivityIndicator size="small" color={palette.error} />
+                      ) : (
+                        <Ionicons name="trash-outline" size={18} color={palette.error} />
+                      )}
+                    </TouchableOpacity>
+                  </View>
                 </Animated.View>
               ))
             )}
@@ -704,77 +900,7 @@ export default function WorkoutScreen() {
             <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
           </TouchableOpacity>
 
-          <View style={styles.toolbarRow}>
-            <View style={styles.searchBar}>
-              <Ionicons name="search" size={18} color={palette.textMuted} />
-              <TextInput
-                accessibilityLabel={t('accessibility.searchExercises', { defaultValue: 'Search exercises' })}
-                value={exerciseQuery}
-                onChangeText={setExerciseQuery}
-                placeholder={t('workout.searchExercisesPlaceholder')}
-                placeholderTextColor={palette.textMuted}
-                style={styles.searchInput}
-                autoCorrect={false}
-                autoCapitalize="none"
-              />
-            </View>
-          </View>
-
-          <Text style={styles.filterChipsSectionLabel}>{t('workout.muscleGroup')}</Text>
-          <ScrollView
-            horizontal
-            nestedScrollEnabled
-            showsHorizontalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            style={styles.filterChipsScroll}
-            contentContainerStyle={styles.filterChipsContent}
-          >
-            {MUSCLE_FILTER_CHIP_KEYS.map((filterKey) => {
-              const isSelected = filterKey === selectedMuscleFilter;
-              return (
-                <TouchableOpacity
-                  key={filterKey}
-                  style={[styles.libraryFilterChip, isSelected && styles.libraryFilterChipSelected]}
-                  activeOpacity={ACTIVE_OPACITY}
-                  onPress={() => startFilterTransition(() => setSelectedMuscleFilter(filterKey))}
-                  accessibilityRole="button"
-                  accessibilityLabel={getMuscleFilterLabel(filterKey)}
-                >
-                  <Text style={[styles.libraryFilterChipText, isSelected && styles.libraryFilterChipTextSelected]}>
-                    {getMuscleFilterLabel(filterKey)}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-
-          <Text style={styles.filterChipsSectionLabel}>{t('workout.equipment')}</Text>
-          <ScrollView
-            horizontal
-            nestedScrollEnabled
-            showsHorizontalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            style={styles.filterChipsScroll}
-            contentContainerStyle={styles.filterChipsContent}
-          >
-            {EQUIPMENT_FILTER_CHIP_KEYS.map((filterKey) => {
-              const isSelected = filterKey === selectedEquipmentFilter;
-              return (
-                <TouchableOpacity
-                  key={filterKey}
-                  style={[styles.libraryFilterChip, isSelected && styles.libraryFilterChipSelected]}
-                  activeOpacity={ACTIVE_OPACITY}
-                  onPress={() => startFilterTransition(() => setSelectedEquipmentFilter(filterKey))}
-                  accessibilityRole="button"
-                  accessibilityLabel={getEquipmentFilterLabel(filterKey)}
-                >
-                  <Text style={[styles.libraryFilterChipText, isSelected && styles.libraryFilterChipTextSelected]}>
-                    {getEquipmentFilterLabel(filterKey)}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+          {exerciseLibraryFilters}
 
           {isLoadingCatalog ? (
             <View style={styles.statusContainer}>
@@ -842,10 +968,17 @@ export default function WorkoutScreen() {
 
       <DismissibleBottomSheet
         visible={isCreateTemplateModalVisible}
-        onClose={() => setIsCreateTemplateModalVisible(false)}
+        onClose={() => {
+          setIsCreateTemplateModalVisible(false);
+          resetTemplateForm();
+        }}
         scrollable
+        sheetStyle={styles.templatePickerSheet}
       >
-            <Text style={styles.modalTitle}>{t('workout.createTemplate')}</Text>
+        <SafeAreaView edges={['bottom']} style={styles.templateSheetBody}>
+            <Text style={styles.modalTitle}>
+              {editingTemplateId ? t('workout.editTemplate') : t('workout.createTemplate')}
+            </Text>
 
             <TextInput
               accessibilityLabel={t('accessibility.templateName', { defaultValue: 'Template name' })}
@@ -860,100 +993,136 @@ export default function WorkoutScreen() {
 
             <Text style={styles.modalSectionTitle}>{`${t('workout.templateExercises')} (${selectedTemplateExercises.length})`}</Text>
 
-            {isLoadingCatalog ? (
-              <View style={styles.modalStatusContainer}>
-                <ActivityIndicator size="small" color={palette.accent} />
-                <Text style={styles.modalStatusText}>{t('workout.loadingExerciseCatalog')}</Text>
-              </View>
-            ) : catalogError ? (
-              <View style={styles.modalStatusContainer}>
-                <Text style={styles.modalStatusTitle}>{t('workout.unableToLoadExercises')}</Text>
-                <Text style={styles.modalStatusText}>{catalogError}</Text>
-                <TouchableOpacity
-                  style={styles.modalRetryButton}
-                  onPress={() => void loadCatalogExercises()}
-                  activeOpacity={ACTIVE_OPACITY}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('common.retry')}
-                >
-                  <Text style={styles.modalRetryButtonText}>{t('common.retry')}</Text>
-                </TouchableOpacity>
-              </View>
-            ) : catalogExercises.length === 0 ? (
-              <View style={styles.modalStatusContainer}>
-                <Text style={styles.modalStatusTitle}>{t('workout.noExercisesAvailable')}</Text>
-                <Text style={styles.modalStatusText}>{t('workout.createExercisesHint')}</Text>
-              </View>
-            ) : (
-              <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
-                {catalogExercises.map((exercise) => {
+            {selectedExerciseRows.length > 0 ? (
+              <ScrollView
+                style={styles.templateSelectedList}
+                contentContainerStyle={styles.templateSelectedListContent}
+                nestedScrollEnabled
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                {selectedExerciseRows.map((exercise) => {
                   const selectedOrder = selectionOrder.get(exercise.id);
-                  const isSelected = selectedOrder !== undefined;
-
-                  if (isSelected) {
-                    return (
-                      <View key={exercise.id} style={[styles.modalExerciseRow, styles.modalExerciseRowSelected]}>
-                        <View style={styles.modalExerciseTextWrap}>
-                          <Text style={styles.modalExerciseName}>{getDisplayExerciseName(exercise)}</Text>
-                          <Text style={styles.modalExerciseMeta}>
-                            {getDisplayMuscle(exercise)} - {getDisplayEquipment(exercise)}
-                          </Text>
-                        </View>
-
-                        <View style={styles.selectedActionsWrap}>
-                          <View style={styles.orderBadge}>
-                            <Text style={styles.orderBadgeText}>{selectedOrder}</Text>
-                          </View>
-
-                          <TouchableOpacity
-                            style={styles.removeSelectedButton}
-                            activeOpacity={ACTIVE_OPACITY}
-                            onPress={() => toggleExerciseSelection(exercise.id)}
-                            accessibilityRole="button"
-                            accessibilityLabel={t('accessibility.removeSelectedExercise', { defaultValue: 'Remove exercise' })}
-                          >
-                            <Ionicons name="remove" size={14} color={palette.textPrimary} />
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    );
-                  }
-
                   return (
-                    <TouchableOpacity
-                      key={exercise.id}
-                      style={styles.modalExerciseRow}
-                      activeOpacity={ACTIVE_OPACITY}
-                      onPress={() => toggleExerciseSelection(exercise.id)}
-                      accessibilityRole="button"
-                      accessibilityLabel={t('accessibility.addSpecificExercise', { name: getDisplayExerciseName(exercise), defaultValue: 'Add exercise' })}
-                    >
-                      <View style={styles.modalExerciseTextWrap}>
-                        <Text style={styles.modalExerciseName}>{getDisplayExerciseName(exercise)}</Text>
-                        <Text style={styles.modalExerciseMeta}>
+                    <View key={exercise.id} style={[styles.libraryExerciseRow, styles.modalExerciseRowSelected]}>
+                      <ExerciseThumbnail exercise={exercise} size={34} />
+                      <View style={styles.libraryExerciseTextWrap}>
+                        <Text style={styles.libraryExerciseName} numberOfLines={1}>
+                          {getDisplayExerciseName(exercise)}
+                        </Text>
+                        <Text style={styles.libraryExerciseMeta} numberOfLines={1}>
                           {getDisplayMuscle(exercise)} - {getDisplayEquipment(exercise)}
                         </Text>
                       </View>
-
-                      {isSelected ? (
+                      <View style={styles.selectedActionsWrap}>
                         <View style={styles.orderBadge}>
                           <Text style={styles.orderBadgeText}>{selectedOrder}</Text>
                         </View>
-                      ) : (
-                        <View style={styles.addActionButton}>
-                          <Ionicons name="add" size={16} color={palette.accent} />
-                        </View>
-                      )}
-                    </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.removeSelectedButton}
+                          activeOpacity={ACTIVE_OPACITY}
+                          hitSlop={HIT_SLOP}
+                          onPress={() => toggleExerciseSelection(exercise.id)}
+                          accessibilityRole="button"
+                          accessibilityLabel={t('accessibility.removeSelectedExercise', { defaultValue: 'Remove exercise' })}
+                        >
+                          <Ionicons name="remove" size={14} color={palette.textPrimary} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   );
                 })}
               </ScrollView>
-            )}
+            ) : null}
+
+            {exerciseLibraryFilters}
+
+            <ScrollView
+              style={styles.templateCatalogList}
+              contentContainerStyle={styles.templateCatalogListContent}
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {isLoadingCatalog ? (
+                <View style={styles.modalStatusContainer}>
+                  <ActivityIndicator size="small" color={palette.accent} />
+                  <Text style={styles.modalStatusText}>{t('workout.loadingExerciseCatalog')}</Text>
+                </View>
+              ) : catalogError ? (
+                <View style={styles.modalStatusContainer}>
+                  <Text style={styles.modalStatusTitle}>{t('workout.unableToLoadExercises')}</Text>
+                  <Text style={styles.modalStatusText}>{catalogError}</Text>
+                  <TouchableOpacity
+                    style={styles.modalRetryButton}
+                    onPress={() => void loadCatalogExercises()}
+                    activeOpacity={ACTIVE_OPACITY}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('common.retry')}
+                  >
+                    <Text style={styles.modalRetryButtonText}>{t('common.retry')}</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : catalogExercises.length === 0 ? (
+                <View style={styles.modalStatusContainer}>
+                  <Text style={styles.modalStatusTitle}>{t('workout.noExercisesAvailable')}</Text>
+                  <Text style={styles.modalStatusText}>{t('workout.createExercisesHint')}</Text>
+                </View>
+              ) : groupedExercises.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyTitle}>{t('exercise.emptySearchTitle')}</Text>
+                  <Text style={styles.emptySubtitle}>{t('exercise.emptySearchSubtitle')}</Text>
+                </View>
+              ) : (
+                visibleGroupedExercises.map(([muscle, groupedItems]) => {
+                  const unselected = groupedItems.filter((exercise) => !selectionOrder.has(exercise.id));
+                  if (unselected.length === 0) {
+                    return null;
+                  }
+
+                  return (
+                    <View key={muscle} style={styles.groupSection}>
+                      <Text style={styles.groupTitle}>{muscle}</Text>
+                      {unselected.map((exercise) => {
+                        const exerciseLabel = getDisplayExerciseName(exercise);
+
+                        return (
+                          <TouchableOpacity
+                            key={exercise.id}
+                            style={styles.libraryExerciseRow}
+                            activeOpacity={ACTIVE_OPACITY}
+                            onPress={() => toggleExerciseSelection(exercise.id)}
+                            accessibilityRole="button"
+                            accessibilityLabel={t('accessibility.addSpecificExercise', { name: exerciseLabel, defaultValue: 'Add exercise' })}
+                          >
+                            <ExerciseThumbnail exercise={exercise} size={34} />
+                            <View style={styles.libraryExerciseTextWrap}>
+                              <Text style={styles.libraryExerciseName} numberOfLines={1}>
+                                {exerciseLabel}
+                              </Text>
+                              <Text style={styles.libraryExerciseMeta} numberOfLines={1}>
+                                {getDisplayMuscle(exercise)} - {getDisplayEquipment(exercise)}
+                              </Text>
+                            </View>
+                            <View style={styles.addActionButton}>
+                              <Ionicons name="add" size={16} color={palette.accent} />
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
 
             <View style={styles.modalButtonRow}>
               <TouchableOpacity
                 style={styles.modalCancelButton}
-                onPress={() => setIsCreateTemplateModalVisible(false)}
+                onPress={() => {
+                  setIsCreateTemplateModalVisible(false);
+                  resetTemplateForm();
+                }}
                 activeOpacity={ACTIVE_OPACITY}
                 accessibilityRole="button"
                 accessibilityLabel={t('common.cancel')}
@@ -963,19 +1132,22 @@ export default function WorkoutScreen() {
 
               <TouchableOpacity
                 style={[styles.modalCreateButton, isSavingTemplate && styles.modalCreateButtonDisabled]}
-                onPress={() => void handleCreateTemplate()}
+                onPress={() => void handleSaveTemplate()}
                 activeOpacity={ACTIVE_OPACITY}
                 disabled={isSavingTemplate}
                 accessibilityRole="button"
-                accessibilityLabel={t('workout.saveTemplate')}
+                accessibilityLabel={editingTemplateId ? t('workout.editTemplate') : t('workout.saveTemplate')}
               >
                 {isSavingTemplate ? (
                   <ActivityIndicator size="small" color={palette.textPrimary} />
                 ) : (
-                  <Text style={styles.modalCreateButtonText}>{t('workout.saveTemplate')}</Text>
+                  <Text style={styles.modalCreateButtonText}>
+                    {editingTemplateId ? t('workout.editTemplate') : t('workout.saveTemplate')}
+                  </Text>
                 )}
               </TouchableOpacity>
             </View>
+        </SafeAreaView>
       </DismissibleBottomSheet>
 
       <DismissibleBottomSheet
@@ -1219,6 +1391,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
+  quickStartCardMain: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  templateDeleteButton: {
+    width: 30,
+    height: 30,
+    marginLeft: 8,
+    borderRadius: Radius.xs,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.bgPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   quickStartCardTextWrap: {
     flex: 1,
     paddingRight: 14,
@@ -1347,42 +1536,25 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 6,
-    marginTop: 2,
+    marginBottom: 8,
+    marginTop: 4,
   },
   filterChipsScroll: {
     flexGrow: 0,
+    flexShrink: 0,
+    minHeight: 38,
     marginBottom: 10,
   },
+  filterChipsScrollWeb: {
+    scrollbarWidth: 'none',
+    msOverflowStyle: 'none',
+  } as object,
   filterChipsContent: {
     flexDirection: 'row',
     alignItems: 'center',
     columnGap: 8,
     paddingRight: 16,
-    paddingVertical: 2,
-  },
-  libraryFilterChip: {
-    flexShrink: 0,
-    minHeight: 34,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: palette.borderStrong,
-    backgroundColor: palette.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-  },
-  libraryFilterChipSelected: {
-    borderColor: palette.accent,
-    backgroundColor: palette.accent,
-  },
-  libraryFilterChipText: {
-    color: palette.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  libraryFilterChipTextSelected: {
-    color: '#FFFFFF',
+    paddingVertical: 4,
   },
   libraryExerciseRow: {
     borderWidth: 1,
@@ -1411,33 +1583,6 @@ const styles = StyleSheet.create({
     color: palette.textSecondary,
     fontSize: 13,
     fontWeight: '500',
-  },
-  filterChipRow: {
-    flexDirection: 'row',
-    columnGap: 8,
-    marginBottom: 12,
-  },
-  filterChip: {
-    minHeight: 32,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: palette.borderStrong,
-    backgroundColor: palette.surfaceAlt,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterChipActive: {
-    borderColor: palette.accent,
-    backgroundColor: palette.accent,
-  },
-  filterChipText: {
-    color: palette.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  filterChipTextActive: {
-    color: palette.textPrimary,
   },
   exerciseTextWrap: {
     flex: 1,
@@ -1510,6 +1655,33 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginBottom: 12,
   },
+  templatePickerSheet: {
+    minHeight: '78%',
+    maxHeight: '92%',
+    paddingBottom: Spacing.md,
+  },
+  templateSheetBody: {
+    flexGrow: 1,
+    minHeight: 0,
+    maxHeight: '100%',
+  },
+  templateSelectedList: {
+    flexGrow: 0,
+    flexShrink: 1,
+    maxHeight: 128,
+    marginBottom: 4,
+  },
+  templateSelectedListContent: {
+    paddingBottom: 2,
+  },
+  templateCatalogList: {
+    flex: 1,
+    minHeight: 140,
+    marginTop: 2,
+  },
+  templateCatalogListContent: {
+    paddingBottom: 8,
+  },
   modalInput: {
     backgroundColor: palette.inputBackground,
     borderWidth: 1,
@@ -1570,9 +1742,6 @@ const styles = StyleSheet.create({
   optionChipTextSelected: {
     color: palette.chipTextSelected,
   },
-  modalList: {
-    maxHeight: 260,
-  },
   modalStatusContainer: {
     borderWidth: 1,
     borderColor: palette.border,
@@ -1608,42 +1777,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
-  modalExerciseRow: {
-    borderWidth: 1,
-    borderColor: palette.border,
-    borderRadius: Radius.card,
-    backgroundColor: palette.surfaceAlt,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    minHeight: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
   modalExerciseRowSelected: {
     borderColor: palette.accent,
     backgroundColor: palette.accentSoft,
   },
-  modalExerciseTextWrap: {
-    flex: 1,
-    paddingRight: 14,
-  },
-  modalExerciseName: {
-    color: palette.textPrimary,
-    fontSize: 16,
-    fontWeight: '800',
-    marginBottom: 4,
-    lineHeight: 22,
-  },
-  modalExerciseMeta: {
-    color: palette.textMuted,
-    fontSize: 12,
-    fontWeight: '500',
-  },
   selectedActionsWrap: {
+    flexDirection: 'row',
     alignItems: 'center',
-    rowGap: 8,
+    columnGap: 6,
+    flexShrink: 0,
   },
   orderBadge: {
     minWidth: 32,
@@ -1682,7 +1824,8 @@ const styles = StyleSheet.create({
   modalButtonRow: {
     flexDirection: 'row',
     columnGap: 10,
-    marginTop: 14,
+    marginTop: 10,
+    paddingTop: 4,
   },
   modalCancelButton: {
     flex: 1,

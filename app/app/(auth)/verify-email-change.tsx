@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -14,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
+import { AppButton } from '@/components/ui/AppButton';
 import { useAppToast } from '@/context/ToastContext';
 import { supabase } from '@/services/supabase';
 import { goBack } from '@/utils/navigation';
@@ -89,15 +89,11 @@ export default function VerifyEmailChangeScreen() {
           </View>
 
           <View style={styles.formCard}>
-            <TouchableOpacity
-              style={styles.primaryButton}
+            <AppButton
+              label={t('auth.verifyEmailChange.backToProfile')}
               onPress={() => router.replace('/(tabs)/profile/edit' as any)}
-              activeOpacity={ACTIVE_OPACITY}
-              accessibilityRole="button"
-              accessibilityLabel={t('auth.verifyEmailChange.backToProfile')}
-            >
-              <Text style={styles.primaryButtonText}>{t('auth.verifyEmailChange.backToProfile')}</Text>
-            </TouchableOpacity>
+              style={styles.submitButton}
+            />
           </View>
         </View>
       </AuthAmbientGlow>
@@ -149,20 +145,12 @@ export default function VerifyEmailChangeScreen() {
             </View>
             <Text style={styles.codeHint}>{t('auth.verify.codeHint')}</Text>
 
-            <TouchableOpacity
-              style={styles.primaryButton}
+            <AppButton
+              label={t('auth.verifyEmailChange.confirmAction')}
               onPress={() => void handleVerifyCode()}
-              disabled={loading}
-              activeOpacity={ACTIVE_OPACITY}
-              accessibilityRole="button"
-              accessibilityLabel={t('auth.verifyEmailChange.confirmAction')}
-            >
-              {loading ? (
-                <ActivityIndicator color={palette.textPrimary} />
-              ) : (
-                <Text style={styles.primaryButtonText}>{t('auth.verifyEmailChange.confirmAction')}</Text>
-              )}
-            </TouchableOpacity>
+              loading={loading}
+              style={styles.submitButton}
+            />
 
             <TouchableOpacity
               style={styles.switchAction}
@@ -269,19 +257,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginTop: -2,
   },
-  primaryButton: {
+  submitButton: {
     marginTop: Spacing.md,
-    backgroundColor: palette.accent,
-    borderRadius: Radius.md,
-    minHeight: 54,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryButtonText: {
-    color: palette.textPrimary,
-    fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: 0.4,
   },
   switchAction: {
     marginTop: Spacing.sm,

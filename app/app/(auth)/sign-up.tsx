@@ -19,6 +19,7 @@ import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
 import { AuthFeedback, type AuthFeedbackValue } from '@/components/auth/AuthFeedback';
 import { AuthLanguageToggle } from '@/components/auth/AuthLanguageToggle';
 import { PasswordRequirements } from '@/components/auth/PasswordRequirements';
+import { AppButton } from '@/components/ui/AppButton';
 import { markTermsAcceptedForOAuth, startGoogleOAuth } from '@/services/authService';
 import { checkUsernameAvailability } from '@/services/profileService';
 import { loadSignUpDraft, saveSignUpDraft } from '@/services/signUpDraft';
@@ -380,19 +381,13 @@ export default function SignUpScreen() {
                 visible from where the user is looking when they submit. */}
             <AuthFeedback feedback={feedback} />
 
-            <TouchableOpacity
-              style={[styles.primaryButton, !termsAccepted && styles.primaryButtonDisabled]}
+            <AppButton
+              label={t('auth.signUp.createAccountAction')}
               onPress={() => void handleSignUp()}
-              disabled={loading || !termsAccepted}
-              accessibilityRole="button"
-              accessibilityLabel={t('auth.signUp.createAccountAction')}
-            >
-              {loading ? (
-                <ActivityIndicator color={palette.textPrimary} />
-              ) : (
-                <Text style={styles.primaryButtonText}>{t('auth.signUp.createAccountAction')}</Text>
-              )}
-            </TouchableOpacity>
+              disabled={!termsAccepted}
+              loading={loading}
+              style={styles.submitButton}
+            />
 
             <View style={styles.dividerRow}>
               <View style={styles.dividerLine} />
@@ -531,19 +526,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  primaryButton: {
+  submitButton: {
     marginTop: Spacing.md,
-    backgroundColor: palette.accent,
-    borderRadius: Radius.md,
-    minHeight: 54,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryButtonText: {
-    color: palette.textPrimary,
-    fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: 0.4,
   },
   dividerRow: {
     marginTop: Spacing.md,
@@ -639,9 +623,6 @@ const styles = StyleSheet.create({
   termsLink: {
     color: palette.accent,
     fontWeight: '700',
-  },
-  primaryButtonDisabled: {
-    opacity: 0.45,
   },
   usernamePrefix: {
     color: palette.textMuted,

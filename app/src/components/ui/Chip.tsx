@@ -1,6 +1,6 @@
 import { StyleSheet, Text, TouchableOpacity, type StyleProp, type ViewStyle } from 'react-native';
 import { Colors } from '@/constants/Colors';
-import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
+import { ACTIVE_OPACITY, HIT_SLOP, Radius, Typography } from '@/constants/Styles';
 
 const palette = Colors.dark;
 
@@ -15,8 +15,10 @@ export function Chip({ label, selected = false, onPress, style }: ChipProps) {
   return (
     <TouchableOpacity
       accessibilityRole="button"
+      accessibilityLabel={label}
       accessibilityState={{ selected }}
       activeOpacity={ACTIVE_OPACITY}
+      hitSlop={HIT_SLOP}
       onPress={onPress}
       style={[
         styles.chip,
@@ -33,25 +35,25 @@ export function Chip({ label, selected = false, onPress, style }: ChipProps) {
 
 const styles = StyleSheet.create({
   chip: {
+    flexShrink: 0,
     minHeight: 34,
     borderRadius: Radius.pill,
     borderWidth: 1,
-    borderColor: palette.chipBorder,
-    backgroundColor: palette.chipFill,
+    borderColor: palette.borderStrong,
+    backgroundColor: palette.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
   },
   chipSelected: {
-    borderColor: palette.chipBorderSelected,
-    backgroundColor: palette.chipFillSelected,
+    borderColor: palette.accent,
+    backgroundColor: palette.accent,
   },
   chipText: {
-    color: palette.chipText,
-    fontSize: 12,
-    fontWeight: '700',
+    ...Typography.chip,
+    color: palette.textSecondary,
   },
   chipTextSelected: {
-    color: palette.chipTextSelected,
+    color: '#FFFFFF',
   },
 });

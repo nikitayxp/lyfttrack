@@ -335,20 +335,9 @@ export default function ActiveWorkout() {
         return;
       }
 
-      if (previousSet) {
-        if (!setItem.weightInput && previousSet.weight != null && previousSet.weight > 0) {
-          updateSetInput(exercise.id, setItem.id, 'weightInput', String(previousSet.weight));
-        }
-        if (!setItem.repsInput && previousSet.reps != null && previousSet.reps > 0) {
-          updateSetInput(exercise.id, setItem.id, 'repsInput', String(Math.trunc(previousSet.reps)));
-        }
-        if (!setItem.rirInput && previousSet.rir != null && previousSet.rir >= 0) {
-          updateSetInput(exercise.id, setItem.id, 'rirInput', String(previousSet.rir));
-        }
-      }
-
       const effectiveWeightInput = setItem.weightInput || (previousSet?.weight != null && previousSet.weight > 0 ? String(previousSet.weight) : '');
       const effectiveRepsInput = setItem.repsInput || (previousSet?.reps != null && previousSet.reps > 0 ? String(Math.trunc(previousSet.reps)) : '');
+      const effectiveRirInput = setItem.rirInput || (previousSet?.rir != null && previousSet.rir >= 0 ? String(previousSet.rir) : '');
 
       const best = personalBestsByExerciseId[exerciseId] ?? EMPTY_PERSONAL_BEST;
       const sample = {
@@ -365,9 +354,13 @@ export default function ActiveWorkout() {
         }));
       }
 
-      handleSetCompletionToggle(exercise.id, setItem.id);
+      handleSetCompletionToggle(exercise.id, setItem.id, {
+        weightInput: effectiveWeightInput,
+        repsInput: effectiveRepsInput,
+        rirInput: effectiveRirInput,
+      });
     },
-    [handleSetCompletionToggle, personalBestsByExerciseId, updateSetInput]
+    [handleSetCompletionToggle, personalBestsByExerciseId]
   );
 
   const activeExerciseIds = useMemo(
@@ -1381,9 +1374,9 @@ export default function ActiveWorkout() {
                     );
                   })}
 
-                  <TouchableOpacity 
-                    style={styles.addSetButton} 
-                    activeOpacity={ACTIVE_OPACITY} 
+                  <TouchableOpacity
+                    style={styles.addSetButton}
+                    activeOpacity={ACTIVE_OPACITY}
                     onPress={() => addSet(exercise.id)}
                     accessibilityRole="button"
                     accessibilityLabel={t('accessibility.addSet', { defaultValue: 'Add set' })}
@@ -1397,7 +1390,7 @@ export default function ActiveWorkout() {
           )}
         </ScrollView>
 
-        <View style={[styles.bottomActionArea, { bottom: insets.bottom + 12 }]}> 
+        <View style={[styles.bottomActionArea, { bottom: insets.bottom + 12 }]}>
           <TouchableOpacity
             style={styles.addExerciseTrigger}
             activeOpacity={ACTIVE_OPACITY}

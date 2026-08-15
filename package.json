@@ -6,7 +6,7 @@
     "site"
   ],
   "scripts": {
-    "postinstall": "patch-package",
+    "postinstall": "patch-package --patch-dir app/patches",
     "dev:site": "npm run dev --workspace=site",
     "dev:app": "npm run start --workspace=app",
     "install:all": "npm install",

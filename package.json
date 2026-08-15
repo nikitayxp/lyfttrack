@@ -6,9 +6,13 @@
     "site"
   ],
   "scripts": {
+    "postinstall": "patch-package",
     "dev:site": "npm run dev --workspace=site",
     "dev:app": "npm run start --workspace=app",
     "install:all": "npm install",
     "build:android": "npm run build:android --workspace=app"
+  },
+  "devDependencies": {
+    "patch-package": "^8.0.1"
   }
 }

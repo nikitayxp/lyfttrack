@@ -440,30 +440,53 @@ export function useActiveWorkoutState({
     [getExerciseCompletionGlowValue]
   );
 
-  const toggleSetCompleted = useCallback((exerciseId: string, setId: string) => {
+  const toggleSetCompleted = useCallback((
+    exerciseId: string,
+    setId: string,
+    inputValues?: Partial<Pick<ActiveSet, 'weightInput' | 'repsInput' | 'rirInput'>>
+  ) => {
     setActiveExercisesWithRef((currentValue) =>
       currentValue.map((exercise) => {
         if (exercise.id !== exerciseId) return exercise;
 
         return {
           ...exercise,
-          sets: exercise.sets.map((setItem) =>
-            setItem.id === setId ? { ...setItem, completed: !setItem.completed } : setItem
-          ),
+          sets: exercise.sets.map((setItem) => {
+            if (setItem.id !== setId) return setItem;
+
+            const weightInput = inputValues?.weightInput ?? setItem.weightInput;
+            const repsInput = inputValues?.repsInput ?? setItem.repsInput;
+            const rirInput = inputValues?.rirInput ?? setItem.rirInput;
+
+            return {
+              ...setItem,
+              completed: !setItem.completed,
+              weightInput,
+              weight: parseOptionalWeight(weightInput),
+              repsInput,
+              reps: parseOptionalReps(repsInput),
+              rirInput,
+              rir: parseOptionalRir(rirInput),
+            };
+          }),
         };
       })
     );
   }, [setActiveExercisesWithRef]);
 
   const handleSetCompletionToggle = useCallback(
-    (exerciseId: string, setId: string) => {
+    (
+      exerciseId: string,
+      setId: string,
+      inputValues?: Partial<Pick<ActiveSet, 'weightInput' | 'repsInput' | 'rirInput'>>
+    ) => {
       const targetExercise = activeExercisesRef.current.find((exercise) => exercise.id === exerciseId);
       const targetSet = targetExercise?.sets.find((setItem) => setItem.id === setId);
 
       const willBeCompleted = targetSet ? !targetSet.completed : false;
       const restSecondsForExercise = normalizeExerciseRestSeconds(targetExercise?.defaultRestSeconds);
 
-      toggleSetCompleted(exerciseId, setId);
+      toggleSetCompleted(exerciseId, setId, inputValues);
 
       if (willBeCompleted) {
         if (onSetCompleted) {
@@ -605,8 +628,11 @@ export function useActiveWorkoutState({
     );
   }, [setActiveExercisesWithRef]);
 
-  const addExercise = useCallback((exercise: ExerciseRow) => {
-    setActiveExercisesWithRef((currentValue) => [...currentValue, createExerciseBlock(exercise)]);
+  const addExercise = useCallback((exercise: ExerciseRow, historicalSets?: CopySetSeed[]) => {
+    const block = historicalSets && historicalSets.length > 0
+      ? createExerciseBlockFromSets(exercise, historicalSets)
+      : createExerciseBlock(exercise);
+    setActiveExercisesWithRef((currentValue) => [...currentValue, block]);
   }, [setActiveExercisesWithRef]);
 
   const clearExercises = useCallback(() => {

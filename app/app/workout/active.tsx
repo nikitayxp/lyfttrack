@@ -316,7 +316,7 @@ export default function ActiveWorkout() {
   }, [activeExerciseIdsKey]);
 
   const toggleSetAndCheckRecord = useCallback(
-    (exercise: ActiveExercise, setItem: ActiveSet) => {
+    (exercise: ActiveExercise, setItem: ActiveSet, previousSet?: PreviousExercisePerformanceSet) => {
       const isCompleting = !setItem.completed;
       const exerciseId = exercise.exercise.id;
 
@@ -335,24 +335,30 @@ export default function ActiveWorkout() {
         return;
       }
 
+      const effectiveWeightInput = setItem.weightInput || (previousSet?.weight != null && previousSet.weight > 0 ? String(previousSet.weight) : '');
+      const effectiveRepsInput = setItem.repsInput || (previousSet?.reps != null && previousSet.reps > 0 ? String(Math.trunc(previousSet.reps)) : '');
+      const effectiveRirInput = setItem.rirInput || (previousSet?.rir != null && previousSet.rir >= 0 ? String(previousSet.rir) : '');
+
       const best = personalBestsByExerciseId[exerciseId] ?? EMPTY_PERSONAL_BEST;
       const sample = {
-        weight: toSafeNumber(setItem.weightInput, { min: 0, max: INPUT_LIMITS.weightMax, decimals: 2 }),
-        reps: toSafeInteger(setItem.repsInput, { min: 0, max: INPUT_LIMITS.repsMax }),
+        weight: toSafeNumber(effectiveWeightInput, { min: 0, max: INPUT_LIMITS.weightMax, decimals: 2 }),
+        reps: toSafeInteger(effectiveRepsInput, { min: 0, max: INPUT_LIMITS.repsMax }),
       };
 
       if (isRecordSet(sample, best)) {
         setRecordSetIds((current) => new Set(current).add(setItem.id));
 
-        // Raise the bar so a lighter set later in the same exercise does not
-        // also claim the record.
         setPersonalBestsByExerciseId((current) => ({
           ...current,
           [exerciseId]: mergePersonalBest(current[exerciseId] ?? EMPTY_PERSONAL_BEST, sample),
         }));
       }
 
-      handleSetCompletionToggle(exercise.id, setItem.id);
+      handleSetCompletionToggle(exercise.id, setItem.id, {
+        weightInput: effectiveWeightInput,
+        repsInput: effectiveRepsInput,
+        rirInput: effectiveRirInput,
+      });
     },
     [handleSetCompletionToggle, personalBestsByExerciseId]
   );
@@ -1280,7 +1286,7 @@ export default function ActiveWorkout() {
                             onChangeText={(value) => updateSetInput(exercise.id, setItem.id, 'weightInput', value)}
                             style={[styles.numericInput, styles.kgInput, setItem.completed && styles.numericInputCompleted]}
                             keyboardType="decimal-pad"
-                            placeholder="0"
+                            placeholder={previousSet?.weight != null && previousSet.weight > 0 ? String(previousSet.weight) : '0'}
                             placeholderTextColor={palette.textMuted}
                           />
 
@@ -1290,7 +1296,7 @@ export default function ActiveWorkout() {
                             onChangeText={(value) => updateSetInput(exercise.id, setItem.id, 'repsInput', value)}
                             style={[styles.numericInput, styles.cellReps, setItem.completed && styles.numericInputCompleted]}
                             keyboardType="numeric"
-                            placeholder="0"
+                            placeholder={previousSet?.reps != null && previousSet.reps > 0 ? String(Math.trunc(previousSet.reps)) : '0'}
                             placeholderTextColor={palette.textMuted}
                           />
 
@@ -1300,7 +1306,7 @@ export default function ActiveWorkout() {
                             onChangeText={(value) => updateSetInput(exercise.id, setItem.id, 'rirInput', value)}
                             style={[styles.numericInput, styles.cellRir, setItem.completed && styles.numericInputCompleted]}
                             keyboardType="decimal-pad"
-                            placeholder="0"
+                            placeholder={previousSet?.rir != null && previousSet.rir >= 0 ? String(previousSet.rir) : '0'}
                             placeholderTextColor={palette.textMuted}
                           />
 
@@ -1308,7 +1314,7 @@ export default function ActiveWorkout() {
                             <TouchableOpacity
                               style={[styles.checkButton, setItem.completed && styles.checkButtonCompleted]}
                               activeOpacity={ACTIVE_OPACITY}
-                              onPress={() => toggleSetAndCheckRecord(exercise, setItem)}
+                              onPress={() => toggleSetAndCheckRecord(exercise, setItem, previousSet)}
                               accessibilityRole="button"
                               accessibilityLabel={setItem.completed ? t('accessibility.markSetIncomplete', { defaultValue: 'Mark set incomplete' }) : t('accessibility.markSetComplete', { defaultValue: 'Mark set complete' })}
                               hitSlop={HIT_SLOP}
@@ -1368,9 +1374,9 @@ export default function ActiveWorkout() {
                     );
                   })}
 
-                  <TouchableOpacity 
-                    style={styles.addSetButton} 
-                    activeOpacity={ACTIVE_OPACITY} 
+                  <TouchableOpacity
+                    style={styles.addSetButton}
+                    activeOpacity={ACTIVE_OPACITY}
                     onPress={() => addSet(exercise.id)}
                     accessibilityRole="button"
                     accessibilityLabel={t('accessibility.addSet', { defaultValue: 'Add set' })}
@@ -1384,7 +1390,7 @@ export default function ActiveWorkout() {
           )}
         </ScrollView>
 
-        <View style={[styles.bottomActionArea, { bottom: insets.bottom + 12 }]}> 
+        <View style={[styles.bottomActionArea, { bottom: insets.bottom + 12 }]}>
           <TouchableOpacity
             style={styles.addExerciseTrigger}
             activeOpacity={ACTIVE_OPACITY}

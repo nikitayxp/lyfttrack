@@ -15,10 +15,12 @@ import {
   useActiveWorkoutState,
   type ActiveExercise,
   type ActiveExercisesUpdater,
+  type ActiveSet,
   type ExerciseRow,
   type RecoveredDraftState,
 } from '@/hooks/useActiveWorkoutState';
 import { supabase } from '@/services/supabase';
+import { getPreviousExercisePerformance } from '@/services/workoutService';
 
 type ExerciseStopwatchEntry = {
   startedAtMs: number;
@@ -32,7 +34,11 @@ type WorkoutContextValue = {
   activeExercises: ActiveExercise[];
   activeExercisesRef: MutableRefObject<ActiveExercise[]>;
   setActiveExercisesWithRef: (nextValue: ActiveExercisesUpdater) => void;
-  handleSetCompletionToggle: (exerciseId: string, setId: string) => void;
+  handleSetCompletionToggle: (
+    exerciseId: string,
+    setId: string,
+    inputValues?: Partial<Pick<ActiveSet, 'weightInput' | 'repsInput' | 'rirInput'>>
+  ) => void;
   updateSetInput: (exerciseId: string, setId: string, field: 'weightInput' | 'repsInput' | 'rirInput', value: string) => void;
   updateSetSide: (exerciseId: string, setId: string, side: 'both' | 'left' | 'right') => void;
   updateSetType: (exerciseId: string, setId: string, setType: 'normal' | 'warmup' | 'drop' | 'failure') => void;
@@ -403,7 +409,16 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
   const addExerciseToWorkout = useCallback(
     (exercise: ExerciseRow) => {
       ensureWorkoutStarted();
-      addExercise(exercise);
+      getPreviousExercisePerformance(exercise.id, null)
+        .then((previousSets) => {
+          const seeds = previousSets.map((s) => ({
+            setType: s.setType,
+          }));
+          addExercise(exercise, seeds);
+        })
+        .catch(() => {
+          addExercise(exercise);
+        });
     },
     [addExercise, ensureWorkoutStarted]
   );

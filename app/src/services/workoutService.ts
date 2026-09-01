@@ -1516,6 +1516,15 @@ function escapeIlike(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 }
 
+const EXERCISE_SEARCH_MIN_CHARS = 4;
+
+function wordPrefixOrFilter(columns: string[], search: string): string {
+  const escaped = escapeIlike(search);
+  return columns
+    .flatMap((column) => [`${column}.ilike.${escaped}%`, `${column}.ilike.% ${escaped}%`])
+    .join(',');
+}
+
 function monthKeyFromIso(value: string): string | null {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) {
@@ -1594,11 +1603,10 @@ export async function getUserWorkoutMonthBuckets(userId: string): Promise<Workou
 }
 
 async function workoutIdsMatchingExerciseSearch(search: string, userIds: string[]): Promise<string[]> {
-  const pattern = `%${escapeIlike(search)}%`;
   const { data: exercises, error: exercisesError } = await supabase
     .from('exercises')
     .select('id')
-    .or(`name.ilike.${pattern},name_en.ilike.${pattern},name_pt.ilike.${pattern}`)
+    .or(wordPrefixOrFilter(['name', 'name_en', 'name_pt'], search))
     .limit(40);
 
   if (exercisesError || !exercises || exercises.length === 0) {
@@ -1642,13 +1650,13 @@ function applyWorkoutListFilter<
     return next;
   }
 
-  const pattern = `%${escapeIlike(search)}%`;
+  const nameFilter = wordPrefixOrFilter(['name'], search);
 
   if (exerciseWorkoutIds.length === 0) {
-    return next.ilike('name', pattern);
+    return next.or(nameFilter);
   }
 
-  return next.or(`name.ilike.${pattern},id.in.(${exerciseWorkoutIds.join(',')})`);
+  return next.or(`${nameFilter},id.in.(${exerciseWorkoutIds.join(',')})`);
 }
 
 async function resolveExerciseWorkoutIds(
@@ -1656,7 +1664,7 @@ async function resolveExerciseWorkoutIds(
   userIds: string[]
 ): Promise<string[]> {
   const search = normalizeSearchTerm(filter?.search);
-  if (!search) {
+  if (!search || search.length < EXERCISE_SEARCH_MIN_CHARS) {
     return [];
   }
 

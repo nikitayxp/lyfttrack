@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LyftTrack</title>
+  </head>
+  <body style="margin:0;padding:0;background:#09090b;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#09090b;padding:32px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#111111;border:1px solid #27272a;border-radius:16px;">
+            <tr>
+              <td style="padding:28px 28px 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;letter-spacing:2px;font-weight:700;color:#3b82f6;">
+                LYFTTRACK
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:16px 28px 0;font-family:Arial,Helvetica,sans-serif;font-size:22px;line-height:28px;font-weight:800;color:#ffffff;">
+                O teu codigo de acesso
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:4px 28px 0;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:22px;color:#a1a1aa;">
+                Your sign-in code
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:20px 28px 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:22px;color:#d4d4d8;">
+                Usa este codigo na app para entrares.
+                <br /><br />
+                Use this code in the app to sign in.
+              </td>
+            </tr>
+            <tr>
+              <td align="center" style="padding:24px 28px 8px;font-family:Arial,Helvetica,sans-serif;font-size:32px;letter-spacing:8px;font-weight:800;color:#ffffff;">
+                {{ .Token }}
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:16px 28px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#a1a1aa;">
+                Ou abre o link magico:
+                <br />
+                Or open the magic link:
+                <br />
+                <a href="{{ .ConfirmationURL }}" style="color:#3b82f6;word-break:break-all;">{{ .ConfirmationURL }}</a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:24px 28px 28px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#71717a;">
+                Se nao pediste este codigo, ignora o email.
+                <br />
+                If you did not ask for this code, ignore the email.
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

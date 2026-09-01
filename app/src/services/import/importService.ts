@@ -40,12 +40,20 @@ export type ImportPlan = {
   source: ImportSource;
   parse: HevyParseResult;
   matches: ExerciseMatch[];
-  /** Titles with nothing in the catalogue; imported as custom exercises. */
   unmatchedTitles: string[];
-  /** Workouts already in the account at the same start time. Skipped on import. */
   duplicateStartTimes: string[];
-  /** Workouts that would actually be written. */
   importableWorkouts: number;
+  repairChanges: RepairChange[];
+};
+
+export type RepairChange = {
+  workoutId: string;
+  workoutName: string;
+  startTime: string;
+  hevyTitle: string;
+  fromName: string;
+  toName: string;
+  mode: 'remap' | 'rebuild';
 };
 
 export type ImportProgress = {
@@ -58,7 +66,7 @@ export type ImportSummary = {
   importedSets: number;
   skippedDuplicates: number;
   createdExercises: number;
-  /** Workouts that threw. The rest still went in — this is not a transaction. */
+  repairedWorkouts: number;
   failedWorkouts: { title: string; startTime: string; reason: string }[];
 };
 
@@ -446,6 +454,203 @@ async function findExistingStartTimes(startTimes: string[]): Promise<Set<string>
   return existing;
 }
 
+async function findExistingWorkouts(
+  startTimes: string[]
+): Promise<Map<string, { id: string; name: string }>> {
+  const user = await getAuthenticatedUserOrThrow();
+  const existing = new Map<string, { id: string; name: string }>();
+
+  if (startTimes.length === 0) {
+    return existing;
+  }
+
+  const sorted = [...startTimes].sort();
+  const { data, error } = await supabase
+    .from('workouts')
+    .select('id, name, start_time')
+    .eq('user_id', user.id)
+    .gte('start_time', sorted[0])
+    .lte('start_time', sorted[sorted.length - 1]);
+
+  if (error) {
+    throw new Error(`Unable to load imported workouts: ${error.message}`);
+  }
+
+  const wanted = new Set(startTimes);
+
+  for (const row of data ?? []) {
+    if (typeof row.start_time !== 'string' || typeof row.id !== 'string') {
+      continue;
+    }
+
+    const key = new Date(row.start_time).toISOString();
+    if (!wanted.has(key)) {
+      continue;
+    }
+
+    existing.set(key, { id: row.id, name: row.name ?? 'Untitled Workout' });
+  }
+
+  return existing;
+}
+
+type StoredWorkoutExercise = {
+  id: string;
+  workoutId: string;
+  exerciseId: string;
+  order: number;
+  name: string;
+};
+
+async function loadStoredWorkoutExercises(workoutIds: string[]): Promise<Map<string, StoredWorkoutExercise[]>> {
+  const byWorkout = new Map<string, StoredWorkoutExercise[]>();
+
+  if (workoutIds.length === 0) {
+    return byWorkout;
+  }
+
+  for (let start = 0; start < workoutIds.length; start += 100) {
+    const chunk = workoutIds.slice(start, start + 100);
+    const { data, error } = await supabase
+      .from('workout_exercises')
+      .select('id, workout_id, exercise_id, order, exercises(name, name_en, name_pt)')
+      .in('workout_id', chunk)
+      .order('order', { ascending: true });
+
+    if (error) {
+      throw new Error(`Unable to load imported exercises: ${error.message}`);
+    }
+
+    for (const row of data ?? []) {
+      if (typeof row.id !== 'string' || typeof row.workout_id !== 'string' || typeof row.exercise_id !== 'string') {
+        continue;
+      }
+
+      const exercise = row.exercises as { name?: string | null; name_en?: string | null; name_pt?: string | null } | null;
+      const stored: StoredWorkoutExercise = {
+        id: row.id,
+        workoutId: row.workout_id,
+        exerciseId: row.exercise_id,
+        order: typeof row.order === 'number' ? row.order : 0,
+        name: exercise?.name_pt || exercise?.name_en || exercise?.name || row.exercise_id,
+      };
+
+      const list = byWorkout.get(row.workout_id) ?? [];
+      list.push(stored);
+      byWorkout.set(row.workout_id, list);
+    }
+  }
+
+  for (const list of byWorkout.values()) {
+    list.sort((left, right) => left.order - right.order);
+  }
+
+  return byWorkout;
+}
+
+function desiredNameForTitle(title: string, matches: ExerciseMatch[]): string {
+  const match = matches.find((item) => item.title === title);
+  if (match?.matchedName) {
+    return match.matchedName;
+  }
+
+  return title;
+}
+
+async function buildRepairChanges(
+  parse: HevyParseResult,
+  matches: ExerciseMatch[],
+  duplicateStartTimes: string[]
+): Promise<RepairChange[]> {
+  if (duplicateStartTimes.length === 0) {
+    return [];
+  }
+
+  const existing = await findExistingWorkouts(duplicateStartTimes);
+  const storedByWorkout = await loadStoredWorkoutExercises([...existing.values()].map((row) => row.id));
+  const idByTitle = new Map<string, string>();
+
+  for (const match of matches) {
+    idByTitle.set(match.title, match.exerciseId ?? `custom:${titleTokenKey(match.title)}`);
+  }
+
+  const changes: RepairChange[] = [];
+  const duplicates = new Set(duplicateStartTimes);
+
+  for (const workout of parse.workouts) {
+    if (!duplicates.has(workout.startTime)) {
+      continue;
+    }
+
+    const storedWorkout = existing.get(workout.startTime);
+    if (!storedWorkout) {
+      continue;
+    }
+
+    const desired = collectWorkoutExercises(workout, idByTitle);
+    const stored = storedByWorkout.get(storedWorkout.id) ?? [];
+    const sameLength = desired.length === stored.length;
+    const sameIds =
+      sameLength &&
+      desired.every((block, index) => {
+        const current = stored[index];
+        if (!current) {
+          return false;
+        }
+
+        if (block.exerciseId === current.exerciseId) {
+          return true;
+        }
+
+        if (block.exerciseId.startsWith('custom:')) {
+          return titleTokenKey(current.name) === block.exerciseId.slice('custom:'.length);
+        }
+
+        return false;
+      });
+
+    if (sameIds) {
+      continue;
+    }
+
+    const mode: RepairChange['mode'] = sameLength ? 'remap' : 'rebuild';
+    const titleByDesiredId = new Map<string, string>();
+
+    for (const exercise of workout.exercises) {
+      const desiredId = idByTitle.get(exercise.title);
+      if (desiredId && !titleByDesiredId.has(desiredId)) {
+        titleByDesiredId.set(desiredId, exercise.title);
+      }
+    }
+
+    desired.forEach((block, index) => {
+      const current = stored[index];
+      if (
+        current &&
+        (block.exerciseId === current.exerciseId ||
+          (block.exerciseId.startsWith('custom:') &&
+            titleTokenKey(current.name) === block.exerciseId.slice('custom:'.length)))
+      ) {
+        return;
+      }
+
+      const hevyTitle = titleByDesiredId.get(block.exerciseId) ?? current?.name ?? block.exerciseId;
+
+      changes.push({
+        workoutId: storedWorkout.id,
+        workoutName: storedWorkout.name,
+        startTime: workout.startTime,
+        hevyTitle,
+        fromName: current?.name ?? stored.map((row) => row.name).join(', '),
+        toName: desiredNameForTitle(hevyTitle, matches),
+        mode,
+      });
+    });
+  }
+
+  return changes;
+}
+
 export async function buildImportPlan(csvText: string): Promise<ImportPlan> {
   const parse = parseHevyCsv(csvText);
   const titles = collectExerciseTitles(parse);
@@ -456,6 +661,7 @@ export async function buildImportPlan(csvText: string): Promise<ImportPlan> {
   const duplicateStartTimes = parse.workouts
     .map((workout) => workout.startTime)
     .filter((startTime) => existing.has(startTime));
+  const repairChanges = await buildRepairChanges(parse, matches, duplicateStartTimes);
 
   return {
     source: 'hevy',
@@ -464,6 +670,7 @@ export async function buildImportPlan(csvText: string): Promise<ImportPlan> {
     unmatchedTitles: matches.filter((match) => match.kind === 'none').map((match) => match.title),
     duplicateStartTimes,
     importableWorkouts: parse.workouts.length - duplicateStartTimes.length,
+    repairChanges,
   };
 }
 
@@ -690,6 +897,130 @@ async function writeWorkoutBatch(
   return { workouts: workoutRows.length, sets: setRows.length };
 }
 
+async function rewriteWorkoutExercises(workoutId: string, blocks: WorkoutExerciseBlock[]): Promise<void> {
+  const { error: setsError } = await supabase.from('sets').delete().eq('workout_id', workoutId);
+  if (setsError) {
+    throw new Error(`Unable to clear imported sets: ${setsError.message}`);
+  }
+
+  const { error: exercisesError } = await supabase.from('workout_exercises').delete().eq('workout_id', workoutId);
+  if (exercisesError) {
+    throw new Error(`Unable to clear imported exercises: ${exercisesError.message}`);
+  }
+
+  if (blocks.length === 0) {
+    return;
+  }
+
+  const workoutExerciseRows: TablesInsert<'workout_exercises'>[] = [];
+  const setRows: TablesInsert<'sets'>[] = [];
+
+  blocks.forEach((block, index) => {
+    const workoutExerciseId = generateId();
+    workoutExerciseRows.push({
+      id: workoutExerciseId,
+      workout_id: workoutId,
+      exercise_id: block.exerciseId,
+      order: index + 1,
+      notes: normalizeWriteText(block.notes, 1000),
+    });
+
+    for (const draft of block.sets) {
+      const row = buildSetInsertRow(workoutId, draft, workoutExerciseId);
+      if (row) {
+        setRows.push(row);
+      }
+    }
+  });
+
+  await insertRowsOrThrow('workout_exercises', workoutExerciseRows);
+  if (setRows.length > 0) {
+    await insertRowsOrThrow('sets', setRows);
+  }
+}
+
+async function applyRepair(
+  plan: ImportPlan,
+  idByTitle: Map<string, string>,
+  options: { onProgress?: (progress: ImportProgress) => void } = {}
+): Promise<{ repairedWorkouts: number; failedWorkouts: ImportSummary['failedWorkouts'] }> {
+  const workoutIds = [...new Set(plan.repairChanges.map((change) => change.workoutId))];
+  const csvByStartTime = new Map(plan.parse.workouts.map((workout) => [workout.startTime, workout]));
+  const modeByWorkout = new Map(plan.repairChanges.map((change) => [change.workoutId, change.mode]));
+  const storedByWorkout = await loadStoredWorkoutExercises(workoutIds);
+
+  const failedWorkouts: ImportSummary['failedWorkouts'] = [];
+  let repairedWorkouts = 0;
+
+  for (let index = 0; index < workoutIds.length; index += 1) {
+    const workoutId = workoutIds[index];
+    const change = plan.repairChanges.find((item) => item.workoutId === workoutId);
+    const csvWorkout = change ? csvByStartTime.get(change.startTime) : undefined;
+
+    try {
+      if (!csvWorkout) {
+        throw new Error('Imported workout was not in the file.');
+      }
+
+      const blocks = collectWorkoutExercises(csvWorkout, idByTitle);
+      const mode = modeByWorkout.get(workoutId) ?? 'rebuild';
+      const stored = storedByWorkout.get(workoutId) ?? [];
+
+      if (mode === 'remap' && stored.length === blocks.length) {
+        for (let blockIndex = 0; blockIndex < blocks.length; blockIndex += 1) {
+          const block = blocks[blockIndex];
+          const current = stored[blockIndex];
+          if (!current || current.exerciseId === block.exerciseId) {
+            continue;
+          }
+
+          const { error: exerciseError } = await supabase
+            .from('workout_exercises')
+            .update({ exercise_id: block.exerciseId })
+            .eq('id', current.id);
+
+          if (exerciseError) {
+            throw new Error(exerciseError.message);
+          }
+
+          const { error: setError } = await supabase
+            .from('sets')
+            .update({ exercise_id: block.exerciseId })
+            .eq('workout_exercise_id', current.id);
+
+          if (setError) {
+            throw new Error(setError.message);
+          }
+        }
+      } else {
+        await rewriteWorkoutExercises(workoutId, blocks);
+      }
+
+      repairedWorkouts += 1;
+    } catch (error) {
+      failedWorkouts.push({
+        title: csvWorkout?.title ?? change?.workoutName ?? 'Workout',
+        startTime: change?.startTime ?? '',
+        reason: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+
+    options.onProgress?.({ done: index + 1, total: workoutIds.length });
+  }
+
+  return { repairedWorkouts, failedWorkouts };
+}
+
+export async function runRepair(
+  plan: ImportPlan,
+  options: { onProgress?: (progress: ImportProgress) => void } = {}
+): Promise<{ repairedWorkouts: number; createdExercises: number; failedWorkouts: ImportSummary['failedWorkouts'] }> {
+  const user = await getAuthenticatedUserOrThrow();
+  const { idByTitle, created } = await resolveExerciseIds(plan, user.id);
+  const result = await applyRepair(plan, idByTitle, options);
+  return { ...result, createdExercises: created };
+}
+
 export async function runImport(
   plan: ImportPlan,
   options: { onProgress?: (progress: ImportProgress) => void } = {}
@@ -703,16 +1034,30 @@ export async function runImport(
 
   const duplicates = new Set(plan.duplicateStartTimes);
   const pending = plan.parse.workouts.filter((workout) => !duplicates.has(workout.startTime));
+  const repairWorkoutCount = new Set(plan.repairChanges.map((change) => change.workoutId)).size;
+  const totalWork = pending.length + repairWorkoutCount;
 
   const summary: ImportSummary = {
     importedWorkouts: 0,
     importedSets: 0,
     skippedDuplicates: plan.duplicateStartTimes.length,
     createdExercises: created,
+    repairedWorkouts: 0,
     failedWorkouts: [],
   };
 
   let done = 0;
+
+  if (plan.repairChanges.length > 0) {
+    const repair = await applyRepair(plan, idByTitle, {
+      onProgress: (progress) => {
+        options.onProgress?.({ done: progress.done, total: totalWork });
+      },
+    });
+    summary.repairedWorkouts = repair.repairedWorkouts;
+    summary.failedWorkouts.push(...repair.failedWorkouts);
+    done = repairWorkoutCount;
+  }
 
   for (let start = 0; start < pending.length; start += IMPORT_BATCH_SIZE) {
     const batch = pending.slice(start, start + IMPORT_BATCH_SIZE);
@@ -733,7 +1078,7 @@ export async function runImport(
     }
 
     done += batch.length;
-    options.onProgress?.({ done, total: pending.length });
+    options.onProgress?.({ done, total: totalWork });
   }
 
   return summary;

@@ -1593,12 +1593,6 @@ export async function getUserWorkoutMonthBuckets(userId: string): Promise<Workou
   return bucketsFromStartTimes(await fetchStartTimesForUsers([normalizedUserId]));
 }
 
-export async function getFeedWorkoutMonthBuckets(): Promise<WorkoutMonthBucket[]> {
-  const user = await getAuthenticatedUserOrThrow();
-  const participantIds = await getFeedParticipantIds(user.id);
-  return bucketsFromStartTimes(await fetchStartTimesForUsers(participantIds));
-}
-
 async function workoutIdsMatchingExerciseSearch(search: string, userIds: string[]): Promise<string[]> {
   const pattern = `%${escapeIlike(search)}%`;
   const { data: exercises, error: exercisesError } = await supabase
@@ -1669,11 +1663,7 @@ async function resolveExerciseWorkoutIds(
   return workoutIdsMatchingExerciseSearch(search, userIds);
 }
 
-export async function getFeedWorkouts(
-  page = 0,
-  limit = 20,
-  filter?: WorkoutListFilter
-): Promise<WorkoutFeedItem[]> {
+export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeedItem[]> {
   const safePage = Number.isFinite(page) ? Math.max(0, Math.trunc(page)) : 0;
   const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.trunc(limit)) : 20;
   const from = safePage * safeLimit;
@@ -1681,18 +1671,11 @@ export async function getFeedWorkouts(
 
   const user = await getAuthenticatedUserOrThrow();
   const participantIds = await getFeedParticipantIds(user.id);
-  const exerciseWorkoutIds = await resolveExerciseWorkoutIds(filter, participantIds);
 
-  const filteredQuery = applyWorkoutListFilter(
-    supabase
-      .from('workouts')
-      .select('*, workout_likes(count), workout_comments(count)')
-      .in('user_id', participantIds),
-    filter,
-    exerciseWorkoutIds
-  );
-
-  const { data: workouts, error: workoutsError } = await filteredQuery
+  const { data: workouts, error: workoutsError } = await supabase
+    .from('workouts')
+    .select('*, workout_likes(count), workout_comments(count)')
+    .in('user_id', participantIds)
     .order('start_time', { ascending: false })
     .range(from, to);
 

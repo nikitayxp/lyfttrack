@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import {
@@ -23,11 +23,15 @@ import {
   type CommentAuthorProfile,
   type WorkoutCommentWithProfile,
 } from '@/services/interactionService';
+import { HistoryJumpBar } from '@/components/history/HistoryJumpBar';
 import {
   getAuthenticatedUserOrThrow,
   getErrorMessage,
+  getFeedWorkoutMonthBuckets,
   getFeedWorkouts,
   type WorkoutFeedItem,
+  type WorkoutListFilter,
+  type WorkoutMonthBucket,
 } from '@/services/workoutService';
 import { WORKOUTS_IMPORTED_EVENT } from '@/services/import/importEvents';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -50,7 +54,7 @@ type FeedLikeInteractionState = {
 };
 
 export default function FeedScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { showToast } = useAppToast();
 
   const { confirmAndDelete } = useWorkoutDelete();
@@ -61,7 +65,18 @@ export default function FeedScreen() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [historySearchInput, setHistorySearchInput] = useState('');
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyPeriodKey, setHistoryPeriodKey] = useState<string | null>(null);
+  const [historyMonths, setHistoryMonths] = useState<WorkoutMonthBucket[]>([]);
+  const historyFilterRef = useRef<WorkoutListFilter>({});
+  const skippedFirstHistoryFilterEffect = useRef(true);
   const [feedError, setFeedError] = useState<string | null>(null);
+
+  historyFilterRef.current = {
+    periodKey: historyPeriodKey,
+    search: historySearch,
+  };
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [optimisticLikeState, setOptimisticLikeState] = useState<Record<string, FeedLikeInteractionState>>({});
   const [commentsByWorkoutId, setCommentsByWorkoutId] = useState<Record<string, WorkoutCommentWithProfile[]>>({});
@@ -107,7 +122,7 @@ export default function FeedScreen() {
     }
 
     try {
-      const data = await getFeedWorkouts(pageToLoad, FEED_PAGE_SIZE);
+      const data = await getFeedWorkouts(pageToLoad, FEED_PAGE_SIZE, historyFilterRef.current);
 
       if (mode === 'reset') {
         setWorkouts(data);
@@ -236,7 +251,7 @@ export default function FeedScreen() {
   useEffect(() => {
     const run = async () => {
       setIsLoading(true);
-      await loadFeedPage(0, 'reset');
+      await Promise.all([loadFeedPage(0, 'reset'), getFeedWorkoutMonthBuckets().then(setHistoryMonths)]);
       setIsLoading(false);
     };
 
@@ -244,10 +259,27 @@ export default function FeedScreen() {
   }, [loadFeedPage]);
 
   useEffect(() => {
+    const handle = setTimeout(() => {
+      setHistorySearch(historySearchInput.trim());
+    }, 300);
+
+    return () => clearTimeout(handle);
+  }, [historySearchInput]);
+
+  useEffect(() => {
+    if (skippedFirstHistoryFilterEffect.current) {
+      skippedFirstHistoryFilterEffect.current = false;
+      return;
+    }
+
+    void loadFeedPage(0, 'reset');
+  }, [historyPeriodKey, historySearch, loadFeedPage]);
+
+  useEffect(() => {
     const subscription = DeviceEventEmitter.addListener(WORKOUTS_IMPORTED_EVENT, () => {
       void (async () => {
         setIsLoading(true);
-        await loadFeedPage(0, 'reset');
+        await Promise.all([loadFeedPage(0, 'reset'), getFeedWorkoutMonthBuckets().then(setHistoryMonths)]);
         setIsLoading(false);
       })();
     });
@@ -267,7 +299,7 @@ export default function FeedScreen() {
 
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await loadFeedPage(0, 'reset');
+    await Promise.all([loadFeedPage(0, 'reset'), getFeedWorkoutMonthBuckets().then(setHistoryMonths)]);
     setIsRefreshing(false);
   }, [loadFeedPage]);
 
@@ -491,6 +523,17 @@ export default function FeedScreen() {
         <Text style={styles.title}>{t('feed.title')}</Text>
         <Text style={styles.subtitle}>{t('feed.subtitle')}</Text>
 
+        <HistoryJumpBar
+          months={historyMonths}
+          selectedPeriodKey={historyPeriodKey}
+          onSelectPeriod={setHistoryPeriodKey}
+          query={historySearchInput}
+          onChangeQuery={setHistorySearchInput}
+          searchPlaceholder={t('historyJump.searchPlaceholder')}
+          allLabel={t('historyJump.all')}
+          locale={i18n.resolvedLanguage ?? i18n.language ?? 'pt'}
+        />
+
         <View style={styles.athletesHubCard}>
           <View style={styles.athletesHubHeader}>
             <View style={styles.athletesHubIconWrap}>
@@ -516,7 +559,7 @@ export default function FeedScreen() {
         </View>
       </Animated.View>
     );
-  }, [animationEpoch, openAthletesExplorer, t]);
+  }, [animationEpoch, historyMonths, historyPeriodKey, historySearchInput, i18n.language, i18n.resolvedLanguage, openAthletesExplorer, t]);
 
   const emptyState = useMemo(() => {
     if (isLoading) {
@@ -546,14 +589,18 @@ export default function FeedScreen() {
 
     return (
       <EmptyState
-        icon="trophy-outline"
-        title={t('feed.emptyTitle')}
-        description={t('feed.emptyDescription')}
+        icon={historyPeriodKey || historySearch ? 'search-outline' : 'trophy-outline'}
+        title={historyPeriodKey || historySearch ? t('historyJump.noResultsTitle') : t('feed.emptyTitle')}
+        description={
+          historyPeriodKey || historySearch
+            ? t('historyJump.noResultsDescription')
+            : t('feed.emptyDescription')
+        }
         containerStyle={styles.statusCard}
         descriptionStyle={styles.statusText}
       />
     );
-  }, [feedError, isLoading, loadFeedPage, t]);
+  }, [feedError, historyPeriodKey, historySearch, isLoading, loadFeedPage, t]);
 
   const selectedWorkoutComments = selectedWorkoutForComments
     ? commentsByWorkoutId[selectedWorkoutForComments.id] ?? []

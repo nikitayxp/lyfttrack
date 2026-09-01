@@ -78,6 +78,18 @@ export type WorkoutStats = {
   totalSets: number;
 };
 
+export type WorkoutListFilter = {
+  periodKey?: string | null;
+  search?: string | null;
+};
+
+export type WorkoutMonthBucket = {
+  key: string;
+  year: number;
+  month: number;
+  count: number;
+};
+
 export type PublicProfile = Pick<ProfileRow, 'id' | 'username' | 'full_name' | 'avatar_url'>;
 
 export type WorkoutFeedItem = Pick<
@@ -1461,7 +1473,193 @@ async function getFeedParticipantIds(userId: string): Promise<string[]> {
   return [...participantIds];
 }
 
-export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeedItem[]> {
+const START_TIME_PAGE_SIZE = 1000;
+
+export function periodRangeIso(periodKey: string): { from: string; to: string } | null {
+  const yearMatch = /^(\d{4})$/.exec(periodKey);
+  if (yearMatch) {
+    const year = Number(yearMatch[1]);
+    return {
+      from: new Date(year, 0, 1).toISOString(),
+      to: new Date(year + 1, 0, 1).toISOString(),
+    };
+  }
+
+  const monthMatch = /^(\d{4})-(\d{2})$/.exec(periodKey);
+  if (!monthMatch) {
+    return null;
+  }
+
+  const year = Number(monthMatch[1]);
+  const month = Number(monthMatch[2]);
+  if (month < 1 || month > 12) {
+    return null;
+  }
+
+  return {
+    from: new Date(year, month - 1, 1).toISOString(),
+    to: new Date(year, month, 1).toISOString(),
+  };
+}
+
+function normalizeSearchTerm(value: string | null | undefined): string | null {
+  const cleaned = sanitizeText(value, { maxLength: 80, allowEmpty: true });
+  if (!cleaned) {
+    return null;
+  }
+
+  const compact = cleaned.replace(/[,()]/g, ' ').replace(/\s+/g, ' ').trim();
+  return compact.length > 0 ? compact : null;
+}
+
+function escapeIlike(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
+
+function monthKeyFromIso(value: string): string | null {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) {
+    return null;
+  }
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+}
+
+function bucketsFromStartTimes(startTimes: string[]): WorkoutMonthBucket[] {
+  const counts = new Map<string, number>();
+
+  for (const startTime of startTimes) {
+    const key = monthKeyFromIso(startTime);
+    if (!key) {
+      continue;
+    }
+
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  return [...counts.entries()]
+    .sort((left, right) => (left[0] < right[0] ? 1 : -1))
+    .map(([key, count]) => {
+      const year = Number(key.slice(0, 4));
+      const month = Number(key.slice(5, 7));
+      return { key, year, month, count };
+    });
+}
+
+async function fetchStartTimesForUsers(userIds: string[]): Promise<string[]> {
+  if (userIds.length === 0) {
+    return [];
+  }
+
+  const startTimes: string[] = [];
+
+  for (let page = 0; page < 20; page += 1) {
+    const from = page * START_TIME_PAGE_SIZE;
+    const to = from + START_TIME_PAGE_SIZE - 1;
+    const { data, error } = await supabase
+      .from('workouts')
+      .select('start_time')
+      .in('user_id', userIds)
+      .order('start_time', { ascending: false })
+      .range(from, to);
+
+    if (error) {
+      throw new Error(`Unable to load workout months: ${error.message}`);
+    }
+
+    const rows = data ?? [];
+    for (const row of rows) {
+      if (typeof row.start_time === 'string') {
+        startTimes.push(row.start_time);
+      }
+    }
+
+    if (rows.length < START_TIME_PAGE_SIZE) {
+      break;
+    }
+  }
+
+  return startTimes;
+}
+
+export async function getUserWorkoutMonthBuckets(userId: string): Promise<WorkoutMonthBucket[]> {
+  const normalizedUserId = normalizeOptionalId(userId);
+  if (!normalizedUserId) {
+    return [];
+  }
+
+  return bucketsFromStartTimes(await fetchStartTimesForUsers([normalizedUserId]));
+}
+
+export async function getFeedWorkoutMonthBuckets(): Promise<WorkoutMonthBucket[]> {
+  const user = await getAuthenticatedUserOrThrow();
+  const participantIds = await getFeedParticipantIds(user.id);
+  return bucketsFromStartTimes(await fetchStartTimesForUsers(participantIds));
+}
+
+async function workoutIdsMatchingExerciseSearch(search: string, userIds: string[]): Promise<string[]> {
+  const pattern = `%${escapeIlike(search)}%`;
+  const { data: exercises, error: exercisesError } = await supabase
+    .from('exercises')
+    .select('id')
+    .or(`name.ilike.${pattern},name_en.ilike.${pattern},name_pt.ilike.${pattern}`)
+    .limit(40);
+
+  if (exercisesError || !exercises || exercises.length === 0) {
+    return [];
+  }
+
+  const { data: rows, error } = await supabase
+    .from('workout_exercises')
+    .select('workout_id, workouts!inner(user_id)')
+    .in('exercise_id', exercises.map((row) => row.id))
+    .in('workouts.user_id', userIds)
+    .limit(300);
+
+  if (error || !rows) {
+    return [];
+  }
+
+  return [...new Set(rows.map((row) => row.workout_id).filter((id): id is string => Boolean(id)))];
+}
+
+async function constrainWorkoutListQuery(
+  query: ReturnType<ReturnType<typeof supabase.from>['select']>,
+  filter: WorkoutListFilter | undefined,
+  userIds: string[]
+) {
+  let next = query;
+  const periodKey = filter?.periodKey?.trim();
+
+  if (periodKey) {
+    const range = periodRangeIso(periodKey);
+    if (range) {
+      next = next.gte('start_time', range.from).lt('start_time', range.to);
+    }
+  }
+
+  const search = normalizeSearchTerm(filter?.search);
+  if (!search) {
+    return next;
+  }
+
+  const pattern = `%${escapeIlike(search)}%`;
+  const exerciseWorkoutIds = await workoutIdsMatchingExerciseSearch(search, userIds);
+
+  if (exerciseWorkoutIds.length === 0) {
+    return next.ilike('name', pattern);
+  }
+
+  return next.or(`name.ilike.${pattern},id.in.(${exerciseWorkoutIds.join(',')})`);
+}
+
+export async function getFeedWorkouts(
+  page = 0,
+  limit = 20,
+  filter?: WorkoutListFilter
+): Promise<WorkoutFeedItem[]> {
   const safePage = Number.isFinite(page) ? Math.max(0, Math.trunc(page)) : 0;
   const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.trunc(limit)) : 20;
   const from = safePage * safeLimit;
@@ -1470,10 +1668,16 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
   const user = await getAuthenticatedUserOrThrow();
   const participantIds = await getFeedParticipantIds(user.id);
 
-  const { data: workouts, error: workoutsError } = await supabase
-    .from('workouts')
-    .select('*, workout_likes(count), workout_comments(count)')
-    .in('user_id', participantIds)
+  const filteredQuery = await constrainWorkoutListQuery(
+    supabase
+      .from('workouts')
+      .select('*, workout_likes(count), workout_comments(count)')
+      .in('user_id', participantIds),
+    filter,
+    participantIds
+  );
+
+  const { data: workouts, error: workoutsError } = await filteredQuery
     .order('start_time', { ascending: false })
     .range(from, to);
 
@@ -2089,7 +2293,12 @@ export async function deleteWorkout(workoutId: string): Promise<void> {
   }
 }
 
-export async function getUserWorkouts(userId: string, page = 0, limit = 20): Promise<WorkoutFeedItem[]> {
+export async function getUserWorkouts(
+  userId: string,
+  page = 0,
+  limit = 20,
+  filter?: WorkoutListFilter
+): Promise<WorkoutFeedItem[]> {
   const safePage = Number.isFinite(page) ? Math.max(0, Math.trunc(page)) : 0;
   const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.trunc(limit)) : 20;
   const from = safePage * safeLimit;
@@ -2102,10 +2311,16 @@ export async function getUserWorkouts(userId: string, page = 0, limit = 20): Pro
     throw new Error('User id is required to load workout history.');
   }
 
-  const { data: workouts, error: workoutsError } = await supabase
-    .from('workouts')
-    .select('*, workout_likes(count), workout_comments(count)')
-    .eq('user_id', normalizedUserId)
+  const filteredQuery = await constrainWorkoutListQuery(
+    supabase
+      .from('workouts')
+      .select('*, workout_likes(count), workout_comments(count)')
+      .eq('user_id', normalizedUserId),
+    filter,
+    [normalizedUserId]
+  );
+
+  const { data: workouts, error: workoutsError } = await filteredQuery
     .order('start_time', { ascending: false })
     .range(from, to);
 

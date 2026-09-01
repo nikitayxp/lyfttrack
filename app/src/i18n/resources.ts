@@ -54,6 +54,12 @@ export const resources = {
         english: 'English',
         portuguese: 'Portuguese',
       },
+      historyJump: {
+        searchPlaceholder: 'Search by workout or exercise',
+        all: 'All',
+        noResultsTitle: 'No workouts in this range',
+        noResultsDescription: 'Try another month or clear the search.',
+      },
       tabs: {
         feed: 'Feed',
         workout: 'Train',
@@ -838,6 +844,12 @@ export const resources = {
         title: 'Idioma',
         english: 'English',
         portuguese: 'Português',
+      },
+      historyJump: {
+        searchPlaceholder: 'Pesquisar por treino ou exercicio',
+        all: 'Tudo',
+        noResultsTitle: 'Nenhum treino neste periodo',
+        noResultsDescription: 'Tenta outro mes ou limpa a pesquisa.',
       },
       tabs: {
         feed: 'Feed',

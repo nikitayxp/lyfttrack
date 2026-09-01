@@ -39,7 +39,15 @@ import { getProfile, type ProfileRow } from '@/services/profileService';
 import { addWeight, getWeightHistory, parseBodyWeightInput, type BodyMeasurementEntry } from '@/services/measurementService';
 import { getAllTimePRs, type AllTimePR } from '@/services/statsService';
 import { supabase } from '@/services/supabase';
-import { getErrorMessage, getUserWorkouts, type WorkoutFeedItem } from '@/services/workoutService';
+import { HistoryJumpBar } from '@/components/history/HistoryJumpBar';
+import {
+  getErrorMessage,
+  getUserWorkoutMonthBuckets,
+  getUserWorkouts,
+  type WorkoutFeedItem,
+  type WorkoutListFilter,
+  type WorkoutMonthBucket,
+} from '@/services/workoutService';
 import { useAppToast } from '@/context/ToastContext';
 import { useWorkoutContext } from '@/context/WorkoutContext';
 import { useWorkoutDelete, WORKOUT_DELETED_EVENT } from '@/hooks/useWorkoutDelete';
@@ -234,6 +242,12 @@ export default function ProfileScreen() {
   const [isSavingWeight, setIsSavingWeight] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [historySearchInput, setHistorySearchInput] = useState('');
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyPeriodKey, setHistoryPeriodKey] = useState<string | null>(null);
+  const [historyMonths, setHistoryMonths] = useState<WorkoutMonthBucket[]>([]);
+  const historyFilterRef = useRef<WorkoutListFilter>({});
+  const skippedFirstHistoryFilterEffect = useRef(true);
   const [optimisticLikeState, setOptimisticLikeState] = useState<Record<string, FeedLikeInteractionState>>({});
   const [commentsByWorkoutId, setCommentsByWorkoutId] = useState<Record<string, WorkoutCommentWithProfile[]>>({});
   const [commentCountByWorkoutId, setCommentCountByWorkoutId] = useState<Record<string, number>>({});
@@ -249,6 +263,11 @@ export default function ProfileScreen() {
   const targetUserId = useMemo(() => {
     return profile?.id ?? authUserId;
   }, [authUserId, profile?.id]);
+
+  historyFilterRef.current = {
+    periodKey: historyPeriodKey,
+    search: historySearch,
+  };
 
   const displayName = useMemo(() => {
     const profileName = profile?.full_name?.trim() || profile?.username?.trim() || '';
@@ -298,7 +317,7 @@ export default function ProfileScreen() {
     }
 
     try {
-      const data = await getUserWorkouts(userId, pageToLoad, HISTORY_PAGE_SIZE);
+      const data = await getUserWorkouts(userId, pageToLoad, HISTORY_PAGE_SIZE, historyFilterRef.current);
 
       if (mode === 'reset') {
         setWorkouts(data);
@@ -420,13 +439,38 @@ export default function ProfileScreen() {
         throw new Error(t('profile.unknownUserId'));
       }
 
-      await Promise.all([loadUserHistoryPage(resolvedUserId, 0, 'reset'), loadPerformanceData()]);
+      await Promise.all([
+        loadUserHistoryPage(resolvedUserId, 0, 'reset'),
+        loadPerformanceData(),
+        getUserWorkoutMonthBuckets(resolvedUserId).then(setHistoryMonths),
+      ]);
     } catch (error) {
       setProfileError(getErrorMessage(error));
     } finally {
       setIsBootstrapping(false);
     }
   }, [loadPerformanceData, loadUserHistoryPage, t]);
+
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setHistorySearch(historySearchInput.trim());
+    }, 300);
+
+    return () => clearTimeout(handle);
+  }, [historySearchInput]);
+
+  useEffect(() => {
+    if (skippedFirstHistoryFilterEffect.current) {
+      skippedFirstHistoryFilterEffect.current = false;
+      return;
+    }
+
+    if (!targetUserId) {
+      return;
+    }
+
+    void loadUserHistoryPage(targetUserId, 0, 'reset');
+  }, [historyPeriodKey, historySearch, loadUserHistoryPage, targetUserId]);
 
   useEffect(() => {
     void bootstrap();
@@ -487,7 +531,11 @@ export default function ProfileScreen() {
     }
 
     setIsRefreshing(true);
-    await Promise.all([loadUserHistoryPage(targetUserId, 0, 'reset'), loadPerformanceData()]);
+    await Promise.all([
+      loadUserHistoryPage(targetUserId, 0, 'reset'),
+      loadPerformanceData(),
+      getUserWorkoutMonthBuckets(targetUserId).then(setHistoryMonths),
+    ]);
     setIsRefreshing(false);
   }, [loadPerformanceData, loadUserHistoryPage, targetUserId]);
 
@@ -1141,6 +1189,17 @@ export default function ProfileScreen() {
           <Text style={styles.sectionTitle}>{t('profile.workoutsTitle')}</Text>
         </View>
 
+        <HistoryJumpBar
+          months={historyMonths}
+          selectedPeriodKey={historyPeriodKey}
+          onSelectPeriod={setHistoryPeriodKey}
+          query={historySearchInput}
+          onChangeQuery={setHistorySearchInput}
+          searchPlaceholder={t('historyJump.searchPlaceholder')}
+          allLabel={t('historyJump.all')}
+          locale={uiLanguage}
+        />
+
         {historyError ? (
           <View style={styles.historyErrorCard}>
             <Text style={styles.historyErrorTitle}>{t('profile.historyErrorTitle')}</Text>
@@ -1159,6 +1218,9 @@ export default function ProfileScreen() {
     handleOpenStats,
     handleShareTrophyCard,
     historyError,
+    historyMonths,
+    historyPeriodKey,
+    historySearchInput,
     initials,
     isWeb,
     isLoadingPerformance,
@@ -1193,6 +1255,18 @@ export default function ProfileScreen() {
       );
     }
 
+    if (historyPeriodKey || historySearch) {
+      return (
+        <EmptyState
+          icon="search-outline"
+          title={t('historyJump.noResultsTitle')}
+          description={t('historyJump.noResultsDescription')}
+          containerStyle={styles.statusCard}
+          descriptionStyle={styles.statusText}
+        />
+      );
+    }
+
     return (
       <EmptyState
         icon="barbell-outline"
@@ -1204,7 +1278,7 @@ export default function ProfileScreen() {
         descriptionStyle={styles.statusText}
       />
     );
-  }, [handleStartFreeWorkout, historyError, isBootstrapping, t]);
+  }, [handleStartFreeWorkout, historyError, historyPeriodKey, historySearch, isBootstrapping, t]);
 
   const selectedWorkoutComments = selectedWorkoutForComments
     ? commentsByWorkoutId[selectedWorkoutForComments.id] ?? []

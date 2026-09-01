@@ -1625,11 +1625,14 @@ async function workoutIdsMatchingExerciseSearch(search: string, userIds: string[
   return [...new Set(rows.map((row) => row.workout_id).filter((id): id is string => Boolean(id)))];
 }
 
-async function constrainWorkoutListQuery(
-  query: ReturnType<ReturnType<typeof supabase.from>['select']>,
-  filter: WorkoutListFilter | undefined,
-  userIds: string[]
-) {
+function applyWorkoutListFilter<
+  Query extends {
+    gte: (column: string, value: string) => Query;
+    lt: (column: string, value: string) => Query;
+    ilike: (column: string, pattern: string) => Query;
+    or: (filters: string) => Query;
+  },
+>(query: Query, filter: WorkoutListFilter | undefined, exerciseWorkoutIds: string[]): Query {
   let next = query;
   const periodKey = filter?.periodKey?.trim();
 
@@ -1646,13 +1649,24 @@ async function constrainWorkoutListQuery(
   }
 
   const pattern = `%${escapeIlike(search)}%`;
-  const exerciseWorkoutIds = await workoutIdsMatchingExerciseSearch(search, userIds);
 
   if (exerciseWorkoutIds.length === 0) {
     return next.ilike('name', pattern);
   }
 
   return next.or(`name.ilike.${pattern},id.in.(${exerciseWorkoutIds.join(',')})`);
+}
+
+async function resolveExerciseWorkoutIds(
+  filter: WorkoutListFilter | undefined,
+  userIds: string[]
+): Promise<string[]> {
+  const search = normalizeSearchTerm(filter?.search);
+  if (!search) {
+    return [];
+  }
+
+  return workoutIdsMatchingExerciseSearch(search, userIds);
 }
 
 export async function getFeedWorkouts(
@@ -1667,14 +1681,15 @@ export async function getFeedWorkouts(
 
   const user = await getAuthenticatedUserOrThrow();
   const participantIds = await getFeedParticipantIds(user.id);
+  const exerciseWorkoutIds = await resolveExerciseWorkoutIds(filter, participantIds);
 
-  const filteredQuery = await constrainWorkoutListQuery(
+  const filteredQuery = applyWorkoutListFilter(
     supabase
       .from('workouts')
       .select('*, workout_likes(count), workout_comments(count)')
       .in('user_id', participantIds),
     filter,
-    participantIds
+    exerciseWorkoutIds
   );
 
   const { data: workouts, error: workoutsError } = await filteredQuery
@@ -2311,13 +2326,15 @@ export async function getUserWorkouts(
     throw new Error('User id is required to load workout history.');
   }
 
-  const filteredQuery = await constrainWorkoutListQuery(
+  const exerciseWorkoutIds = await resolveExerciseWorkoutIds(filter, [normalizedUserId]);
+
+  const filteredQuery = applyWorkoutListFilter(
     supabase
       .from('workouts')
       .select('*, workout_likes(count), workout_comments(count)')
       .eq('user_id', normalizedUserId),
     filter,
-    [normalizedUserId]
+    exerciseWorkoutIds
   );
 
   const { data: workouts, error: workoutsError } = await filteredQuery

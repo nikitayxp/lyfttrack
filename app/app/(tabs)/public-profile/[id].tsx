@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
@@ -14,6 +14,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
+import { HistoryJumpBar } from '@/components/history/HistoryJumpBar';
 import { EmptyState } from '@/components/common/EmptyState';
 import { FeedCommentsModal } from '@/components/feed/FeedCommentsModal';
 import { WorkoutFeedCard } from '@/components/feed/WorkoutFeedCard';
@@ -35,7 +36,14 @@ import {
   sendFriendRequest,
   type UserRelation,
 } from '@/services/socialService';
-import { getErrorMessage, getUserWorkouts, type WorkoutFeedItem } from '@/services/workoutService';
+import {
+  getErrorMessage,
+  getUserWorkoutMonthBuckets,
+  getUserWorkouts,
+  type WorkoutFeedItem,
+  type WorkoutListFilter,
+  type WorkoutMonthBucket,
+} from '@/services/workoutService';
 import { useAppToast } from '@/context/ToastContext';
 import { confirmAction } from '@/utils/confirmAction';
 import { showAlert } from '@/utils/showAlert';
@@ -84,7 +92,7 @@ function initialsFromName(value: string): string {
 }
 
 export default function PublicProfileScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { showToast } = useAppToast();
   const params = useLocalSearchParams<{ id?: string | string[]; from?: string | string[] }>();
   const profileId = useMemo(() => readRouteId(params.id), [params.id]);
@@ -126,6 +134,17 @@ export default function PublicProfileScreen() {
   const [currentCommentAuthor, setCurrentCommentAuthor] = useState<CommentAuthorProfile | null>(null);
   const [relation, setRelation] = useState<UserRelation | null>(null);
   const [isRelationBusy, setIsRelationBusy] = useState(false);
+  const [historySearchInput, setHistorySearchInput] = useState('');
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyPeriodKey, setHistoryPeriodKey] = useState<string | null>(null);
+  const [historyMonths, setHistoryMonths] = useState<WorkoutMonthBucket[]>([]);
+  const historyFilterRef = useRef<WorkoutListFilter>({});
+  const skippedFirstHistoryFilterEffect = useRef(true);
+
+  historyFilterRef.current = {
+    periodKey: historyPeriodKey,
+    search: historySearch,
+  };
 
   // An empty list on a non-public profile means "not allowed to see", not
   // "trained nothing" — saying the wrong one is what made the old behaviour
@@ -158,20 +177,23 @@ export default function PublicProfileScreen() {
         .catch(() => setRelation(null));
 
       try {
-        const [profileData, workoutData] = await Promise.all([
+        const [profileData, workoutData, monthBuckets] = await Promise.all([
           getPublicProfileById(profileId),
-          getUserWorkouts(profileId, 0, FEED_PAGE_SIZE),
+          getUserWorkouts(profileId, 0, FEED_PAGE_SIZE, historyFilterRef.current),
+          getUserWorkoutMonthBuckets(profileId),
         ]);
 
         if (!profileData) {
           setProfile(null);
           setWorkouts([]);
+          setHistoryMonths([]);
           setError(t('publicProfile.notFound'));
           return;
         }
 
         setProfile(profileData);
         setWorkouts(workoutData);
+        setHistoryMonths(monthBuckets);
 
         setOptimisticLikeState((currentState) => {
           const validWorkoutIds = new Set(workoutData.map((item) => item.id));
@@ -215,6 +237,7 @@ export default function PublicProfileScreen() {
         setError(getErrorMessage(loadError));
         setProfile(null);
         setWorkouts([]);
+        setHistoryMonths([]);
       } finally {
         setIsLoading(false);
         setIsRefreshing(false);
@@ -226,6 +249,34 @@ export default function PublicProfileScreen() {
   useEffect(() => {
     void loadData('initial');
   }, [loadData]);
+
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setHistorySearch(historySearchInput.trim());
+    }, 300);
+
+    return () => clearTimeout(handle);
+  }, [historySearchInput]);
+
+  useEffect(() => {
+    if (skippedFirstHistoryFilterEffect.current) {
+      skippedFirstHistoryFilterEffect.current = false;
+      return;
+    }
+
+    if (!profileId) {
+      return;
+    }
+
+    void (async () => {
+      try {
+        const workoutData = await getUserWorkouts(profileId, 0, FEED_PAGE_SIZE, historyFilterRef.current);
+        setWorkouts(workoutData);
+      } catch (loadError) {
+        setError(getErrorMessage(loadError));
+      }
+    })();
+  }, [historyPeriodKey, historySearch, profileId]);
 
   const runRelationAction = useCallback(
     async (action: () => Promise<void>, errorTitleKey: string) => {
@@ -601,18 +652,35 @@ export default function PublicProfileScreen() {
               <Text style={styles.sectionTitle}>{t('publicProfile.workoutsSectionTitle')}</Text>
             </View>
 
+            {!isRestrictedProfile ? (
+              <HistoryJumpBar
+                months={historyMonths}
+                selectedPeriodKey={historyPeriodKey}
+                onSelectPeriod={setHistoryPeriodKey}
+                query={historySearchInput}
+                onChangeQuery={setHistorySearchInput}
+                searchPlaceholder={t('historyJump.searchPlaceholder')}
+                allLabel={t('historyJump.all')}
+                locale={i18n.resolvedLanguage ?? i18n.language ?? 'pt'}
+              />
+            ) : null}
+
             {workouts.length === 0 ? (
               <EmptyState
                 icon={isRestrictedProfile ? 'lock-closed-outline' : 'trophy-outline'}
                 title={
                   isRestrictedProfile
                     ? t('publicProfile.restrictedTitle')
-                    : t('publicProfile.noPublicWorkoutsTitle')
+                    : historyPeriodKey || historySearch
+                      ? t('historyJump.noResultsTitle')
+                      : t('publicProfile.noPublicWorkoutsTitle')
                 }
                 description={
                   isRestrictedProfile
                     ? t('publicProfile.restrictedDescription')
-                    : t('publicProfile.noPublicWorkoutsDescription')
+                    : historyPeriodKey || historySearch
+                      ? t('historyJump.noResultsDescription')
+                      : t('publicProfile.noPublicWorkoutsDescription')
                 }
                 containerStyle={styles.statusCard}
                 descriptionStyle={styles.statusText}

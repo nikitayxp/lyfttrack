@@ -118,14 +118,15 @@ export default function ImportDataScreen() {
     if (stage.kind !== 'preview') return;
 
     const { plan } = stage;
+    const repairCount = new Set(plan.repairChanges.map((change) => change.workoutId)).size;
     setError(null);
-    setStage({ kind: 'importing', done: 0, total: plan.importableWorkouts });
+    setStage({ kind: 'importing', done: 0, total: plan.importableWorkouts + repairCount });
 
     try {
       const summary = await runImport(plan, {
         onProgress: ({ done, total }) => setStage({ kind: 'importing', done, total }),
       });
-      if (summary.importedWorkouts > 0) {
+      if (summary.importedWorkouts > 0 || summary.repairedWorkouts > 0) {
         notifyWorkoutsImported();
       }
       setStage({ kind: 'done', summary });
@@ -210,6 +211,20 @@ export default function ImportDataScreen() {
           </View>
         ) : null}
 
+        {plan.repairChanges.length > 0 ? (
+          <View style={[styles.card, styles.noticeCard]}>
+            <Text style={styles.noticeTitle}>
+              {t('importData.repairTitle', {
+                count: new Set(plan.repairChanges.map((change) => change.workoutId)).size,
+              })}
+            </Text>
+            <Text style={styles.noticeText}>{t('importData.repairText')}</Text>
+            <Text style={styles.noticeList}>
+              {[...new Set(plan.repairChanges.map((change) => change.hevyTitle))].slice(0, 8).join(', ')}
+            </Text>
+          </View>
+        ) : null}
+
         {plan.unmatchedTitles.length > 0 ? (
           <View style={[styles.card, styles.noticeCard]}>
             <Text style={styles.noticeTitle}>
@@ -235,14 +250,21 @@ export default function ImportDataScreen() {
         ) : null}
 
         <TouchableOpacity
-          style={[styles.primaryButton, plan.importableWorkouts === 0 && styles.buttonDisabled]}
+          style={[
+            styles.primaryButton,
+            plan.importableWorkouts === 0 && plan.repairChanges.length === 0 && styles.buttonDisabled,
+          ]}
           activeOpacity={ACTIVE_OPACITY}
-          disabled={plan.importableWorkouts === 0}
+          disabled={plan.importableWorkouts === 0 && plan.repairChanges.length === 0}
           onPress={() => void confirmImport()}
         >
           <Ionicons name="cloud-download-outline" size={18} color={palette.textPrimary} />
           <Text style={styles.primaryButtonText}>
-            {t('importData.confirm', { count: plan.importableWorkouts })}
+            {plan.importableWorkouts > 0
+              ? t('importData.confirm', { count: plan.importableWorkouts })
+              : t('importData.confirmRepair', {
+                  count: new Set(plan.repairChanges.map((change) => change.workoutId)).size,
+                })}
           </Text>
         </TouchableOpacity>
 
@@ -274,6 +296,12 @@ export default function ImportDataScreen() {
           <View style={styles.statRow}>
             <Text style={styles.statLabel}>{t('importData.statCreatedExercises')}</Text>
             <Text style={styles.statValue}>{summary.createdExercises}</Text>
+          </View>
+        ) : null}
+        {summary.repairedWorkouts > 0 ? (
+          <View style={styles.statRow}>
+            <Text style={styles.statLabel}>{t('importData.statRepaired')}</Text>
+            <Text style={styles.statValue}>{summary.repairedWorkouts}</Text>
           </View>
         ) : null}
         {summary.skippedDuplicates > 0 ? (

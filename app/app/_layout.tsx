@@ -15,6 +15,7 @@ import { Colors } from '@/constants/theme';
 import { applyPendingTermsAcceptance } from '@/services/authService';
 import { needsOptionalOnboarding, needsUsernameReview } from '@/services/authSetup';
 import { supabase } from '@/services/supabase';
+import { getWebVisibleViewportHeight } from '@/utils/webVisibleViewport';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import NeuralBackground from '@/components/ui/flow-field-background';
 import { SplashLoader } from '@/components/ui/SplashLoader';
@@ -40,13 +41,8 @@ function shouldSkipAuthSplashDelay(): boolean {
   return false;
 }
 
-/**
- * Chrome (and similar) can cover the bottom of the layout viewport without
- * updating CSS safe-area insets. Pad the web root by the visualViewport gap
- * so the compact tab bar stays fully visible above browser chrome.
- */
-function useWebVisualViewportBottomInset(enabled: boolean): number {
-  const [bottomInset, setBottomInset] = useState(0);
+function useWebVisibleViewportHeight(enabled: boolean): number | null {
+  const [height, setHeight] = useState<number | null>(null);
 
   useEffect(() => {
     if (!enabled || typeof window === 'undefined') {
@@ -56,13 +52,8 @@ function useWebVisualViewportBottomInset(enabled: boolean): number {
     const visualViewport = window.visualViewport;
 
     const update = () => {
-      if (!visualViewport) {
-        setBottomInset(0);
-        return;
-      }
-
-      const covered = Math.max(0, window.innerHeight - (visualViewport.height + visualViewport.offsetTop));
-      setBottomInset(Math.round(covered));
+      window.scrollTo(0, 0);
+      setHeight(getWebVisibleViewportHeight(window.innerHeight, visualViewport?.height ?? window.innerHeight));
     };
 
     update();
@@ -77,7 +68,7 @@ function useWebVisualViewportBottomInset(enabled: boolean): number {
     };
   }, [enabled]);
 
-  return bottomInset;
+  return height;
 }
 
 const palette = Colors.dark;
@@ -88,7 +79,6 @@ const DESKTOP_WEB_MOCKUP_MIN_WIDTH = 768;
 const webViewportFill: ViewStyle = {
   width: '100%',
   height: '100%' as ViewStyle['height'],
-  minHeight: '100dvh' as ViewStyle['minHeight'],
   overflow: 'hidden',
 };
 
@@ -184,7 +174,7 @@ export default function RootLayout() {
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
   const isDesktopWeb = isWeb && width > DESKTOP_WEB_MOCKUP_MIN_WIDTH;
-  const webBrowserBottomInset = useWebVisualViewportBottomInset(isWeb && !isDesktopWeb);
+  const webVisibleViewportHeight = useWebVisibleViewportHeight(isWeb && !isDesktopWeb);
   const segments = useSegments();
   const rootSegment = String(segments[0] ?? '');
   const childSegment = String(segments[1] ?? '');
@@ -214,25 +204,45 @@ export default function RootLayout() {
       htmlHeight: html.style.height,
       htmlMinHeight: html.style.minHeight,
       htmlBackground: html.style.backgroundColor,
+      htmlOverflow: html.style.overflow,
+      htmlOverscrollBehavior: html.style.overscrollBehavior,
       bodyHeight: body.style.height,
       bodyMinHeight: body.style.minHeight,
       bodyMargin: body.style.margin,
       bodyBackground: body.style.backgroundColor,
+      bodyOverflow: body.style.overflow,
+      bodyOverscrollBehavior: body.style.overscrollBehavior,
+      bodyPosition: body.style.position,
+      bodyInset: body.style.inset,
+      bodyWidth: body.style.width,
+      bodyTouchAction: body.style.touchAction,
       rootHeight: root?.style.height ?? '',
       rootMinHeight: root?.style.minHeight ?? '',
       rootDisplay: root?.style.display ?? '',
       rootFlexDirection: root?.style.flexDirection ?? '',
       rootBackground: root?.style.backgroundColor ?? '',
+      rootOverflow: root?.style.overflow ?? '',
     };
 
     html.style.height = '100%';
     html.style.minHeight = '100%';
     html.style.backgroundColor = palette.bgPrimary;
+    html.style.overflow = 'hidden';
+    html.style.overscrollBehavior = 'none';
 
     body.style.height = '100%';
     body.style.minHeight = '100%';
     body.style.margin = '0';
     body.style.backgroundColor = palette.bgPrimary;
+    body.style.overflow = 'hidden';
+    body.style.overscrollBehavior = 'none';
+
+    if (!isDesktopWeb) {
+      body.style.position = 'fixed';
+      body.style.inset = '0';
+      body.style.width = '100%';
+      body.style.touchAction = 'manipulation';
+    }
 
     if (root) {
       root.style.height = '100%';
@@ -240,17 +250,26 @@ export default function RootLayout() {
       root.style.display = 'flex';
       root.style.flexDirection = 'column';
       root.style.backgroundColor = palette.bgPrimary;
+      root.style.overflow = 'hidden';
     }
 
     return () => {
       html.style.height = previous.htmlHeight;
       html.style.minHeight = previous.htmlMinHeight;
       html.style.backgroundColor = previous.htmlBackground;
+      html.style.overflow = previous.htmlOverflow;
+      html.style.overscrollBehavior = previous.htmlOverscrollBehavior;
 
       body.style.height = previous.bodyHeight;
       body.style.minHeight = previous.bodyMinHeight;
       body.style.margin = previous.bodyMargin;
       body.style.backgroundColor = previous.bodyBackground;
+      body.style.overflow = previous.bodyOverflow;
+      body.style.overscrollBehavior = previous.bodyOverscrollBehavior;
+      body.style.position = previous.bodyPosition;
+      body.style.inset = previous.bodyInset;
+      body.style.width = previous.bodyWidth;
+      body.style.touchAction = previous.bodyTouchAction;
 
       if (root) {
         root.style.height = previous.rootHeight;
@@ -258,9 +277,10 @@ export default function RootLayout() {
         root.style.display = previous.rootDisplay;
         root.style.flexDirection = previous.rootFlexDirection;
         root.style.backgroundColor = previous.rootBackground;
+        root.style.overflow = previous.rootOverflow;
       }
     };
-  }, [isWeb]);
+  }, [isDesktopWeb, isWeb]);
 
   useEffect(() => {
     if (!isWeb || typeof document === 'undefined') {
@@ -454,18 +474,17 @@ export default function RootLayout() {
   );
 
   if (isWeb) {
-    const mobileWebBottomPad: ViewStyle | null =
-      !isDesktopWeb && webBrowserBottomInset > 0
+    const mobileWebShellStyle: ViewStyle | null =
+      !isDesktopWeb
         ? {
-            paddingBottom: webBrowserBottomInset,
-            // Keep the shell inside the visible viewport (border-box) so the compact tab bar isn't pushed under browser chrome.
-            boxSizing: 'border-box',
-            maxHeight: '100dvh' as ViewStyle['maxHeight'],
+            height: webVisibleViewportHeight ?? ('100dvh' as ViewStyle['height']),
+            maxHeight: webVisibleViewportHeight ?? ('100dvh' as ViewStyle['maxHeight']),
+            overflow: 'hidden',
           }
         : null;
 
     return (
-      <View style={[styles.webRoot, isDesktopWeb && styles.webRootDesktop, webViewportFill, mobileWebBottomPad]}>
+      <View style={[styles.webRoot, isDesktopWeb && styles.webRootDesktop, webViewportFill, mobileWebShellStyle]}>
         <View style={[styles.webFlowLayer, styles.pointerEventsNone]}>
           <NeuralBackground color="#3B82F6" trailOpacity={0.12} speed={0.35} />
         </View>

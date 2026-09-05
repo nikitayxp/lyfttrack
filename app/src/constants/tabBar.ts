@@ -2,7 +2,7 @@
  * YouTube / Material-style bottom nav: compact icon+label row (~56),
  * plus real safe-area inset only (no fake empty strip under labels).
  *
- * On web, browser chrome is padded at the root via visualViewport — not inside this bar.
+ * On web, the root shell is sized to the visible viewport — not padded inside this bar.
  */
 export const TAB_ICON_SIZE = 24;
 /** Material bottom navigation content row (matches YouTube-like density). */

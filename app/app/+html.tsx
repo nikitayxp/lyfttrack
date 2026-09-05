@@ -8,7 +8,8 @@ const BASE_WEB_BG_STYLE = `
     min-height: 100%;
     height: 100%;
     margin: 0;
-    overflow-x: hidden;
+    overflow: hidden;
+    overscroll-behavior: none;
   }
 
   /* Constrain only RN Web modal portals inside the desktop phone mockup. */
@@ -73,7 +74,7 @@ export default function Root({ children }: PropsWithChildren) {
         />
         <meta
           name="viewport"
-          content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"
+          content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover, interactive-widget=resizes-content"
         />
         <link rel="icon" href="/logo.jpg" type="image/jpeg" />
         <link rel="shortcut icon" href="/logo.jpg" type="image/jpeg" />

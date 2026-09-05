@@ -69,7 +69,12 @@ export function HistoryJumpBar({
           style={styles.searchInput}
           autoCorrect={false}
           autoCapitalize="none"
+          autoComplete="off"
+          textContentType="none"
+          importantForAutofill="no"
+          spellCheck={false}
           returnKeyType="search"
+          inputMode="search"
         />
       </View>
 

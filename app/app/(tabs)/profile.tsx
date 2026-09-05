@@ -1325,6 +1325,8 @@ export default function ProfileScreen() {
         }}
         style={styles.screen}
         contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         ListHeaderComponent={headerComponent}
         ListEmptyComponent={emptyComponent}
         ListFooterComponent={

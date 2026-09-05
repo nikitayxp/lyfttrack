@@ -591,6 +591,8 @@ export default function PublicProfileScreen() {
       <ScrollView
         style={styles.screen}
         contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void loadData('refresh')} tintColor={palette.accent} />}
       >
         <View style={styles.topRow}>

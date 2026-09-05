@@ -127,6 +127,14 @@ const styles = StyleSheet.create({
     backgroundColor: palette.tabBarBackground,
     borderTopColor: palette.border,
     borderTopWidth: 1,
+    ...(Platform.OS === 'web'
+      ? {
+          position: 'absolute' as const,
+          left: 0,
+          right: 0,
+          bottom: 0,
+        }
+      : null),
   },
   tabItem: {
     justifyContent: 'center',

@@ -466,13 +466,13 @@ export function CinematicHero({
 
   if (reducedMotion) {
     return (
-      <section className="flex min-h-screen flex-col items-center justify-center gap-6 bg-[#050505] px-6 py-32 text-center text-white">
+      <div ref={containerRef} className={cn('flex min-h-screen flex-col items-center justify-center gap-6 bg-[#050505] px-6 py-32 text-center text-white', className)} {...props}>
         <h1 className="max-w-4xl text-4xl font-bold tracking-tight md:text-7xl">{copy.tagline1} {copy.tagline2}</h1>
         <p className="max-w-xl text-lg text-white/70">{copy.ctaDescription}</p>
         <a href="https://lyfttrack-app.vercel.app/" className="rounded-full bg-[#3B82F6] px-6 py-4 font-bold focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white">
           {copy.ctaPrimary}
         </a>
-      </section>
+      </div>
     );
   }
 

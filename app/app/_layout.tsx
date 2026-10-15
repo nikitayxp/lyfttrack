@@ -175,7 +175,7 @@ export default function RootLayout() {
   const isWeb = Platform.OS === 'web';
   const isDesktopWeb = isWeb && width > DESKTOP_WEB_MOCKUP_MIN_WIDTH;
   const webVisibleViewportHeight = useWebVisibleViewportHeight(isWeb && !isDesktopWeb);
-  const segments = useSegments();
+  const segments: readonly string[] = useSegments();
   const rootSegment = String(segments[0] ?? '');
   const childSegment = String(segments[1] ?? '');
   const [session, setSession] = useState<Session | null>(null);

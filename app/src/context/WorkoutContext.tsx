@@ -77,30 +77,20 @@ const WorkoutContext = createContext<WorkoutContextValue | null>(null);
 export function WorkoutProvider({ children }: PropsWithChildren) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isAuthResolved, setIsAuthResolved] = useState(false);
-  const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
-  const [workoutName, setWorkoutName] = useState<string | null>(null);
-  const [didRestoreDraft, setDidRestoreDraft] = useState(false);
-  const [workoutStartedAtMs, setWorkoutStartedAtMs] = useState<number | null>(null);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [isTimerPaused, setIsTimerPaused] = useState(false);
-  const [pausedElapsedSeconds, setPausedElapsedSeconds] = useState<number | null>(null);
-  const [exerciseStopwatchById, setExerciseStopwatchById] = useState<Record<string, ExerciseStopwatchEntry>>({});
-  const [exerciseRestSnapshotById, setExerciseRestSnapshotById] = useState<Record<string, number>>({});
-  const keepAwakeStateRef = useRef<{ activated: boolean; deactivated: boolean }>({
-    activated: false,
-    deactivated: false,
-  });
 
   useEffect(() => {
     let isMounted = true;
+    let receivedAuthEvent = false;
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!isMounted) {
+      if (!isMounted || receivedAuthEvent) {
         return;
       }
 
       setCurrentUserId(session?.user?.id ?? null);
       setIsAuthResolved(true);
+    }).catch(() => {
+      if (isMounted && !receivedAuthEvent) setIsAuthResolved(true);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -108,6 +98,7 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
         return;
       }
 
+      receivedAuthEvent = true;
       setCurrentUserId(session?.user?.id ?? null);
       setIsAuthResolved(true);
     });
@@ -117,6 +108,28 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
       subscription.unsubscribe();
     };
   }, []);
+
+  return (
+    <WorkoutSessionProvider key={currentUserId ?? 'signed-out'} currentUserId={currentUserId} isAuthResolved={isAuthResolved}>
+      {children}
+    </WorkoutSessionProvider>
+  );
+}
+
+function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: PropsWithChildren<{
+  currentUserId: string | null;
+  isAuthResolved: boolean;
+}>) {
+  const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
+  const [workoutName, setWorkoutName] = useState<string | null>(null);
+  const [didRestoreDraft, setDidRestoreDraft] = useState(false);
+  const [workoutStartedAtMs, setWorkoutStartedAtMs] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [isTimerPaused, setIsTimerPaused] = useState(false);
+  const [pausedElapsedSeconds, setPausedElapsedSeconds] = useState<number | null>(null);
+  const [exerciseStopwatchById, setExerciseStopwatchById] = useState<Record<string, ExerciseStopwatchEntry>>({});
+  const [exerciseRestSnapshotById, setExerciseRestSnapshotById] = useState<Record<string, number>>({});
+  const keepAwakeStateRef = useRef({ activated: false, deactivated: false });
 
   const workoutStartedAtIso = useMemo(
     () => (workoutStartedAtMs === null ? undefined : new Date(workoutStartedAtMs).toISOString()),
@@ -169,6 +182,8 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
   const resetWorkoutSession = useCallback(() => {
     setWorkoutStartedAtMs(null);
     setElapsedSeconds(0);
+    setIsTimerPaused(false);
+    setPausedElapsedSeconds(null);
     setActiveTemplateId(null);
     setWorkoutName(null);
     setDidRestoreDraft(false);

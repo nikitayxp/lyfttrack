@@ -327,6 +327,8 @@ export const resources = {
         deleteAccountTypePrompt: 'Type "{{word}}" to confirm',
       },
       workout: {
+        pauseTimer: 'Pause workout timer',
+        resumeTimer: 'Resume workout timer',
         title: 'Workout',
         subtitle: 'Consolidate templates and exercises in one flow.',
         startEmptyWorkout: 'Start Empty Workout',
@@ -1239,6 +1241,8 @@ export const resources = {
         finishWorkoutTitleLabel: 'Titulo do treino',
         finishWorkoutTitlePlaceholder: 'O meu treino',
         defaultActiveWorkoutName: 'Treino',
+        pauseTimer: 'Pausar cronómetro do treino',
+        resumeTimer: 'Retomar cronómetro do treino',
         recoverTitle: 'Recuperar treino?',
         recoverDescription: 'Foi encontrado um treino nao guardado (guardado as {{savedAt}}). Queres continuar onde ficaste?',
         recoverDiscard: 'Descartar',

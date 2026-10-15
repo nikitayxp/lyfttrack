@@ -12,7 +12,7 @@
     "build:android": "npm run build:android --workspace=app",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "node --test scripts/check-*.ts",
+    "test": "node --test scripts/check-*.ts scripts/tests/*.test.cjs",
     "check": "npm run lint && npm run typecheck && npm test"
   },
   "devDependencies": {

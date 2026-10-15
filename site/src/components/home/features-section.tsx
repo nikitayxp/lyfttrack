@@ -24,7 +24,7 @@ const copyData = {
       {
         icon: CloudOff,
         title: 'Guarda Offline',
-        desc: 'Sem rede no piso -1 do ginasio? O LyftTrack guarda o treino offline e sincroniza automaticamente quando o sinal voltar.',
+        desc: 'O rascunho do treino fica guardado neste dispositivo. Liga-te à internet para terminar o treino e guardá-lo na tua conta.',
       },
     ]
   },
@@ -44,8 +44,8 @@ const copyData = {
       },
       {
         icon: CloudOff,
-        title: 'Offline First',
-        desc: 'Lost connection in the basement gym? LyftTrack logs everything locally and syncs back when online.',
+        title: 'Local Drafts',
+        desc: 'Your workout draft stays on this device. Connect to the internet to finish your workout and save it to your account.',
       },
     ]
   }

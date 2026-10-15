@@ -48,7 +48,11 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-      - run: npm ci
+      - if: matrix.workspace == 'app'
+        run: npm ci
+      - if: matrix.workspace == 'site'
+        run: npm ci --workspaces=false
+        working-directory: site
       - if: matrix.workspace == 'app'
         run: npm run build:web --workspace=app
       - if: matrix.workspace == 'site'

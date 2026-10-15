@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: 'true'
+  EXPO_NO_TELEMETRY: '1'
+  NEXT_TELEMETRY_DISABLED: '1'
+  EXPO_PUBLIC_SUPABASE_URL: https://example.supabase.co
+  EXPO_PUBLIC_SUPABASE_ANON_KEY: ci-public-placeholder
+
+jobs:
+  quality:
+    name: Lint, types and regression checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+
+  build:
+    name: Build ${{ matrix.workspace }}
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: [app, site]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - if: matrix.workspace == 'app'
+        run: npm run build:web --workspace=app
+      - if: matrix.workspace == 'site'
+        run: npm run build --workspace=site

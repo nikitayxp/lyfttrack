@@ -61,5 +61,14 @@ skills/
 
 # local
 .planning/
+.claude/
+.cursor/
+.clinerules/
+.agents/
+.codex/
+CLAUDE.md
+AGENTS.md
+tmp/
+supabase/.temp/
 supabase_schema.sql
 supabase/seed_famous_exercises.sql

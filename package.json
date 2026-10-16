@@ -9,6 +9,14 @@
     "dev:site": "npm run dev --workspace=site",
     "dev:app": "npm run start --workspace=app",
     "install:all": "npm install",
-    "build:android": "npm run build:android --workspace=app"
+    "build:android": "npm run build:android --workspace=app",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "node --test scripts/check-*.ts",
+    "check": "npm run lint && npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.10",
+    "react-test-renderer": "19.1.0"
   }
 }

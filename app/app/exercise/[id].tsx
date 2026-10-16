@@ -1262,10 +1262,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   chartWrapDraggable: {
-    cursor: 'grab',
+    cursor: 'pointer' as const,
   },
   chartWrapDragging: {
-    cursor: 'grabbing',
+    cursor: 'pointer' as const,
   },
   chartNavigation: {
     flexDirection: 'row',

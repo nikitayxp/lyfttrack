@@ -14,6 +14,7 @@ import {
   type WorkoutDraft,
   buildDraftId,
   clearWorkoutDraft,
+  flushWorkoutDraftSave,
   loadWorkoutDraft,
   saveWorkoutDraftNow,
   saveWorkoutDraftSync,
@@ -298,6 +299,12 @@ export function useActiveWorkoutState({
   const [recoveredDraft, setRecoveredDraft] = useState<RecoveredDraftState | null>(null);
   /** True until the stored draft has been read, so callers can wait before seeding state. */
   const [isDraftRecoveryPending, setIsDraftRecoveryPending] = useState(true);
+
+  useEffect(() => {
+    return () => {
+      if (userId) flushWorkoutDraftSave(userId);
+    };
+  }, [userId]);
 
   // ── Draft auto-save: flush immediately on app-background ──────────────────
 

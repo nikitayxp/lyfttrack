@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "framer-motion": "^12.38.0",
+    "framer-motion": "^13.0.0",
     "gsap": "^3.14.2",
     "lucide-react": "^1.7.0",
     "next": "16.1.6",

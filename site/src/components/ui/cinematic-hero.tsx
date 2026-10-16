@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { Activity, Dumbbell, Layers, Rocket, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { createElement } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { useReducedMotion } from '@/lib/use-reduced-motion';
 import NeuralBackground from '@/components/ui/flow-field-background';
 import { cn } from '@/lib/utils';
 
@@ -269,6 +270,7 @@ export function CinematicHero({
   const mockupRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<number>(0);
   const copy = HERO_COPY[language];
+  const reducedMotion = useReducedMotion();
   const formattedMetricValue = useMemo(
     () => Math.max(0, Math.round(metricValue)).toLocaleString(language === 'pt' ? 'pt-PT' : 'en-US'),
     [language, metricValue]
@@ -303,6 +305,7 @@ export function CinematicHero({
   };
 
   useEffect(() => {
+    if (reducedMotion) return;
     const handleMouseMove = (event: MouseEvent) => {
       if (window.innerWidth < 768) {
         return;
@@ -344,9 +347,10 @@ export function CinematicHero({
       window.removeEventListener('mousemove', handleMouseMove);
       cancelAnimationFrame(requestRef.current);
     };
-  }, []);
+  }, [reducedMotion]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (reducedMotion) return;
     const isMobile = window.innerWidth < 768;
 
     const context = gsap.context(() => {
@@ -458,7 +462,19 @@ export function CinematicHero({
     }, containerRef);
 
     return () => context.revert();
-  }, [metricValue]);
+  }, [metricValue, reducedMotion]);
+
+  if (reducedMotion) {
+    return (
+      <div ref={containerRef} className={cn('flex min-h-screen flex-col items-center justify-center gap-6 bg-[#050505] px-6 py-32 text-center text-white', className)} {...props}>
+        <h1 className="max-w-4xl text-4xl font-bold tracking-tight md:text-7xl">{copy.tagline1} {copy.tagline2}</h1>
+        <p className="max-w-xl text-lg text-white/70">{copy.ctaDescription}</p>
+        <a href="https://lyfttrack-app.vercel.app/" className="rounded-full bg-[#3B82F6] px-6 py-4 font-bold focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white">
+          {copy.ctaPrimary}
+        </a>
+      </div>
+    );
+  }
 
   return (
     <div

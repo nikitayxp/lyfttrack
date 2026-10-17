@@ -1,5 +1,5 @@
 import { supabase } from '@/services/supabase';
-import type { TablesInsert } from '@/types/database';
+import type { Json, TablesInsert } from '@/types/database';
 import { INPUT_LIMITS, sanitizeText, toSafeInteger, toSafeNumber } from '@/utils/inputValidation';
 import {
   getAuthenticatedUserOrThrow,
@@ -437,150 +437,57 @@ export type UpdateWorkoutSetsInput = {
   notesByExerciseId?: Record<string, string | null | undefined>;
 };
 
-/**
- * Edit a completed workout's sets (weight/reps/rir/side) plus optional workout
- * name and per-workout-exercise notes. Rows are scoped to the current user via
- * RLS; we also filter by workout_id to make the intent explicit.
- *
- * Missing columns (`side` on sets, `notes` on workout_exercises) are handled
- * gracefully so the client works before/after the schema migration runs.
- */
 export async function updateWorkoutSets(input: UpdateWorkoutSetsInput): Promise<void> {
   const normalizedWorkoutId = input.workoutId.trim();
-
   if (!normalizedWorkoutId) {
     throw new WorkoutSaveValidationError('no-valid-set-rows', 'Workout id is required');
   }
 
-  const user = await getAuthenticatedUserOrThrow();
-
-  if (typeof input.workoutName === 'string' || typeof input.workoutNotes === 'string') {
-    const workoutUpdatePayload: Record<string, unknown> = {};
-
-    if (typeof input.workoutName === 'string') {
-      workoutUpdatePayload.name = normalizeWriteText(input.workoutName, INPUT_LIMITS.nameMax) ?? 'Workout';
-    }
-
-    if (typeof input.workoutNotes === 'string') {
-      workoutUpdatePayload.notes = normalizeWriteText(input.workoutNotes, INPUT_LIMITS.notesMax);
-    }
-
-    if (Object.keys(workoutUpdatePayload).length > 0) {
-      const { error: workoutUpdateError } = await supabase
-        .from('workouts')
-        .update(workoutUpdatePayload as Record<string, never>)
-        .eq('id', normalizedWorkoutId)
-        .eq('user_id', user.id);
-
-      if (workoutUpdateError) {
-        throw new Error(`Unable to update workout: ${workoutUpdateError.message}`);
-      }
-    }
+  const workoutPatch: Record<string, Json> = {};
+  if (typeof input.workoutName === 'string') {
+    workoutPatch.name = normalizeWriteText(input.workoutName, INPUT_LIMITS.nameMax) ?? 'Workout';
+  }
+  if (input.workoutNotes !== undefined) {
+    workoutPatch.notes = normalizeWriteText(input.workoutNotes, INPUT_LIMITS.notesMax);
   }
 
-  for (const patch of input.setPatches) {
-    const normalizedSetId = patch.setId?.trim();
-
-    if (!normalizedSetId) {
-      continue;
+  const setPatches = input.setPatches.map((patch) => {
+    const id = patch.setId?.trim();
+    if (!id) {
+      throw new WorkoutSaveValidationError('no-valid-set-rows', 'Set id is required');
     }
-
-    const updatePayload: Record<string, unknown> = {};
-
+    const normalized: Record<string, Json> = { id };
     if (patch.weight !== undefined) {
-      updatePayload.weight = toSafeNumber(patch.weight, {
-        min: 0,
-        max: INPUT_LIMITS.weightMax,
-        decimals: 2,
-      });
+      normalized.weight = toSafeNumber(patch.weight, { min: 0, max: INPUT_LIMITS.weightMax, decimals: 2 });
     }
-
     if (patch.reps !== undefined) {
-      updatePayload.reps = toSafeInteger(patch.reps, {
-        min: 0,
-        max: INPUT_LIMITS.repsMax,
-      });
+      normalized.reps = toSafeInteger(patch.reps, { min: 0, max: INPUT_LIMITS.repsMax });
     }
-
     if (patch.rir !== undefined) {
-      updatePayload.rir = toSafeInteger(patch.rir, {
-        min: 0,
-        max: INPUT_LIMITS.rirMax,
-      });
+      normalized.rir = toSafeInteger(patch.rir, { min: 0, max: INPUT_LIMITS.rirMax });
     }
-
     if (patch.side !== undefined) {
-      updatePayload.side = patch.side;
+      normalized.side = patch.side;
     }
+    return normalized;
+  });
 
-    if (Object.keys(updatePayload).length === 0) {
-      continue;
+  const exerciseNotes: Record<string, Json> = {};
+  for (const [exerciseId, notes] of Object.entries(input.notesByExerciseId ?? {})) {
+    const id = exerciseId.trim();
+    if (!id) {
+      throw new WorkoutSaveValidationError('no-valid-set-rows', 'Exercise id is required');
     }
-
-    const baseQuery = () =>
-      supabase
-        .from('sets')
-        .update(updatePayload as Record<string, never>)
-        .eq('id', normalizedSetId)
-        .eq('workout_id', normalizedWorkoutId);
-
-    let { error: updateError } = await baseQuery();
-
-    if (updateError) {
-      const meta = extractSupabaseErrorMeta(updateError);
-      const message = `${meta.message} ${meta.details ?? ''}`.toLowerCase();
-      const isSideColumnMissing = message.includes("'side'") || message.includes('column "side"') || message.includes('sets.side');
-
-      if (isSideColumnMissing && 'side' in updatePayload) {
-        const { side: _sideIgnored, ...fallbackPayload } = updatePayload;
-
-        if (Object.keys(fallbackPayload).length === 0) {
-          continue;
-        }
-
-        const retry = await supabase
-          .from('sets')
-          .update(fallbackPayload as Record<string, never>)
-          .eq('id', normalizedSetId)
-          .eq('workout_id', normalizedWorkoutId);
-
-        updateError = retry.error;
-      }
-    }
-
-    if (updateError) {
-      throw new Error(`Unable to update set ${normalizedSetId}: ${updateError.message}`);
-    }
+    exerciseNotes[id] = normalizeWriteText(notes, INPUT_LIMITS.notesMax);
   }
 
-  if (input.notesByExerciseId) {
-    for (const [exerciseId, rawNotes] of Object.entries(input.notesByExerciseId)) {
-      const normalizedExerciseId = exerciseId?.trim();
-
-      if (!normalizedExerciseId) {
-        continue;
-      }
-
-      const normalizedNotes = typeof rawNotes === 'string'
-        ? sanitizeText(rawNotes, { maxLength: INPUT_LIMITS.notesMax, allowEmpty: true })
-        : null;
-
-      const { error: notesError } = await supabase
-        .from('workout_exercises')
-        .update({ notes: normalizedNotes } as any)
-        .eq('workout_id', normalizedWorkoutId)
-        .eq('exercise_id', normalizedExerciseId);
-
-      if (notesError) {
-        const meta = extractSupabaseErrorMeta(notesError);
-        const message = `${meta.message} ${meta.details ?? ''}`.toLowerCase();
-        const isNotesColumnMissing = message.includes("'notes'") || message.includes('column "notes"') || message.includes('workout_exercises.notes');
-
-        if (!isNotesColumnMissing) {
-          throw new Error(`Unable to update workout exercise notes: ${notesError.message}`);
-        }
-      }
-    }
+  const { error } = await supabase.rpc('update_workout_atomic', {
+    p_workout_id: normalizedWorkoutId,
+    p_workout_patch: workoutPatch,
+    p_set_patches: setPatches,
+    p_exercise_notes: exerciseNotes,
+  });
+  if (error) {
+    throw new Error(`Unable to update workout: ${error.message}`);
   }
 }
-

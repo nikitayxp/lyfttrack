@@ -604,6 +604,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      update_workout_atomic: {
+        Args: {
+          p_workout_id: string
+          p_workout_patch: Json
+          p_set_patches: Json
+          p_exercise_notes: Json
+        }
+        Returns: undefined
+      }
       delete_own_account: {
         Args: Record<string, never>
         Returns: undefined

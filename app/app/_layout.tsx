@@ -296,6 +296,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     let isMounted = true;
+    let hasReceivedAuthEvent = false;
 
     Promise.all([
       supabase.auth.getSession(),
@@ -303,11 +304,18 @@ export default function RootLayout() {
         ? Promise.resolve()
         : new Promise((resolve) => setTimeout(resolve, 1500)),
     ]).then(([{ data: { session: initialSession } }]) => {
-      if (!isMounted) {
+      if (!isMounted || hasReceivedAuthEvent) {
         return;
       }
 
       setSession(initialSession);
+      setIsAuthBootstrapPending(false);
+    }).catch(() => {
+      if (!isMounted || hasReceivedAuthEvent) {
+        return;
+      }
+
+      setSession(null);
       setIsAuthBootstrapPending(false);
     });
 
@@ -317,6 +325,7 @@ export default function RootLayout() {
           return;
         }
 
+        hasReceivedAuthEvent = true;
         setSession(nextSession);
         setIsAuthBootstrapPending(false);
 

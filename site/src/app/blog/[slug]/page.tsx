@@ -3,12 +3,12 @@ import { BlogArticleView } from '@/components/blog/blog-article-view';
 import { BLOG_POSTS, getBlogPostBySlug, type LanguageCode } from '@/lib/blog-data';
 
 type BlogPageProps = {
-  params: {
+  params: Promise<{
     slug: string;
-  };
-  searchParams?: {
+  }>;
+  searchParams?: Promise<{
     lang?: string;
-  };
+  }>;
 };
 
 export function generateStaticParams() {
@@ -17,14 +17,16 @@ export function generateStaticParams() {
   }));
 }
 
-export default function BlogPostPage({ params, searchParams }: BlogPageProps) {
-  const post = getBlogPostBySlug(params.slug);
+export default async function BlogPostPage({ params, searchParams }: BlogPageProps) {
+  const { slug } = await params;
+  const post = getBlogPostBySlug(slug);
 
   if (!post) {
     notFound();
   }
 
-  const initialLanguage: LanguageCode = searchParams?.lang === 'en' ? 'en' : 'pt';
+  const query = await searchParams;
+  const initialLanguage: LanguageCode = query?.lang === 'en' ? 'en' : 'pt';
 
   return <BlogArticleView post={post} initialLanguage={initialLanguage} />;
 }

@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/Colors';
 import { Radius } from '@/constants/Styles';
-import { getTabBarHeight } from '@/constants/tabBar';
+import { getTabBarHeight, MINIMIZED_WORKOUT_BAR_GAP, MINIMIZED_WORKOUT_BAR_HEIGHT } from '@/constants/tabBar';
 import { usePreferences } from '@/context/PreferencesContext';
 import { useWorkoutContext } from '@/context/WorkoutContext';
 import { getLocalizedExerciseName } from '@/utils/exerciseLocalization';
@@ -43,7 +43,7 @@ export function MinimizedWorkoutBar({ visible }: MinimizedWorkoutBarProps) {
   const isWeb = Platform.OS === 'web';
   const tabBarHeight = getTabBarHeight(isWeb, insets.bottom);
 
-  const bottomOffset = useMemo(() => tabBarHeight + 10, [tabBarHeight]);
+  const bottomOffset = useMemo(() => tabBarHeight + MINIMIZED_WORKOUT_BAR_GAP, [tabBarHeight]);
   const durationLabel = useMemo(() => formatElapsedTime(elapsedSeconds), [elapsedSeconds]);
   const sessionSummary = useMemo(() => {
     const exerciseCount = activeExercises.length;
@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.accentSoft,
     backgroundColor: palette.surfaceAlt,
-    minHeight: 64,
+    minHeight: MINIMIZED_WORKOUT_BAR_HEIGHT,
     paddingHorizontal: 12,
     paddingVertical: 10,
     flexDirection: 'row',

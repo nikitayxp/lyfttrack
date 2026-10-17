@@ -8,6 +8,8 @@ export const TAB_ICON_SIZE = 24;
 /** Material bottom navigation content row (matches YouTube-like density). */
 export const TAB_BAR_ROW_HEIGHT = 56;
 export const TAB_BAR_TOP_PADDING = 0;
+export const MINIMIZED_WORKOUT_BAR_HEIGHT = 64;
+export const MINIMIZED_WORKOUT_BAR_GAP = 10;
 
 export function getTabBarBottomPadding(isWeb: boolean, safeAreaBottom: number): number {
   if (isWeb) {

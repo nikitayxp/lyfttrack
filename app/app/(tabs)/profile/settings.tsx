@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import {
   ActivityIndicator,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,6 +18,8 @@ import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import { BackButton } from '@/components/common/BackButton';
 import { useAppToast } from '@/context/ToastContext';
 import { usePreferences } from '@/context/PreferencesContext';
+import { useWorkoutContext } from '@/context/WorkoutContext';
+import { getTabBarHeight, MINIMIZED_WORKOUT_BAR_GAP, MINIMIZED_WORKOUT_BAR_HEIGHT } from '@/constants/tabBar';
 import type { AppLanguage } from '@/i18n/resources';
 import { supabase } from '@/services/supabase';
 import { deleteOwnAccount, getProfile, updateProfile } from '@/services/profileService';
@@ -64,6 +67,10 @@ export default function ProfileSettingsScreen() {
   const { t } = useTranslation();
   const { showToast } = useAppToast();
   const { language, setLanguage, countWorkingSetsOnly, setCountWorkingSetsOnly } = usePreferences();
+  const { hasActiveWorkout } = useWorkoutContext();
+  const bottomPadding = 28
+    + (Platform.OS === 'web' ? getTabBarHeight(true, 0) : 0)
+    + (hasActiveWorkout ? MINIMIZED_WORKOUT_BAR_HEIGHT + MINIMIZED_WORKOUT_BAR_GAP : 0);
   const [visibility, setVisibility] = useState<'public' | 'friends' | 'private'>('public');
   const [isUpdatingPrivacy, setIsUpdatingPrivacy] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
@@ -187,7 +194,7 @@ export default function ProfileSettingsScreen() {
   }, [confirmSignOut, isSigningOut, showToast, t]);
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]}>
       <View style={styles.headerRow}>
         <BackButton onPress={() => router.replace('/(tabs)/profile' as any)} />
       </View>
@@ -640,7 +647,6 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 28,
   },
   headerRow: {
     marginBottom: 12,

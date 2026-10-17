@@ -26,6 +26,8 @@ import {
 } from '@/services/profileService';
 import { BackButton } from '@/components/common/BackButton';
 import { useAppToast } from '@/context/ToastContext';
+import { useWorkoutContext } from '@/context/WorkoutContext';
+import { getTabBarHeight, MINIMIZED_WORKOUT_BAR_GAP, MINIMIZED_WORKOUT_BAR_HEIGHT } from '@/constants/tabBar';
 import { getEmailChangeRedirectTo, getPasswordResetRedirectTo, supabase } from '@/services/supabase';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
 import { ConfirmModal } from '@/components/common/ConfirmModal';
@@ -61,6 +63,10 @@ function initialsFromName(value: string): string {
 export default function EditProfileScreen() {
   const { t } = useTranslation();
   const { showToast } = useAppToast();
+  const { hasActiveWorkout } = useWorkoutContext();
+  const bottomPadding = 28
+    + (Platform.OS === 'web' ? getTabBarHeight(true, 0) : 0)
+    + (hasActiveWorkout ? MINIMIZED_WORKOUT_BAR_HEIGHT + MINIMIZED_WORKOUT_BAR_GAP : 0);
   const [usernameInput, setUsernameInput] = useState('');
   const [fullNameInput, setFullNameInput] = useState('');
   const [bioInput, setBioInput] = useState('');
@@ -428,7 +434,7 @@ export default function EditProfileScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]} keyboardShouldPersistTaps="handled">
         <View style={styles.headerRow}>
           <BackButton onPress={() => router.replace('/(tabs)/profile' as any)} />
         </View>
@@ -678,7 +684,6 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 28,
   },
   headerRow: {
     marginBottom: 14,

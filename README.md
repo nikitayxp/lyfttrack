@@ -23,7 +23,7 @@ Monorepo com duas apps:
 
 ```bash
 # instalar dependências (raiz do monorepo)
-npm install
+npm ci --workspaces --include-workspace-root
 
 # app Expo
 npm run dev:app
@@ -31,6 +31,12 @@ npm run dev:app
 # landing Next.js
 npm run dev:site
 ```
+
+Instala as dependências na raiz do projeto, antes de entrar em `app/` ou `site/`, e espera que a instalação termine. Uma instalação feita dentro de um workspace pode deixar as dependências do outro por instalar.
+
+Mantém apenas um servidor de cada app em execução. Se o terminal indicar que a porta já está ocupada pelo mesmo projeto, usa o endereço do servidor existente ou termina-o com `Ctrl+C` no terminal onde arrancou antes de iniciar outro. Para reinstalar dependências, para primeiro os servidores.
+
+Para a app no telemóvel: `cd app` e `npx expo start --lan`; abre o QR no Expo Go ou `http://desktop-b00buva:8081/` no navegador. Para o site: `http://localhost:3000/` no computador ou `http://desktop-b00buva:3000/` na mesma rede. O hostname de desenvolvimento do site está autorizado em `site/next.config.ts`; se o nome do computador mudar, atualiza essa entrada.
 
 Cria um ficheiro `app/.env` com as chaves do Supabase:
 

@@ -112,6 +112,19 @@ function getSavedAtMs(draft: WorkoutDraft | null): number {
 }
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+let scheduledDraft: WorkoutDraft | null = null;
+
+function cancelScheduledDraft(userId: string): void {
+  if (scheduledDraft?.userId !== userId) return;
+  if (debounceTimer !== null) clearTimeout(debounceTimer);
+  debounceTimer = null;
+  scheduledDraft = null;
+}
+
+export function flushWorkoutDraftSave(userId: string): void {
+  if (scheduledDraft?.userId !== userId) return;
+  saveWorkoutDraftSync(scheduledDraft);
+}
 
 // ---------- Public API ----------
 
@@ -120,10 +133,7 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null;
  * Use this for lifecycle events such as app-background.
  */
 export async function saveWorkoutDraftNow(draft: WorkoutDraft): Promise<void> {
-  if (debounceTimer !== null) {
-    clearTimeout(debounceTimer);
-    debounceTimer = null;
-  }
+  cancelScheduledDraft(draft.userId);
 
   const key = getDraftKey(draft.userId);
   const payload = JSON.stringify({ ...draft, savedAt: new Date().toISOString() });
@@ -156,10 +166,7 @@ function writeWebMirror(userId: string, payload: string): void {
  * back to the regular async write.
  */
 export function saveWorkoutDraftSync(draft: WorkoutDraft): void {
-  if (debounceTimer !== null) {
-    clearTimeout(debounceTimer);
-    debounceTimer = null;
-  }
+  cancelScheduledDraft(draft.userId);
 
   const payload = JSON.stringify({ ...draft, savedAt: new Date().toISOString() });
   const storage = getWebStorage();
@@ -186,6 +193,7 @@ export function scheduleWorkoutDraftSave(draft: WorkoutDraft): void {
     clearTimeout(debounceTimer);
   }
 
+  scheduledDraft = draft;
   debounceTimer = setTimeout(() => {
     void saveWorkoutDraftNow(draft);
   }, WRITE_DEBOUNCE_MS);
@@ -232,10 +240,7 @@ export async function loadWorkoutDraft(userId: string): Promise<WorkoutDraft | n
  * or when the user explicitly discards the workout.
  */
 export async function clearWorkoutDraft(userId: string): Promise<void> {
-  if (debounceTimer !== null) {
-    clearTimeout(debounceTimer);
-    debounceTimer = null;
-  }
+  cancelScheduledDraft(userId);
 
   const storage = getWebStorage();
 

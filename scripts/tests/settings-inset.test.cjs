@@ -10,33 +10,36 @@ function flatten(style) {
   return Array.isArray(style) ? Object.assign({}, ...style.filter(Boolean).map(flatten)) : style;
 }
 
-async function setup(t, platform, active) {
+async function setup(t, platform, active, screen = 'settings') {
   let hasActiveWorkout = active;
   const colors = createSourceLoader()('app/src/constants/Colors.ts');
   const empty = () => null;
+  const translate = value => value;
   const load = createSourceLoader({
     'react-native': {
       Platform: { OS: platform, select: values => values[platform] ?? values.default },
       StyleSheet: { create: value => value, absoluteFillObject: {} },
       ScrollView: 'ScrollView', View: 'View', Text: 'Text', TextInput: 'TextInput',
+      KeyboardAvoidingView: 'KeyboardAvoidingView', Image: 'Image', Alert: { alert() {} },
       TouchableOpacity: 'TouchableOpacity', Pressable: 'Pressable', Modal: 'Modal', ActivityIndicator: 'ActivityIndicator',
     },
     '@expo/vector-icons': { Ionicons: empty },
     'expo-router': { router: { push() {}, replace() {} } },
-    'react-i18next': { useTranslation: () => ({ t: value => value }) },
+    'react-i18next': { useTranslation: () => ({ t: translate }) },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 34 }) },
     '@/constants/theme': colors,
     '@/components/common/BackButton': { BackButton: empty },
+    '@/components/common/ConfirmModal': { ConfirmModal: empty },
     '@/context/ToastContext': { useAppToast: () => ({ showToast() {} }) },
     '@/context/PreferencesContext': { usePreferences: () => ({ language: 'pt', setLanguage() {}, countWorkingSetsOnly: false, setCountWorkingSetsOnly() {} }) },
     '@/context/WorkoutContext': { useWorkoutContext: () => ({ hasActiveWorkout, activeExercises: [], elapsedSeconds: 0 }) },
-    '@/services/supabase': { supabase: { auth: { signOut: async () => ({ error: null }) } } },
-    '@/services/profileService': { getProfile: async () => ({ visibility: 'public' }), updateProfile() {}, deleteOwnAccount() {} },
+    '@/services/supabase': { supabase: { auth: { signOut: async () => ({ error: null }), getUser: async () => ({ data: { user: { email: 'test@example.test' } }, error: null }) } } },
+    '@/services/profileService': { getProfile: async () => ({ visibility: 'public' }), updateProfile() {}, deleteOwnAccount() {}, withAvatarCacheBuster: value => value },
     '@/utils/confirmAction': { confirmAction: async () => false },
     '@/utils/showAlert': { showAlert() {} },
     '@/utils/exerciseLocalization': { getLocalizedExerciseName: exercise => exercise.name },
   });
-  const Screen = load('app/app/(tabs)/profile/settings.tsx').default;
+  const Screen = load(`app/app/(tabs)/profile/${screen}.tsx`).default;
   const { MinimizedWorkoutBar } = load('app/src/components/workout/MinimizedWorkoutBar.tsx');
   const { getTabBarHeight } = load('app/src/constants/tabBar.ts');
   const content = () => React.createElement(React.Fragment, null,
@@ -56,19 +59,21 @@ async function setup(t, platform, active) {
   };
 }
 
-for (const [platform, active] of [['web', false], ['web', true], ['ios', true], ['ios', false]]) {
-  test(`settings content clears bottom navigation on ${platform}, workout active=${active}`, async t => {
-    const screen = await setup(t, platform, active);
-    assert.ok(screen.padding >= screen.requiredPadding, `${screen.padding}px padding cannot clear ${screen.requiredPadding}px of bottom space`);
+for (const route of ['settings', 'edit']) {
+  for (const [platform, active] of [['web', false], ['web', true], ['ios', true], ['ios', false]]) {
+    test(`${route} content clears bottom navigation on ${platform}, workout active=${active}`, async t => {
+      const screen = await setup(t, platform, active, route);
+      assert.ok(screen.padding >= screen.requiredPadding, `${screen.padding}px padding cannot clear ${screen.requiredPadding}px of bottom space`);
+    });
+  }
+
+  test(`${route} follows the presence of the minimized workout without keeping extra space`, async t => {
+    const screen = await setup(t, 'web', false, route);
+    const idlePadding = screen.padding;
+    await screen.setActive(true);
+    assert.ok(screen.padding >= screen.requiredPadding);
+    assert.ok(screen.padding > idlePadding);
+    await screen.setActive(false);
+    assert.equal(screen.padding, idlePadding);
   });
 }
-
-test('settings follows the presence of the minimized workout without keeping extra space', async t => {
-  const screen = await setup(t, 'web', false);
-  const idlePadding = screen.padding;
-  await screen.setActive(true);
-  assert.ok(screen.padding >= screen.requiredPadding);
-  assert.ok(screen.padding > idlePadding);
-  await screen.setActive(false);
-  assert.equal(screen.padding, idlePadding);
-});

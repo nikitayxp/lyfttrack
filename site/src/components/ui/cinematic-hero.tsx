@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Activity, Dumbbell, Layers, Rocket, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
@@ -271,10 +271,6 @@ export function CinematicHero({
   const requestRef = useRef<number>(0);
   const copy = HERO_COPY[language];
   const reducedMotion = useReducedMotion();
-  const formattedMetricValue = useMemo(
-    () => Math.max(0, Math.round(metricValue)).toLocaleString(language === 'pt' ? 'pt-PT' : 'en-US'),
-    [language, metricValue]
-  );
   const handleSystemScroll = (event: React.MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
 
@@ -393,7 +389,7 @@ export function CinematicHero({
         scrollTrigger: {
           trigger: containerRef.current,
           start: 'top top',
-          end: isMobile ? '+=4000' : '+=4200',
+          end: isMobile ? '+=1400' : '+=1600',
           pin: true,
           scrub: 1,
           anticipatePin: 1,
@@ -401,64 +397,24 @@ export function CinematicHero({
       });
 
       scrollTimeline
-        .to('.hero-text-wrapper', {
-          scale: isMobile ? 1.08 : 1.15,
-          filter: isMobile ? 'blur(12px)' : 'blur(20px)',
-          opacity: 0.2,
-          ease: 'power2.inOut',
-          duration: 2,
-        }, 0)
-        .to('.main-card', { y: 0, ease: 'power3.inOut', duration: 2 }, 0)
-        .to('.main-card', { width: '100%', height: '100%', borderRadius: '0px', ease: 'power3.inOut', duration: 1.5 })
+        .to('.hero-text-wrapper', { autoAlpha: 0, y: -40, duration: 1, ease: 'power2.inOut' }, 0)
+        .to('.main-card', { y: 0, ease: 'power2.out', duration: 1 }, 0)
         .fromTo(
           '.mockup-scroll-wrapper',
-          { y: isMobile ? 180 : 300, z: -500, rotationX: 50, rotationY: -30, autoAlpha: 0, scale: isMobile ? 0.72 : 0.6 },
-          { y: 0, z: 0, rotationX: 0, rotationY: 0, autoAlpha: 1, scale: 1, ease: 'expo.out', duration: 2.5 },
-          '-=0.8'
-        )
-        .fromTo(
-          '.phone-widget',
           { y: 40, autoAlpha: 0, scale: 0.95 },
-          { y: 0, autoAlpha: 1, scale: 1, stagger: 0.15, ease: 'back.out(1.2)', duration: 1.5 },
-          '-=1.5'
+          { y: 0, autoAlpha: 1, scale: 1, ease: 'power2.out', duration: 1 },
+          0
         )
-        .to('.progress-ring', { strokeDashoffset: 60, duration: 2, ease: 'power3.inOut' }, '-=1.2')
-        .to('.counter-val', { innerHTML: metricValue, snap: { innerHTML: 1 }, duration: 2, ease: 'expo.out' }, '-=2.0')
-        .fromTo(
-          '.floating-badge',
-          { y: isMobile ? 50 : 100, autoAlpha: 0, scale: isMobile ? 0.84 : 0.7, rotationZ: -10 },
-          { y: 0, autoAlpha: 1, scale: 1, rotationZ: 0, ease: 'back.out(1.5)', duration: 1.5, stagger: 0.2 },
-          '-=2.0'
-        )
-        .fromTo('.card-left-text', { x: -50, autoAlpha: 0 }, { x: 0, autoAlpha: 1, ease: 'power4.out', duration: 1.5 }, '-=1.5')
-        .fromTo('.card-right-text', { x: 50, autoAlpha: 0, scale: 0.8 }, { x: 0, autoAlpha: 1, scale: 1, ease: 'expo.out', duration: 1.5 }, '<')
-        .to({}, { duration: 2.5 })
-        .set('.hero-text-wrapper', { autoAlpha: 0 })
+        .fromTo('.phone-widget', { y: 16, autoAlpha: 0 }, { y: 0, autoAlpha: 1, stagger: 0.08, duration: 0.7 }, 0.1)
+        .to('.progress-ring', { strokeDashoffset: 60, duration: 1 }, 0.4)
+        .to('.counter-val', { innerHTML: metricValue, snap: { innerHTML: 1 }, duration: 1 }, 0.4)
+        .fromTo('.floating-badge', { y: 20, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 0.7 }, 0.3)
+        .to('.card-left-text', { autoAlpha: 1, duration: 0.7 }, 0.3)
+        .fromTo('.card-right-text', { x: 20, autoAlpha: 0 }, { x: 0, autoAlpha: 1, duration: 0.7 }, 0.3)
+        .to({}, { duration: 0.5 })
         .set('.cta-wrapper', { autoAlpha: 1 })
-        .to({}, { duration: 1.5 })
-        .to(['.mockup-scroll-wrapper', '.floating-badge', '.card-left-text', '.card-right-text'], {
-          scale: 0.9,
-          y: -40,
-          z: -200,
-          autoAlpha: 0,
-          ease: 'power3.in',
-          duration: 1.2,
-          stagger: 0.05,
-        })
-        .to(
-          '.main-card',
-          {
-            width: isMobile ? '92vw' : '85vw',
-            height: isMobile ? '92vh' : '85vh',
-            borderRadius: isMobile ? '32px' : '40px',
-            ease: 'expo.inOut',
-            duration: 1.8,
-          },
-          'pullback'
-        )
-        .to('.cta-wrapper', { scale: 1, filter: 'blur(0px)', ease: 'expo.inOut', duration: 1.8 }, 'pullback')
-        .to('.main-card', { y: -window.innerHeight - 300, ease: 'power3.in', duration: 1.5 })
-        .to({}, { duration: 2.5 });
+        .to('.main-card', { y: -window.innerHeight - 300, ease: 'power2.inOut', duration: 1 })
+        .to('.cta-wrapper', { scale: 1, filter: 'blur(0px)', ease: 'power2.out', duration: 1 }, '<');
     }, containerRef);
 
     return () => context.revert();
@@ -523,7 +479,6 @@ export function CinematicHero({
           </Link>
         </div>
 
-        {/* App Store & Google Play badges */}
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <button
             type="button"
@@ -546,13 +501,13 @@ export function CinematicHero({
               });
             }}
             className="group inline-flex h-12 items-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.04] px-4 transition-all hover:-translate-y-px hover:border-white/20 hover:bg-white/[0.08]"
-            aria-label="App Store"
+            aria-label={language === 'pt' ? 'App Store — Em breve' : 'App Store — Coming soon'}
           >
             <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-white" fill="currentColor" aria-hidden="true">
               <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98l-.09.06c-1.06.61-1.78 1.65-1.77 3 .01 1.56.93 2.93 2.3 3.53-.17.46-.35.9-.58 1.35M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11"/>
             </svg>
             <div className="text-left">
-              <div className="text-[9px] font-semibold uppercase tracking-[0.1em] text-white/45">{language === 'pt' ? 'Disponível na' : 'Download on the'}</div>
+              <div className="text-[9px] font-semibold uppercase tracking-[0.1em] text-white/45">{language === 'pt' ? 'Em breve' : 'Coming soon'}</div>
               <div className="text-sm font-bold leading-none text-white">App Store</div>
             </div>
           </button>
@@ -578,13 +533,13 @@ export function CinematicHero({
               });
             }}
             className="group inline-flex h-12 items-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.04] px-4 transition-all hover:-translate-y-px hover:border-white/20 hover:bg-white/[0.08]"
-            aria-label="Google Play"
+            aria-label={language === 'pt' ? 'Google Play — Em breve' : 'Google Play — Coming soon'}
           >
             <svg viewBox="0 0 512 512" className="h-5 w-5 shrink-0 text-white" fill="currentColor" aria-hidden="true">
               <path d="M48 59.49v393a4.33 4.33 0 0 0 7.37 3.07L274 256 55.37 56.42A4.33 4.33 0 0 0 48 59.49zM345.8 174L89.22 32.64l-.16-.09c-4.42-2.4-8.62 3.58-5 7.06L285.19 231.28zM84.08 472.39c-3.64 3.48.56 9.46 5 7.06l.16-.09L345.8 338l-60.61-57.26zM449.38 231l-71.65-39.46L310.36 256l67.37 63.7L449.38 281c19.49-10.77 19.49-39.23 0-50z"/>
             </svg>
             <div className="text-left">
-              <div className="text-[9px] font-semibold uppercase tracking-[0.1em] text-white/45">{language === 'pt' ? 'Disponível no' : 'Get it on'}</div>
+              <div className="text-[9px] font-semibold uppercase tracking-[0.1em] text-white/45">{language === 'pt' ? 'Em breve' : 'Coming soon'}</div>
               <div className="text-sm font-bold leading-none text-white">Google Play</div>
             </div>
           </button>
@@ -667,9 +622,9 @@ export function CinematicHero({
                           <span className="feed-cell">3</span>
                         </div>
 
-                        <button type="button" className="cta-blue w-full rounded-xl px-3 py-2 text-xs font-bold tracking-wide">
+                        <a href="https://lyfttrack-app.vercel.app/" className="cta-blue block w-full rounded-xl px-3 py-2 text-center text-xs font-bold tracking-wide focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
                           {copy.startSession}
-                        </button>
+                        </a>
                       </div>
 
                       <div className="phone-widget relative mb-5 mx-auto flex h-40 w-40 items-center justify-center drop-shadow-[0_15px_25px_rgba(0,0,0,0.8)]">
@@ -697,7 +652,7 @@ export function CinematicHero({
                   </div>
                 </div>
 
-                <div className="floating-badge floating-ui-badge absolute -left-2 top-0 z-30 hidden items-center gap-2 rounded-xl p-2 sm:flex sm:left-[-8px] sm:top-4 sm:scale-95 sm:gap-3 sm:p-3 lg:left-[-80px] lg:top-12 lg:scale-100 lg:gap-3 lg:rounded-2xl lg:p-4">
+                <div className="floating-badge floating-ui-badge absolute -left-2 top-0 z-30 hidden items-center gap-2 rounded-xl p-2 sm:flex sm:left-[-8px] sm:top-4 sm:scale-95 sm:gap-3 sm:p-3 lg:left-[-20px] lg:top-12 lg:scale-100 lg:gap-3 lg:rounded-2xl lg:p-4">
                   <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--hero-widget-border)] bg-[var(--hero-widget-top)] lg:h-10 lg:w-10">
                     <TrendingUp className="h-4 w-4 text-[var(--hero-accent)]" />
                   </div>

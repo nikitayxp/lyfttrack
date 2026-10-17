@@ -1,48 +1,15 @@
 "use client";
 
 import { ChevronDown, Globe } from 'lucide-react';
-import { useEffect, useState, useSyncExternalStore } from 'react';
-import { CinematicHero, type HeroLanguage } from '@/components/ui/cinematic-hero';
+import { useEffect, useState } from 'react';
+import { CinematicHero } from '@/components/ui/cinematic-hero';
 import { FeaturesSection } from '@/components/home/features-section';
 import { CookiePreferencesLink } from '@/components/ui/cookie-consent-banner';
-
-const LANGUAGE_STORAGE_KEY = 'lyfttrack.site.language';
-const languageListeners = new Set<() => void>();
-let selectedLanguage: HeroLanguage | null = null;
-
-function readLanguage(): HeroLanguage {
-  if (selectedLanguage) return selectedLanguage;
-  try {
-    const stored = JSON.parse(window.localStorage.getItem(LANGUAGE_STORAGE_KEY) ?? 'null');
-    if (stored === 'pt' || stored === 'en') return stored;
-  } catch {}
-  return 'pt';
-}
-
-function subscribeLanguage(listener: () => void) {
-  languageListeners.add(listener);
-  const onStorage = () => {
-    selectedLanguage = null;
-    listener();
-  };
-  window.addEventListener('storage', onStorage);
-  return () => {
-    languageListeners.delete(listener);
-    window.removeEventListener('storage', onStorage);
-  };
-}
-
-function serverLanguage(): HeroLanguage {
-  return 'pt';
-}
+import { useSiteLanguage } from '@/lib/use-site-language';
 
 export function LandingShell() {
   const [showScrollHint, setShowScrollHint] = useState(false);
-  const language = useSyncExternalStore(subscribeLanguage, readLanguage, serverLanguage);
-
-  useEffect(() => {
-    if (typeof document !== 'undefined') document.documentElement.lang = language === 'pt' ? 'pt-PT' : 'en';
-  }, [language]);
+  const [language, setLanguage] = useSiteLanguage();
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -102,11 +69,7 @@ export function LandingShell() {
 
   const handleLanguageToggle = () => {
     const next = language === 'pt' ? 'en' : 'pt';
-    selectedLanguage = next;
-    try {
-      window.localStorage.setItem(LANGUAGE_STORAGE_KEY, JSON.stringify(next));
-    } catch {}
-    languageListeners.forEach(listener => listener());
+    setLanguage(next);
   };
 
   return (
@@ -150,10 +113,10 @@ export function LandingShell() {
             © {new Date().getFullYear()} LyftTrack
           </p>
           <div className="flex flex-wrap gap-4 text-sm font-semibold">
-            <a href="/termos" className="text-white/70 no-underline transition hover:text-white">
+            <a href={`/termos?lang=${language}`} className="text-white/70 no-underline transition hover:text-white">
               {language === 'pt' ? 'Termos de Uso' : 'Terms of Service'}
             </a>
-            <a href="/privacidade" className="text-white/70 no-underline transition hover:text-white">
+            <a href={`/privacidade?lang=${language}`} className="text-white/70 no-underline transition hover:text-white">
               {language === 'pt' ? 'Política de Privacidade' : 'Privacy Policy'}
             </a>
             <CookiePreferencesLink
@@ -169,13 +132,12 @@ export function LandingShell() {
         }`}
         aria-hidden="true"
       >
-        <div className="flex min-w-[170px] flex-col items-center gap-1 rounded-full border border-[var(--hero-header-border)] bg-black/55 px-3 py-2 backdrop-blur-xl md:min-w-[180px] md:px-4">
-          <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--hero-text-muted)]">
+        <div className="flex items-center gap-3 rounded-full border border-white/15 bg-black/60 py-2 pl-4 pr-2 shadow-[0_8px_32px_rgba(0,0,0,0.3)] backdrop-blur-xl">
+          <span className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.14em] text-white/80">
             {language === 'pt' ? 'Desce para explorar' : 'Scroll to explore'}
           </span>
-          <div className="flex items-center text-[var(--hero-accent)]">
-            <ChevronDown className="h-4 w-4 animate-bounce" />
-            <ChevronDown className="-ml-2 h-4 w-4 animate-bounce opacity-70 [animation-delay:120ms]" />
+          <div className="flex h-7 w-7 items-center justify-center rounded-full border border-blue-400/20 bg-blue-400/10 text-blue-400">
+            <ChevronDown className="h-4 w-4 motion-safe:animate-bounce" />
           </div>
         </div>
       </div>

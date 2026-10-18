@@ -7,7 +7,7 @@ type PageQuery<Row> = PromiseLike<{
   gt(column: string, value: string): PageQuery<Row>;
 };
 
-const PAGE_SIZE = 200;
+const PAGE_SIZE = 1000;
 
 export async function loadAllRows<Row>(buildQuery: () => PageQuery<Row>, context: string): Promise<Row[]> {
   const rows: Row[] = [];

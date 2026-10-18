@@ -18,9 +18,9 @@ export default async function BlogPage({ searchParams }: {
         </Link>
         <div className="flex gap-4" aria-label={isPortuguese ? 'Idioma' : 'Language'}>
           {(['pt', 'en'] as const).map((option) => (
-            <Link key={option} href={`/blog?lang=${option}`} hrefLang={option} aria-current={language === option ? 'page' : undefined} className={`rounded px-2 py-2 font-bold uppercase focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-400 ${language === option ? 'text-blue-400' : 'text-white/60 hover:text-white'}`}>
+            <a key={option} href={`/blog?lang=${option}`} hrefLang={option} aria-current={language === option ? 'page' : undefined} className={`rounded px-2 py-2 font-bold uppercase focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-400 ${language === option ? 'text-blue-400' : 'text-white/60 hover:text-white'}`}>
               {option}
-            </Link>
+            </a>
           ))}
         </div>
       </nav>

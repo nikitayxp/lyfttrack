@@ -30,7 +30,7 @@ export type BodyMeasurementEntry = {
   recorded_at: string;
 };
 
-const MAX_HISTORY_ENTRIES = 30;
+const HISTORY_PAGE_SIZE = 200;
 const WEIGHT_TRACE_PREFIX = '[weight-save-trace]';
 export { BODY_WEIGHT_MAX_KG };
 
@@ -79,8 +79,8 @@ function isMissingMeasuredAtColumn(error: { code?: string | null; message?: stri
   const normalizedMessage = (error.message ?? '').toLowerCase();
 
   return (
-    error.code === '42703' ||
-    (normalizedMessage.includes('measured_at') && normalizedMessage.includes('does not exist'))
+    normalizedMessage.includes('measured_at') &&
+    (error.code === '42703' || normalizedMessage.includes('does not exist'))
   );
 }
 
@@ -438,6 +438,41 @@ export async function addWeight(value: number): Promise<BodyMeasurementEntry> {
   return loadLatestMeasurementEntryOrFallback(user.id, normalizedWeight, writeTimestamp, traceId);
 }
 
+async function loadWeightHistoryPages(userId: string, orderColumn: 'measured_at' | 'created_at') {
+  const history: BodyMeasurementRow[] = [];
+  let cursor: BodyMeasurementEntry | undefined;
+
+  while (true) {
+    const source = supabase.from('body_measurements');
+    const selection = orderColumn === 'measured_at'
+      ? source.select('id, user_id, weight, measured_at, created_at')
+      : source.select('id, user_id, weight, created_at');
+    let query = selection
+      .eq('user_id', userId)
+      .order(orderColumn, { ascending: false })
+      .order('id', { ascending: false })
+      .range(0, HISTORY_PAGE_SIZE - 1);
+
+    if (cursor) {
+      const timestamp = cursor.recorded_at;
+      query = query.or(`${orderColumn}.lt.${timestamp},and(${orderColumn}.eq.${timestamp},id.lt.${cursor.id})`);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      return { data: [], error };
+    }
+
+    const page = data ?? [];
+    history.push(...page);
+    if (page.length < HISTORY_PAGE_SIZE) {
+      return { data: history, error: null };
+    }
+
+    cursor = toMeasurementEntry(page[page.length - 1]);
+  }
+}
+
 export async function getWeightHistory(): Promise<BodyMeasurementEntry[]> {
   const traceId = createWeightTraceId('history');
   const user = await getAuthenticatedUserOrThrow();
@@ -447,12 +482,7 @@ export async function getWeightHistory(): Promise<BodyMeasurementEntry[]> {
     userId: user.id,
   });
 
-  const withMeasuredAt = await supabase
-    .from('body_measurements')
-    .select('id, user_id, weight, measured_at, created_at')
-    .eq('user_id', user.id)
-    .order('measured_at', { ascending: false })
-    .limit(MAX_HISTORY_ENTRIES);
+  const withMeasuredAt = await loadWeightHistoryPages(user.id, 'measured_at');
 
   if (!withMeasuredAt.error) {
     const history = (withMeasuredAt.data ?? []).map((row) => toMeasurementEntry(row));
@@ -482,12 +512,7 @@ export async function getWeightHistory(): Promise<BodyMeasurementEntry[]> {
     traceId,
   });
 
-  const fallbackHistory = await supabase
-    .from('body_measurements')
-    .select('id, user_id, weight, created_at')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
-    .limit(MAX_HISTORY_ENTRIES);
+  const fallbackHistory = await loadWeightHistoryPages(user.id, 'created_at');
 
   if (fallbackHistory.error) {
     logMeasurementError('history_without_measured_at', fallbackHistory.error, {

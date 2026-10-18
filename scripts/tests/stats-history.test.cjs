@@ -50,6 +50,12 @@ test('all-time records include a light exercise after more than 1000 heavier set
     const { stats } = setup();
     assert.equal((await stats.getAllTimePRs()).length, 2);
 });
+
+test('record muscle metadata is available without another catalog query', async () => {
+    const { stats } = setup();
+    const records = await stats.getAllTimePRs();
+    assert.ok(records.every(record => record.muscleKey === 'chest'));
+});
 test('exercise progress and records count every owned set', async () => {
     const { stats } = setup();
     const points = await stats.getExerciseProgress('first');

@@ -364,6 +364,7 @@ export default function WorkoutEditScreen() {
                   <View key={setItem.setId} style={styles.tableRow}>
                     <Text style={[styles.valueCell, styles.cellSet]}>{setItem.setNumber ?? '-'}</Text>
                     <TextInput
+                      accessibilityLabel={`${t('workoutDetails.tableSet')} ${setItem.setNumber ?? '-'} · kg`}
                       value={setItem.weightInput}
                       onChangeText={(value) => updateSetInput(exercise.exerciseId, setItem.setId, 'weightInput', value)}
                       style={[styles.numericInput, styles.cellKg]}
@@ -372,6 +373,7 @@ export default function WorkoutEditScreen() {
                       placeholderTextColor={palette.textMuted}
                     />
                     <TextInput
+                      accessibilityLabel={`${t('workoutDetails.tableSet')} ${setItem.setNumber ?? '-'} · ${t('workoutDetails.tableReps')}`}
                       value={setItem.repsInput}
                       onChangeText={(value) => updateSetInput(exercise.exerciseId, setItem.setId, 'repsInput', value)}
                       style={[styles.numericInput, styles.cellReps]}
@@ -380,6 +382,7 @@ export default function WorkoutEditScreen() {
                       placeholderTextColor={palette.textMuted}
                     />
                     <TextInput
+                      accessibilityLabel={`${t('workoutDetails.tableSet')} ${setItem.setNumber ?? '-'} · RIR`}
                       value={setItem.rirInput}
                       onChangeText={(value) => updateSetInput(exercise.exerciseId, setItem.setId, 'rirInput', value)}
                       style={[styles.numericInput, styles.cellRir]}
@@ -534,7 +537,7 @@ const styles = StyleSheet.create({
   tableRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 4,
   },
   tableHeaderRow: {
     paddingTop: 4,
@@ -563,28 +566,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     textAlign: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
     paddingVertical: 8,
   },
   cellSet: {
-    width: 44,
+    width: 30,
     flexShrink: 0,
   },
   cellKg: {
-    width: 66,
-    flexShrink: 0,
+    flex: 1,
+    minWidth: 44,
   },
   cellReps: {
-    width: 66,
-    flexShrink: 0,
+    flex: 1,
+    minWidth: 44,
   },
   cellRir: {
-    width: 66,
-    flexShrink: 0,
+    flex: 1,
+    minWidth: 44,
   },
   cellType: {
-    flex: 1,
-    minWidth: 72,
+    flex: 1.4,
+    minWidth: 60,
     textAlign: 'right',
   },
   emptyCard: {

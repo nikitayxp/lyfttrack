@@ -45,3 +45,9 @@ assert.ok(flatRange.max > flatRange.min);
 const spacing = resolveBodyWeightLineSpacing(200, 5);
 assert.ok(spacing >= 8);
 assert.ok(BODY_WEIGHT_CHART_EDGE_SPACING * 2 + spacing * 4 <= 200);
+
+for (const count of [56, 1205]) {
+  const denseSpacing = resolveBodyWeightLineSpacing(140, count);
+  const total = BODY_WEIGHT_CHART_EDGE_SPACING * 2 + denseSpacing * (count - 1);
+  assert.ok(Math.abs(total - 140) < 0.001, 'dense histories must fill the plot without clipping recent points');
+}

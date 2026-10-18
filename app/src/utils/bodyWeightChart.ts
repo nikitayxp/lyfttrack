@@ -81,7 +81,7 @@ export function resolveBodyWeightLineSpacing(plotWidth: number, pointCount: numb
   }
 
   const usable = Math.max(1, plotWidth - BODY_WEIGHT_CHART_EDGE_SPACING * 2);
-  return Math.max(1, Math.floor(usable / (pointCount - 1)));
+  return usable / (pointCount - 1);
 }
 
 export function shouldLabelBodyWeightPoint(index: number, total: number, pointSpacing: number): boolean {

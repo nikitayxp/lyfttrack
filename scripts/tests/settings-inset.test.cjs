@@ -22,10 +22,13 @@ async function setup(t, platform, active, screen = 'settings') {
       ScrollView: 'ScrollView', View: 'View', Text: 'Text', TextInput: 'TextInput',
       KeyboardAvoidingView: 'KeyboardAvoidingView', Image: 'Image', Alert: { alert() {} },
       TouchableOpacity: 'TouchableOpacity', Pressable: 'Pressable', Modal: 'Modal', ActivityIndicator: 'ActivityIndicator',
+      Animated: { Value: class {}, View: 'AnimatedView', timing() {}, sequence() {}, loop: () => ({ start() {}, stop() {} }) },
     },
     '@expo/vector-icons': { Ionicons: empty },
     'expo-router': { router: { push() {}, replace() {} } },
-    'react-i18next': { useTranslation: () => ({ t: translate }) },
+    'react-i18next': { useTranslation: () => ({ t: translate, i18n: { language: 'pt' } }) },
+    'react-native-gifted-charts': { BarChart: empty },
+    '@/services/statsService': { getWeeklyDashboardMetrics: async () => [], getWeeklyVolumeByMuscle: async () => [] },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 34 }) },
     '@/constants/theme': colors,
     '@/components/common/BackButton': { BackButton: empty },
@@ -39,7 +42,7 @@ async function setup(t, platform, active, screen = 'settings') {
     '@/utils/showAlert': { showAlert() {} },
     '@/utils/exerciseLocalization': { getLocalizedExerciseName: exercise => exercise.name },
   });
-  const Screen = load(`app/app/(tabs)/profile/${screen}.tsx`).default;
+  const Screen = load(screen === 'stats' ? 'app/app/(tabs)/stats.tsx' : `app/app/(tabs)/profile/${screen}.tsx`).default;
   const { MinimizedWorkoutBar } = load('app/src/components/workout/MinimizedWorkoutBar.tsx');
   const { getTabBarHeight } = load('app/src/constants/tabBar.ts');
   const content = () => React.createElement(React.Fragment, null,
@@ -59,7 +62,7 @@ async function setup(t, platform, active, screen = 'settings') {
   };
 }
 
-for (const route of ['settings', 'edit']) {
+for (const route of ['settings', 'edit', 'stats']) {
   for (const [platform, active] of [['web', false], ['web', true], ['ios', true], ['ios', false]]) {
     test(`${route} content clears bottom navigation on ${platform}, workout active=${active}`, async t => {
       const screen = await setup(t, platform, active, route);

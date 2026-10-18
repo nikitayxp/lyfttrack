@@ -62,7 +62,8 @@ export type WorkoutDraft = {
   draftId: string;
   userId: string;
   workoutName: string;
-  startTime: string; // ISO string – used to reconstruct elapsed time
+  startTime: string;
+  sessionStartTime?: string;
   templateId: string | null;
   exercises: DraftExercise[];
   savedAt: string; // ISO string

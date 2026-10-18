@@ -275,6 +275,7 @@ interface UseActiveWorkoutStateProps {
   userId?: string | null;
   /** ISO string of when the workout started — used in draft + elapsed reconstruction */
   startTime?: string;
+  sessionStartTime?: string;
   workoutName?: string;
   templateId?: string | null;
 }
@@ -288,6 +289,7 @@ export function useActiveWorkoutState({
   onSetCompleted,
   userId,
   startTime,
+  sessionStartTime,
   workoutName,
   templateId,
 }: UseActiveWorkoutStateProps = {}) {
@@ -313,15 +315,16 @@ export function useActiveWorkoutState({
 
     return {
       schemaVersion: SCHEMA_VERSION,
-      draftId: buildDraftId(userId, startTime),
+      draftId: buildDraftId(userId, sessionStartTime ?? startTime),
       userId,
       workoutName: workoutName ?? 'Untitled Workout',
       startTime,
+      sessionStartTime: sessionStartTime ?? startTime,
       templateId: templateId ?? null,
       exercises: activeExercisesRef.current.map(exerciseToDraft),
       savedAt: new Date().toISOString(),
     };
-  }, [userId, startTime, workoutName, templateId]);
+  }, [userId, startTime, sessionStartTime, workoutName, templateId]);
 
   // Flush on app background
   useEffect(() => {

@@ -209,6 +209,7 @@ export default function ActiveWorkout() {
 
   const {
     workoutStartedAtMs,
+    workoutSessionStartedAtMs,
     elapsedSeconds,
     safeDeactivateKeepAwake,
     ensureWorkoutStarted,
@@ -781,6 +782,7 @@ export default function ActiveWorkout() {
         exerciseRestSecondsByExerciseId: getExerciseRestSecondsByExerciseId(),
         notesByExerciseId: buildExerciseNotesMap(finishSnapshot),
         startTime,
+        sessionStartTime: new Date(workoutSessionStartedAtMs ?? startedAtMs).toISOString(),
         setDrafts,
       });
 

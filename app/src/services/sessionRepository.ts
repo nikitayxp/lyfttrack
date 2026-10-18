@@ -1,5 +1,5 @@
 import { supabase } from '@/services/supabase';
-import type { Json, TablesInsert } from '@/types/database';
+import type { Json } from '@/types/database';
 import { INPUT_LIMITS, sanitizeText, toSafeInteger, toSafeNumber } from '@/utils/inputValidation';
 import {
   getAuthenticatedUserOrThrow,
@@ -7,9 +7,7 @@ import {
   normalizeIsoTimestamp,
   normalizeOptionalId,
   normalizeExerciseIdList,
-  isWorkoutExercisesTableMissing,
   buildSetInsertRow,
-  isWorkoutExerciseIdColumnMissing,
   calculateDurationSeconds,
   toCompletedSetDrafts,
   calculateWorkoutVolume,
@@ -110,6 +108,7 @@ export async function finishWorkout(input: FinishWorkoutInput): Promise<FinishWo
       exerciseRestSecondsByExerciseId: input.exerciseRestSecondsByExerciseId,
       notesByExerciseId: input.notesByExerciseId,
       startTime: input.startTime,
+      sessionStartTime: input.sessionStartTime ?? input.startTime,
       endTime,
       setDrafts: completedSetDrafts,
     });
@@ -121,6 +120,7 @@ export async function finishWorkout(input: FinishWorkoutInput): Promise<FinishWo
     console.error('[finishWorkout] Unable to persist workout to Supabase', {
       templateId: input.templateId ?? null,
       startTime: input.startTime,
+      sessionStartTime: input.sessionStartTime ?? input.startTime,
       endTime,
       totalSetDrafts: input.setDrafts.length,
       completedSetDrafts: completedSetDrafts.length,
@@ -142,9 +142,9 @@ export async function finishWorkout(input: FinishWorkoutInput): Promise<FinishWo
     completedSetCount: completedSetDrafts.length,
     completedWorkingSetCount: completedSetDrafts.filter((draft) => draft.setType !== 'warmup').length,
     totalVolume: calculateWorkoutVolume(input.setDrafts),
-    durationSeconds: calculateDurationSeconds(input.startTime, endTime),
-    startTime: input.startTime,
-    endTime,
+    durationSeconds: calculateDurationSeconds(saveResult.startTime, saveResult.endTime),
+    startTime: saveResult.startTime,
+    endTime: saveResult.endTime,
     prCount: prExerciseIds.length,
     prExerciseIds,
   };
@@ -153,270 +153,52 @@ export async function finishWorkout(input: FinishWorkoutInput): Promise<FinishWo
 export async function createWorkoutWithSets(
   input: CreateWorkoutWithSetsInput
 ): Promise<CreateWorkoutWithSetsResult> {
-  if (input.setDrafts.length === 0) {
-    throw new WorkoutSaveValidationError('no-valid-set-rows', 'No completed sets were provided for saving.');
+  if (input.setDrafts.length === 0 || input.setDrafts.length > 1000) {
+    throw new WorkoutSaveValidationError('no-valid-set-rows', 'Provide between 1 and 1000 completed sets.');
   }
-
   const user = await getAuthenticatedUserOrThrow();
-  const normalizedStartTime = normalizeIsoTimestamp(input.startTime, 'Workout start time');
-  const normalizedEndTime = normalizeIsoTimestamp(input.endTime, 'Workout end time');
-  const normalizedWorkoutName = sanitizeText(input.name, {
-    maxLength: INPUT_LIMITS.nameMax,
-    allowEmpty: true,
-  }) ?? 'Untitled Workout';
-  const normalizedWorkoutNotes = normalizeWriteText(input.notes, INPUT_LIMITS.notesMax);
-
-  if (new Date(normalizedEndTime).getTime() < new Date(normalizedStartTime).getTime()) {
+  const startTime = normalizeIsoTimestamp(input.startTime, 'Workout start time');
+  const endTime = normalizeIsoTimestamp(input.endTime, 'Workout end time');
+  const sessionStartTime = normalizeIsoTimestamp(input.sessionStartTime ?? input.startTime, 'Workout session identity');
+  if (new Date(endTime).getTime() < new Date(startTime).getTime()) {
     throw new Error('Workout end time must be after start time.');
   }
-
-  const normalizedTemplateId = normalizeOptionalId(input.templateId);
-  let safeTemplateId: string | null = normalizedTemplateId;
-
-  if (normalizedTemplateId) {
-    const { data: ownedTemplate, error: ownedTemplateError } = await supabase
-      .from('workout_templates')
-      .select('id')
-      .eq('id', normalizedTemplateId)
-      .eq('user_id', user.id)
-      .maybeSingle();
-
-    if (ownedTemplateError) {
-      console.error('[createWorkoutWithSets] Failed to validate template_id, using null fallback', {
-        userId: user.id,
-        templateId: normalizedTemplateId,
-        error: extractSupabaseErrorMeta(ownedTemplateError),
-      });
-      safeTemplateId = null;
-    } else if (!ownedTemplate) {
-      console.error('[createWorkoutWithSets] Invalid template_id for user, using null fallback', {
-        userId: user.id,
-        templateId: normalizedTemplateId,
-      });
-      safeTemplateId = null;
+  const rows = input.setDrafts.map(draft => {
+    const row = buildSetInsertRow('', draft);
+    if (!row || (draft.weight != null && row.weight == null) || (draft.reps != null && row.reps == null) || (draft.rir != null && row.rir == null)) {
+      throw new WorkoutSaveValidationError('no-valid-set-rows', 'Review the completed sets before saving.');
     }
-  }
-
-  let workoutInsert: TablesInsert<'workouts'> = {
-    user_id: user.id,
-    name: normalizedWorkoutName,
-    notes: normalizedWorkoutNotes,
-    template_id: safeTemplateId ?? null,
-    start_time: normalizedStartTime,
-    end_time: normalizedEndTime,
-  };
-
-  const insertWorkout = async (payload: TablesInsert<'workouts'>) => {
-    return supabase
-      .from('workouts')
-      .insert(payload)
-      .select('id')
-      .single();
-  };
-
-  let { data: createdWorkout, error: workoutError } = await insertWorkout(workoutInsert);
-
-  if (workoutError && workoutInsert.template_id !== null) {
-    const errorMeta = extractSupabaseErrorMeta(workoutError);
-    const shouldRetryWithoutTemplate =
-      errorMeta.code === '23503' ||
-      errorMeta.code === 'PGRST204' ||
-      errorMeta.message.toLowerCase().includes('template_id');
-
-    if (shouldRetryWithoutTemplate) {
-      console.error('[createWorkoutWithSets] workouts insert failed with template_id, retrying with null template_id', {
-        payload: workoutInsert,
-        error: errorMeta,
-      });
-
-      workoutInsert = {
-        ...workoutInsert,
-        template_id: null,
-      };
-
-      const retryResult = await insertWorkout(workoutInsert);
-      createdWorkout = retryResult.data;
-      workoutError = retryResult.error;
-    }
-  }
-
-  if (workoutError || !createdWorkout) {
-    console.error('[createWorkoutWithSets] workouts insert failed', {
-      payload: workoutInsert,
-      templateIdInput: input.templateId ?? null,
-      normalizedTemplateId,
-      safeTemplateId,
-      error: extractSupabaseErrorMeta(workoutError),
-    });
-    throw new Error(`Unable to create workout: ${workoutError?.message ?? 'Unknown error'}`);
-  }
-
-  const uniqueExerciseIds = normalizeExerciseIdList(
-    input.setDrafts.map((draft) => draft.exerciseId ?? '')
-  );
-
-  const restSecondsByExerciseId = input.exerciseRestSecondsByExerciseId ?? {};
-  const notesByExerciseId = input.notesByExerciseId ?? {};
-
-  const workoutExerciseRows: TablesInsert<'workout_exercises'>[] = uniqueExerciseIds.map((exerciseId, index) => {
-    const rawNotes = notesByExerciseId[exerciseId];
-    const normalizedNotes = normalizeWriteText(
-      typeof rawNotes === 'string' ? rawNotes : null,
-      1000
-    );
-
     return {
-      workout_id: createdWorkout.id,
-      exercise_id: exerciseId,
-      order: index + 1,
-      rest_time: toSafeInteger(restSecondsByExerciseId[exerciseId], {
-        min: 0,
-        max: 3600,
-      }) ?? 0,
-      notes: normalizedNotes,
+      exercise_id: row.exercise_id, set_number: row.set_number, weight: row.weight,
+      reps: row.reps, rir: row.rir, set_type: row.set_type, side: row.side,
     };
   });
-
-  const workoutExerciseIdByExercise = new Map<string, string>();
-
-  if (workoutExerciseRows.length > 0) {
-    let { data: insertedWorkoutExercises, error: workoutExercisesError } = await supabase
-      .from('workout_exercises')
-      .insert(workoutExerciseRows)
-      .select('id, exercise_id');
-
-    // If the `notes` column isn't present yet (older schema), retry without it.
-    if (workoutExercisesError) {
-      const errorMessage = workoutExercisesError.message?.toLowerCase() ?? '';
-      const isNotesColumnMissing =
-        errorMessage.includes("column") && errorMessage.includes("notes");
-
-      if (isNotesColumnMissing) {
-        const legacyRows = workoutExerciseRows.map(({ notes: _ignored, ...rest }) => rest);
-        const retry = await supabase
-          .from('workout_exercises')
-          .insert(legacyRows)
-          .select('id, exercise_id');
-        insertedWorkoutExercises = retry.data;
-        workoutExercisesError = retry.error;
-      }
-    }
-
-    if (workoutExercisesError) {
-      if (isWorkoutExercisesTableMissing(workoutExercisesError)) {
-        console.warn('[createWorkoutWithSets] workout_exercises table missing, continuing with legacy sets-only insertion', {
-          workoutId: createdWorkout.id,
-          error: extractSupabaseErrorMeta(workoutExercisesError),
-        });
-      } else {
-        const { error: rollbackError } = await supabase.from('workouts').delete().eq('id', createdWorkout.id);
-
-        if (rollbackError) {
-          throw new Error(
-            `Unable to create workout exercises: ${workoutExercisesError.message}. Rollback failed for workout ${createdWorkout.id}: ${rollbackError.message}`
-          );
-        }
-
-        throw new Error(
-          `Unable to create workout exercises: ${workoutExercisesError.message}. Workout ${createdWorkout.id} was rolled back successfully.`
-        );
-      }
-    } else {
-      for (const relation of insertedWorkoutExercises ?? []) {
-        workoutExerciseIdByExercise.set(relation.exercise_id, relation.id);
-      }
-    }
+  const exerciseIds = normalizeExerciseIdList(rows.map(row => row.exercise_id ?? ''));
+  const exercises = exerciseIds.map((id, index) => ({
+    exercise_id: id, order: index + 1,
+    rest_time: toSafeInteger(input.exerciseRestSecondsByExerciseId?.[id], { min: 0, max: 3600 }) ?? 0,
+    notes: normalizeWriteText(input.notesByExerciseId?.[id], 1000),
+  }));
+  const { data, error } = await supabase.rpc('create_workout_atomic', {
+    p_expected_user_id: user.id,
+    p_workout: {
+      name: sanitizeText(input.name, { maxLength: INPUT_LIMITS.nameMax, allowEmpty: true }) ?? 'Untitled Workout',
+      notes: normalizeWriteText(input.notes, INPUT_LIMITS.notesMax),
+      template_id: normalizeOptionalId(input.templateId), start_time: startTime, end_time: endTime, session_started_at: sessionStartTime,
+    },
+    p_exercises: exercises, p_sets: rows,
+  });
+  if (error) throw new Error(`Unable to save workout: ${error.message}`);
+  const result = data as { workout_id?: string; inserted_set_count?: number; start_time?: string; end_time?: string } | null;
+  if (!result?.workout_id || !Number.isInteger(result.inserted_set_count) || result.inserted_set_count! <= 0 || !result.start_time || !result.end_time) {
+    throw new Error('The server did not confirm the saved workout. Please retry.');
   }
-
-  const mappedSetRows = input.setDrafts
-    .map((draft) => {
-      const normalizedExerciseId = draft.exerciseId?.trim() ?? '';
-      return buildSetInsertRow(createdWorkout.id, draft, workoutExerciseIdByExercise.get(normalizedExerciseId) ?? null);
-    });
-
-  const setRows = mappedSetRows.filter((row): row is TablesInsert<'sets'> => row !== null);
-  const rejectedSetRows = mappedSetRows.length - setRows.length;
-
-  if (rejectedSetRows > 0) {
-    console.warn('[createWorkoutWithSets] Some set rows were dropped during validation', {
-      workoutId: createdWorkout.id,
-      attemptedSetRows: mappedSetRows.length,
-      insertedCandidateRows: setRows.length,
-      rejectedSetRows,
-    });
-  }
-
-  if (setRows.length === 0) {
-    const { error: rollbackError } = await supabase.from('workouts').delete().eq('id', createdWorkout.id);
-
-    if (rollbackError) {
-      throw new Error(
-        `No valid sets were generated for insertion. Rollback failed for workout ${createdWorkout.id}: ${rollbackError.message}`
-      );
-    }
-
-    throw new WorkoutSaveValidationError(
-      'no-valid-set-rows',
-      'No valid completed sets were found to save. Please review your sets and try again.'
-    );
-  }
-
-  const insertSets = async (rows: TablesInsert<'sets'>[]) => {
-    return supabase.from('sets').insert(rows);
+  const currentUser = await getAuthenticatedUserOrThrow();
+  if (currentUser.id !== user.id) throw new Error('Account changed while saving. Return to the original account to check the saved workout.');
+  return {
+    workoutId: result.workout_id, insertedSetCount: result.inserted_set_count!,
+    startTime: result.start_time, endTime: result.end_time,
   };
-
-  let { error: setsError } = await insertSets(setRows);
-
-  if (setsError && isWorkoutExerciseIdColumnMissing(setsError)) {
-    const legacySetRows: TablesInsert<'sets'>[] = setRows.map(({ workout_exercise_id: _ignored, ...rest }) => rest);
-
-    console.warn('[createWorkoutWithSets] sets.workout_exercise_id column missing, retrying insert without it', {
-      workoutId: createdWorkout.id,
-      error: extractSupabaseErrorMeta(setsError),
-    });
-
-    const retryResult = await insertSets(legacySetRows);
-    setsError = retryResult.error;
-  }
-
-  if (setsError) {
-    const errorMessage = setsError.message?.toLowerCase() ?? '';
-    const isSideColumnMissing =
-      errorMessage.includes('column') && errorMessage.includes("side");
-
-    if (isSideColumnMissing) {
-      const legacySetRowsNoSide: TablesInsert<'sets'>[] = setRows.map(
-        ({ side: _ignored, ...rest }) => rest as TablesInsert<'sets'>
-      );
-
-      console.warn('[createWorkoutWithSets] sets.side column missing, retrying insert without it', {
-        workoutId: createdWorkout.id,
-        error: extractSupabaseErrorMeta(setsError),
-      });
-
-      const retryResult = await insertSets(legacySetRowsNoSide);
-      setsError = retryResult.error;
-    }
-  }
-
-  if (!setsError) {
-    return {
-      workoutId: createdWorkout.id,
-      insertedSetCount: setRows.length,
-    };
-  }
-
-  const { error: rollbackError } = await supabase.from('workouts').delete().eq('id', createdWorkout.id);
-
-  if (rollbackError) {
-    throw new Error(
-      `Unable to save sets: ${setsError.message}. Rollback failed for workout ${createdWorkout.id}: ${rollbackError.message}`
-    );
-  }
-
-  throw new Error(
-    `Unable to save sets: ${setsError.message}. Workout ${createdWorkout.id} was rolled back successfully.`
-  );
 }
 
 // ---------- Edit Workout (completed) ----------

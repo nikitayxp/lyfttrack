@@ -3,7 +3,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
-module.exports = function createSourceLoader(replacements = {}) {
+module.exports = function createSourceLoader(replacements = {}, globals = {}) {
   const cache = new Map();
   const root = path.resolve(__dirname, '../..');
 
@@ -39,7 +39,7 @@ module.exports = function createSourceLoader(replacements = {}) {
       module: sourceModule,
       exports: sourceModule.exports,
       console,
-      Date,
+      Date: globals.Date ?? Date,
       setTimeout,
       clearTimeout,
       setInterval,

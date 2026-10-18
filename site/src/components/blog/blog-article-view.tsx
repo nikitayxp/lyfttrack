@@ -1,33 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import Link from 'next/link';
 import type { BlogPost, LanguageCode } from '@/lib/blog-data';
-
-type ThemeMode = 'dark' | 'light';
-
-const STORAGE_KEYS = {
-  language: 'lyfttrack.site.language',
-  theme: 'lyfttrack.site.theme',
-};
-
-function readStorageValue<T>(key: string, fallback: T): T {
-  if (typeof window === 'undefined') {
-    return fallback;
-  }
-
-  const rawValue = window.localStorage.getItem(key);
-
-  if (!rawValue) {
-    return fallback;
-  }
-
-  try {
-    return JSON.parse(rawValue) as T;
-  } catch {
-    return fallback;
-  }
-}
+import { useSiteLanguage } from '@/lib/use-site-language';
 
 function formatDate(value: string, language: LanguageCode): string {
   return new Date(value).toLocaleDateString(language === 'pt' ? 'pt-PT' : 'en-US', {
@@ -38,30 +14,11 @@ function formatDate(value: string, language: LanguageCode): string {
 }
 
 export function BlogArticleView({ post, initialLanguage }: { post: BlogPost; initialLanguage: LanguageCode }) {
-  const [language, setLanguage] = useState<LanguageCode>(() => readStorageValue(STORAGE_KEYS.language, initialLanguage));
-  const [theme, setTheme] = useState<ThemeMode>(() => readStorageValue(STORAGE_KEYS.theme, 'dark'));
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof document === 'undefined') {
-      return;
-    }
-
-    document.documentElement.setAttribute('data-theme', theme);
-    window.localStorage.setItem(STORAGE_KEYS.theme, JSON.stringify(theme));
-  }, [theme]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    window.localStorage.setItem(STORAGE_KEYS.language, JSON.stringify(language));
-  }, [language]);
-
+  const [language, setLanguage] = useSiteLanguage(initialLanguage);
   const localizedTitle = post.title[language];
   const localizedExcerpt = post.excerpt[language];
 
-  const backLabel = language === 'pt' ? 'Voltar \u00E0 Comunidade' : 'Back to Community';
+  const backLabel = language === 'pt' ? 'Voltar ao início' : 'Back to home';
   const readLabel = language === 'pt' ? 'min de leitura' : 'min read';
 
   const sectionRows = useMemo(() => {
@@ -74,7 +31,7 @@ export function BlogArticleView({ post, initialLanguage }: { post: BlogPost; ini
   return (
     <div className="article-shell">
       <header className="article-topbar">
-        <Link href={`/?lang=${language}#community`} className="btn-outline no-underline">
+        <Link href={`/?lang=${language}`} className="btn-outline no-underline">
           {backLabel}
         </Link>
 
@@ -95,14 +52,6 @@ export function BlogArticleView({ post, initialLanguage }: { post: BlogPost; ini
               EN
             </button>
           </div>
-
-          <button
-            type="button"
-            className="theme-toggle"
-            onClick={() => setTheme((currentValue) => (currentValue === 'dark' ? 'light' : 'dark'))}
-          >
-            {theme === 'dark' ? (language === 'pt' ? 'Claro' : 'Light') : language === 'pt' ? 'Escuro' : 'Dark'}
-          </button>
         </div>
       </header>
 

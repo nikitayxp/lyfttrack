@@ -61,6 +61,7 @@ type WorkoutContextValue = {
   acceptRecoveredDraft: (recovered: RecoveredDraftState) => void;
   discardRecoveredDraft: () => Promise<void>;
   workoutStartedAtMs: number | null;
+  workoutSessionStartedAtMs: number | null;
   elapsedSeconds: number;
   isTimerPaused: boolean;
   toggleTimerPause: () => void;
@@ -124,6 +125,7 @@ function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: Pro
   const [workoutName, setWorkoutName] = useState<string | null>(null);
   const [didRestoreDraft, setDidRestoreDraft] = useState(false);
   const [workoutStartedAtMs, setWorkoutStartedAtMs] = useState<number | null>(null);
+  const [workoutSessionStartedAtMs, setWorkoutSessionStartedAtMs] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isTimerPaused, setIsTimerPaused] = useState(false);
   const [pausedElapsedSeconds, setPausedElapsedSeconds] = useState<number | null>(null);
@@ -158,6 +160,7 @@ function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: Pro
   } = useActiveWorkoutState({
     userId: currentUserId ?? undefined,
     startTime: workoutStartedAtIso,
+    sessionStartTime: workoutSessionStartedAtMs === null ? undefined : new Date(workoutSessionStartedAtMs).toISOString(),
     templateId: activeTemplateId,
     workoutName: workoutName ?? undefined,
   });
@@ -175,12 +178,14 @@ function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: Pro
 
     const now = Date.now();
     setWorkoutStartedAtMs(now);
+    setWorkoutSessionStartedAtMs(now);
     setElapsedSeconds(0);
     return now;
   }, [workoutStartedAtMs]);
 
   const resetWorkoutSession = useCallback(() => {
     setWorkoutStartedAtMs(null);
+    setWorkoutSessionStartedAtMs(null);
     setElapsedSeconds(0);
     setIsTimerPaused(false);
     setPausedElapsedSeconds(null);
@@ -200,6 +205,7 @@ function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: Pro
     if (hasActiveWorkout && workoutStartedAtMs === null) {
       const now = Date.now();
       setWorkoutStartedAtMs(now);
+      setWorkoutSessionStartedAtMs(now);
       setElapsedSeconds(0);
     }
   }, [hasActiveWorkout, resetWorkoutSession, workoutStartedAtMs]);
@@ -446,6 +452,8 @@ function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: Pro
   const acceptRecoveredDraftWithTimer = useCallback(
     (recovered: RecoveredDraftState) => {
       const parsedStartMs = new Date(recovered.draft.startTime).getTime();
+      const sessionStartMs = new Date(recovered.draft.sessionStartTime ?? recovered.draft.startTime).getTime();
+      setWorkoutSessionStartedAtMs(Number.isFinite(sessionStartMs) ? sessionStartMs : parsedStartMs);
 
       setActiveTemplateId(recovered.draft.templateId ?? null);
 
@@ -518,6 +526,7 @@ function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: Pro
     acceptRecoveredDraft: acceptRecoveredDraftWithTimer,
     discardRecoveredDraft,
     workoutStartedAtMs,
+    workoutSessionStartedAtMs,
     elapsedSeconds,
     isTimerPaused,
     toggleTimerPause,
@@ -563,6 +572,7 @@ function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: Pro
     isTimerPaused,
     toggleTimerPause,
     workoutStartedAtMs,
+    workoutSessionStartedAtMs,
     acceptRecoveredDraftWithTimer,
   ]);
 

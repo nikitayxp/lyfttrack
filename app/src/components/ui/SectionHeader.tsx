@@ -39,11 +39,13 @@ const styles = StyleSheet.create({
   },
   title: {
     color: palette.textPrimary,
-    fontSize: 28,
-    fontWeight: '900',
-    letterSpacing: -0.8,
+    fontSize: 22,
+    fontWeight: '700',
+    letterSpacing: -0.4,
   },
   pill: {
+    minHeight: 44,
+    justifyContent: 'center',
     borderRadius: 6,
     borderWidth: 1,
     borderColor: palette.border,
@@ -53,8 +55,7 @@ const styles = StyleSheet.create({
   },
   pillText: {
     color: palette.textMuted,
-    fontSize: 10,
-    fontWeight: '800',
-    textTransform: 'uppercase',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

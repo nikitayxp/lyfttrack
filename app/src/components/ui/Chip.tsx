@@ -36,7 +36,7 @@ export function Chip({ label, selected = false, onPress, style }: ChipProps) {
 const styles = StyleSheet.create({
   chip: {
     flexShrink: 0,
-    minHeight: 34,
+    minHeight: 44,
     borderRadius: Radius.pill,
     borderWidth: 1,
     borderColor: palette.borderStrong,
@@ -47,13 +47,13 @@ const styles = StyleSheet.create({
   },
   chipSelected: {
     borderColor: palette.accent,
-    backgroundColor: palette.accent,
+    backgroundColor: palette.accentSoft,
   },
   chipText: {
     ...Typography.chip,
     color: palette.textSecondary,
   },
   chipTextSelected: {
-    color: '#FFFFFF',
+    color: palette.chipTextSelected,
   },
 });

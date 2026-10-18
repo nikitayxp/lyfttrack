@@ -2,7 +2,7 @@
 
 import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import Link from 'next/link';
-import { Activity, Dumbbell, Layers, Rocket, TrendingUp } from 'lucide-react';
+import { Layers, Rocket } from 'lucide-react';
 import { toast } from 'sonner';
 import { createElement } from 'react';
 import { gsap } from 'gsap';
@@ -10,6 +10,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useReducedMotion } from '@/lib/use-reduced-motion';
 import NeuralBackground from '@/components/ui/flow-field-background';
 import { cn } from '@/lib/utils';
+import { ShowcaseDescription, WorkoutPreview } from '@/components/home/workout-showcase';
 
 if (typeof window !== 'undefined') {
   gsap.registerPlugin(ScrollTrigger);
@@ -99,47 +100,6 @@ const INJECTED_STYLES = `
       border: 1px solid var(--hero-widget-border);
   }
 
-  .floating-ui-badge {
-      background: linear-gradient(135deg, var(--hero-badge-top) 0%, var(--hero-badge-bottom) 100%);
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
-      box-shadow:
-        0 0 0 1px var(--hero-badge-border),
-          0 25px 50px -12px rgba(0, 0, 0, 0.86),
-          inset 0 1px 1px rgba(255, 255, 255, 0.14),
-          inset 0 -1px 1px rgba(0, 0, 0, 0.56);
-  }
-
-  .progress-ring {
-      transform: rotate(-90deg);
-      transform-origin: center;
-      stroke-dasharray: 402;
-      stroke-dashoffset: 402;
-      stroke-linecap: round;
-  }
-
-  .feed-table {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      row-gap: 8px;
-      column-gap: 8px;
-      font-size: 10px;
-      line-height: 1;
-  }
-
-  .feed-table-head {
-      color: var(--hero-table-head);
-      font-weight: 700;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      font-size: 9px;
-  }
-
-  .feed-cell {
-      color: var(--hero-cell);
-      font-weight: 700;
-  }
-
   .cta-blue {
       background: linear-gradient(180deg, var(--hero-accent) 0%, var(--hero-accent-strong) 100%);
       color: #FFFFFF;
@@ -169,99 +129,27 @@ const INJECTED_STYLES = `
 
 export type HeroLanguage = 'pt' | 'en';
 
-type HeroCopy = {
-  brandName: string;
-  tagline1: string;
-  tagline2: string;
-  cardHeading: string;
-  cardDescription: string;
-  metricLabel: string;
-  ctaHeading: string;
-  ctaDescription: string;
-  ctaPrimary: string;
-  ctaSecondary: string;
-  mockupKicker: string;
-  mockupTitle: string;
-  setLabel: string;
-  exerciseName: string;
-  tableSet: string;
-  tableKg: string;
-  tableReps: string;
-  startSession: string;
-  sessionSummary: string;
-  volumeSummary: string;
-  intensitySummary: string;
-  badgeOneTitle: string;
-  badgeOneSub: string;
-  badgeTwoTitle: string;
-  badgeTwoSub: string;
-};
-
-const HERO_COPY: Record<HeroLanguage, HeroCopy> = {
+const HERO_COPY = {
   pt: {
-    brandName: 'LyftTrack',
-    tagline1: 'Mede o teu esforço,',
-    tagline2: 'não apenas as reps.',
-    cardHeading: 'Progresso, redefinido.',
-    cardDescription: 'combina registo preciso, análise instantânea e um feed minimalista para sessões pesadas.',
-    metricLabel: 'Volume Total (kg)',
-    ctaHeading: 'Começa a treinar pesado.',
-    ctaDescription: 'Junta-te à elite e assume o controlo dos teus treinos hoje.',
-    ctaPrimary: 'Entrar na App',
-    ctaSecondary: 'Ver sistema',
-    mockupKicker: 'Feed de Treino',
-    mockupTitle: 'Dia pesado',
-    setLabel: 'Sets',
-    exerciseName: 'Back Squat',
-    tableSet: 'Set',
-    tableKg: 'Kg',
-    tableReps: 'Reps',
-    startSession: 'Iniciar sessão',
-    sessionSummary: 'Resumo da sessão',
-    volumeSummary: 'Volume: 12.460 kg',
-    intensitySummary: 'Intensidade +6,3% vs última semana',
-    badgeOneTitle: 'PR +5kg',
-    badgeOneSub: 'Marco no squat',
-    badgeTwoTitle: 'Tendência de volume',
-    badgeTwoSub: '+18% este mês',
+    tagline1: 'Mede o teu esforço,', tagline2: 'não apenas as reps.',
+    ctaHeading: 'O teu próximo treino começa aqui.',
+    ctaDescription: 'Regista as séries, acompanha o progresso e volta ao ginásio com um plano.',
+    ctaPrimary: 'Entrar na app', ctaSecondary: 'Ver funcionalidades',
   },
   en: {
-    brandName: 'LyftTrack',
-    tagline1: 'Track the weight,',
-    tagline2: 'not just the reps.',
-    cardHeading: 'Progress, redefined.',
-    cardDescription: 'combines precision logging, instant analytics and a dense minimalist feed for heavy sessions.',
-    metricLabel: 'Total Volume (kg)',
-    ctaHeading: 'Start lifting heavy.',
-    ctaDescription: 'Join the elite and take full control of your training today.',
-    ctaPrimary: 'Open Web App',
-    ctaSecondary: 'Explore system',
-    mockupKicker: 'Workout Feed',
-    mockupTitle: 'Heavy day',
-    setLabel: 'Sets',
-    exerciseName: 'Back Squat',
-    tableSet: 'Set',
-    tableKg: 'Kg',
-    tableReps: 'Reps',
-    startSession: 'Start session',
-    sessionSummary: 'Session summary',
-    volumeSummary: 'Volume: 12,460 kg',
-    intensitySummary: 'Intensity up 6.3% vs last week',
-    badgeOneTitle: 'PR +5kg',
-    badgeOneSub: 'Squat milestone',
-    badgeTwoTitle: 'Volume trend',
-    badgeTwoSub: '+18% this month',
+    tagline1: 'Track the weight,', tagline2: 'not just the reps.',
+    ctaHeading: 'Your next workout starts here.',
+    ctaDescription: 'Log your sets, track your progress and get back to the gym with a plan.',
+    ctaPrimary: 'Open Web App', ctaSecondary: 'Explore features',
   },
 };
 
 export interface CinematicHeroProps extends React.HTMLAttributes<HTMLDivElement> {
   language?: HeroLanguage;
-  metricValue?: number;
 }
 
 export function CinematicHero({
   language = 'pt',
-  metricValue = 12460,
   className,
   ...props
 }: CinematicHeroProps) {
@@ -359,7 +247,7 @@ export function CinematicHero({
       });
       gsap.set('.text-days', { autoAlpha: 1, clipPath: 'inset(0 100% 0 0)' });
       gsap.set('.main-card', { y: window.innerHeight + 200, autoAlpha: 1 });
-      gsap.set(['.card-left-text', '.card-right-text', '.mockup-scroll-wrapper', '.floating-badge', '.phone-widget'], {
+      gsap.set(['.card-right-text', '.mockup-scroll-wrapper', '.phone-widget'], {
         autoAlpha: 0,
       });
       gsap.set('.cta-wrapper', { autoAlpha: 0, scale: 0.8, filter: 'blur(30px)' });
@@ -406,10 +294,6 @@ export function CinematicHero({
           0
         )
         .fromTo('.phone-widget', { y: 16, autoAlpha: 0 }, { y: 0, autoAlpha: 1, stagger: 0.08, duration: 0.7 }, 0.1)
-        .to('.progress-ring', { strokeDashoffset: 60, duration: 1 }, 0.4)
-        .to('.counter-val', { innerHTML: metricValue, snap: { innerHTML: 1 }, duration: 1 }, 0.4)
-        .fromTo('.floating-badge', { y: 20, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 0.7 }, 0.3)
-        .to('.card-left-text', { autoAlpha: 1, duration: 0.7 }, 0.3)
         .fromTo('.card-right-text', { x: 20, autoAlpha: 0 }, { x: 0, autoAlpha: 1, duration: 0.7 }, 0.3)
         .to({}, { duration: 0.5 })
         .set('.cta-wrapper', { autoAlpha: 1 })
@@ -418,7 +302,7 @@ export function CinematicHero({
     }, containerRef);
 
     return () => context.revert();
-  }, [metricValue, reducedMotion]);
+  }, [reducedMotion]);
 
   if (reducedMotion) {
     return (
@@ -552,146 +436,20 @@ export function CinematicHero({
           className="main-card premium-depth-card gsap-reveal pointer-events-auto relative flex h-[86vh] w-[94vw] items-center justify-center overflow-hidden rounded-[28px] md:h-[85vh] md:w-[85vw] md:rounded-[40px]"
         >
           <div className="card-sheen" aria-hidden="true" />
-
-          <div className="relative z-10 mx-auto flex h-full w-full max-w-7xl flex-col justify-center gap-3 px-4 py-4 sm:justify-around sm:gap-4 sm:py-5 lg:grid lg:grid-cols-2 lg:items-center lg:gap-10 lg:px-12 lg:py-0">
-            <div className="card-right-text gsap-reveal order-1 z-20 flex w-full max-w-full justify-center pt-10 md:pt-0 lg:order-2 lg:justify-start">
-              <h2 className="text-card-silver-matte break-words text-3xl font-black uppercase tracking-tighter sm:text-5xl md:text-[6rem] lg:text-[4.8rem] xl:text-[5.8rem]">
-                {copy.brandName}
-              </h2>
+          <div className="relative z-10 mx-auto flex h-full w-full max-w-7xl flex-col items-center justify-center gap-2 px-4 py-5 lg:grid lg:grid-cols-2 lg:gap-8 lg:px-10 lg:py-0">
+            <div className="card-right-text gsap-reveal order-1 w-full lg:order-2">
+              <ShowcaseDescription language={language} />
             </div>
-
-            <div
-              className="mockup-scroll-wrapper order-2 relative z-10 flex h-[300px] w-full items-center justify-center sm:h-[340px] md:h-[380px] lg:order-1 lg:h-[600px]"
-              style={{ perspective: '1000px' }}
-            >
-              <div className="relative flex h-full w-full scale-[0.52] items-center justify-center sm:scale-[0.6] md:scale-[0.85] lg:scale-100">
-                <div
-                  ref={mockupRef}
-                  className="iphone-bezel relative flex h-[580px] w-[280px] flex-col rounded-[3rem] will-change-transform"
-                >
-                  <div className="hardware-btn absolute -left-[3px] top-[120px] z-0 h-[25px] w-[3px] rounded-l-md" aria-hidden="true" />
-                  <div className="hardware-btn absolute -left-[3px] top-[160px] z-0 h-[45px] w-[3px] rounded-l-md" aria-hidden="true" />
-                  <div className="hardware-btn absolute -left-[3px] top-[220px] z-0 h-[45px] w-[3px] rounded-l-md" aria-hidden="true" />
-                  <div
-                    className="hardware-btn absolute -right-[3px] top-[170px] z-0 h-[70px] w-[3px] scale-x-[-1] rounded-r-md"
-                    aria-hidden="true"
-                  />
-
-                  <div className="absolute inset-[7px] z-10 overflow-hidden rounded-[2.5rem] bg-[var(--hero-screen)] text-[var(--hero-text-primary)] shadow-[inset_0_0_15px_rgba(0,0,0,1)]">
-                    <div className="screen-glare pointer-events-none absolute inset-0 z-40" aria-hidden="true" />
-
-                    <div className="absolute left-1/2 top-[5px] z-50 flex h-[28px] w-[100px] -translate-x-1/2 items-center justify-end rounded-full bg-[var(--hero-bg)] px-3 shadow-[inset_0_-1px_2px_rgba(255,255,255,0.1)]">
-                      <div
-                        className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--hero-accent)]"
-                        style={{ boxShadow: '0 0 8px var(--hero-accent)' }}
-                      />
-                    </div>
-
-                    <div className="relative flex h-full w-full flex-col px-5 pb-8 pt-12">
-                      <div className="phone-widget mb-6 flex items-center justify-between">
-                        <div className="flex flex-col">
-                          <span className="hero-copy-soft mb-1 text-[10px] font-bold uppercase tracking-widest">{copy.mockupKicker}</span>
-                          <span className="text-xl font-bold tracking-tight text-[var(--hero-text-primary)] drop-shadow-md">{copy.mockupTitle}</span>
-                        </div>
-                        <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--hero-widget-border)] bg-[var(--hero-widget-top)] text-[var(--hero-text-muted)] shadow-lg shadow-black/50">
-                          <Activity className="h-4 w-4" />
-                        </div>
-                      </div>
-
-                      <div className="phone-widget widget-depth mb-4 rounded-2xl p-3">
-                        <div className="mb-2 flex items-center justify-between">
-                          <span className="text-sm font-bold text-[var(--hero-text-primary)]">{copy.exerciseName}</span>
-                          <span className="hero-copy-soft text-[10px] font-bold uppercase tracking-wider">{copy.setLabel}</span>
-                        </div>
-
-                        <div className="feed-table mb-3">
-                          <span className="feed-table-head">{copy.tableSet}</span>
-                          <span className="feed-table-head">{copy.tableKg}</span>
-                          <span className="feed-table-head">{copy.tableReps}</span>
-
-                          <span className="feed-cell">1</span>
-                          <span className="feed-cell">100</span>
-                          <span className="feed-cell">5</span>
-
-                          <span className="feed-cell">2</span>
-                          <span className="feed-cell">105</span>
-                          <span className="feed-cell">4</span>
-
-                          <span className="feed-cell">3</span>
-                          <span className="feed-cell">110</span>
-                          <span className="feed-cell">3</span>
-                        </div>
-
-                        <a href="https://lyfttrack-app.vercel.app/" className="cta-blue block w-full rounded-xl px-3 py-2 text-center text-xs font-bold tracking-wide focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
-                          {copy.startSession}
-                        </a>
-                      </div>
-
-                      <div className="phone-widget relative mb-5 mx-auto flex h-40 w-40 items-center justify-center drop-shadow-[0_15px_25px_rgba(0,0,0,0.8)]">
-                        <svg className="absolute inset-0 h-full w-full" aria-hidden="true">
-                          <circle cx="80" cy="80" r="64" fill="none" stroke="var(--hero-ring-track)" strokeWidth="12" />
-                          <circle className="progress-ring" cx="80" cy="80" r="64" fill="none" stroke="var(--hero-accent)" strokeWidth="12" />
-                        </svg>
-                        <div className="z-10 flex flex-col items-center text-center">
-                          <span className="counter-val text-4xl font-extrabold tracking-tighter text-[var(--hero-text-primary)]">0</span>
-                          <span className="mt-0.5 text-[8px] font-bold uppercase tracking-[0.1em] hero-copy-soft">{copy.metricLabel}</span>
-                        </div>
-                      </div>
-
-                      <div className="phone-widget widget-depth rounded-2xl p-3">
-                        <div className="mb-2 flex items-center justify-between">
-                          <span className="hero-copy-soft text-[11px] font-semibold">{copy.sessionSummary}</span>
-                          <Dumbbell className="h-4 w-4 text-[var(--hero-accent)]" />
-                        </div>
-                        <div className="text-sm font-bold text-[var(--hero-text-primary)]">{copy.volumeSummary}</div>
-                        <div className="hero-copy-soft mt-1 text-xs">{copy.intensitySummary}</div>
-                      </div>
-
-                      <div className="absolute bottom-2 left-1/2 h-[4px] w-[120px] -translate-x-1/2 rounded-full bg-white/20 shadow-[0_1px_2px_rgba(0,0,0,0.5)]" />
-                    </div>
+            <div className="mockup-scroll-wrapper order-2 relative flex h-[420px] w-full shrink-0 items-center justify-center lg:order-1 lg:h-[580px]" style={{ perspective: '1000px' }}>
+              <div className="relative flex h-[580px] w-[280px] shrink-0 scale-[0.7] items-center justify-center sm:scale-[0.75] lg:scale-[0.9] xl:scale-100">
+                <div ref={mockupRef} className="iphone-bezel relative flex h-[580px] w-[280px] flex-col rounded-[3rem] will-change-transform">
+                  <div className="hardware-btn absolute -left-[3px] top-[120px] h-[25px] w-[3px] rounded-l-md" aria-hidden="true" />
+                  <div className="hardware-btn absolute -left-[3px] top-[160px] h-[45px] w-[3px] rounded-l-md" aria-hidden="true" />
+                  <div className="hardware-btn absolute -right-[3px] top-[170px] h-[70px] w-[3px] rounded-r-md" aria-hidden="true" />
+                  <div className="absolute inset-[7px] overflow-hidden rounded-[2.5rem] bg-[#09090b]">
+                    <div className="absolute left-1/2 top-2 z-10 h-6 w-24 -translate-x-1/2 rounded-full bg-black" aria-hidden="true" />
+                    <WorkoutPreview language={language} />
                   </div>
-                </div>
-
-                <div className="floating-badge floating-ui-badge absolute -left-2 top-0 z-30 hidden items-center gap-2 rounded-xl p-2 sm:flex sm:left-[-8px] sm:top-4 sm:scale-95 sm:gap-3 sm:p-3 lg:left-[-20px] lg:top-12 lg:scale-100 lg:gap-3 lg:rounded-2xl lg:p-4">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--hero-widget-border)] bg-[var(--hero-widget-top)] lg:h-10 lg:w-10">
-                    <TrendingUp className="h-4 w-4 text-[var(--hero-accent)]" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold tracking-tight text-[var(--hero-text-primary)] lg:text-sm">{copy.badgeOneTitle}</p>
-                    <p className="hero-copy-soft text-[10px] font-medium lg:text-xs">{copy.badgeOneSub}</p>
-                  </div>
-                </div>
-
-                <div className="floating-badge floating-ui-badge absolute bottom-0 -right-2 z-30 hidden items-center gap-2 rounded-xl p-2 sm:flex sm:bottom-8 sm:right-[-8px] sm:scale-95 sm:gap-3 sm:p-3 lg:bottom-20 lg:right-[-80px] lg:scale-100 lg:gap-3 lg:rounded-2xl lg:p-4">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--hero-widget-border)] bg-[var(--hero-widget-top)] lg:h-10 lg:w-10">
-                    <Activity className="h-4 w-4 text-[var(--hero-accent)]" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold tracking-tight text-[var(--hero-text-primary)] lg:text-sm">{copy.badgeTwoTitle}</p>
-                    <p className="hero-copy-soft text-[10px] font-medium lg:text-xs">{copy.badgeTwoSub}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Mobile-only badges row (replaces floating badges on small screens) */}
-            <div className="card-left-text gsap-reveal order-3 z-20 flex w-full items-center justify-center gap-3 px-1 sm:hidden">
-              <div className="floating-badge floating-ui-badge flex items-center gap-2 rounded-xl p-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--hero-widget-border)] bg-[var(--hero-widget-top)]">
-                  <TrendingUp className="h-3.5 w-3.5 text-[var(--hero-accent)]" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold tracking-tight text-[var(--hero-text-primary)]">{copy.badgeOneTitle}</p>
-                  <p className="hero-copy-soft text-[10px] font-medium">{copy.badgeOneSub}</p>
-                </div>
-              </div>
-              <div className="floating-badge floating-ui-badge flex items-center gap-2 rounded-xl p-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--hero-widget-border)] bg-[var(--hero-widget-top)]">
-                  <Activity className="h-3.5 w-3.5 text-[var(--hero-accent)]" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold tracking-tight text-[var(--hero-text-primary)]">{copy.badgeTwoTitle}</p>
-                  <p className="hero-copy-soft text-[10px] font-medium">{copy.badgeTwoSub}</p>
                 </div>
               </div>
             </div>

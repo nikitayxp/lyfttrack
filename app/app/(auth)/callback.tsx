@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Linking from 'expo-linking';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
@@ -19,24 +18,6 @@ function readRouteValue(value: string | string[] | undefined): string {
   }
 
   return value?.trim() ?? '';
-}
-
-function buildCallbackUrl(params: Record<string, string | string[] | undefined>): string {
-  const queryParams: Record<string, string> = {};
-
-  for (const [key, value] of Object.entries(params)) {
-    const normalizedValue = readRouteValue(value);
-
-    if (normalizedValue) {
-      queryParams[key] = normalizedValue;
-    }
-  }
-
-  if (typeof window !== 'undefined' && window.location?.href) {
-    return window.location.href;
-  }
-
-  return Linking.createURL('callback', { queryParams });
 }
 
 /** Web OAuth may return PKCE `?code=` or implicit `#access_token=` / `#refresh_token=`. */
@@ -69,10 +50,11 @@ function readBrowserOAuthParams(): {
 export default function OAuthCallbackScreen() {
   const { t } = useTranslation();
   const params = useLocalSearchParams<Record<string, string | string[]>>();
-  const [message, setMessage] = useState(t('auth.callback.loading'));
+  const routeCode = readRouteValue(params.code);
+  const routeError = readRouteValue(params.error);
+  const routeErrorDescription = readRouteValue(params.error_description);
+  const [messageKey, setMessageKey] = useState('auth.callback.loading');
   const [isError, setIsError] = useState(false);
-
-  const callbackUrl = useMemo(() => buildCallbackUrl(params), [params]);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,12 +79,12 @@ export default function OAuthCallbackScreen() {
 
       const browser = readBrowserOAuthParams();
       const errorDescription =
-        browser.error || readRouteValue(params.error_description) || readRouteValue(params.error);
+        browser.error || routeErrorDescription || routeError;
 
       if (errorDescription) {
         if (!cancelled) {
           setIsError(true);
-          setMessage(t('auth.callback.errorDescription'));
+          setMessageKey('auth.callback.errorDescription');
         }
         return;
       }
@@ -122,7 +104,7 @@ export default function OAuthCallbackScreen() {
           if (error) {
             console.warn('[auth-callback] setSession from hash failed', error);
             setIsError(true);
-            setMessage(t('auth.callback.errorDescription'));
+            setMessageKey('auth.callback.errorDescription');
             return;
           }
 
@@ -131,7 +113,7 @@ export default function OAuthCallbackScreen() {
           return;
         }
 
-        const code = browser.code || readRouteValue(params.code);
+        const code = browser.code || routeCode;
 
         if (!code) {
           const { data } = await supabase.auth.getSession();
@@ -146,11 +128,11 @@ export default function OAuthCallbackScreen() {
           }
 
           setIsError(true);
-          setMessage(t('auth.callback.missingCode'));
+          setMessageKey('auth.callback.missingCode');
           return;
         }
 
-        const { error } = await supabase.auth.exchangeCodeForSession(callbackUrl);
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
 
         if (cancelled) {
           return;
@@ -159,7 +141,7 @@ export default function OAuthCallbackScreen() {
         if (error) {
           console.warn('[auth-callback] exchangeCodeForSession failed', error);
           setIsError(true);
-          setMessage(t('auth.callback.errorDescription'));
+          setMessageKey('auth.callback.errorDescription');
           return;
         }
 
@@ -171,7 +153,7 @@ export default function OAuthCallbackScreen() {
 
         console.warn('[auth-callback] unexpected OAuth callback failure', exchangeError);
         setIsError(true);
-        setMessage(t('auth.callback.errorDescription'));
+        setMessageKey('auth.callback.errorDescription');
       }
     };
 
@@ -180,7 +162,7 @@ export default function OAuthCallbackScreen() {
     return () => {
       cancelled = true;
     };
-  }, [callbackUrl, params.code, params.error, params.error_description, t]);
+  }, [routeCode, routeError, routeErrorDescription]);
 
   return (
     <AuthAmbientGlow>
@@ -195,7 +177,7 @@ export default function OAuthCallbackScreen() {
           </View>
 
           <Text style={styles.title}>{t('auth.callback.title')}</Text>
-          <Text style={styles.subtitle}>{message}</Text>
+          <Text style={styles.subtitle}>{t(messageKey)}</Text>
 
           {isError ? (
             <AppButton

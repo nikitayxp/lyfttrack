@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import { PrBadge } from '@/components/common/PrBadge';
+import { WorkoutSessionPreview } from '@/components/history/WorkoutSessionPreview';
 import { DismissibleBottomSheet } from '@/components/common/DismissibleBottomSheet';
 import { ShareWorkoutSheet } from '@/components/workout/ShareWorkoutSheet';
 import { WorkoutActionsMenu, type WorkoutMenuAction } from '@/components/workout/WorkoutActionsMenu';
@@ -22,6 +23,7 @@ const EXERCISE_PREVIEW_LIMIT = 3;
 
 type WorkoutFeedCardProps = {
   workout: WorkoutFeedItem;
+  variant?: 'feed' | 'history';
   likeCount?: number;
   commentsCount?: number;
   hasLiked?: boolean;
@@ -75,6 +77,7 @@ function initialsFromName(value: string): string {
 
 export function WorkoutFeedCard({
   workout,
+  variant = 'feed',
   likeCount,
   commentsCount,
   hasLiked,
@@ -94,7 +97,7 @@ export function WorkoutFeedCard({
   const { language, countWorkingSetsOnly } = usePreferences();
   const displayName = profileDisplayName(workout, t('publicProfile.athleteFallback'));
   const localizedExerciseNames = workout.exerciseNames.map((exercise) =>
-    getLocalizedExerciseName(exercise, language)
+    getLocalizedExerciseName(exercise, language),
   );
 
   // A card is a summary, not a table of contents: a long session should not
@@ -149,81 +152,97 @@ export function WorkoutFeedCard({
 
   return (
     <View style={styles.card}>
-      <TouchableOpacity 
-        style={styles.mainTouchArea} 
-        activeOpacity={ACTIVE_OPACITY} 
+      <TouchableOpacity
+        style={styles.mainTouchArea}
+        activeOpacity={ACTIVE_OPACITY}
         onPress={openWorkoutDetails}
         accessibilityRole="button"
-        accessibilityLabel={t('feed.openWorkout', { defaultValue: 'Open workout' })}
+        accessibilityLabel={
+          variant === 'history'
+            ? t('historyJump.openWorkout', { name: workout.name })
+            : t('feed.openWorkout', { defaultValue: 'Open workout' })
+        }
       >
-        <View style={styles.cardHeader}>
-          <View style={styles.authorWrap}>
-            {workout.profile?.avatar_url ? (
-              <Image source={{ uri: workout.profile.avatar_url }} style={styles.avatar} />
-            ) : (
-              <View style={styles.avatarFallback}>
-                <Text style={styles.avatarFallbackText}>{initialsFromName(displayName)}</Text>
+        {variant === 'history' ? (
+          <WorkoutSessionPreview workout={workout} />
+        ) : (
+          <>
+            <View style={styles.cardHeader}>
+              <View style={styles.authorWrap}>
+                {workout.profile?.avatar_url ? (
+                  <Image source={{ uri: workout.profile.avatar_url }} style={styles.avatar} />
+                ) : (
+                  <View style={styles.avatarFallback}>
+                    <Text style={styles.avatarFallbackText}>{initialsFromName(displayName)}</Text>
+                  </View>
+                )}
+
+                <View style={styles.authorTextWrap}>
+                  <Text style={styles.authorName}>{displayName}</Text>
+                  <Text style={styles.authorMeta}>{formatRelativeTime(workout.start_time, t, language)}</Text>
+                </View>
               </View>
-            )}
 
-            <View style={styles.authorTextWrap}>
-              <Text style={styles.authorName}>{displayName}</Text>
-              <Text style={styles.authorMeta}>{formatRelativeTime(workout.start_time, t, language)}</Text>
+              <View style={styles.headerChips}>
+                <PrBadge count={workout.prCount} />
+
+                <View style={styles.durationChip}>
+                  <Ionicons name="time-outline" size={13} color={palette.accent} />
+                  <Text style={styles.durationText}>
+                    {formatDuration(workout.start_time, workout.end_time)}
+                  </Text>
+                </View>
+              </View>
             </View>
-          </View>
 
-          <View style={styles.headerChips}>
-            <PrBadge count={workout.prCount} />
+            <Text style={styles.workoutName}>{workout.name}</Text>
+            {workout.notes ? (
+              <Text style={styles.workoutNotes} numberOfLines={2}>
+                {workout.notes}
+              </Text>
+            ) : null}
 
-            <View style={styles.durationChip}>
-              <Ionicons name="time-outline" size={13} color={palette.accent} />
-              <Text style={styles.durationText}>{formatDuration(workout.start_time, workout.end_time)}</Text>
-            </View>
-          </View>
-        </View>
-
-        <Text style={styles.workoutName}>{workout.name}</Text>
-        {workout.notes ? <Text style={styles.workoutNotes} numberOfLines={2}>{workout.notes}</Text> : null}
-
-        <View style={styles.metricsRow}>
-          <View style={styles.metricBlock}>
-            <Text style={styles.metricValue}>
-              {countWorkingSetsOnly ? workout.workingSets : workout.totalSets}
-            </Text>
-            <Text style={styles.metricLabel}>{t('feed.metrics.sets')}</Text>
-          </View>
-          <View style={styles.metricDivider} />
-          <View style={styles.metricBlock}>
-            <Text style={styles.metricValue}>{localizedExerciseNames.length}</Text>
-            <Text style={styles.metricLabel}>{t('feed.metrics.exercises')}</Text>
-          </View>
-        </View>
-
-        {localizedExerciseNames.length > 0 ? (
-          <View style={styles.exercisePreviewWrap}>
-            {previewExerciseNames.map((name, index) => (
-              <View key={`${name}-${index}`} style={styles.exercisePreviewRow}>
-                <View style={styles.exerciseBullet} />
-                <Text style={styles.exercisePreviewText} numberOfLines={1}>
-                  {name}
+            <View style={styles.metricsRow}>
+              <View style={styles.metricBlock}>
+                <Text style={styles.metricValue}>
+                  {countWorkingSetsOnly ? workout.workingSets : workout.totalSets}
                 </Text>
+                <Text style={styles.metricLabel}>{t('feed.metrics.sets')}</Text>
               </View>
-            ))}
+              <View style={styles.metricDivider} />
+              <View style={styles.metricBlock}>
+                <Text style={styles.metricValue}>{localizedExerciseNames.length}</Text>
+                <Text style={styles.metricLabel}>{t('feed.metrics.exercises')}</Text>
+              </View>
+            </View>
 
-            {/* Text rather than its own TouchableOpacity: the whole card is
+            {localizedExerciseNames.length > 0 ? (
+              <View style={styles.exercisePreviewWrap}>
+                {previewExerciseNames.map((name, index) => (
+                  <View key={`${name}-${index}`} style={styles.exercisePreviewRow}>
+                    <View style={styles.exerciseBullet} />
+                    <Text style={styles.exercisePreviewText} numberOfLines={1}>
+                      {name}
+                    </Text>
+                  </View>
+                ))}
+
+                {/* Text rather than its own TouchableOpacity: the whole card is
                 already the button that opens the workout, and nesting one
                 pressable in another renders a <button> inside a <button> on
                 web, which is invalid and warns about hydration. */}
-            {hiddenExerciseCount > 0 ? (
-              <View style={styles.showMoreRow}>
-                <Text style={styles.showMoreText}>
-                  {t('feed.showMoreExercises', { count: hiddenExerciseCount })}
-                </Text>
-                <Ionicons name="chevron-forward" size={13} color={palette.accent} />
+                {hiddenExerciseCount > 0 ? (
+                  <View style={styles.showMoreRow}>
+                    <Text style={styles.showMoreText}>
+                      {t('feed.showMoreExercises', { count: hiddenExerciseCount })}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={13} color={palette.accent} />
+                  </View>
+                ) : null}
               </View>
             ) : null}
-          </View>
-        ) : null}
+          </>
+        )}
       </TouchableOpacity>
 
       <DismissibleBottomSheet visible={sheetMode !== 'closed'} onClose={closeSheet}>
@@ -263,7 +282,11 @@ export function WorkoutFeedCard({
           onPress={onToggleLike}
           disabled={interactionsDisabled || resolvedIsLikePending}
           accessibilityRole="button"
-          accessibilityLabel={resolvedHasLiked ? t('feed.unlikeWorkout', { defaultValue: 'Unlike workout' }) : t('feed.likeWorkout', { defaultValue: 'Like workout' })}
+          accessibilityLabel={
+            resolvedHasLiked
+              ? t('feed.unlikeWorkout', { defaultValue: 'Unlike workout' })
+              : t('feed.likeWorkout', { defaultValue: 'Like workout' })
+          }
         >
           {resolvedIsLikePending ? (
             <ActivityIndicator size="small" color={resolvedHasLiked ? palette.accent : palette.textMuted} />
@@ -274,7 +297,9 @@ export function WorkoutFeedCard({
               color={resolvedHasLiked ? palette.accent : palette.textMuted}
             />
           )}
-          <Text style={[styles.interactionText, resolvedHasLiked && styles.likeTextActive]}>{resolvedLikeCount}</Text>
+          <Text style={[styles.interactionText, resolvedHasLiked && styles.likeTextActive]}>
+            {resolvedLikeCount}
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -302,16 +327,18 @@ export function WorkoutFeedCard({
         </TouchableOpacity>
       </View>
 
-      {('latest_comment' in workout && (workout as any).latest_comment) ? (
-        <TouchableOpacity 
-          style={styles.latestCommentWrap} 
-          activeOpacity={ACTIVE_OPACITY} 
+      {'latest_comment' in workout && (workout as any).latest_comment ? (
+        <TouchableOpacity
+          style={styles.latestCommentWrap}
+          activeOpacity={ACTIVE_OPACITY}
           onPress={onOpenComments}
           accessibilityRole="button"
           accessibilityLabel={t('feed.openComments', { defaultValue: 'Open comments' })}
         >
           <Text style={styles.latestCommentAuthor}>{(workout as any).latest_comment.author}</Text>
-          <Text style={styles.latestCommentContent} numberOfLines={1}>{(workout as any).latest_comment.content}</Text>
+          <Text style={styles.latestCommentContent} numberOfLines={1}>
+            {(workout as any).latest_comment.content}
+          </Text>
         </TouchableOpacity>
       ) : null}
     </View>

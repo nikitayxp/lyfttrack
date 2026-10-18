@@ -1297,6 +1297,7 @@ export default function ProfileScreen() {
           return (
             <WorkoutFeedCard
               workout={item}
+              variant="history"
               likeCount={interactionState?.likesCount ?? item.likes_count}
               commentsCount={commentCountByWorkoutId[item.id] ?? item.comments_count}
               hasLiked={interactionState?.hasLiked ?? item.has_liked}

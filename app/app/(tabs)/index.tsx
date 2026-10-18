@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect } from 'expo-router';
+import { router } from 'expo-router';
 import {
   ActivityIndicator,
   DeviceEventEmitter,
@@ -11,7 +11,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Animated, { FadeInDown, FadeInUp, LinearTransition } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
@@ -41,7 +40,6 @@ const palette = Colors.dark;
 const SCREEN_BG = palette.bgPrimary;
 const CARD_BG = palette.surface;
 const FEED_PAGE_SIZE = 20;
-const feedCardLayoutTransition = LinearTransition.springify().damping(16).stiffness(180);
 
 type FeedLikeInteractionState = {
   hasLiked: boolean;
@@ -72,7 +70,6 @@ export default function FeedScreen() {
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [commentInputValue, setCommentInputValue] = useState('');
   const [currentCommentAuthor, setCurrentCommentAuthor] = useState<CommentAuthorProfile | null>(null);
-  const [animationEpoch, setAnimationEpoch] = useState(0);
 
   // Decides whether a card offers edit and copy or only share.
   useEffect(() => {
@@ -94,12 +91,6 @@ export default function FeedScreen() {
       cancelled = true;
     };
   }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      setAnimationEpoch((currentValue) => currentValue + 1);
-    }, [])
-  );
 
   const loadFeedPage = useCallback(async (pageToLoad: number, mode: 'reset' | 'append') => {
     if (mode === 'reset') {
@@ -482,12 +473,7 @@ export default function FeedScreen() {
 
   const headerTitle = useMemo(() => {
     return (
-      <Animated.View
-        key={`feed-header-${animationEpoch}`}
-        style={styles.headerWrap}
-        entering={FadeInUp.duration(320)}
-        layout={feedCardLayoutTransition}
-      >
+      <View style={styles.headerWrap}>
         <Text style={styles.title}>{t('feed.title')}</Text>
         <Text style={styles.subtitle}>{t('feed.subtitle')}</Text>
 
@@ -514,9 +500,9 @@ export default function FeedScreen() {
             <Ionicons name="arrow-forward" size={15} color={palette.chipTextSelected} />
           </TouchableOpacity>
         </View>
-      </Animated.View>
+      </View>
     );
-  }, [animationEpoch, openAthletesExplorer, t]);
+  }, [openAthletesExplorer, t]);
 
   const emptyState = useMemo(() => {
     if (isLoading) {
@@ -564,15 +550,11 @@ export default function FeedScreen() {
       <FlatList
         data={workouts}
         keyExtractor={(item) => item.id}
-        renderItem={({ item, index }) => {
+        renderItem={({ item }) => {
           const interactionState = optimisticLikeState[item.id];
 
           return (
-            <Animated.View
-              key={`${item.id}-${animationEpoch}`}
-              entering={FadeInDown.delay(Math.min(index * 35, 260)).duration(300)}
-              layout={feedCardLayoutTransition}
-            >
+            <View>
               <WorkoutFeedCard
                 workout={item}
                 likeCount={interactionState?.likesCount ?? item.likes_count}
@@ -590,7 +572,7 @@ export default function FeedScreen() {
                     : undefined
                 }
               />
-            </Animated.View>
+            </View>
           );
         }}
         ListHeaderComponent={headerTitle}

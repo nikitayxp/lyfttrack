@@ -49,7 +49,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: Radius.md,
-    backgroundColor: palette.accent,
+    backgroundColor: palette.accentStrong,
   },
   disabled: {
     opacity: 0.45,
@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
   label: {
     color: palette.textPrimary,
     fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: 0.4,
+    fontWeight: '700',
+    letterSpacing: 0.1,
   },
 });

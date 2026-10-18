@@ -91,6 +91,7 @@ import {
   type PersonalBest,
 } from '@/utils/personalRecords';
 import { formatPreviousSetLabel, previousColumnWidthForSets, previousLabelFontSize, previousSetForRow } from '@/utils/previousPerformance';
+import { getWorkoutTableLayout, WORKOUT_TABLE_COLUMNS } from '@/utils/workoutTableLayout';
 import { showAlert } from '@/utils/showAlert';
 
 const palette = Colors.dark;
@@ -180,6 +181,7 @@ export default function ActiveWorkout() {
   const { language } = usePreferences();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
+  const [tableRowWidth, setTableRowWidth] = useState(0);
   const isWeb = Platform.OS === 'web';
   const isDesktopWeb = isWeb && windowWidth > DESKTOP_WEB_MIN_WIDTH;
   const searchParams = useLocalSearchParams<{
@@ -1063,6 +1065,7 @@ export default function ActiveWorkout() {
                 exercise.sets.length,
                 exercise.sets.map((entry) => entry.set_number)
               );
+              const tableLayout = getWorkoutTableLayout(tableRowWidth, previousColumnWidth);
 
               return (
                 <View key={exercise.id} style={styles.exerciseCard}>
@@ -1151,9 +1154,12 @@ export default function ActiveWorkout() {
                     maxLength={1000}
                   />
 
-                  <View style={[styles.tableRow, styles.tableHeaderRow]}>
+                  <View
+                    style={[styles.tableRow, styles.tableHeaderRow]}
+                    onLayout={(event) => setTableRowWidth(event.nativeEvent.layout.width)}
+                  >
                     <Text style={[styles.headerLabel, styles.cellSet]}>{t('workout.setHeader')}</Text>
-                    <Text
+                    {!tableLayout.stackPrevious ? <Text
                       style={[
                         styles.headerLabel,
                         styles.cellPrevious,
@@ -1161,7 +1167,7 @@ export default function ActiveWorkout() {
                       ]}
                     >
                       {t('workout.previousHeader')}
-                    </Text>
+                    </Text> : null}
                     <Text style={[styles.headerLabel, styles.cellKg]}>kg</Text>
                     <Text style={[styles.headerLabel, styles.cellReps]}>{t('workout.repsHeader')}</Text>
                     <Text style={[styles.headerLabel, styles.cellRir]}>{t('workout.rirHeader')}</Text>
@@ -1194,6 +1200,45 @@ export default function ActiveWorkout() {
                       : 'normal';
 
                     const isRecordBreakingSet = recordSetIds.has(setItem.id);
+
+                    const previousCell = previousSet ? (
+                      <TouchableOpacity
+                        style={tableLayout.stackPrevious ? styles.previousBelowButton : [styles.cellPrevious, { width: previousColumnWidth }]}
+                        activeOpacity={ACTIVE_OPACITY}
+                        onPress={() => {
+                          if (previousSet.weight != null && Number.isFinite(previousSet.weight)) {
+                            updateSetInput(exercise.id, setItem.id, 'weightInput', String(previousSet.weight));
+                          }
+                          if (previousSet.reps != null && Number.isFinite(previousSet.reps)) {
+                            updateSetInput(exercise.id, setItem.id, 'repsInput', String(Math.trunc(previousSet.reps)));
+                          }
+                          if (previousSet.rir != null && Number.isFinite(previousSet.rir)) {
+                            updateSetInput(exercise.id, setItem.id, 'rirInput', String(previousSet.rir));
+                          }
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('workout.fillFromPrevious')}
+                        hitSlop={HIT_SLOP}
+                      >
+                        <Text
+                          style={[styles.previousCellText, { fontSize: tableLayout.stackPrevious ? 13 : previousLabelFontSize(previousLabel) }]}
+                          numberOfLines={1}
+                        >
+                          {tableLayout.stackPrevious ? `${t('workout.previousHeader')}: ${previousLabel}` : previousLabel}
+                        </Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <Text
+                        style={[
+                          styles.previousCellText,
+                          styles.cellPrevious,
+                          { width: previousColumnWidth, fontSize: previousLabelFontSize('—') },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        —
+                      </Text>
+                    );
 
                     return (
                       <View key={setItem.id} style={styles.setRowWrapper}>
@@ -1243,44 +1288,7 @@ export default function ActiveWorkout() {
                             ) : null}
                           </TouchableOpacity>
 
-                          {previousSet ? (
-                            <TouchableOpacity
-                              style={[styles.cellPrevious, { width: previousColumnWidth }]}
-                              activeOpacity={ACTIVE_OPACITY}
-                              onPress={() => {
-                                if (previousSet.weight != null && Number.isFinite(previousSet.weight)) {
-                                  updateSetInput(exercise.id, setItem.id, 'weightInput', String(previousSet.weight));
-                                }
-                                if (previousSet.reps != null && Number.isFinite(previousSet.reps)) {
-                                  updateSetInput(exercise.id, setItem.id, 'repsInput', String(Math.trunc(previousSet.reps)));
-                                }
-                                if (previousSet.rir != null && Number.isFinite(previousSet.rir)) {
-                                  updateSetInput(exercise.id, setItem.id, 'rirInput', String(previousSet.rir));
-                                }
-                              }}
-                              accessibilityRole="button"
-                              accessibilityLabel={t('workout.fillFromPrevious')}
-                              hitSlop={HIT_SLOP}
-                            >
-                              <Text
-                                style={[styles.previousCellText, { fontSize: previousLabelFontSize(previousLabel) }]}
-                                numberOfLines={1}
-                              >
-                                {previousLabel}
-                              </Text>
-                            </TouchableOpacity>
-                          ) : (
-                            <Text
-                              style={[
-                                styles.previousCellText,
-                                styles.cellPrevious,
-                                { width: previousColumnWidth, fontSize: previousLabelFontSize('—') },
-                              ]}
-                              numberOfLines={1}
-                            >
-                              —
-                            </Text>
-                          )}
+                          {!tableLayout.stackPrevious ? previousCell : null}
 
                           <TextInput
                             accessibilityLabel={t('accessibility.weightInput', { defaultValue: 'Weight' })}
@@ -1335,6 +1343,10 @@ export default function ActiveWorkout() {
                             </TouchableOpacity>
                           </View>
                         </Pressable>
+
+                        {tableLayout.stackPrevious && previousSet ? (
+                          <View style={styles.previousBelowRow}>{previousCell}</View>
+                        ) : null}
 
                         {/* At the moment of confirming, not only in the summary
                             at the end: that was the whole complaint. */}
@@ -1877,9 +1889,9 @@ const styles = StyleSheet.create({
     columnGap: 8,
   },
   iconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 44,
+    height: 44,
+    borderRadius: Radius.button,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: palette.surface,
@@ -1891,7 +1903,7 @@ const styles = StyleSheet.create({
   },
   timerText: {
     color: palette.textPrimary,
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '800',
     letterSpacing: 1,
     fontVariant: ['tabular-nums'],
@@ -1900,8 +1912,8 @@ const styles = StyleSheet.create({
     color: palette.warningText,
   },
   finishButton: {
-    backgroundColor: palette.accent,
-    minHeight: 38,
+    backgroundColor: palette.accentStrong,
+    minHeight: 44,
     minWidth: 78,
     borderRadius: Radius.card,
     alignItems: 'center',
@@ -2008,12 +2020,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     marginBottom: 10,
     columnGap: 10,
+    flexWrap: 'wrap',
+    rowGap: 12,
   },
   exerciseHeaderTextWrap: {
     flex: 1,
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
+    flexBasis: '100%',
   },
   exerciseThumbnail: {
     width: 34,
@@ -2036,12 +2051,12 @@ const styles = StyleSheet.create({
   exerciseHeaderActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    columnGap: 5,
+    columnGap: 8,
     flexShrink: 0,
   },
   exerciseActionButton: {
-    width: 32,
-    height: 32,
+    width: 44,
+    height: 44,
     borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: palette.inputStroke,
@@ -2058,12 +2073,13 @@ const styles = StyleSheet.create({
   },
   exerciseTitle: {
     color: palette.textPrimary,
-    fontSize: 20,
-    fontWeight: '800',
+    fontSize: 19,
+    fontWeight: '700',
+    flex: 1,
   },
   exerciseStatsButton: {
-    width: 34,
-    height: 34,
+    width: 44,
+    height: 44,
     borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: palette.inputStroke,
@@ -2076,8 +2092,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 7,
-    paddingHorizontal: 2,
-    columnGap: 4,
+    paddingHorizontal: WORKOUT_TABLE_COLUMNS.padding,
+    columnGap: WORKOUT_TABLE_COLUMNS.gap,
     borderBottomWidth: 1,
     borderBottomColor: palette.rowSeparator,
     minWidth: 0,
@@ -2094,7 +2110,7 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   sideToggleChip: {
-    minHeight: 24,
+    minHeight: 36,
     paddingHorizontal: 8,
     borderRadius: Radius.pill,
     borderWidth: 1,
@@ -2102,6 +2118,7 @@ const styles = StyleSheet.create({
     backgroundColor: palette.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
+    minWidth: 44,
   },
   sideToggleChipActive: {
     borderColor: palette.accent,
@@ -2158,12 +2175,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   cellSet: {
-    width: 38,
-    minWidth: 38,
+    width: WORKOUT_TABLE_COLUMNS.set,
+    minWidth: WORKOUT_TABLE_COLUMNS.set,
     flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
     textAlign: 'center',
+    minHeight: 44,
   },
   setNumberText: {
     color: palette.textPrimary,
@@ -2190,6 +2208,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
+  previousBelowRow: {
+    marginTop: 4,
+    marginLeft: WORKOUT_TABLE_COLUMNS.set + WORKOUT_TABLE_COLUMNS.gap,
+  },
+  previousBelowButton: {
+    minHeight: 44,
+    alignSelf: 'flex-start',
+    justifyContent: 'center',
+    borderRadius: Radius.md,
+    paddingHorizontal: 10,
+    backgroundColor: palette.bgAlt,
+  },
   cellPrevious: {
     flexGrow: 0,
     flexShrink: 0,
@@ -2206,30 +2236,30 @@ const styles = StyleSheet.create({
   },
   cellKg: {
     flex: 1.15,
-    minWidth: 52,
+    minWidth: WORKOUT_TABLE_COLUMNS.weight,
   },
   kgInput: {
     flex: 1.15,
-    minWidth: 52,
+    minWidth: WORKOUT_TABLE_COLUMNS.weight,
   },
   cellReps: {
     flex: 0.95,
-    minWidth: 40,
+    minWidth: WORKOUT_TABLE_COLUMNS.reps,
   },
   cellRir: {
     flex: 0.95,
-    minWidth: 40,
+    minWidth: WORKOUT_TABLE_COLUMNS.rir,
   },
   numericInput: {
     flex: 1,
-    height: 36,
+    height: 44,
     borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: palette.inputStroke,
     backgroundColor: palette.inputFill,
     color: palette.textPrimary,
     textAlign: 'center',
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: '700',
     paddingHorizontal: 2,
     fontVariant: ['tabular-nums'],
@@ -2241,16 +2271,16 @@ const styles = StyleSheet.create({
     backgroundColor: palette.completedFill,
   },
   cellCheck: {
-    width: 36,
-    minWidth: 36,
+    width: WORKOUT_TABLE_COLUMNS.complete,
+    minWidth: WORKOUT_TABLE_COLUMNS.complete,
     flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkButton: {
-    width: 34,
-    height: 34,
-    minWidth: 34,
+    width: WORKOUT_TABLE_COLUMNS.complete,
+    height: 44,
+    minWidth: WORKOUT_TABLE_COLUMNS.complete,
     flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2264,7 +2294,7 @@ const styles = StyleSheet.create({
   },
   addSetButton: {
     marginTop: 12,
-    minHeight: 40,
+    minHeight: 48,
     borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: palette.inputBorder,

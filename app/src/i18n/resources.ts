@@ -330,7 +330,7 @@ export const resources = {
         pauseTimer: 'Pause workout timer',
         resumeTimer: 'Resume workout timer',
         title: 'Workout',
-        subtitle: 'Consolidate templates and exercises in one flow.',
+        subtitle: 'Start a workout or choose one of your plans.',
         startEmptyWorkout: 'Start Empty Workout',
         startModeLabel: 'Start Workout',
         templatesModeLabel: 'My Templates',
@@ -646,7 +646,7 @@ export const resources = {
         },
       },
       feed: {
-        title: 'TRAINING FEED',
+        title: 'Workout feed',
         subtitle: 'Your latest sessions and workouts from your network.',
         searchPlaceholder: 'Search athletes...',
         searchingAthletes: 'Searching athletes...',
@@ -1125,7 +1125,7 @@ export const resources = {
       },
       workout: {
         title: 'Treino',
-        subtitle: 'Consolida templates e exercicios num unico fluxo.',
+        subtitle: 'Inicia um treino ou escolhe um dos teus planos.',
         startEmptyWorkout: 'Iniciar treino vazio',
         startModeLabel: 'Iniciar treino',
         templatesModeLabel: 'Meus templates',
@@ -1443,8 +1443,8 @@ export const resources = {
         },
       },
       feed: {
-        title: 'FEED DE TREINO',
-        subtitle: 'As tuas ultimas sessoes e os treinos da tua rede.',
+        title: 'Feed de treino',
+        subtitle: 'As tuas últimas sessões e os treinos da tua rede.',
         searchPlaceholder: 'Pesquisar atletas...',
         searchingAthletes: 'A pesquisar atletas...',
         noAthleteResults: 'Sem resultados para esta pesquisa.',

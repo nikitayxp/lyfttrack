@@ -45,8 +45,8 @@ export function BackButton({ fallback = '/(tabs)', onPress, style }: BackButtonP
 
 const styles = StyleSheet.create({
   button: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.borderStrong,

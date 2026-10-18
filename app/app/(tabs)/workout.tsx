@@ -1255,14 +1255,15 @@ const styles = StyleSheet.create({
   },
   title: {
     color: palette.textPrimary,
-    fontSize: 30,
-    fontWeight: '800',
+    fontSize: 28,
+    fontWeight: '700',
+    letterSpacing: -0.5,
     marginBottom: 6,
   },
   subtitle: {
     color: palette.textSecondary,
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 14,
+    lineHeight: 21,
     marginBottom: 16,
   },
   modeSwitchRow: {
@@ -1272,7 +1273,7 @@ const styles = StyleSheet.create({
   },
   modeChip: {
     flex: 1,
-    minHeight: 40,
+    minHeight: 48,
     borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.inputStroke,
@@ -1287,16 +1288,16 @@ const styles = StyleSheet.create({
   },
   modeChipText: {
     color: palette.chipText,
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '600',
     textAlign: 'center',
   },
   modeChipTextActive: {
     color: palette.textPrimary,
   },
   primaryButton: {
-    backgroundColor: palette.accent,
-    minHeight: 76,
+    backgroundColor: palette.accentStrong,
+    minHeight: 64,
     borderRadius: Radius.card,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1305,8 +1306,8 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: palette.textPrimary,
-    fontSize: 19,
-    fontWeight: '800',
+    fontSize: 17,
+    fontWeight: '700',
   },
   quickStartSection: {
     marginTop: 8,
@@ -1329,9 +1330,9 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   createTemplateButton: {
-    minHeight: 40,
+    minHeight: 48,
     borderRadius: Radius.button,
-    backgroundColor: palette.accent,
+    backgroundColor: palette.accentStrong,
     paddingHorizontal: 10,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1398,8 +1399,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   templateDeleteButton: {
-    width: 30,
-    height: 30,
+    width: 44,
+    height: 44,
     marginLeft: 8,
     borderRadius: Radius.xs,
     borderWidth: 1,

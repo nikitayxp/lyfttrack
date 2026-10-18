@@ -59,19 +59,19 @@ export const Typography: Record<
   h1: {
     fontSize: 36,
     lineHeight: 40,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: -0.8,
   },
   h2: {
     fontSize: 28,
     lineHeight: 32,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: -0.5,
   },
   h3: {
     fontSize: 22,
     lineHeight: 26,
-    fontWeight: '800',
+    fontWeight: '700',
     letterSpacing: -0.3,
   },
   h4: {

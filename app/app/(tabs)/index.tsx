@@ -654,8 +654,8 @@ const styles = StyleSheet.create({
   },
   title: {
     color: palette.textPrimary,
-    fontSize: 30,
-    fontWeight: '900',
+    fontSize: 28,
+    fontWeight: '700',
     marginBottom: 4,
     letterSpacing: -0.6,
   },
@@ -707,7 +707,7 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   athletesHubActionButton: {
-    minHeight: 38,
+    minHeight: 48,
     borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: palette.accent,
@@ -720,10 +720,8 @@ const styles = StyleSheet.create({
   },
   athletesHubActionText: {
     color: palette.chipTextSelected,
-    fontSize: 12,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.35,
+    fontSize: 14,
+    fontWeight: '600',
   },
   statusCard: {
     backgroundColor: CARD_BG,

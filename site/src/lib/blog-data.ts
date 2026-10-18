@@ -25,45 +25,45 @@ export const BLOG_POSTS: BlogPost[] = [
     slug: 'active-workout-system',
     tag: 'Training',
     publishedAt: '2026-03-27',
-    readTimeMinutes: 6,
+    readTimeMinutes: 1,
     title: {
-      en: 'How to Build Brutal Workout Consistency (Without Burnout)',
-      pt: 'Como criar consistencia brutal no treino (sem burnout)',
+      en: 'Build a Consistent Training Routine Without Burning Out',
+      pt: 'Como manter a consistência no treino sem esgotar',
     },
     excerpt: {
-      en: 'A practical playbook to stop skipping sessions and keep progression alive every week.',
-      pt: 'Um playbook pratico para parares de falhar treinos e manteres progressao todas as semanas.',
+      en: 'Practical ways to maintain a training routine and follow your progress.',
+      pt: 'Estratégias práticas para manteres uma rotina de treino e acompanhares a tua evolução.',
     },
     sections: [
       {
         heading: {
-          en: 'Consistency beats motivation every time',
-          pt: 'Consistencia ganha da motivacao todas as vezes',
+          en: 'A routine helps when motivation fades',
+          pt: 'Uma rotina ajuda quando a motivação falha',
         },
         paragraphs: [
           {
-            en: 'Motivation is unstable. Systems are reliable. If your plan only works on perfect days, it is not a real plan.',
-            pt: 'Motivacao e instavel. Sistemas sao fiaveis. Se o teu plano so funciona em dias perfeitos, nao e um plano real.',
+            en: 'Motivation changes from day to day. Choose a routine that you can adapt to the time and energy you have available.',
+            pt: 'A motivação varia de dia para dia. Escolhe uma rotina que consigas adaptar ao tempo e à energia que tens disponíveis.',
           },
           {
-            en: 'LyftTrack helps you show up by keeping your next set, load, and progression target visible at all times.',
-            pt: 'O LyftTrack ajuda-te a aparecer porque mantem o proximo set, carga e alvo de progressao sempre visiveis.',
+            en: 'LyftTrack shows previous sets and loads to help you prepare for your next workout.',
+            pt: 'O LyftTrack mostra as séries e cargas anteriores para te ajudar a preparar o próximo treino.',
           },
         ],
       },
       {
         heading: {
-          en: 'Win the week, not just one workout',
-          pt: 'Ganha a semana, nao apenas um treino',
+          en: 'Look at the week, not just one workout',
+          pt: 'Olha para a semana, não apenas para um treino',
         },
         paragraphs: [
           {
-            en: 'Strong athletes think in weekly execution: total sets, quality reps, and progressive overload with control.',
-            pt: 'Atletas fortes pensam em execucao semanal: total de series, reps de qualidade e sobrecarga progressiva com controlo.',
+            en: 'Review sets, repetitions and loads across the week. This context helps you understand how your training is developing.',
+            pt: 'Revê o total de séries, as repetições e as cargas ao longo da semana. Esse contexto ajuda-te a perceber como o treino está a evoluir.',
           },
           {
-            en: 'When your log is clear, discipline becomes easier and PRs become repeatable, not lucky moments.',
-            pt: 'Quando o teu registo e claro, disciplina fica mais facil e PRs tornam-se repetiveis, nao momentos de sorte.',
+            en: 'A clear log lets you compare sessions and recognise progress without relying only on memory.',
+            pt: 'Um registo claro permite comparar sessões e reconhecer progressos sem depender apenas da memória.',
           },
         ],
       },
@@ -73,45 +73,45 @@ export const BLOG_POSTS: BlogPost[] = [
     slug: 'plate-calculator-design',
     tag: 'Programming',
     publishedAt: '2026-03-23',
-    readTimeMinutes: 5,
+    readTimeMinutes: 1,
     title: {
-      en: 'Load the Bar Faster and Lift Harder',
-      pt: 'Carrega a barra mais rapido e levanta mais pesado',
+      en: 'Prepare the Bar With Fewer Calculations',
+      pt: 'Prepara a barra com menos contas',
     },
     excerpt: {
-      en: 'Stop wasting rest time doing plate math. Use exact per-side loading and stay locked in.',
-      pt: 'Para de perder descanso a fazer contas de discos. Usa o loading exato por lado e mantem foco total.',
+      en: 'Check the plates needed on each side of the bar and confirm the load before you begin.',
+      pt: 'Consulta os discos necessários de cada lado da barra e confirma a carga antes de começares.',
     },
     sections: [
       {
         heading: {
-          en: 'Every second between sets matters',
-          pt: 'Cada segundo entre sets conta',
+          en: 'Prepare for your next set without rushing',
+          pt: 'Prepara a próxima série com calma',
         },
         paragraphs: [
           {
-            en: 'Long transitions kill intensity. Fast loading keeps your rhythm, aggression and output where they should be.',
-            pt: 'Transicoes longas matam intensidade. Loading rapido mantem ritmo, agressividade e output onde devem estar.',
+            en: 'Preparing plates in advance simplifies the transition between sets. Keep the rest periods appropriate for your workout.',
+            pt: 'Preparar os discos com antecedência simplifica a transição entre séries. Mantém o descanso adequado ao teu treino.',
           },
           {
-            en: 'With plate guidance in real time, you focus on execution instead of guessing what to load.',
-            pt: 'Com guia de discos em tempo real, focas na execucao em vez de adivinhar o que meter na barra.',
+            en: 'To work out the load on each side, subtract the bar weight from the total and divide by two. Check the weight of the bar and the available plates.',
+            pt: 'Para calcular a carga de cada lado, subtrai o peso da barra ao total e divide por dois. Confirma o peso da barra e dos discos disponíveis.',
           },
         ],
       },
       {
         heading: {
-          en: 'Confidence under heavy load',
-          pt: 'Confianca sob carga pesada',
+          en: 'Check the load before you begin',
+          pt: 'Confirma a carga antes de começar',
         },
         paragraphs: [
           {
-            en: 'When loading is precise, your attempts are cleaner and your top sets become more consistent.',
-            pt: 'Quando o loading e preciso, as tentativas saem mais limpas e os top sets ficam mais consistentes.',
+            en: 'Check that both sides of the bar have the same load and that the total matches what you planned.',
+            pt: 'Verifica se os dois lados da barra têm a mesma carga e se o total corresponde ao que planeaste.',
           },
           {
-            en: 'Small wins in setup stack into big wins on the platform, on stage, and in your progression graph.',
-            pt: 'Pequenas vitorias no setup acumulam-se em grandes vitorias na plataforma, no palco e no teu grafico de progressao.',
+            en: 'Log the weight and repetitions for each set so you have a reference for your next session.',
+            pt: 'Regista o peso e as repetições de cada série para teres uma referência na próxima sessão.',
           },
         ],
       },
@@ -121,45 +121,45 @@ export const BLOG_POSTS: BlogPost[] = [
     slug: 'pr-sharing-loop',
     tag: 'Product',
     publishedAt: '2026-03-19',
-    readTimeMinutes: 4,
+    readTimeMinutes: 1,
     title: {
-      en: 'Turn Your PRs Into Social Momentum',
-      pt: 'Transforma os teus PRs em momentum social',
+      en: 'Share Your Records With Your Training Friends',
+      pt: 'Partilha os teus recordes com quem treina contigo',
     },
     excerpt: {
-      en: 'Your hard sets deserve visibility. Share your PR cards and build accountability with your circle.',
-      pt: 'Os teus sets duros merecem visibilidade. Partilha os teus PR cards e cria accountability com o teu circulo.',
+      en: 'Celebrate your progress and follow your friends\' workouts at your own pace.',
+      pt: 'Celebra a tua evolução e acompanha os treinos dos teus amigos, ao teu ritmo.',
     },
     sections: [
       {
         heading: {
-          en: 'Your progress should be visible',
-          pt: 'O teu progresso tem de ser visivel',
+          en: 'Recognise your progress',
+          pt: 'Reconhece o teu progresso',
         },
         paragraphs: [
           {
-            en: 'When athletes share milestones, they reinforce identity: this is who I am and this is what I do.',
-            pt: 'Quando atletas partilham milestones, reforcam identidade: isto e quem sou e isto e o que faco.',
+            en: 'Sharing a milestone can be a way to celebrate the effort you put into training.',
+            pt: 'Partilhar uma conquista pode ser uma forma de celebrar o esforço que colocaste no treino.',
           },
           {
-            en: 'That identity loop is powerful for retention, discipline and long-term progression.',
-            pt: 'Esse loop de identidade e poderoso para retencao, disciplina e progressao de longo prazo.',
+            en: 'Choose what you want to share and stay focused on your own goals, without constantly comparing yourself with other people.',
+            pt: 'Escolhe o que queres partilhar e mantém o foco nos teus próprios objetivos, sem te comparares constantemente com outras pessoas.',
           },
         ],
       },
       {
         heading: {
-          en: 'Accountability that drives extra reps',
-          pt: 'Accountability que puxa mais reps',
+          en: 'A community that follows your progress',
+          pt: 'Uma comunidade que acompanha a tua evolução',
         },
         paragraphs: [
           {
-            en: 'Sharing your numbers creates healthy pressure to keep showing up and lifting with intention.',
-            pt: 'Partilhar os teus numeros cria pressao saudavel para continuares a aparecer e treinar com intencao.',
+            en: 'Following your friends\' workouts can give you new ideas and create opportunities to exchange experiences.',
+            pt: 'Acompanhar os treinos dos teus amigos pode dar-te novas ideias e abrir espaço para trocar experiências.',
           },
           {
-            en: 'Use Hall of Fame moments to stay connected with your team, coach, and community.',
-            pt: 'Usa momentos de Hall of Fame para ficares ligado a equipa, coach e comunidade.',
+            en: 'Use the feed to follow sessions and records. Everyone progresses at their own pace.',
+            pt: 'Usa o feed para acompanhar sessões e recordes. Cada pessoa evolui ao seu ritmo.',
           },
         ],
       },

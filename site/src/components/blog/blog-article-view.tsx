@@ -18,7 +18,7 @@ export function BlogArticleView({ post, initialLanguage }: { post: BlogPost; ini
   const localizedTitle = post.title[language];
   const localizedExcerpt = post.excerpt[language];
 
-  const backLabel = language === 'pt' ? 'Voltar ao início' : 'Back to home';
+  const backLabel = language === 'pt' ? 'Voltar aos artigos' : 'Back to articles';
   const readLabel = language === 'pt' ? 'min de leitura' : 'min read';
 
   const sectionRows = useMemo(() => {
@@ -31,7 +31,7 @@ export function BlogArticleView({ post, initialLanguage }: { post: BlogPost; ini
   return (
     <div className="article-shell">
       <header className="article-topbar">
-        <Link href={`/?lang=${language}`} className="btn-outline no-underline">
+        <Link href={`/blog?lang=${language}`} className="btn-outline no-underline">
           {backLabel}
         </Link>
 

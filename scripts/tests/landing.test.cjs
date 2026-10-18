@@ -69,3 +69,13 @@ test('language changes persist and remain usable with blocked storage', async t 
   await act(async () => blocked.tree.root.findByType('header').findByType('button').props.onClick());
   assert.equal(blocked.tree.root.findByType('header').findByType('a').children.join(''), 'Open app');
 });
+
+test('the footer exposes the article index in the selected language', async t => {
+  const { tree } = await setup(t, '"pt"');
+  const articleLink = () => tree.root.findByType('footer').findAllByType('a').find(link => link.props.href.startsWith('/blog'));
+  assert.equal(articleLink().props.href, '/blog?lang=pt');
+  assert.equal(articleLink().children.join(''), 'Artigos');
+  await act(async () => tree.root.findByType('header').findByType('button').props.onClick());
+  assert.equal(articleLink().props.href, '/blog?lang=en');
+  assert.equal(articleLink().children.join(''), 'Articles');
+});

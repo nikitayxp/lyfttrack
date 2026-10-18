@@ -150,6 +150,9 @@ export function LandingShell() {
             © {new Date().getFullYear()} LyftTrack
           </p>
           <div className="flex flex-wrap gap-4 text-sm font-semibold">
+            <a href={`/blog?lang=${language}`} className="text-white/70 no-underline transition hover:text-white">
+              {language === 'pt' ? 'Artigos' : 'Articles'}
+            </a>
             <a href="/termos" className="text-white/70 no-underline transition hover:text-white">
               {language === 'pt' ? 'Termos de Uso' : 'Terms of Service'}
             </a>

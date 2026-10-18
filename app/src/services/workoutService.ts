@@ -1,3 +1,4 @@
+import { loadAllRows } from '@/services/queryPages';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/services/supabase';
 import {
@@ -415,7 +416,7 @@ function sortWorkoutDetailsSets(a: WorkoutDetailsSet, b: WorkoutDetailsSet): num
   return a.id.localeCompare(b.id);
 }
 
-function sortWorkoutFeedExerciseSets(a: WorkoutFeedExerciseSet, b: WorkoutFeedExerciseSet): number {
+function sortWorkoutFeedExerciseSets(a: Pick<WorkoutFeedExerciseSet, 'id' | 'set_number'>, b: Pick<WorkoutFeedExerciseSet, 'id' | 'set_number'>): number {
   const aNumber = a.set_number ?? Number.MAX_SAFE_INTEGER;
   const bNumber = b.set_number ?? Number.MAX_SAFE_INTEGER;
 
@@ -577,28 +578,26 @@ async function resolvePrCountsByWorkoutId(
       continue;
     }
 
-    const { data: historyWorkouts, error: historyError } = await supabase
+    const historyWorkouts = await loadAllRows(() => supabase
       .from('workouts')
       .select('id, start_time')
       .eq('user_id', userId)
-      .not('end_time', 'is', null)
-      .order('start_time', { ascending: true });
+      .not('end_time', 'is', null),
+      'Unable to load record history workouts'
+    );
 
-    if (historyError || !historyWorkouts || historyWorkouts.length === 0) {
+    if (historyWorkouts.length === 0) {
       continue;
     }
 
-    const historyWorkoutIds = historyWorkouts.map((row) => row.id);
-
-    const { data: historySets, error: historySetsError } = await supabase
+    const historySets = await loadAllRows(() => supabase
       .from('sets')
-      .select('workout_id, exercise_id, weight, reps')
-      .in('workout_id', historyWorkoutIds)
-      .in('exercise_id', [...exerciseIds]);
-
-    if (historySetsError) {
-      continue;
-    }
+      .select('id, workout_id, exercise_id, weight, reps, workouts!inner(user_id, end_time)')
+      .eq('workouts.user_id', userId)
+      .not('workouts.end_time', 'is', null)
+      .in('exercise_id', [...exerciseIds]),
+      'Unable to load record history sets'
+    );
 
     const historySetsByWorkoutId = new Map<string, PersonalRecordSetSample[]>();
 
@@ -1712,17 +1711,13 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
 
   const likedWorkoutIds = new Set((ownLikes ?? []).map((row) => row.workout_id));
 
-  const { data: allSets, error: setsError } = await supabase
+  const allSets = await loadAllRows(() => supabase
     .from('sets')
     .select('id, workout_id, exercise_id, set_number, weight, reps, rir, set_type, exercises(id, name, name_en, name_pt)')
-    .in('workout_id', workoutIds)
-    .order('exercise_id', { ascending: true })
-    .order('set_number', { ascending: true })
-    .order('id', { ascending: true });
-
-  if (setsError) {
-    throw new Error(`Unable to load workout feed sets: ${setsError.message}`);
-  }
+    .in('workout_id', workoutIds),
+    'Unable to load workout feed sets'
+  );
+  allSets.sort((a, b) => (a.exercise_id ?? '').localeCompare(b.exercise_id ?? '') || sortWorkoutFeedExerciseSets(a, b));
 
   const aggregateByWorkout = aggregateWorkoutFeedSets((allSets as RawWorkoutFeedSetRow[] | null) ?? []);
 
@@ -2356,17 +2351,13 @@ export async function getUserWorkouts(
 
   const likedWorkoutIds = new Set((ownLikes ?? []).map((row) => row.workout_id));
 
-  const { data: allSets, error: setsError } = await supabase
+  const allSets = await loadAllRows(() => supabase
     .from('sets')
     .select('id, workout_id, exercise_id, set_number, weight, reps, rir, set_type, exercises(id, name, name_en, name_pt)')
-    .in('workout_id', workoutIds)
-    .order('exercise_id', { ascending: true })
-    .order('set_number', { ascending: true })
-    .order('id', { ascending: true });
-
-  if (setsError) {
-    throw new Error(`Unable to load workout history sets: ${setsError.message}`);
-  }
+    .in('workout_id', workoutIds),
+    'Unable to load workout history sets'
+  );
+  allSets.sort((a, b) => (a.exercise_id ?? '').localeCompare(b.exercise_id ?? '') || sortWorkoutFeedExerciseSets(a, b));
 
   const aggregateByWorkout = aggregateWorkoutFeedSets((allSets as RawWorkoutFeedSetRow[] | null) ?? []);
 

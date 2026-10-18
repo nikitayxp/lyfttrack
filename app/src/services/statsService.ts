@@ -1,3 +1,4 @@
+import { loadAllRows } from '@/services/queryPages';
 import { supabase } from '@/services/supabase';
 import {
   getAuthenticatedUserOrThrow,
@@ -54,7 +55,7 @@ export type WeeklyVolumeByMuscle = {
   sets: number;
 };
 
-type WorkoutRef = Pick<Tables<'workouts'>, 'start_time' | 'end_time' | 'user_id'>;
+type WorkoutRef = Pick<Tables<'workouts'>, 'id' | 'start_time' | 'end_time' | 'user_id'>;
 type ExerciseRef = Pick<Tables<'exercises'>, 'id' | 'name' | 'name_en' | 'name_pt'>;
 type WeeklyExerciseRef = Pick<
   Tables<'exercises'>,
@@ -199,15 +200,13 @@ async function getExerciseSetRowsForUser(exerciseId: string): Promise<RawSetWith
     throw new Error('Exercise id is required to load progress.');
   }
 
-  const { data, error } = await supabase
+  const data = await loadAllRows(() => supabase
     .from('sets')
-    .select('exercise_id, weight, reps, rir, set_type, workouts!inner(start_time, end_time, user_id)')
+    .select('id, exercise_id, weight, reps, rir, set_type, workouts!inner(id, start_time, end_time, user_id)')
     .eq('exercise_id', normalizedExerciseId)
-    .eq('workouts.user_id', user.id);
-
-  if (error) {
-    throw new Error(`Unable to load exercise progress: ${error.message}`);
-  }
+    .eq('workouts.user_id', user.id),
+    'Unable to load exercise progress'
+  );
 
   const rows = (data as RawSetWithWorkout[] | null) ?? [];
 
@@ -220,19 +219,17 @@ async function getExerciseSetRowsForUser(exerciseId: string): Promise<RawSetWith
 export async function getTrackedExercises(language: 'en' | 'pt' = 'en'): Promise<StatsExerciseOption[]> {
   const user = await getAuthenticatedUserOrThrow();
 
-  const { data, error } = await supabase
+  const data = await loadAllRows(() => supabase
     .from('sets')
-    .select('exercise_id, exercises!inner(id, name, name_en, name_pt), workouts!inner(user_id, end_time)')
+    .select('id, exercise_id, exercises!inner(id, name, name_en, name_pt), workouts!inner(user_id, end_time)')
     .eq('workouts.user_id', user.id)
-    .not('workouts.end_time', 'is', null);
-
-  if (error) {
-    throw new Error(`Unable to load tracked exercises: ${error.message}`);
-  }
+    .not('workouts.end_time', 'is', null),
+    'Unable to load tracked exercises'
+  );
 
   const optionsById = new Map<string, StatsExerciseOption>();
 
-  for (const row of (data as RawSetWithWorkout[] | null) ?? []) {
+  for (const row of data) {
     const exercise = resolveEmbeddedObject(row.exercises);
 
     if (!exercise?.id || !exercise.name) {
@@ -320,7 +317,7 @@ export async function getExerciseProgress(
       current.maxWeightReps = reps;
     }
 
-    const workoutKey = `${workout.start_time}|${workout.end_time ?? ''}`;
+    const workoutKey = workout.id;
 
     if (!current.trackedWorkoutKeys.has(workoutKey)) {
       current.trackedWorkoutKeys.add(workoutKey);
@@ -396,20 +393,17 @@ export async function getExercisePersonalRecords(exerciseId: string): Promise<Ex
 export async function getAllTimePRs(language: 'en' | 'pt' = 'en'): Promise<AllTimePR[]> {
   const user = await getAuthenticatedUserOrThrow();
 
-  const { data, error } = await supabase
+  const data = await loadAllRows(() => supabase
     .from('sets')
-    .select('exercise_id, weight, workouts!inner(start_time, end_time, user_id), exercises!inner(id, name, name_en, name_pt)')
+    .select('id, exercise_id, weight, workouts!inner(id, start_time, end_time, user_id), exercises!inner(id, name, name_en, name_pt)')
     .eq('workouts.user_id', user.id)
     .not('workouts.end_time', 'is', null)
     .not('weight', 'is', null)
-    .gt('weight', 0)
-    .order('weight', { ascending: false });
+    .gt('weight', 0),
+    'Unable to load all-time PRs'
+  );
 
-  if (error) {
-    throw new Error(`Unable to load all-time PRs: ${error.message}`);
-  }
-
-  const rows = (data as RawSetWithWorkout[] | null) ?? [];
+  const rows = data;
   const bestByExerciseId = new Map<string, AllTimePR>();
 
   for (const row of rows) {
@@ -438,7 +432,7 @@ export async function getAllTimePRs(language: 'en' | 'pt' = 'en'): Promise<AllTi
       bestByExerciseId.set(exercise.id, {
         exerciseId: exercise.id,
         exercise: exerciseNames,
-        maxWeight: Number(weight.toFixed(1)),
+        maxWeight: weight,
         achievedAt,
       });
       continue;
@@ -448,7 +442,7 @@ export async function getAllTimePRs(language: 'en' | 'pt' = 'en'): Promise<AllTi
       bestByExerciseId.set(exercise.id, {
         exerciseId: exercise.id,
         exercise: exerciseNames,
-        maxWeight: Number(weight.toFixed(1)),
+        maxWeight: weight,
         achievedAt,
       });
       continue;
@@ -467,7 +461,10 @@ export async function getAllTimePRs(language: 'en' | 'pt' = 'en'): Promise<AllTi
     }
   }
 
-  return [...bestByExerciseId.values()].sort((a, b) => {
+  return [...bestByExerciseId.values()].map((record) => ({
+    ...record,
+    maxWeight: Number(record.maxWeight.toFixed(1)),
+  })).sort((a, b) => {
     if (b.maxWeight !== a.maxWeight) {
       return b.maxWeight - a.maxWeight;
     }
@@ -482,16 +479,14 @@ export async function getWeeklyVolumeByMuscle(localeTag?: string): Promise<Weekl
   const user = await getAuthenticatedUserOrThrow();
   const sinceIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const { data, error } = await supabase
+  const data = await loadAllRows(() => supabase
     .from('sets')
-    .select('id, workouts!inner(start_time, end_time, user_id), exercises(name, name_en, name_pt, muscle_group, muscle_en, muscle_pt)')
+    .select('id, workouts!inner(id, start_time, end_time, user_id), exercises(name, name_en, name_pt, muscle_group, muscle_en, muscle_pt)')
     .eq('workouts.user_id', user.id)
     .gte('workouts.start_time', sinceIso)
-    .not('workouts.end_time', 'is', null);
-
-  if (error) {
-    throw new Error(`Unable to load weekly muscle volume: ${error.message}`);
-  }
+    .not('workouts.end_time', 'is', null),
+    'Unable to load weekly muscle volume'
+  );
 
   const rows = (data as RawWeeklySetWithWorkout[] | null) ?? [];
 
@@ -569,19 +564,16 @@ export async function getExerciseWorkoutHistory(exerciseId: string): Promise<Exe
     return [];
   }
 
-  const { data, error } = await supabase
+  const data = await loadAllRows(() => supabase
     .from('workout_exercises')
     .select(
-      'workout_id, workouts!inner(id, name, start_time, end_time, user_id), sets!sets_workout_exercise_id_fkey(set_number, weight, reps, rir, set_type)'
+      'id, workout_id, workouts!inner(id, name, start_time, end_time, user_id), sets!sets_workout_exercise_id_fkey(set_number, weight, reps, rir, set_type)'
     )
     .eq('exercise_id', normalizedId)
     .eq('workouts.user_id', user.id)
-    .not('workouts.end_time', 'is', null)
-    .order('workouts(start_time)', { ascending: false });
-
-  if (error) {
-    throw new Error(`Unable to load exercise history: ${error.message}`);
-  }
+    .not('workouts.end_time', 'is', null),
+    'Unable to load exercise history'
+  );
 
   type HistoryWorkout = { id: string; name: string; start_time: string; end_time: string | null; user_id: string };
 
@@ -599,7 +591,9 @@ export async function getExerciseWorkoutHistory(exerciseId: string): Promise<Exe
       | null;
   };
 
-  const rows = (data as HistoryRow[] | null) ?? [];
+  const rows = ((data as HistoryRow[] | null) ?? []).sort((a, b) =>
+    (resolveEmbeddedObject(b.workouts)?.start_time ?? '').localeCompare(resolveEmbeddedObject(a.workouts)?.start_time ?? '')
+  );
   const entriesByWorkout = new Map<string, ExerciseWorkoutHistoryEntry>();
 
   for (const row of rows) {
@@ -648,17 +642,14 @@ export async function getWeeklyTrainingHours(localeTag?: string): Promise<{ week
   const weeksBack = 12;
   const sinceIso = new Date(Date.now() - weeksBack * 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const { data, error } = await supabase
+  const data = await loadAllRows(() => supabase
     .from('workouts')
-    .select('start_time, end_time')
+    .select('id, start_time, end_time')
     .eq('user_id', user.id)
     .not('end_time', 'is', null)
-    .gte('start_time', sinceIso)
-    .order('start_time', { ascending: true });
-
-  if (error) {
-    throw new Error(`Unable to load weekly training hours: ${error.message}`);
-  }
+    .gte('start_time', sinceIso),
+    'Unable to load weekly training hours'
+  );
 
   const rows = (data as WorkoutRef[] | null) ?? [];
   const weekMap = new Map<string, { hours: number; workouts: number }>();
@@ -702,32 +693,28 @@ export async function getWeeklyDashboardMetrics(
   const user = await getAuthenticatedUserOrThrow();
   const sinceIso = new Date(Date.now() - weeksBack * 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const { data: workouts, error: workoutsError } = await supabase
+  const workouts = await loadAllRows(() => supabase
     .from('workouts')
     .select('id, start_time, end_time')
     .eq('user_id', user.id)
     .not('end_time', 'is', null)
-    .gte('start_time', sinceIso)
-    .order('start_time', { ascending: true });
-
-  if (workoutsError) {
-    throw new Error(`Unable to load dashboard workouts: ${workoutsError.message}`);
-  }
+    .gte('start_time', sinceIso),
+    'Unable to load dashboard workouts'
+  );
 
   const workoutRows = (workouts as Array<{ id: string; start_time: string; end_time: string | null }> | null) ?? [];
   if (workoutRows.length === 0) {
     return [];
   }
 
-  const workoutIds = workoutRows.map((row) => row.id);
-  const { data: setRows, error: setsError } = await supabase
+  const setRows = await loadAllRows(() => supabase
     .from('sets')
-    .select('workout_id, weight, reps')
-    .in('workout_id', workoutIds);
-
-  if (setsError) {
-    throw new Error(`Unable to load dashboard sets: ${setsError.message}`);
-  }
+    .select('id, workout_id, weight, reps, workouts!inner(user_id, start_time, end_time)')
+    .eq('workouts.user_id', user.id)
+    .not('workouts.end_time', 'is', null)
+    .gte('workouts.start_time', sinceIso),
+    'Unable to load dashboard sets'
+  );
 
   const volumeByWorkout = new Map<string, { volumeKg: number; repsTotal: number }>();
   for (const row of (setRows as Array<{ workout_id: string | null; weight: number | null; reps: number | null }> | null) ?? []) {

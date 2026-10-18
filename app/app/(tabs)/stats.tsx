@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Animated, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { BarChart } from 'react-native-gifted-charts';
 import { useTranslation } from 'react-i18next';
 import {
@@ -12,6 +12,9 @@ import {
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import { BackButton } from '@/components/common/BackButton';
+import { getBarChartLayout } from '@/utils/barChartLayout';
+import { useWorkoutContext } from '@/context/WorkoutContext';
+import { getTabBarHeight, MINIMIZED_WORKOUT_BAR_GAP, MINIMIZED_WORKOUT_BAR_HEIGHT } from '@/constants/tabBar';
 
 const palette = Colors.dark;
 const SCREEN_BG = palette.bgPrimary;
@@ -66,7 +69,10 @@ function metricValueOf(point: WeeklyDashboardPoint, metric: WeeklyDashboardMetri
 
 export default function StatsScreen() {
   const { t, i18n } = useTranslation();
-  const { width: windowWidth } = useWindowDimensions();
+  const { hasActiveWorkout } = useWorkoutContext();
+  const bottomPadding = 34
+    + (Platform.OS === 'web' ? getTabBarHeight(true, 0) : 0)
+    + (hasActiveWorkout ? MINIMIZED_WORKOUT_BAR_HEIGHT + MINIMIZED_WORKOUT_BAR_GAP : 0);
   const localeTag = i18n.language;
 
   const [dashboardMetric, setDashboardMetric] = useState<WeeklyDashboardMetric>('volume');
@@ -79,8 +85,10 @@ export default function StatsScreen() {
   const [selectedDashboardIndex, setSelectedDashboardIndex] = useState<number | null>(null);
   const [selectedVolumeIndex, setSelectedVolumeIndex] = useState<number | null>(null);
 
-  const chartWidth = useMemo(() => Math.min(Math.max(280, windowWidth - 40), 360), [windowWidth]);
-  const volumeViewportWidth = useMemo(() => Math.max(280, windowWidth - 40), [windowWidth]);
+  const [dashboardContainerWidth, setDashboardContainerWidth] = useState(0);
+  const [volumeContainerWidth, setVolumeContainerWidth] = useState(0);
+  const dashboardLayout = getBarChartLayout(dashboardContainerWidth, 50, dashboardRows.length);
+  const volumeViewportWidth = getBarChartLayout(volumeContainerWidth, 64, 1).width;
 
   const loadDashboard = useCallback(async () => {
     setIsLoadingDashboard(true);
@@ -117,7 +125,7 @@ export default function StatsScreen() {
     () =>
       dashboardRows.map((item, i) => ({
         value: Math.max(0, metricValueOf(item, dashboardMetric)),
-        label: item.weekLabel,
+        label: i % 4 === 0 ? item.weekLabel : '',
         frontColor: i === selectedDashboardIndex ? palette.accentLight : CHART_NEON,
         onPress: () => setSelectedDashboardIndex(i),
       })),
@@ -154,7 +162,7 @@ export default function StatsScreen() {
   );
 
   const volumeChartWidth = useMemo(() => {
-    const w = volumeBarData.length * 92 + 36;
+    const w = volumeBarData.length * 92 + 24;
     return Math.max(volumeViewportWidth, w);
   }, [volumeBarData.length, volumeViewportWidth]);
 
@@ -205,7 +213,7 @@ export default function StatsScreen() {
   ];
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]}>
       <View style={styles.headerRow}>
         <BackButton fallback="/(tabs)/profile" />
       </View>
@@ -224,7 +232,7 @@ export default function StatsScreen() {
         {selectedHeadline ? (
           <View style={styles.headlineWrap}>
             <Text style={styles.headlineValue}>{selectedHeadline}</Text>
-            {weeksAgoLabel ? <Text style={styles.headlineMeta}>{weeksAgoLabel}</Text> : null}
+            {weeksAgoLabel ? <Text style={styles.headlineMeta}>{selectedDashboardPoint?.weekLabel} · {weeksAgoLabel}</Text> : null}
           </View>
         ) : null}
 
@@ -239,16 +247,17 @@ export default function StatsScreen() {
             <Text style={styles.placeholderText}>{t('stats.noDashboardData')}</Text>
           </View>
         ) : (
-          <View style={styles.chartWrap}>
-            <BarChart
+          <View style={styles.chartWrap} onLayout={(event) => setDashboardContainerWidth(event.nativeEvent.layout.width)}>
+            {dashboardContainerWidth > 0 ? <BarChart
               data={dashboardBarData}
-              width={chartWidth}
+              width={dashboardLayout.width}
               height={220}
               maxValue={dashboardMaxValue}
-              barWidth={Math.max(14, Math.min(28, Math.floor(chartWidth / Math.max(dashboardBarData.length, 1)) - 8))}
-              spacing={12}
-              initialSpacing={12}
-              endSpacing={10}
+              barWidth={dashboardLayout.barWidth}
+              spacing={dashboardLayout.spacing}
+              initialSpacing={6}
+              endSpacing={6}
+              disableScroll
               roundedTop
               frontColor={CHART_NEON}
               gradientColor="#60A5FA"
@@ -256,9 +265,9 @@ export default function StatsScreen() {
               yAxisColor={palette.borderStrong}
               xAxisColor={palette.borderStrong}
               yAxisLabelWidth={50}
-              xAxisLabelsHeight={52}
-              xAxisLabelsVerticalShift={8}
-              labelsExtraHeight={36}
+              labelWidth={48}
+              xAxisLabelsHeight={18}
+              labelsExtraHeight={24}
               overflowTop={12}
               yAxisTextStyle={styles.axisText}
               xAxisLabelTextStyle={styles.xAxisLabelText}
@@ -266,8 +275,7 @@ export default function StatsScreen() {
               rulesColor={palette.inputFill}
               noOfSections={4}
               isAnimated
-              adjustToWidth
-            />
+            /> : null}
           </View>
         )}
 
@@ -303,21 +311,20 @@ export default function StatsScreen() {
             <Text style={styles.placeholderText}>{t('stats.noWeeklySets')}</Text>
           </View>
         ) : (
-          <View style={styles.chartWrap}>
+          <View style={styles.chartWrap} onLayout={(event) => setVolumeContainerWidth(event.nativeEvent.layout.width)}>
             <ScrollView
               horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.weeklyChartScrollContent}
+              showsHorizontalScrollIndicator
             >
               <BarChart
                 data={volumeBarData}
                 width={volumeChartWidth}
                 height={220}
                 maxValue={volumeMaxValue}
-                barWidth={Math.max(22, Math.min(34, Math.floor(volumeChartWidth / Math.max(volumeBarData.length, 1)) - 26))}
-                spacing={14}
+                barWidth={34}
+                spacing={58}
                 initialSpacing={12}
-                endSpacing={10}
+                endSpacing={12}
                 roundedTop
                 frontColor={CHART_NEON}
                 gradientColor="#60A5FA"
@@ -325,9 +332,9 @@ export default function StatsScreen() {
                 yAxisColor={palette.borderStrong}
                 xAxisColor={palette.borderStrong}
                 yAxisLabelWidth={64}
-                xAxisLabelsHeight={52}
-                xAxisLabelsVerticalShift={8}
-                labelsExtraHeight={36}
+                labelWidth={80}
+                xAxisLabelsHeight={18}
+                labelsExtraHeight={24}
                 overflowTop={12}
                 yAxisTextStyle={styles.axisText}
                 xAxisLabelTextStyle={styles.xAxisLabelText}
@@ -341,7 +348,7 @@ export default function StatsScreen() {
             {selectedVolumePoint ? (
               <View style={styles.selectedPointCard}>
                 <Text style={styles.selectedPointLabel}>{selectedVolumePoint.muscle}</Text>
-                <Text style={styles.selectedPointValue}>{`${selectedVolumePoint.sets} ${t('stats.weeklySetsSuffix')}`}</Text>
+                <Text style={styles.selectedPointValue}>{`${selectedVolumePoint.sets} ${t('stats.weeklySetsSuffix', { count: selectedVolumePoint.sets })}`}</Text>
               </View>
             ) : null}
           </View>
@@ -450,10 +457,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 28,
     paddingHorizontal: 8,
-    overflow: 'visible',
-  },
-  weeklyChartScrollContent: {
-    paddingRight: 8,
+    overflow: 'hidden',
   },
   axisText: {
     color: '#8FA2BA',
@@ -462,7 +466,6 @@ const styles = StyleSheet.create({
   xAxisLabelText: {
     color: '#94A3B8',
     fontSize: 10,
-    width: 48,
     textAlign: 'center',
   },
   metricTabsRow: {

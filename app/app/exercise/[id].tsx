@@ -43,8 +43,6 @@ import {
   isChartAtNewestEnd,
   resolveChartScrollMax,
   resolveInitialPointerIndex,
-  resolvePointerCardEdge,
-  resolvePointerCardShiftX,
   resolveDragScrollX,
 } from '@/utils/chartViewport';
 import type { ActiveExercise } from '@/hooks/useActiveWorkoutState';
@@ -62,24 +60,8 @@ const CHART_HOLD_INTERVAL_MS = 380;
 type ChartRange = '3m' | '1y' | 'all';
 type ChartMetric = Extract<ProgressMetric, 'weight' | 'e1rm'>;
 
-// gifted-charts places the pointer overlay one `initialSpacing` to the right of
-// the point it is reporting: `getX` already includes `initialSpacing`, and the
-// overlay's own origin adds it a second time. Measured at exactly 20px with
-// `initialSpacing={20}` — the strip, the dot and the card all landed beside the
-// data point instead of on it, which is what the review flagged.
-//
-// The library gives no way to shift the overlay as a whole, so each of the three
-// pieces is pulled back by hand: the strip through `pointerShiftX` on the data,
-// the dot through `pointerComponent`, and the card through its own style.
-// `shiftPointerLabelX` is not one of them — it is ignored outright while
-// `autoAdjustPointerLabelPosition` is on, which we want for the edge clamping.
+// The pointer origin adds initialSpacing twice; keep the dot aligned with its point.
 const POINTER_X_CORRECTION = -CHART_EDGE_SPACING;
-/**
- * The chart clamps the label against the plot edges using this number, so the
- * card has to actually be this wide. Letting it size to its text made it wider
- * than the chart believed, and the extra hung off the right edge, cut in half.
- */
-const POINTER_LABEL_WIDTH = 150;
 /** Must match `styles.activeDataPoint` — gifted-charts centres custom points with dataPointWidth/Height (default 4). */
 const ACTIVE_POINT_SIZE = 12;
 
@@ -313,10 +295,12 @@ export default function ExerciseDetailScreen() {
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [chartScrollPosition, setChartScrollPosition] = useState({ x: 0, max: 0 });
   const [chartDragging, setChartDragging] = useState(false);
+  const [selectedChartDate, setSelectedChartDate] = useState<string | null>(null);
   /** First open pins to newest; filter changes keep how far back you had scrolled. */
   const [pinChartToEnd, setPinChartToEnd] = useState(true);
 
   const chartScrollRef = useRef<ScrollView | null>(null);
+  const chartPressStartXRef = useRef<number | null>(null);
   const lastScrollXRef = useRef(0);
   const chartScrollMaxRef = useRef(0);
   const chartHoldIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -369,6 +353,8 @@ export default function ExerciseDetailScreen() {
 
     return activeProgressPoint ? [...finished, activeProgressPoint] : finished;
   }, [activeProgressPoint, metric, progress, range]);
+
+  const selectedChartPoint = chartProgress.find((point) => point.date === selectedChartDate) ?? chartProgress[chartProgress.length - 1];
 
   // Reserves the axis gutter and both end margins before dividing, otherwise
   // the final point is drawn half outside the plot.
@@ -459,6 +445,7 @@ export default function ExerciseDetailScreen() {
   const startChartHold = useCallback(
     (direction: -1 | 1) => {
       stopChartHold();
+      chartPressStartXRef.current = lastScrollXRef.current;
 
       const step = () => {
         const x = lastScrollXRef.current;
@@ -908,6 +895,14 @@ export default function ExerciseDetailScreen() {
               ]}
               {...(Platform.OS === 'web' ? { onMouseDown: handleChartMouseDown } : null)}
             >
+              {selectedChartPoint ? (
+                <View style={styles.pointerCard}>
+                  <Text style={styles.pointerDate}>{formatExerciseHistoryDate(selectedChartPoint.date, language)}</Text>
+                  {selectedChartPoint.isActive ? <Text style={styles.pointerMeta}>{t('exercise.detail.pointerInProgress')}</Text> : null}
+                  <Text style={styles.pointerValue}>{`${formatNumericValue(selectedChartPoint.maxWeight)} kg x ${selectedChartPoint.maxWeightReps}`}</Text>
+                  {metric === 'e1rm' ? <Text style={styles.pointerMeta}>{t('exercise.detail.pointerE1rm', { value: formatNumericValue(selectedChartPoint.estimated1RMMax) })}</Text> : null}
+                </View>
+              ) : null}
               {needsHorizontalScroll ? (
                 <View style={styles.chartNavigation}>
                   <TouchableOpacity
@@ -918,6 +913,10 @@ export default function ExerciseDetailScreen() {
                     activeOpacity={ACTIVE_OPACITY}
                     disabled={chartScrollPosition.x <= 1}
                     onPressIn={() => startChartHold(-1)}
+                    onPress={() => {
+                      if (chartPressStartXRef.current === null || lastScrollXRef.current === chartPressStartXRef.current) moveChart(-1);
+                      chartPressStartXRef.current = null;
+                    }}
                     onPressOut={stopChartHold}
                     accessibilityRole="button"
                     accessibilityLabel={t('exercise.detail.chartOlder')}
@@ -934,6 +933,10 @@ export default function ExerciseDetailScreen() {
                     activeOpacity={ACTIVE_OPACITY}
                     disabled={atNewestEnd}
                     onPressIn={() => startChartHold(1)}
+                    onPress={() => {
+                      if (chartPressStartXRef.current === null || lastScrollXRef.current === chartPressStartXRef.current) moveChart(1);
+                      chartPressStartXRef.current = null;
+                    }}
                     onPressOut={stopChartHold}
                     accessibilityRole="button"
                     accessibilityLabel={t('exercise.detail.chartNewer')}
@@ -977,57 +980,23 @@ export default function ExerciseDetailScreen() {
                 // The chart owns horizontal drag only for point inspection.
                 // Paging history is kept on explicit buttons above, so it never
                 // steals the page's vertical scroll gesture.
+                getPointerProps={({ pointerIndex }: { pointerIndex: number }) => {
+                  const point = lineData[pointerIndex]?.point;
+                  if (point) {
+                    focusedDateRef.current = point.date;
+                    setSelectedChartDate(point.date);
+                  }
+                }}
                 pointerConfig={{
                   showPointerStrip: false,
                   pointerColor: palette.textPrimary,
                   radius: 5,
-                  pointerLabelWidth: POINTER_LABEL_WIDTH,
-                  pointerLabelHeight: 84,
                   activatePointersOnLongPress: false,
                   activatePointersInstantlyOnTouch: true,
-                  autoAdjustPointerLabelPosition: true,
                   persistPointer: true,
                   resetPointerOnDataChange: true,
                   initialPointerIndex,
                   pointerComponent: () => <View style={styles.pointerDot} />,
-                  pointerLabelComponent: (
-                    items: { point?: ExerciseProgressPoint }[],
-                    _secondary: unknown,
-                    pointerIndex: number
-                  ) => {
-                    const point = items?.[0]?.point;
-
-                    if (!point) {
-                      return null;
-                    }
-
-                    focusedDateRef.current = point.date;
-                    const shiftX = resolvePointerCardShiftX(
-                      resolvePointerCardEdge(pointerIndex, lineData.length),
-                      POINTER_X_CORRECTION
-                    );
-
-                    return (
-                      <View style={[styles.pointerCard, { transform: [{ translateX: shiftX }] }]}>
-                        <Text style={styles.pointerDate}>
-                          {formatExerciseHistoryDate(point.date, language)}
-                        </Text>
-                        {point.isActive ? (
-                          <Text style={styles.pointerMeta}>{t('exercise.detail.pointerInProgress')}</Text>
-                        ) : null}
-                        <Text style={styles.pointerValue}>
-                          {`${formatNumericValue(point.maxWeight)} kg x ${point.maxWeightReps}`}
-                        </Text>
-                        {metric === 'e1rm' ? (
-                          <Text style={styles.pointerMeta}>
-                            {t('exercise.detail.pointerE1rm', {
-                              value: formatNumericValue(point.estimated1RMMax),
-                            })}
-                          </Text>
-                        ) : null}
-                      </View>
-                    );
-                  },
                 }}
               />
             </View>
@@ -1295,7 +1264,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   pointerCard: {
-    width: POINTER_LABEL_WIDTH,
+    marginBottom: 8,
     borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.borderStrong,

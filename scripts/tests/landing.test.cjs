@@ -24,6 +24,11 @@ async function setup(t, stored, blocked = false) {
     '@/components/home/features-section': { FeaturesSection: () => null },
     '@/components/ui/cookie-consent-banner': { CookiePreferencesLink: () => null },
   };
+  const hookModule = { exports: {} };
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync('site/src/lib/use-site-language.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, {
+    window, document: { documentElement: {} }, require, exports: hookModule.exports, module: hookModule,
+  });
+  replacements['@/lib/use-site-language'] = hookModule.exports;
   const source = fs.readFileSync('site/src/components/home/landing-shell.tsx', 'utf8');
   const compiled = ts.transpileModule(source, { compilerOptions: {
     module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022,
@@ -63,4 +68,14 @@ test('language changes persist and remain usable with blocked storage', async t 
   const blocked = await setup(t, null, true);
   await act(async () => blocked.tree.root.findByType('header').findByType('button').props.onClick());
   assert.equal(blocked.tree.root.findByType('header').findByType('a').children.join(''), 'Open app');
+});
+
+test('the footer exposes the article index in the selected language', async t => {
+  const { tree } = await setup(t, '"pt"');
+  const articleLink = () => tree.root.findByType('footer').findAllByType('a').find(link => link.props.href.startsWith('/blog'));
+  assert.equal(articleLink().props.href, '/blog?lang=pt');
+  assert.equal(articleLink().children.join(''), 'Artigos');
+  await act(async () => tree.root.findByType('header').findByType('button').props.onClick());
+  assert.equal(articleLink().props.href, '/blog?lang=en');
+  assert.equal(articleLink().children.join(''), 'Articles');
 });

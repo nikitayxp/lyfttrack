@@ -41,7 +41,7 @@ async function setup(t, options = {}) {
       },
     } } },
     '@/services/workoutService': { getPreviousExercisePerformance: options.getPerformance ?? (async () => []) },
-  });
+  }, { Date: options.Date ?? Date });
   const { WorkoutProvider, useWorkoutContext } = load('app/src/context/WorkoutContext.tsx');
   const storage = load('app/src/services/offlineSyncService.ts');
   function Consumer() {
@@ -94,6 +94,29 @@ test('token refresh for the same account retains the active session', async t =>
   await app.changeUser('A');
   assert.equal(app.current.activeExercises[0]?.exercise.id, 'A');
   assert.equal(app.current.workoutStartedAtMs, startedAt);
+});
+
+test('save identity survives pause, resume and restoring the same account draft', async t => {
+  let now = Date.UTC(2026, 9, 18, 12);
+  class Clock extends Date {
+    constructor(...args) { super(...(args.length ? args : [now])); }
+    static now() { return now; }
+  }
+  const app = await setup(t, { Date: Clock });
+  await app.run(c => c.setActiveExercisesWithRef([exercise('A')]));
+  const sessionStart = app.current.workoutSessionStartedAtMs;
+  assert.equal(typeof sessionStart, 'number');
+  const timerStart = app.current.workoutStartedAtMs;
+  await app.run(c => c.toggleTimerPause());
+  now += 60_000;
+  await app.run(c => c.toggleTimerPause());
+  assert.notEqual(app.current.workoutStartedAtMs, timerStart);
+  assert.equal(app.current.workoutSessionStartedAtMs, sessionStart);
+  await app.changeUser('B');
+  const saved = await app.storage.loadWorkoutDraft('A');
+  assert.equal(saved.sessionStartTime, new Date(sessionStart).toISOString());
+  await app.changeUser('A');
+  assert.equal(app.current.workoutSessionStartedAtMs, sessionStart);
 });
 
 test('an old session bootstrap cannot overwrite a newer authentication event', async t => {

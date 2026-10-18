@@ -25,11 +25,14 @@ export type CreateWorkoutWithSetsInput = {
   /** Map of exercise.id → per-workout notes snapshot. */
   notesByExerciseId?: Record<string, string | null | undefined>;
   startTime: string;
+  sessionStartTime?: string;
   endTime: string;
   setDrafts: WorkoutSetDraft[];
 };
 
 export type CreateWorkoutWithSetsResult = {
+  startTime: string;
+  endTime: string;
   workoutId: string;
   insertedSetCount: number;
 };
@@ -41,6 +44,7 @@ export type FinishWorkoutInput = {
   exerciseRestSecondsByExerciseId?: Record<string, number | null | undefined>;
   notesByExerciseId?: Record<string, string | null | undefined>;
   startTime: string;
+  sessionStartTime?: string;
   setDrafts: WorkoutSetProgressDraft[];
 };
 

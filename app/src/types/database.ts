@@ -556,6 +556,8 @@ export type Database = {
       }
       workouts: {
         Row: {
+          client_session_started_at: string | null
+          client_save_fingerprint: string | null
           end_time: string | null
           id: string
           name: string
@@ -565,6 +567,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          client_session_started_at?: string | null
+          client_save_fingerprint?: string | null
           end_time?: string | null
           id?: string
           name: string
@@ -574,6 +578,8 @@ export type Database = {
           user_id: string
         }
         Update: {
+          client_session_started_at?: string | null
+          client_save_fingerprint?: string | null
           end_time?: string | null
           id?: string
           name?: string
@@ -604,6 +610,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_workout_atomic: {
+        Args: { p_expected_user_id: string; p_workout: Json; p_exercises: Json; p_sets: Json }
+        Returns: Json
+      }
       update_workout_atomic: {
         Args: {
           p_workout_id: string

@@ -330,7 +330,7 @@ export const resources = {
         pauseTimer: 'Pause workout timer',
         resumeTimer: 'Resume workout timer',
         title: 'Workout',
-        subtitle: 'Consolidate templates and exercises in one flow.',
+        subtitle: 'Start a workout or choose one of your plans.',
         startEmptyWorkout: 'Start Empty Workout',
         startModeLabel: 'Start Workout',
         templatesModeLabel: 'My Templates',
@@ -646,7 +646,7 @@ export const resources = {
         },
       },
       feed: {
-        title: 'TRAINING FEED',
+        title: 'Workout feed',
         subtitle: 'Your latest sessions and workouts from your network.',
         searchPlaceholder: 'Search athletes...',
         searchingAthletes: 'Searching athletes...',

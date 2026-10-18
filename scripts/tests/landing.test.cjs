@@ -24,6 +24,11 @@ async function setup(t, stored, blocked = false) {
     '@/components/home/features-section': { FeaturesSection: () => null },
     '@/components/ui/cookie-consent-banner': { CookiePreferencesLink: () => null },
   };
+  const hookModule = { exports: {} };
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync('site/src/lib/use-site-language.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, {
+    window, document: { documentElement: {} }, require, exports: hookModule.exports, module: hookModule,
+  });
+  replacements['@/lib/use-site-language'] = hookModule.exports;
   const source = fs.readFileSync('site/src/components/home/landing-shell.tsx', 'utf8');
   const compiled = ts.transpileModule(source, { compilerOptions: {
     module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022,

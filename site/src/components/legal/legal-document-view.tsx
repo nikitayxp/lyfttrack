@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import type { LegalDocument, LegalLang } from '@/lib/legal';
+import { useSiteLanguage } from '@/lib/use-site-language';
 
 type LegalDocumentViewProps = {
   document: LegalDocument;
@@ -19,7 +20,7 @@ function formatUpdated(value: string, language: LegalLang): string {
 }
 
 export function LegalDocumentView({ document, initialLanguage = 'pt' }: LegalDocumentViewProps) {
-  const [language, setLanguage] = useState<LegalLang>(initialLanguage);
+  const [language, setLanguage] = useSiteLanguage(initialLanguage);
 
   const sections = useMemo(
     () =>
@@ -40,13 +41,13 @@ export function LegalDocumentView({ document, initialLanguage = 'pt' }: LegalDoc
       : language === 'pt'
         ? 'Termos de Uso'
         : 'Terms of Service';
-  const otherDocHref = document.slug === 'terms' ? '/privacidade' : '/termos';
+  const otherDocHref = `${document.slug === 'terms' ? '/privacidade' : '/termos'}?lang=${language}`;
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-3xl px-5 pb-16 pt-8 md:px-8 md:pt-12">
       <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
         <Link
-          href="/"
+          href={`/?lang=${language}`}
           className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80 no-underline transition hover:bg-white/10 hover:text-white"
         >
           {backLabel}

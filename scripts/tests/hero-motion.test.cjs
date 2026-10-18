@@ -14,6 +14,7 @@ test('changing motion preference preserves the pinned hero root and cleans its a
   const empty = () => null;
   const replacements = {
     'next/link': 'a',
+    '@/components/home/workout-showcase': { WorkoutPreview: empty, ShowcaseDescription: empty },
     'lucide-react': { Activity: empty, Dumbbell: empty, Layers: empty, Rocket: empty, TrendingUp: empty },
     sonner: { toast() {} },
     gsap: { gsap: { registerPlugin() {}, context: () => ({ revert: () => { reverted++; } }) } },

@@ -5,7 +5,7 @@ import {
   normalizeSetType,
   type WorkoutSetType,
 } from '@/services/workoutService';
-import { EXERCISE_MUSCLE_LABELS, resolveExerciseMuscleKey } from '@/constants/exerciseCatalog';
+import { EXERCISE_MUSCLE_LABELS, resolveExerciseMuscleKey, type ExerciseMuscleKey } from '@/constants/exerciseCatalog';
 import type { Tables } from '@/types/database';
 import { getLocalizedExerciseName, type ExerciseNameSource } from '@/utils/exerciseLocalization';
 import { estimateOneRepMax } from '@/utils/estimateOneRepMax';
@@ -48,6 +48,7 @@ export type AllTimePR = {
   exercise: ExerciseNameSource;
   maxWeight: number;
   achievedAt: string;
+  muscleKey?: ExerciseMuscleKey | null;
 };
 
 export type WeeklyVolumeByMuscle = {
@@ -395,7 +396,7 @@ export async function getAllTimePRs(language: 'en' | 'pt' = 'en'): Promise<AllTi
 
   const data = await loadAllRows(() => supabase
     .from('sets')
-    .select('id, exercise_id, weight, workouts!inner(id, start_time, end_time, user_id), exercises!inner(id, name, name_en, name_pt)')
+    .select('id, exercise_id, weight, workouts!inner(id, start_time, end_time, user_id), exercises!inner(id, name, name_en, name_pt, muscle_group, muscle_en, muscle_pt)')
     .eq('workouts.user_id', user.id)
     .not('workouts.end_time', 'is', null)
     .not('weight', 'is', null)
@@ -421,6 +422,14 @@ export async function getAllTimePRs(language: 'en' | 'pt' = 'en'): Promise<AllTi
     }
 
     const achievedAt = workout.end_time ?? workout.start_time;
+    const muscleKey = resolveExerciseMuscleKey({
+      muscleGroup: exercise.muscle_group,
+      muscleEn: exercise.muscle_en,
+      musclePt: exercise.muscle_pt,
+      name: exercise.name,
+      nameEn: exercise.name_en,
+      namePt: exercise.name_pt,
+    });
     const existing = bestByExerciseId.get(exercise.id);
     const exerciseNames: ExerciseNameSource = {
       name: exercise.name,
@@ -434,6 +443,7 @@ export async function getAllTimePRs(language: 'en' | 'pt' = 'en'): Promise<AllTi
         exercise: exerciseNames,
         maxWeight: weight,
         achievedAt,
+        muscleKey,
       });
       continue;
     }
@@ -444,6 +454,7 @@ export async function getAllTimePRs(language: 'en' | 'pt' = 'en'): Promise<AllTi
         exercise: exerciseNames,
         maxWeight: weight,
         achievedAt,
+        muscleKey,
       });
       continue;
     }

@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import * as Sharing from 'expo-sharing';
-import ViewShot from 'react-native-view-shot';
 import {
   ActivityIndicator,
   Animated,
@@ -12,7 +10,6 @@ import {
   Platform,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -51,8 +48,8 @@ import {
 import { useAppToast } from '@/context/ToastContext';
 import { useWorkoutContext } from '@/context/WorkoutContext';
 import { useWorkoutDelete, WORKOUT_DELETED_EVENT } from '@/hooks/useWorkoutDelete';
+import { TrophyRoom, TrophyRoomPreview } from '@/components/profile/TrophyRoom';
 import { BodyWeightChart } from '@/components/profile/BodyWeightChart';
-import { getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 import { sanitizeDecimalText } from '@/utils/inputValidation';
 import { showAlert } from '@/utils/showAlert';
 
@@ -229,6 +226,10 @@ export default function ProfileScreen() {
   const [workouts, setWorkouts] = useState<WorkoutFeedItem[]>([]);
   const [weightHistory, setWeightHistory] = useState<BodyMeasurementEntry[]>([]);
   const [allTimePrs, setAllTimePrs] = useState<AllTimePR[]>([]);
+  const [trophySelection, setTrophySelection] = useState<{ exerciseId: string | null } | null>(null);
+  const openTrophy = useCallback((record: AllTimePR) => setTrophySelection({ exerciseId: record.exerciseId }), []);
+  const openTrophyCollection = useCallback(() => setTrophySelection({ exerciseId: null }), []);
+  useEffect(() => setTrophySelection(null), [authUserId]);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [performanceError, setPerformanceError] = useState<string | null>(null);
@@ -257,8 +258,6 @@ export default function ProfileScreen() {
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [commentInputValue, setCommentInputValue] = useState('');
   const [currentCommentAuthor, setCurrentCommentAuthor] = useState<CommentAuthorProfile | null>(null);
-  const trophyCardRefsByExerciseId = useRef<Record<string, ViewShot | null>>({});
-  const [sharingExerciseId, setSharingExerciseId] = useState<string | null>(null);
 
   const targetUserId = useMemo(() => {
     return profile?.id ?? authUserId;
@@ -942,48 +941,6 @@ export default function ProfileScreen() {
     }
   }, [authUserId, isSavingWeight, latestWeightEntry?.user_id, migrationPath, profile?.id, showToast, t, weightInput]);
 
-  const handleShareTrophyCard = useCallback(
-    async (pr: AllTimePR) => {
-      if (sharingExerciseId) {
-        return;
-      }
-
-      setSharingExerciseId(pr.exerciseId);
-
-      try {
-        const isSharingAvailable = await Sharing.isAvailableAsync();
-
-        if (!isSharingAvailable) {
-          showAlert(showToast, t('profile.shareUnavailableTitle'), t('profile.shareUnavailableDescription'), 'error');
-          return;
-        }
-
-        const shotRef = trophyCardRefsByExerciseId.current[pr.exerciseId];
-
-        if (!shotRef || typeof shotRef.capture !== 'function') {
-          throw new Error(t('profile.capturePrCardError'));
-        }
-
-        const captureUri = await shotRef.capture();
-
-        if (!captureUri) {
-          throw new Error(t('profile.capturePrCardError'));
-        }
-
-        await Sharing.shareAsync(captureUri, {
-          mimeType: 'image/png',
-          dialogTitle: `${getLocalizedExerciseName(pr.exercise, uiLanguage.startsWith('pt') ? 'pt' : 'en')} PR`,
-          UTI: 'public.png',
-        });
-      } catch (error) {
-        showAlert(showToast, t('profile.sharePrCardError'), getErrorMessage(error), 'error');
-      } finally {
-        setSharingExerciseId(null);
-      }
-    },
-    [showToast, sharingExerciseId, t, trophyCardRefsByExerciseId, uiLanguage]
-  );
-
   const headerComponent = useMemo(() => {
     return (
       <View style={styles.headerWrap}>
@@ -1122,68 +1079,16 @@ export default function ProfileScreen() {
           <BodyWeightChart entries={weightHistory} language={uiLanguage} />
         </View>
 
-        <View style={styles.hallWrap}>
-          <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionTitle}>{t('profile.trophiesTitle')}</Text>
-            <View style={styles.sectionPill}>
-              <Text style={styles.sectionPillText}>{t('profile.trophiesPill')}</Text>
-            </View>
-          </View>
-
-          {isLoadingPerformance ? (
-            <SkeletonCard compact lines={3} />
-          ) : performanceError ? (
-            <View style={styles.historyErrorCard}>
-              <Text style={styles.historyErrorTitle}>{t('profile.performanceSummaryErrorTitle')}</Text>
-              <Text style={styles.historyErrorText}>{performanceError}</Text>
-            </View>
-          ) : allTimePrs.length === 0 ? (
-            <View style={styles.statusCardCompact}>
-              <Text style={styles.statusTitle}>{t('profile.noTrophiesTitle')}</Text>
-              <Text style={styles.statusText}>{t('profile.noTrophiesDescription')}</Text>
-            </View>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={isWeb} contentContainerStyle={styles.trophyCarouselContent}>
-              {allTimePrs.map((pr) => (
-                <View key={pr.exerciseId} style={styles.trophyCardShell}>
-                  <ViewShot
-                    ref={(ref) => {
-                      trophyCardRefsByExerciseId.current[pr.exerciseId] = ref;
-                    }}
-                    options={{ format: 'png', quality: 1, result: 'tmpfile' }}
-                  >
-                    <View style={styles.trophyCard}>
-                      <View style={styles.trophyBadge}>
-                        <Ionicons name="trophy" size={14} color={palette.textPrimary} />
-                      </View>
-
-                      <Text style={styles.trophyExerciseName} numberOfLines={2}>
-                        {getLocalizedExerciseName(pr.exercise, uiLanguage.startsWith('pt') ? 'pt' : 'en')}
-                      </Text>
-                      <Text style={styles.trophyValue}>{`${formatWeightKg(pr.maxWeight)} kg`}</Text>
-                      <Text style={styles.trophyDate}>{formatDateShort(pr.achievedAt, uiLanguage)}</Text>
-                    </View>
-                  </ViewShot>
-
-                  <TouchableOpacity
-                    style={styles.trophyShareButton}
-                    activeOpacity={ACTIVE_OPACITY}
-                    onPress={() => void handleShareTrophyCard(pr)}
-                    disabled={sharingExerciseId !== null}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('profile.sharePrCard', { defaultValue: 'Share PR Card' })}
-                  >
-                    {sharingExerciseId === pr.exerciseId ? (
-                      <ActivityIndicator size="small" color={palette.textPrimary} />
-                    ) : (
-                      <Ionicons name="share-social-outline" size={15} color={palette.textPrimary} />
-                    )}
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </ScrollView>
-          )}
-        </View>
+        <TrophyRoomPreview
+          key={authUserId ?? 'guest'}
+          records={allTimePrs}
+          language={uiLanguage}
+          loading={isLoadingPerformance}
+          error={performanceError}
+          onRetry={() => void loadPerformanceData()}
+          onSelect={openTrophy}
+          onBrowse={openTrophyCollection}
+        />
 
         <View style={styles.sectionTitleRow}>
           <Text style={styles.sectionTitle}>{t('profile.workoutsTitle')}</Text>
@@ -1210,26 +1115,27 @@ export default function ProfileScreen() {
     );
   }, [
     allTimePrs,
+    openTrophy,
+    openTrophyCollection,
+    authUserId,
+    loadPerformanceData,
     bootstrap,
     displayName,
     handleEditProfile,
     handleOpenFriends,
     handleOpenSettings,
     handleOpenStats,
-    handleShareTrophyCard,
     historyError,
     historyMonths,
     historyPeriodKey,
     historySearchInput,
     initials,
-    isWeb,
     isLoadingPerformance,
     latestWeightEntry,
     openWeightModal,
     performanceError,
     profile?.avatar_url,
     profileError,
-    sharingExerciseId,
     t,
     uiLanguage,
     weightTrendText,
@@ -1344,6 +1250,14 @@ export default function ProfileScreen() {
         }
         showsVerticalScrollIndicator={false}
       />
+
+      {trophySelection ? <TrophyRoom
+        key={authUserId ?? 'guest'}
+        records={allTimePrs}
+        language={uiLanguage}
+        initialSelectedId={trophySelection.exerciseId}
+        onClose={() => setTrophySelection(null)}
+      /> : null}
 
       {(!isWeightModalVisible && isWeb) ? null : (
       <ModalWrapper
@@ -1696,9 +1610,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
-  hallWrap: {
-    marginBottom: 14,
-  },
   statusCardCompact: {
     borderRadius: Radius.md,
     borderWidth: 1,
@@ -1737,66 +1648,6 @@ const styles = StyleSheet.create({
     width: '64%',
     alignSelf: 'center',
   },
-  trophyCarouselContent: {
-    columnGap: 6,
-    paddingRight: 2,
-  },
-  trophyCardShell: {
-    position: 'relative',
-  },
-  trophyCard: {
-    width: 138,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: CARD_BG,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  trophyBadge: {
-    alignSelf: 'flex-start',
-    borderRadius: Radius.xs,
-    borderWidth: 1,
-    borderColor: palette.accent,
-    backgroundColor: palette.bgPrimary,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    marginBottom: 6,
-  },
-  trophyExerciseName: {
-    color: palette.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
-    lineHeight: 16,
-    minHeight: 28,
-    marginBottom: 4,
-  },
-  trophyValue: {
-    color: palette.textPrimary,
-    fontSize: 28,
-    fontWeight: '900',
-    fontVariant: ['tabular-nums'],
-    letterSpacing: -0.8,
-  },
-  trophyDate: {
-    marginTop: 2,
-    color: palette.textMuted,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  trophyShareButton: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    width: 24,
-    height: 24,
-    borderRadius: Radius.xs,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.bgPrimary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   sectionTitleRow: {
     marginBottom: 10,
     flexDirection: 'row',
@@ -1808,20 +1659,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     letterSpacing: -0.4,
-  },
-  sectionPill: {
-    borderRadius: Radius.sm,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.bgPrimary,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  sectionPillText: {
-    color: palette.textMuted,
-    fontSize: 10,
-    fontWeight: '800',
-    textTransform: 'uppercase',
   },
   historyErrorCard: {
     borderRadius: Radius.card,

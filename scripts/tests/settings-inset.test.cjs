@@ -32,6 +32,7 @@ async function setup(t, platform, active, screen = 'settings') {
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 34 }) },
     '@/constants/theme': colors,
     '@/components/common/BackButton': { BackButton: empty },
+    '@/services/authUserService': { getAuthenticatedUserOrThrow: async () => ({ id: 'owner', email: 'test@example.test' }) },
     '@/components/common/ConfirmModal': { ConfirmModal: empty },
     '@/context/ToastContext': { useAppToast: () => ({ showToast() {} }) },
     '@/context/PreferencesContext': { usePreferences: () => ({ language: 'pt', setLanguage() {}, countWorkingSetsOnly: false, setCountWorkingSetsOnly() {} }) },

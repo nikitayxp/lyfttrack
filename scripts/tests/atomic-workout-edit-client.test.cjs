@@ -6,7 +6,10 @@ function setup(rpcError = null) {
   const state = { name: 'Original', weight: 20 };
   const calls = [];
   const supabase = {
-    auth: { getUser: async () => ({ data: { user: { id: 'owner' } }, error: null }) },
+    auth: {
+      getSession: async () => ({ data: { session: { access_token: 'owner-token', user: { id: 'owner' } } }, error: null }),
+      getUser: async () => ({ data: { user: { id: 'owner' } }, error: null }),
+    },
     rpc: async (name, args) => { calls.push({ name, args }); return { error: rpcError }; },
     from(table) {
       let payload;

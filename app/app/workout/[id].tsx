@@ -517,7 +517,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 6,
+    paddingTop: 16,
     paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: palette.inputFill,

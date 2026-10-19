@@ -36,6 +36,7 @@ export default function TabLayout() {
   return (
     <Tabs
       initialRouteName="index"
+      backBehavior="history"
       screenOptions={{
         header: () => <View style={[styles.headerSafeArea, { height: insets.top }]} />,
         headerShadowVisible: false,
@@ -66,6 +67,10 @@ export default function TabLayout() {
           title: t('tabs.profile'),
           tabBarIcon: ({ color }) => <Ionicons name="person-outline" size={TAB_ICON_SIZE} color={color} />,
         }}
+      />
+      <Tabs.Screen
+        name="athletes"
+        options={{ href: null }}
       />
       <Tabs.Screen
         name="exercises"

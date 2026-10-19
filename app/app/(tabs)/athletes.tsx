@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import {
   ActivityIndicator,
   Image,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -13,6 +14,9 @@ import {
   View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useWorkoutContext } from '@/context/WorkoutContext';
+import { getTabBarHeight, MINIMIZED_WORKOUT_BAR_HEIGHT, MINIMIZED_WORKOUT_BAR_GAP } from '@/constants/tabBar';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import { BackButton } from '@/components/common/BackButton';
@@ -52,14 +56,16 @@ function openPublicProfile(userId: string) {
 
   router.push({
     pathname: '/(tabs)/profile/[id]' as any,
-    // The profile cannot work out where it was opened from, and going back
-    // inside the tabs navigator lands on the feed instead of here.
     params: { id: normalizedUserId, from: 'athletes' },
   });
 }
 
 export default function AthletesScreen() {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  const { hasActiveWorkout } = useWorkoutContext();
+  const bottomPadding = 28 + (Platform.OS === 'web' ? getTabBarHeight(true, insets.bottom) : 0)
+    + (hasActiveWorkout ? MINIMIZED_WORKOUT_BAR_HEIGHT + MINIMIZED_WORKOUT_BAR_GAP : 0);
   const { showToast } = useAppToast();
   const [query, setQuery] = useState('');
   const [athletes, setAthletes] = useState<SocialSearchResult[]>([]);
@@ -163,7 +169,7 @@ export default function AthletesScreen() {
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]}
       refreshControl={
         <RefreshControl
           refreshing={isRefreshing}
@@ -173,7 +179,7 @@ export default function AthletesScreen() {
       }
     >
       <View style={styles.headerRow}>
-        <BackButton fallback="/(tabs)/social" />
+        <BackButton fallback="/(tabs)" />
       </View>
 
       <Text style={styles.title}>{t('feed.exploreAthletes')}</Text>
@@ -278,9 +284,8 @@ const styles = StyleSheet.create({
     backgroundColor: SCREEN_BG,
   },
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 36,
+    paddingHorizontal: 16,
+    paddingTop: 16,
     rowGap: 12,
   },
   headerRow: {

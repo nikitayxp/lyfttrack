@@ -11,7 +11,11 @@ async function renderProfile(visibility, relation, onRefresh = () => {}, scenari
     'react-native': { ActivityIndicator: 'Spinner', Image: 'Image', RefreshControl: 'Refresh', FlatList: ({ data, renderItem, ListHeaderComponent, ListEmptyComponent, ListFooterComponent }) => React.createElement(React.Fragment, null, ListHeaderComponent, data.map(item => React.createElement(React.Fragment, { key: item.id }, renderItem({ item }))), !data.length ? ListEmptyComponent : null, ListFooterComponent), Platform: { OS: 'web' }, StyleSheet: { create: value => value }, Text: 'Text', TouchableOpacity: 'Button', View: 'View' },
     '@expo/vector-icons': { Ionicons: 'Icon' },
     'react-i18next': { useTranslation: () => ({ t: translate, i18n: { resolvedLanguage: 'pt' } }) },
-    'expo-router': { useLocalSearchParams: () => ({ id: scenario.id ?? 'athlete' }), router: {} },
+    'expo-router': { useLocalSearchParams: () => ({ id: scenario.id ?? 'athlete', from: scenario.from }), router: {
+      canGoBack: () => scenario.canGoBack ?? false,
+      back: () => scenario.actions?.push('back'),
+      replace: route => scenario.actions?.push(route),
+    } },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 0 }) },
     '@/context/WorkoutContext': { useWorkoutContext: () => ({ hasActiveWorkout: true }) },
     '@/context/ToastContext': { useAppToast: () => ({ showToast() {} }) },
@@ -42,6 +46,24 @@ test('the public profile summarizes the whole visible history instead of its fir
   assert.equal(tree.root.findAllByType('HistoryFilter').length, 1);
   await act(async () => tree.unmount());
 });
+
+test('returning to the explorer pops history instead of adding a profile/explorer loop', async () => {
+  const actions = [];
+  const tree = await renderProfile('public', 'none', undefined, { from: 'athletes', canGoBack: true, actions });
+  await act(async () => tree.root.findAllByType('Button').find(button => button.props.accessibilityLabel === 'common.back').props.onPress());
+  assert.deepEqual(actions, ['back']);
+  await act(async () => tree.unmount());
+});
+
+for (const [from, destination] of [['athletes', '/athletes'], ['social', '/social'], ['https://example.test', '/(tabs)']]) {
+  test(`a direct profile link falls back safely from ${from}`, async () => {
+    const actions = [];
+    const tree = await renderProfile('public', 'none', undefined, { from, actions });
+    await act(async () => tree.root.findAllByType('Button').find(button => button.props.accessibilityLabel === 'common.back').props.onPress());
+    assert.deepEqual(actions, [destination]);
+    await act(async () => tree.unmount());
+  });
+}
 
 test('private and friends-only profiles do not expose summaries or sessions to strangers', async () => {
   for (const visibility of ['private', 'friends']) {

@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BackButton } from '@/components/common/BackButton';
+import { goBack } from '@/utils/navigation';
 import { useWorkoutContext } from '@/context/WorkoutContext';
 import { getTabBarHeight, MINIMIZED_WORKOUT_BAR_HEIGHT, MINIMIZED_WORKOUT_BAR_GAP } from '@/constants/tabBar';
 import { useAthleteHistory } from '@/hooks/useAthleteHistory';
@@ -98,23 +100,8 @@ export default function PublicProfileScreen() {
   const openedFrom = useMemo(() => readRouteId(params.from), [params.from]);
 
   const handleBack = useCallback(() => {
-    // Going back lands on the tab navigator's initial route (the feed) rather
-    // than on the screen that opened this one, so the origin has to be stated
-    // explicitly. Resolved through a fixed map because `from` travels in the
-    // URL on web and must not be able to name an arbitrary route.
     const origin = openedFrom ? PROFILE_ORIGIN_ROUTES[openedFrom] : undefined;
-
-    if (origin) {
-      router.replace(origin as any);
-      return;
-    }
-
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
-
-    router.replace('/(tabs)' as any);
+    goBack(origin ?? '/(tabs)');
   }, [openedFrom]);
 
   const [historySearchInput, setHistorySearchInput] = useState('');
@@ -564,15 +551,7 @@ export default function PublicProfileScreen() {
         ListHeaderComponent={
           <>
             <View style={styles.topRow}>
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel={t('common.back')}
-                style={styles.backButton}
-                activeOpacity={ACTIVE_OPACITY}
-                onPress={handleBack}
-              >
-                <Ionicons name="arrow-back" size={20} color={palette.textPrimary} />
-              </TouchableOpacity>
+              <BackButton onPress={handleBack} />
               <Text style={styles.title}>{t('publicProfile.title')}</Text>
               <View style={styles.backButtonPlaceholder} />
             </View>
@@ -781,7 +760,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 16,
-    paddingTop: 20,
+    paddingTop: 16,
     paddingBottom: 24,
   },
   topRow: {
@@ -789,19 +768,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   backButtonPlaceholder: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
   },
   title: {
     color: palette.textPrimary,

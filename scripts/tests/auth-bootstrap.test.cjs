@@ -22,6 +22,7 @@ async function setup(t, segments = ['(tabs)']) {
   const Stack = Object.assign(passthrough, { Screen: empty });
   const colors = createSourceLoader()('app/src/constants/Colors.ts');
   const load = createSourceLoader({
+    '@react-navigation/native': { DarkTheme: { dark: true, colors: {} }, ThemeProvider: 'NavigationTheme' },
     'react-native': {
       ActivityIndicator: 'ActivityIndicator', View: 'View',
       Platform: { OS: 'ios' }, useWindowDimensions: () => ({ width: 390, height: 844 }),
@@ -57,6 +58,7 @@ async function setup(t, segments = ['(tabs)']) {
   await act(async () => { tree = create(React.createElement(Root)); });
   t.after(async () => { if (tree) await act(async () => tree.unmount()); });
   return {
+    get theme() { return tree.root.findAllByType('NavigationTheme')[0]?.props.value; },
     routes,
     get loading() { return tree.root.findAllByType('SplashLoader').length > 0; },
     get acceptedTerms() { return acceptedTerms; },
@@ -67,6 +69,14 @@ async function setup(t, segments = ['(tabs)']) {
     async unmount() { await act(async () => tree.unmount()); tree = null; },
   };
 }
+
+test('navigation surfaces use the dark app background rather than the default light theme', async t => {
+  const screen = await setup(t);
+  await screen.resolve(session);
+  assert.equal(screen.theme?.dark, true);
+  assert.equal(screen.theme?.colors.background, '#080C14');
+  assert.equal(screen.theme?.colors.card, '#080C14');
+});
 
 test('a newer sign-in survives an older empty bootstrap response', async t => {
   const screen = await setup(t);

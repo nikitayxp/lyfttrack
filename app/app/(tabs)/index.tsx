@@ -370,7 +370,6 @@ export default function FeedScreen() {
     currentCommentAuthor,
     ensureCurrentCommentAuthor,
     isSendingComment,
-    loadCommentsForWorkout,
     selectedWorkoutForComments,
     showToast,
     t,

@@ -8,13 +8,6 @@ alter policy body_measurements_update_own on public.body_measurements to authent
 using (((select auth.uid()) = user_id))
 with check (((select auth.uid()) = user_id));
 
-alter policy exercises_insert_own_custom on public.exercises to authenticated
-with check ((((select auth.uid()) = created_by) AND (is_custom = true)));
-
-alter policy exercises_update_own_custom on public.exercises to authenticated
-using (((select auth.uid()) = created_by))
-with check (((select auth.uid()) = created_by));
-
 alter policy friend_requests_insert_own on public.friend_requests to authenticated
 with check ((((select auth.uid()) = from_user_id) AND (to_user_id <> (select auth.uid())) AND (status = 'pending'::text)));
 

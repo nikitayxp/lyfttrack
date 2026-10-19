@@ -57,4 +57,14 @@ test('RLS optimization preserves all public policies and visibility permissions'
  assert.equal((await db.query('update body_measurements set weight=90 where user_id=$1 returning id',[ids[1]])).rows.length,0);
  const plan=await db.query('explain select * from body_measurements');assert.match(JSON.stringify(plan.rows),/InitPlan/);
  await db.exec('reset role;set role anon');await assert.rejects(db.query('select public.can_view_user_content($1::uuid)',[ids[0]]),/permission denied/);
+ await db.exec(`reset role; alter policy exercises_update_own_custom on public.exercises
+   using (is_custom=true and created_by=(select auth.uid()))
+   with check (is_custom=true and created_by=(select auth.uid()));`);
+ await db.exec(fs.readFileSync('supabase/migrations/20261019121000_rls_initplans.sql','utf8'));
+ const customPolicy=(await db.query("select qual,with_check from pg_policies where schemaname='public' and policyname='exercises_update_own_custom'")).rows[0];
+ assert.match(customPolicy.qual,/is_custom = true/);
+ assert.match(customPolicy.with_check,/is_custom = true/);
+ await db.exec(`set role authenticated;set test.user_id='${ids[0]}'`);
+ await db.query('insert into exercises values($1,$2,true)',[ids[4],ids[0]]);
+ await assert.rejects(db.query('update exercises set is_custom=false where id=$1',[ids[4]]),/row-level security/);
 });

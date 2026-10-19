@@ -14,8 +14,15 @@ test('saving the template editor passes the snapshot captured when editing began
   const original = { id: 'template', user_id: 'owner', name: 'Original', notes: 'Original notes', created_at: 'now',
     exercises: [{ id: 'relation', order_index: 1, rest_seconds: 90, exercise }] };
   const saves = [];
+  function SectionList({ sections, renderItem, renderSectionHeader, ListHeaderComponent, ListEmptyComponent }) {
+    return React.createElement(React.Fragment, null, ListHeaderComponent,
+      sections.map((section, sectionIndex) => React.createElement(React.Fragment, { key: section.key ?? sectionIndex },
+        renderSectionHeader?.({ section }),
+        section.data.map((item, index) => React.createElement(React.Fragment, { key: item.id ?? index }, renderItem({ item, index, section }))))),
+      !sections.length ? ListEmptyComponent : null);
+  }
   const load = loadSource({
-    'react-native': { ActivityIndicator: 'Spinner', Platform: { OS: 'web' }, ScrollView: 'ScrollView',
+    'react-native': { ActivityIndicator: 'Spinner', Platform: { OS: 'web' }, ScrollView: 'ScrollView', SectionList,
       StyleSheet: { create: x => x }, Text: 'Text', TextInput: 'Input', TouchableOpacity: 'Button', View: 'View' },
     'react-native-safe-area-context': { SafeAreaView: 'SafeAreaView' },
     'react-native-reanimated': { __esModule: true, default: { View: 'View' }, FadeInDown: animation, FadeInUp: animation, LinearTransition: animation },

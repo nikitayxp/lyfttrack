@@ -37,6 +37,9 @@ type FeedCommentsModalProps = {
   onClose: () => void;
   onSend: () => void;
   onRetry: () => void;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
 };
 
 function displayNameOf(comment: WorkoutCommentWithProfile, fallbackLabel: string): string {
@@ -65,6 +68,9 @@ export function FeedCommentsModal({
   onClose,
   onSend,
   onRetry,
+  hasMore = false,
+  isLoadingMore = false,
+  onLoadMore,
 }: FeedCommentsModalProps) {
   const { t } = useTranslation();
   const { language } = usePreferences();
@@ -167,6 +173,14 @@ export function FeedCommentsModal({
                 </View>
               )}
               ListEmptyComponent={listEmptyState}
+              ListFooterComponent={hasMore ? (
+                <View style={styles.statusWrap}>
+                  {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+                  <TouchableOpacity onPress={onLoadMore} disabled={isLoadingMore} accessibilityRole="button" style={styles.retryButton}>
+                    {isLoadingMore ? <ActivityIndicator color={palette.accent} /> : <Text style={styles.retryButtonText}>{t('feed.comments.loadMore')}</Text>}
+                  </TouchableOpacity>
+                </View>
+              ) : null}
               contentContainerStyle={styles.listContent}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}

@@ -610,6 +610,12 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      exercise_history_page: { Args: { p_exercise_id: string; p_limit?: number; p_offset?: number }; Returns: Json }
+      exercise_training_references: { Args: { p_exercise_ids: string[]; p_excluded_workout_id?: string }; Returns: Json }
+      workout_record_summaries: { Args: { p_workout_ids: string[] }; Returns: Json }
+      latest_workout_comments: { Args: { p_workout_ids: string[] }; Returns: Json }
+      workout_month_buckets: { Args: { p_user_id: string; p_timezone?: string }; Returns: Json }
+      recent_candidate_activity: { Args: { p_user_ids: string[] }; Returns: Json }
       create_workout_atomic: {
         Args: { p_expected_user_id: string; p_workout: Json; p_exercises: Json; p_sets: Json }
         Returns: Json

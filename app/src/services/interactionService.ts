@@ -94,7 +94,7 @@ export async function getCurrentCommentAuthorProfile(): Promise<CommentAuthorPro
   return profile;
 }
 
-export async function getWorkoutComments(workoutId: string): Promise<WorkoutCommentWithProfile[]> {
+export async function getWorkoutComments(workoutId: string, options: {limit?: number; offset?: number} = {}): Promise<WorkoutCommentWithProfile[]> {
   const normalizedWorkoutId = normalizeOptionalId(workoutId);
 
   if (!normalizedWorkoutId) {
@@ -105,7 +105,10 @@ export async function getWorkoutComments(workoutId: string): Promise<WorkoutComm
     .from('workout_comments')
     .select('id, workout_id, user_id, content, created_at, profiles(id, username, full_name, avatar_url)')
     .eq('workout_id', normalizedWorkoutId)
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
+    .range(Math.max(0, Math.trunc(options.offset ?? 0) || 0),
+      Math.max(0, Math.trunc(options.offset ?? 0) || 0) + Math.max(1, Math.min(100, Math.trunc(options.limit ?? 50) || 50)) - 1);
 
   if (commentsError) {
     throw new Error(`Unable to load workout comments: ${commentsError.message}`);

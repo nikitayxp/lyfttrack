@@ -1,7 +1,7 @@
+import { getSessionUserOrThrow } from '@/services/authUserService';
 import { loadAllRows } from '@/services/queryPages';
 import { supabase } from '@/services/supabase';
 import {
-  getAuthenticatedUserOrThrow,
   normalizeSetType,
   type WorkoutSetType,
 } from '@/services/workoutService';
@@ -193,19 +193,24 @@ function getWeekStartKey(dateValue: Date): string {
   return utcDate.toISOString().slice(0, 10);
 }
 
-async function getExerciseSetRowsForUser(exerciseId: string): Promise<RawSetWithWorkout[]> {
-  const user = await getAuthenticatedUserOrThrow();
+async function getExerciseSetRowsForUser(exerciseId: string, sinceDate?: string): Promise<RawSetWithWorkout[]> {
+  const user = await getSessionUserOrThrow();
   const normalizedExerciseId = exerciseId.trim();
 
   if (!normalizedExerciseId) {
     throw new Error('Exercise id is required to load progress.');
   }
 
-  const data = await loadAllRows(() => supabase
+  const data = await loadAllRows(() => {
+    let query = supabase
     .from('sets')
     .select('id, exercise_id, weight, reps, rir, set_type, workouts!inner(id, start_time, end_time, user_id)')
     .eq('exercise_id', normalizedExerciseId)
-    .eq('workouts.user_id', user.id),
+    .eq('workouts.user_id', user.id)
+    .not('workouts.end_time', 'is', null);
+    if (sinceDate) query = query.gte('workouts.start_time', sinceDate);
+    return query;
+    },
     'Unable to load exercise progress'
   );
 
@@ -218,7 +223,7 @@ async function getExerciseSetRowsForUser(exerciseId: string): Promise<RawSetWith
 }
 
 export async function getTrackedExercises(language: 'en' | 'pt' = 'en'): Promise<StatsExerciseOption[]> {
-  const user = await getAuthenticatedUserOrThrow();
+  const user = await getSessionUserOrThrow();
 
   const data = await loadAllRows(() => supabase
     .from('exercises')
@@ -254,7 +259,13 @@ export async function getExerciseProgress(
   localeTag?: string,
   options?: ExerciseProgressOptions
 ): Promise<ExerciseProgressPoint[]> {
-  const rows = await getExerciseSetRowsForUser(exerciseId);
+  const rows = await getExerciseSetRowsForUser(exerciseId, options?.sinceDate);
+  return buildExerciseProgress(rows, metric, localeTag, options);
+}
+
+function buildExerciseProgress(
+  rows: RawSetWithWorkout[], metric: ProgressMetric, localeTag?: string, options?: ExerciseProgressOptions
+): ExerciseProgressPoint[] {
   const sinceDate = options?.sinceDate?.trim() || null;
 
   const byDay = new Map<
@@ -364,8 +375,21 @@ export async function getExerciseProgress(
 
 export async function getExercisePersonalRecords(exerciseId: string): Promise<ExercisePersonalRecords> {
   const rows = await getExerciseSetRowsForUser(exerciseId);
-  const progress = await getExerciseProgress(exerciseId, 'volume');
+  return buildExercisePersonalRecords(rows);
+}
 
+export async function getExerciseStats(
+  exerciseId: string, metric: ProgressMetric = 'volume', localeTag?: string, options?: ExerciseProgressOptions
+): Promise<{ progress: ExerciseProgressPoint[]; records: ExercisePersonalRecords }> {
+  const rows = await getExerciseSetRowsForUser(exerciseId);
+  return {
+    progress: buildExerciseProgress(rows, metric, localeTag, options),
+    records: buildExercisePersonalRecords(rows),
+  };
+}
+
+function buildExercisePersonalRecords(rows: RawSetWithWorkout[]): ExercisePersonalRecords {
+  const progress = buildExerciseProgress(rows, 'volume');
   let heaviestWeight = 0;
   let bestEstimated1RM = 0;
   let completedSetCount = 0;
@@ -390,7 +414,7 @@ export async function getExercisePersonalRecords(exerciseId: string): Promise<Ex
 }
 
 export async function getAllTimePRs(language: 'en' | 'pt' = 'en'): Promise<AllTimePR[]> {
-  const user = await getAuthenticatedUserOrThrow();
+  const user = await getSessionUserOrThrow();
 
   const data = await loadAllRows(() => supabase
     .from('exercises')
@@ -487,7 +511,7 @@ export async function getAllTimePRs(language: 'en' | 'pt' = 'en'): Promise<AllTi
 }
 
 export async function getWeeklyVolumeByMuscle(localeTag?: string): Promise<WeeklyVolumeByMuscle[]> {
-  const user = await getAuthenticatedUserOrThrow();
+  const user = await getSessionUserOrThrow();
   const sinceIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const data = await loadAllRows(() => supabase
@@ -567,24 +591,23 @@ function isBetterSet(candidate: ExerciseHistorySet, current: ExerciseHistorySet 
   return candidate.reps > current.reps;
 }
 
-export async function getExerciseWorkoutHistory(exerciseId: string): Promise<ExerciseWorkoutHistoryEntry[]> {
-  const user = await getAuthenticatedUserOrThrow();
+export async function getExerciseWorkoutHistory(exerciseId: string, options?: {limit: number; offset?: number}): Promise<ExerciseWorkoutHistoryEntry[]> {
+  await getSessionUserOrThrow();
   const normalizedId = exerciseId.trim();
-
-  if (!normalizedId) {
-    return [];
+  if (!normalizedId) return [];
+  const limit = Math.max(1, Math.min(100, Math.trunc(options?.limit ?? 100) || 20));
+  let offset = Math.max(0, Math.trunc(options?.offset ?? 0) || 0);
+  const data: unknown[] = [];
+  while (true) {
+    const result = await supabase.rpc('exercise_history_page', {
+      p_exercise_id: normalizedId, p_limit: limit, p_offset: offset,
+    });
+    if (result.error) throw new Error(`Unable to load exercise history: ${result.error.message}`);
+    const page = (result.data ?? []) as unknown[];
+    data.push(...page);
+    if (options || !page.length) break;
+    offset += page.length;
   }
-
-  const data = await loadAllRows(() => supabase
-    .from('workout_exercises')
-    .select(
-      'id, workout_id, workouts!inner(id, name, start_time, end_time, user_id), sets!sets_workout_exercise_id_fkey(set_number, weight, reps, rir, set_type)'
-    )
-    .eq('exercise_id', normalizedId)
-    .eq('workouts.user_id', user.id)
-    .not('workouts.end_time', 'is', null),
-    'Unable to load exercise history'
-  );
 
   type HistoryWorkout = { id: string; name: string; start_time: string; end_time: string | null; user_id: string };
 
@@ -649,7 +672,7 @@ export async function getExerciseWorkoutHistory(exerciseId: string): Promise<Exe
 }
 
 export async function getWeeklyTrainingHours(localeTag?: string): Promise<{ weekLabel: string; hours: number; workouts: number }[]> {
-  const user = await getAuthenticatedUserOrThrow();
+  const user = await getSessionUserOrThrow();
   const weeksBack = 12;
   const sinceIso = new Date(Date.now() - weeksBack * 7 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -701,7 +724,7 @@ export async function getWeeklyDashboardMetrics(
   localeTag?: string,
   weeksBack = 12
 ): Promise<WeeklyDashboardPoint[]> {
-  const user = await getAuthenticatedUserOrThrow();
+  const user = await getSessionUserOrThrow();
   const sinceIso = new Date(Date.now() - weeksBack * 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const workouts = await loadAllRows(() => supabase
@@ -713,7 +736,7 @@ export async function getWeeklyDashboardMetrics(
     'Unable to load dashboard workouts'
   );
 
-  const workoutRows = (workouts as Array<{ id: string; start_time: string; end_time: string | null }> | null) ?? [];
+  const workoutRows = (workouts as { id: string; start_time: string; end_time: string | null }[] | null) ?? [];
   if (workoutRows.length === 0) {
     return [];
   }
@@ -728,7 +751,7 @@ export async function getWeeklyDashboardMetrics(
   );
 
   const volumeByWorkout = new Map<string, { volumeKg: number; repsTotal: number }>();
-  for (const row of (setRows as Array<{ workout_id: string | null; weight: number | null; reps: number | null }> | null) ?? []) {
+  for (const row of (setRows as { workout_id: string | null; weight: number | null; reps: number | null }[] | null) ?? []) {
     if (!row.workout_id) continue;
     const weight = toNonNegativeNumber(row.weight);
     const reps = toNonNegativeNumber(row.reps);

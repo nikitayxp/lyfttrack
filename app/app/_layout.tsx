@@ -8,6 +8,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { router, Stack, useSegments } from 'expo-router';
+import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
@@ -72,6 +73,17 @@ function useWebVisibleViewportHeight(enabled: boolean): number | null {
 }
 
 const palette = Colors.dark;
+const navigationTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: palette.bgPrimary,
+    card: palette.bgPrimary,
+    text: palette.textPrimary,
+    border: palette.border,
+    primary: palette.accent,
+  },
+};
 
 /** Largura mínima (px) para mostrar o mockup de telemóvel na Web; ≤ isto = app a fullscreen como no device. */
 const DESKTOP_WEB_MOCKUP_MIN_WIDTH = 768;
@@ -404,6 +416,7 @@ export default function RootLayout() {
         <ConfirmProvider>
           <WorkoutProvider>
             <SafeAreaProvider style={safeAreaStyle} initialMetrics={isWeb ? undefined : initialWindowMetrics}>
+              <ThemeProvider value={navigationTheme}>
               <Stack
                 screenOptions={{
                   headerShown: false,
@@ -448,14 +461,6 @@ export default function RootLayout() {
                   }}
                 />
                 <Stack.Screen
-                  name="athletes"
-                  options={{
-                    headerShown: false,
-                    animation: 'slide_from_right',
-                    statusBarStyle: 'light',
-                  }}
-                />
-                <Stack.Screen
                   name="legal/terms"
                   options={{
                     headerShown: false,
@@ -475,6 +480,7 @@ export default function RootLayout() {
               <MinimizedWorkoutBar visible={isTabsRoute} />
               <AppToastHost aboveTabBar={isTabsRoute} />
               <ConfirmHost />
+              </ThemeProvider>
             </SafeAreaProvider>
           </WorkoutProvider>
         </ConfirmProvider>
@@ -493,7 +499,7 @@ export default function RootLayout() {
         : null;
 
     return (
-      <View style={[styles.webRoot, isDesktopWeb && styles.webRootDesktop, webViewportFill, mobileWebShellStyle]}>
+      <View testID="app-web-shell" style={[styles.webRoot, isDesktopWeb && styles.webRootDesktop, webViewportFill, mobileWebShellStyle]}>
         <View style={[styles.webFlowLayer, styles.pointerEventsNone]}>
           <NeuralBackground color="#3B82F6" trailOpacity={0.12} speed={0.35} />
         </View>
@@ -511,7 +517,7 @@ export default function RootLayout() {
           style={[styles.webBlueAuraBottom, styles.pointerEventsNone]}
         />
 
-        {isDesktopWeb ? <View style={[styles.deviceMockup, desktopShellWebShadow]}>{layout}</View> : layout}
+        {isDesktopWeb ? <View testID="app-device-frame" style={[styles.deviceMockup, desktopShellWebShadow]}>{layout}</View> : layout}
         <StatusBar style="light" />
       </View>
     );

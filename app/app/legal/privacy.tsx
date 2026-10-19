@@ -4,6 +4,7 @@ import { Colors } from '@/constants/Colors';
 import { PRIVACY_POLICY } from '@/content/legal/privacy-policy';
 import type { LegalLang } from '@/content/legal/terms-of-service';
 import { usePreferences } from '@/context/PreferencesContext';
+import { NavigationHeader } from '@/components/common/NavigationHeader';
 
 const palette = Colors.dark;
 
@@ -21,10 +22,7 @@ export default function PrivacyScreen() {
       <Stack.Screen
         options={{
           headerShown: true,
-          title: doc.title[lang],
-          headerStyle: { backgroundColor: palette.bgPrimary },
-          headerTintColor: palette.textPrimary,
-          headerShadowVisible: false,
+          header: () => <NavigationHeader title={doc.title[lang]} fallback="/(tabs)/profile/settings" />,
         }}
       />
 

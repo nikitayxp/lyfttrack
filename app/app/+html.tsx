@@ -3,6 +3,7 @@ import { ScrollViewStyleReset } from 'expo-router/html';
 
 const BASE_WEB_BG_STYLE = `
   html, body, #root {
+    color-scheme: dark;
     background: #000000;
     width: 100%;
     min-height: 100%;
@@ -10,6 +11,19 @@ const BASE_WEB_BG_STYLE = `
     margin: 0;
     overflow: hidden;
     overscroll-behavior: none;
+  }
+
+  body * {
+    scrollbar-width: none;
+  }
+
+  body *::-webkit-scrollbar {
+    display: none;
+  }
+
+  [data-testid="app-web-shell"],
+  [data-testid="app-device-frame"] {
+    overflow: clip !important;
   }
 
   /* Constrain only RN Web modal portals inside the desktop phone mockup. */

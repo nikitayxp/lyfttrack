@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Colors } from '@/constants/Colors';
 import { TERMS_OF_SERVICE, type LegalLang } from '@/content/legal/terms-of-service';
 import { usePreferences } from '@/context/PreferencesContext';
+import { NavigationHeader } from '@/components/common/NavigationHeader';
 
 const palette = Colors.dark;
 
@@ -20,10 +21,7 @@ export default function TermsScreen() {
       <Stack.Screen
         options={{
           headerShown: true,
-          title: doc.title[lang],
-          headerStyle: { backgroundColor: palette.bgPrimary },
-          headerTintColor: palette.textPrimary,
-          headerShadowVisible: false,
+          header: () => <NavigationHeader title={doc.title[lang]} fallback="/(tabs)/profile/settings" />,
         }}
       />
 

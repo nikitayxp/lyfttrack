@@ -1102,8 +1102,8 @@ const styles = StyleSheet.create({
     backgroundColor: SCREEN_BG,
   },
   content: {
-    paddingHorizontal: 18,
-    paddingTop: 12,
+    paddingHorizontal: 16,
+    paddingTop: 16,
     paddingBottom: 34,
     rowGap: 12,
   },

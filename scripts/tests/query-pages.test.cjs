@@ -48,3 +48,9 @@ test('server caps smaller than requested page size do not truncate history', asy
  const {rows, run} = setup(2001, {serverCap: 137});
  assert.deepEqual(Array.from(await run()), rows);
 });
+
+test('a server cap smaller than the requested page cannot truncate imports', async () => {
+  const { rows, calls, run } = setup(23, { serverCap: 10 });
+  assert.deepEqual(Array.from(await run()), rows);
+  assert.equal(calls.length, 4);
+});

@@ -1,6 +1,8 @@
 import { loadAllRows } from '@/services/queryPages';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/services/supabase';
+import { getAuthenticatedUserOrThrow } from '@/services/authUserService';
+export { getAuthenticatedUserOrThrow } from '@/services/authUserService';
 import {
   EXERCISE_EQUIPMENT_FILTER_KEYWORDS,
   EXERCISE_MUSCLE_FILTER_KEYWORDS,
@@ -592,7 +594,7 @@ async function resolvePrCountsByWorkoutId(
 
     const historySets = await loadAllRows(() => supabase
       .from('sets')
-      .select('id, workout_id, exercise_id, weight, reps, workouts!inner(user_id, end_time)')
+      .select('id, workout_id, exercise_id, weight, reps, workouts!inner()')
       .eq('workouts.user_id', userId)
       .not('workouts.end_time', 'is', null)
       .in('exercise_id', [...exerciseIds]),
@@ -763,22 +765,6 @@ export function calculateWorkoutVolume(setDrafts: WorkoutSetProgressDraft[]): nu
   }
 
   return Math.round(total);
-}
-
-// ---------- Auth ----------
-
-export async function getAuthenticatedUserOrThrow(): Promise<User> {
-  const { data, error } = await supabase.auth.getUser();
-
-  if (error) {
-    throw new Error(`Unable to fetch authenticated user: ${error.message}`);
-  }
-
-  if (!data.user) {
-    throw new Error('Authenticated user not found. Please log in again.');
-  }
-
-  return data.user;
 }
 
 // ---------- Exercises CRUD ----------

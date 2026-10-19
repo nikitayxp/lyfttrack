@@ -14,7 +14,10 @@ function setup() {
     exercises: { id: 'exercise', name: 'Exercise' },
   }));
   const supabase = {
-    auth: { getUser: async () => ({ data: { user: { id: 'owner' } }, error: null }) },
+    auth: {
+      getSession: async () => ({ data: { session: { access_token: 'owner-token', user: { id: 'owner' } } }, error: null }),
+      getUser: async () => ({ data: { user: { id: 'owner' } }, error: null }),
+    },
     from(table) {
       let rows = table === 'workouts' ? [...workouts] : table === 'sets' ? [...sets] : [];
       let from = 0, to = 999;

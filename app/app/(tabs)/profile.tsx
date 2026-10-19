@@ -35,7 +35,7 @@ import {
 import { getProfile, type ProfileRow } from '@/services/profileService';
 import { addWeight, getWeightHistory, parseBodyWeightInput, type BodyMeasurementEntry } from '@/services/measurementService';
 import { getAllTimePRs, type AllTimePR } from '@/services/statsService';
-import { supabase } from '@/services/supabase';
+import { getAuthenticatedUserOrThrow } from '@/services/authUserService';
 import { HistoryJumpBar } from '@/components/history/HistoryJumpBar';
 import {
   getErrorMessage,
@@ -425,13 +425,13 @@ export default function ProfileScreen() {
     setPerformanceError(null);
 
     try {
-      const [{ data: authData }, profileData] = await Promise.all([supabase.auth.getUser(), getProfile()]);
+      const [authUser, profileData] = await Promise.all([getAuthenticatedUserOrThrow(), getProfile()]);
 
-      const resolvedAuthUserId = authData.user?.id ?? null;
+      const resolvedAuthUserId = authUser.id;
       const resolvedUserId = profileData.id ?? resolvedAuthUserId;
 
       setAuthUserId(resolvedAuthUserId);
-      setEmail(authData.user?.email ?? '');
+      setEmail(authUser.email ?? '');
       setProfile(profileData);
 
       if (!resolvedUserId) {

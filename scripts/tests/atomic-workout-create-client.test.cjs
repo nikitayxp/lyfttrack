@@ -6,7 +6,10 @@ function setup(error = null, switchAccount = false) {
   let userId = 'owner';
   const calls = [];
   const supabase = {
-    auth: { getUser: async () => ({ data: { user: { id: userId } }, error: null }) },
+    auth: {
+      getSession: async () => ({ data: { session: { access_token: userId, user: { id: userId } } }, error: null }),
+      getUser: async () => ({ data: { user: { id: userId } }, error: null }),
+    },
     from() { throw Error('Unexpected non-atomic write'); },
     rpc: async (name, args) => {
       calls.push({ name, args });

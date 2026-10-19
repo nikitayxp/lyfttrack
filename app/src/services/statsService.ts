@@ -221,18 +221,16 @@ export async function getTrackedExercises(language: 'en' | 'pt' = 'en'): Promise
   const user = await getAuthenticatedUserOrThrow();
 
   const data = await loadAllRows(() => supabase
-    .from('sets')
-    .select('id, exercise_id, exercises!inner(id, name, name_en, name_pt), workouts!inner(user_id, end_time)')
-    .eq('workouts.user_id', user.id)
-    .not('workouts.end_time', 'is', null),
+    .from('exercises')
+    .select('id, name, name_en, name_pt, sets!inner(workouts!inner())')
+    .eq('sets.workouts.user_id', user.id)
+    .not('sets.workouts.end_time', 'is', null),
     'Unable to load tracked exercises'
   );
 
   const optionsById = new Map<string, StatsExerciseOption>();
 
-  for (const row of data) {
-    const exercise = resolveEmbeddedObject(row.exercises);
-
+  for (const exercise of data) {
     if (!exercise?.id || !exercise.name) {
       continue;
     }
@@ -395,27 +393,29 @@ export async function getAllTimePRs(language: 'en' | 'pt' = 'en'): Promise<AllTi
   const user = await getAuthenticatedUserOrThrow();
 
   const data = await loadAllRows(() => supabase
-    .from('sets')
-    .select('id, exercise_id, weight, workouts!inner(id, start_time, end_time, user_id), exercises!inner(id, name, name_en, name_pt, muscle_group, muscle_en, muscle_pt)')
-    .eq('workouts.user_id', user.id)
-    .not('workouts.end_time', 'is', null)
-    .not('weight', 'is', null)
-    .gt('weight', 0),
+    .from('exercises')
+    .select('id, name, name_en, name_pt, muscle_group, muscle_en, muscle_pt, sets!inner(weight, workouts!inner(start_time, end_time))')
+    .eq('sets.workouts.user_id', user.id)
+    .not('sets.workouts.end_time', 'is', null)
+    .gt('sets.weight', 0)
+    .order('weight', { referencedTable: 'sets', ascending: false })
+    .order('workouts(end_time)', { referencedTable: 'sets', ascending: false })
+    .limit(1, { referencedTable: 'sets' }),
     'Unable to load all-time PRs'
   );
 
   const rows = data;
   const bestByExerciseId = new Map<string, AllTimePR>();
 
-  for (const row of rows) {
-    const exercise = resolveEmbeddedObject(row.exercises);
-    const workout = resolveEmbeddedObject(row.workouts);
+  for (const exercise of rows) {
+    const row = exercise.sets?.[0];
+    const workout = resolveEmbeddedObject(row?.workouts);
 
     if (!exercise?.id || !exercise.name || !workout?.start_time) {
       continue;
     }
 
-    const weight = toNonNegativeNumber(row.weight);
+    const weight = toNonNegativeNumber(row?.weight);
 
     if (weight <= 0) {
       continue;

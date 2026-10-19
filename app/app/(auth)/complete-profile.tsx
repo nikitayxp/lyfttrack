@@ -23,6 +23,7 @@ import {
 } from '@/services/authSetup';
 import { checkUsernameAvailability, getProfile, updateProfile } from '@/services/profileService';
 import { supabase } from '@/services/supabase';
+import { getAuthenticatedUserOrThrow } from '@/services/authUserService';
 
 const palette = Colors.dark;
 const USERNAME_MAX_LENGTH = 24;
@@ -54,15 +55,7 @@ export default function CompleteProfileScreen() {
 
     void (async () => {
       try {
-        const { data } = await supabase.auth.getUser();
-        const user = data.user;
-
-        if (!user) {
-          router.replace('/(auth)/sign-in' as any);
-          return;
-        }
-
-        const profile = await getProfile();
+        const [user, profile] = await Promise.all([getAuthenticatedUserOrThrow(), getProfile()]);
         if (!mounted) {
           return;
         }

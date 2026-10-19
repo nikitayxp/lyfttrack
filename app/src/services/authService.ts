@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 import { getGoogleOAuthRedirectTo, supabase } from '@/services/supabase';
+import { getAuthenticatedUserOrThrow } from '@/services/authUserService';
 
 /**
  * OAuth leaves the app before a session exists, so the acceptance recorded on
@@ -38,8 +39,8 @@ export async function applyPendingTermsAcceptance(): Promise<void> {
   }
 
   try {
-    const { data } = await supabase.auth.getUser();
-    const existingAcceptedAt = (data.user?.user_metadata as { terms_accepted_at?: unknown } | undefined)
+    const user = await getAuthenticatedUserOrThrow();
+    const existingAcceptedAt = (user.user_metadata as { terms_accepted_at?: unknown } | undefined)
       ?.terms_accepted_at;
 
     if (typeof existingAcceptedAt !== 'string' || existingAcceptedAt.trim().length === 0) {

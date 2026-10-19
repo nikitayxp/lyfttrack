@@ -12,6 +12,8 @@ import {
 import { Animated, Platform } from 'react-native';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import {
+  createExerciseBlock,
+  createExerciseBlockFromSets,
   useActiveWorkoutState,
   type ActiveExercise,
   type ActiveExercisesUpdater,
@@ -108,6 +110,16 @@ function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: Pro
   const [exerciseStopwatchById, setExerciseStopwatchById] = useState<Record<string, ExerciseStopwatchEntry>>({});
   const [exerciseRestSnapshotById, setExerciseRestSnapshotById] = useState<Record<string, number>>({});
   const keepAwakeStateRef = useRef({ activated: false, deactivated: false });
+  const historySessionRef = useRef({ mounted: true, generation: 0 });
+
+  useEffect(() => {
+    const historySession = historySessionRef.current;
+    historySession.mounted = true;
+    return () => {
+      historySession.mounted = false;
+      historySession.generation += 1;
+    };
+  }, []);
 
   const workoutStartedAtIso = useMemo(
     () => (workoutStartedAtMs === null ? undefined : new Date(workoutStartedAtMs).toISOString()),
@@ -125,7 +137,6 @@ function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: Pro
     updateExerciseNotes,
     addSet,
     removeSet,
-    addExercise,
     clearExercises,
     getExerciseCompletionGlowValue,
     recoveredDraft,
@@ -159,6 +170,7 @@ function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: Pro
   }, [workoutStartedAtMs]);
 
   const resetWorkoutSession = useCallback(() => {
+    historySessionRef.current.generation += 1;
     setWorkoutStartedAtMs(null);
     setWorkoutSessionStartedAtMs(null);
     setIsTimerPaused(false);
@@ -379,18 +391,23 @@ function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: Pro
   const addExerciseToWorkout = useCallback(
     (exercise: ExerciseRow) => {
       ensureWorkoutStarted();
+      const block = createExerciseBlock(exercise);
+      const generation = historySessionRef.current.generation;
+      setActiveExercisesWithRef((currentValue) => [...currentValue, block]);
       getPreviousExercisePerformance(exercise.id, null)
         .then((previousSets) => {
-          const seeds = previousSets.map((s) => ({
-            setType: s.setType,
-          }));
-          addExercise(exercise, seeds);
+          if (!historySessionRef.current.mounted || historySessionRef.current.generation !== generation || previousSets.length === 0) {
+            return;
+          }
+          const seeded = createExerciseBlockFromSets(exercise, previousSets.map((set) => ({ setType: set.setType })));
+          setActiveExercisesWithRef((currentValue) => currentValue.map((currentBlock) => currentBlock === block ? {
+            ...block,
+            sets: seeded.sets.map((set, index) => ({ ...set, id: block.sets[index]?.id ?? set.id })),
+          } : currentBlock));
         })
-        .catch(() => {
-          addExercise(exercise);
-        });
+        .catch(() => {});
     },
-    [addExercise, ensureWorkoutStarted]
+    [ensureWorkoutStarted, setActiveExercisesWithRef]
   );
 
   const clearWorkout = useCallback(() => {

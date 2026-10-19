@@ -5,13 +5,18 @@ import {
   ActivityIndicator,
   Image,
   RefreshControl,
-  ScrollView,
+  FlatList,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useWorkoutContext } from '@/context/WorkoutContext';
+import { getTabBarHeight, MINIMIZED_WORKOUT_BAR_HEIGHT, MINIMIZED_WORKOUT_BAR_GAP } from '@/constants/tabBar';
+import { useAthleteHistory } from '@/hooks/useAthleteHistory';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import { HistoryJumpBar } from '@/components/history/HistoryJumpBar';
@@ -27,7 +32,7 @@ import {
   type WorkoutCommentWithProfile,
 } from '@/services/interactionService';
 import { FriendActions } from '@/components/social/FriendActions';
-import { getPublicProfileById, type PublicProfileView } from '@/services/profileService';
+import { type PublicProfileView } from '@/services/profileService';
 import {
   acceptRequest,
   getRelationWithUser,
@@ -36,14 +41,7 @@ import {
   sendFriendRequest,
   type UserRelation,
 } from '@/services/socialService';
-import {
-  getErrorMessage,
-  getUserWorkoutMonthBuckets,
-  getUserWorkouts,
-  type WorkoutFeedItem,
-  type WorkoutListFilter,
-  type WorkoutMonthBucket,
-} from '@/services/workoutService';
+import { getErrorMessage, type WorkoutFeedItem } from '@/services/workoutService';
 import { useAppToast } from '@/context/ToastContext';
 import { confirmAction } from '@/utils/confirmAction';
 import { showAlert } from '@/utils/showAlert';
@@ -51,7 +49,6 @@ import { showAlert } from '@/utils/showAlert';
 const palette = Colors.dark;
 const SCREEN_BG = palette.bgPrimary;
 const CARD_BG = palette.surface;
-const FEED_PAGE_SIZE = 20;
 
 // Screens that open a public profile, and where "back" should return to.
 const PROFILE_ORIGIN_ROUTES: Record<string, string> = {
@@ -96,6 +93,8 @@ export default function PublicProfileScreen() {
   const { showToast } = useAppToast();
   const params = useLocalSearchParams<{ id?: string | string[]; from?: string | string[] }>();
   const profileId = useMemo(() => readRouteId(params.id), [params.id]);
+  const activeProfile = useRef({ id: profileId });
+  if (activeProfile.current.id !== profileId) activeProfile.current = { id: profileId };
   const openedFrom = useMemo(() => readRouteId(params.from), [params.from]);
 
   const handleBack = useCallback(() => {
@@ -118,13 +117,37 @@ export default function PublicProfileScreen() {
     router.replace('/(tabs)' as any);
   }, [openedFrom]);
 
-  const [profile, setProfile] = useState<PublicProfileView | null>(null);
-  const [workouts, setWorkouts] = useState<WorkoutFeedItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [optimisticLikeState, setOptimisticLikeState] = useState<Record<string, FeedLikeInteractionState>>({});
-  const [commentsByWorkoutId, setCommentsByWorkoutId] = useState<Record<string, WorkoutCommentWithProfile[]>>({});
+  const [historySearchInput, setHistorySearchInput] = useState('');
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyPeriodKey, setHistoryPeriodKey] = useState<string | null>(null);
+  const {
+    profile,
+    workouts,
+    historyMonths,
+    hasSummary,
+    summaryError,
+    isLoadingProfile,
+    isLoadingHistory,
+    isRefreshing,
+    error,
+    historyError,
+    hasMore,
+    refresh,
+    retryHistory,
+    loadMore,
+  } = useAthleteHistory(profileId, { periodKey: historyPeriodKey, search: historySearch });
+  const insets = useSafeAreaInsets();
+  const { hasActiveWorkout } = useWorkoutContext();
+  const bottomPadding =
+    getTabBarHeight(Platform.OS === 'web', insets.bottom) +
+    24 +
+    (hasActiveWorkout ? MINIMIZED_WORKOUT_BAR_HEIGHT + MINIMIZED_WORKOUT_BAR_GAP : 0);
+  const [optimisticLikeState, setOptimisticLikeState] = useState<Record<string, FeedLikeInteractionState>>(
+    {},
+  );
+  const [commentsByWorkoutId, setCommentsByWorkoutId] = useState<Record<string, WorkoutCommentWithProfile[]>>(
+    {},
+  );
   const [commentCountByWorkoutId, setCommentCountByWorkoutId] = useState<Record<string, number>>({});
   const [selectedWorkoutForComments, setSelectedWorkoutForComments] = useState<WorkoutFeedItem | null>(null);
   const [isCommentsLoading, setIsCommentsLoading] = useState(false);
@@ -134,149 +157,44 @@ export default function PublicProfileScreen() {
   const [currentCommentAuthor, setCurrentCommentAuthor] = useState<CommentAuthorProfile | null>(null);
   const [relation, setRelation] = useState<UserRelation | null>(null);
   const [isRelationBusy, setIsRelationBusy] = useState(false);
-  const [historySearchInput, setHistorySearchInput] = useState('');
-  const [historySearch, setHistorySearch] = useState('');
-  const [historyPeriodKey, setHistoryPeriodKey] = useState<string | null>(null);
-  const [historyMonths, setHistoryMonths] = useState<WorkoutMonthBucket[]>([]);
-  const historyFilterRef = useRef<WorkoutListFilter>({});
-  const skippedFirstHistoryFilterEffect = useRef(true);
-
-  historyFilterRef.current = {
-    periodKey: historyPeriodKey,
-    search: historySearch,
-  };
-
-  // An empty list on a non-public profile means "not allowed to see", not
-  // "trained nothing" — saying the wrong one is what made the old behaviour
-  // read as broken.
-  const isRestrictedProfile = profile ? profile.visibility !== 'public' : false;
-
-  const loadData = useCallback(
-    async (mode: 'initial' | 'refresh' = 'initial') => {
-      if (mode === 'initial') {
-        setIsLoading(true);
-      } else {
-        setIsRefreshing(true);
-      }
-
-      if (!profileId) {
-        setError(t('publicProfile.invalidId'));
-        setProfile(null);
-        setWorkouts([]);
-        setIsLoading(false);
-        setIsRefreshing(false);
-        return;
-      }
-
-      setError(null);
-
-      // The friend state loads on its own: failing to read it should leave the
-      // actions hidden, not stop the profile from opening.
-      void getRelationWithUser(profileId)
-        .then(setRelation)
-        .catch(() => setRelation(null));
-
-      try {
-        const [profileData, workoutData, monthBuckets] = await Promise.all([
-          getPublicProfileById(profileId),
-          getUserWorkouts(profileId, 0, FEED_PAGE_SIZE, historyFilterRef.current),
-          getUserWorkoutMonthBuckets(profileId),
-        ]);
-
-        if (!profileData) {
-          setProfile(null);
-          setWorkouts([]);
-          setHistoryMonths([]);
-          setError(t('publicProfile.notFound'));
-          return;
-        }
-
-        setProfile(profileData);
-        setWorkouts(workoutData);
-        setHistoryMonths(monthBuckets);
-
-        setOptimisticLikeState((currentState) => {
-          const validWorkoutIds = new Set(workoutData.map((item) => item.id));
-          const nextState: Record<string, FeedLikeInteractionState> = {};
-
-          for (const [workoutId, state] of Object.entries(currentState)) {
-            if (validWorkoutIds.has(workoutId)) {
-              nextState[workoutId] = state;
-            }
-          }
-
-          return nextState;
-        });
-
-        setCommentsByWorkoutId((currentState) => {
-          const validWorkoutIds = new Set(workoutData.map((item) => item.id));
-          const nextState: Record<string, WorkoutCommentWithProfile[]> = {};
-
-          for (const [workoutId, state] of Object.entries(currentState)) {
-            if (validWorkoutIds.has(workoutId)) {
-              nextState[workoutId] = state;
-            }
-          }
-
-          return nextState;
-        });
-
-        setCommentCountByWorkoutId((currentState) => {
-          const validWorkoutIds = new Set(workoutData.map((item) => item.id));
-          const nextState: Record<string, number> = {};
-
-          for (const [workoutId, state] of Object.entries(currentState)) {
-            if (validWorkoutIds.has(workoutId)) {
-              nextState[workoutId] = state;
-            }
-          }
-
-          return nextState;
-        });
-      } catch (loadError) {
-        setError(getErrorMessage(loadError));
-        setProfile(null);
-        setWorkouts([]);
-        setHistoryMonths([]);
-      } finally {
-        setIsLoading(false);
-        setIsRefreshing(false);
-      }
-    },
-    [profileId, t]
+  const isRestrictedProfile = Boolean(
+    profile &&
+      profile.visibility !== 'public' &&
+      relation?.relation !== 'self' &&
+      !(profile.visibility === 'friends' && relation?.relation === 'friends'),
   );
 
   useEffect(() => {
-    void loadData('initial');
-  }, [loadData]);
+    let current = true;
+    setRelation(null);
+    setIsRelationBusy(false);
+    if (profileId)
+      void getRelationWithUser(profileId)
+        .then((value) => {
+          if (current) setRelation(value);
+        })
+        .catch(() => {
+          if (current) setRelation(null);
+        });
+    return () => {
+      current = false;
+    };
+  }, [profileId]);
 
   useEffect(() => {
-    const handle = setTimeout(() => {
-      setHistorySearch(historySearchInput.trim());
-    }, 300);
-
+    const handle = setTimeout(() => setHistorySearch(historySearchInput.trim()), 250);
     return () => clearTimeout(handle);
   }, [historySearchInput]);
 
   useEffect(() => {
-    if (skippedFirstHistoryFilterEffect.current) {
-      skippedFirstHistoryFilterEffect.current = false;
-      return;
-    }
-
-    if (!profileId) {
-      return;
-    }
-
-    void (async () => {
-      try {
-        const workoutData = await getUserWorkouts(profileId, 0, FEED_PAGE_SIZE, historyFilterRef.current);
-        setWorkouts(workoutData);
-      } catch (loadError) {
-        setError(getErrorMessage(loadError));
-      }
-    })();
-  }, [historyPeriodKey, historySearch, profileId]);
+    setHistorySearchInput('');
+    setHistorySearch('');
+    setHistoryPeriodKey(null);
+    setSelectedWorkoutForComments(null);
+    setOptimisticLikeState({});
+    setCommentsByWorkoutId({});
+    setCommentCountByWorkoutId({});
+  }, [profileId]);
 
   const runRelationAction = useCallback(
     async (action: () => Promise<void>, errorTitleKey: string) => {
@@ -285,17 +203,23 @@ export default function PublicProfileScreen() {
       }
 
       setIsRelationBusy(true);
+      const actionProfile = activeProfile.current;
+      const isCurrent = () => activeProfile.current === actionProfile;
 
       try {
         await action();
-        setRelation(await getRelationWithUser(profileId));
+        if (!isCurrent()) return;
+        const nextRelation = await getRelationWithUser(profileId);
+        if (!isCurrent()) return;
+        setRelation(nextRelation);
+        await refresh();
       } catch (actionError) {
-        showAlert(showToast, t(errorTitleKey), getErrorMessage(actionError), 'error');
+        if (isCurrent()) showAlert(showToast, t(errorTitleKey), getErrorMessage(actionError), 'error');
       } finally {
-        setIsRelationBusy(false);
+        if (isCurrent()) setIsRelationBusy(false);
       }
     },
-    [isRelationBusy, profileId, showToast, t]
+    [isRelationBusy, profileId, refresh, showToast, t],
   );
 
   const handleAddFriend = useCallback(() => {
@@ -393,7 +317,7 @@ export default function PublicProfileScreen() {
       void ensureCurrentCommentAuthor();
       void loadCommentsForWorkout(workout.id);
     },
-    [ensureCurrentCommentAuthor, loadCommentsForWorkout]
+    [ensureCurrentCommentAuthor, loadCommentsForWorkout],
   );
 
   const closeCommentsModal = useCallback(() => {
@@ -508,206 +432,324 @@ export default function PublicProfileScreen() {
     t,
   ]);
 
-  const handleToggleLike = useCallback(async (workout: WorkoutFeedItem) => {
-    let previousState: FeedLikeInteractionState | undefined;
-    let optimisticState: FeedLikeInteractionState | null = null;
-
-    setOptimisticLikeState((currentState) => {
-      previousState = currentState[workout.id];
-
-      if (previousState?.isPending) {
-        return currentState;
-      }
-
-      const currentHasLiked = previousState?.hasLiked ?? workout.has_liked;
-      const currentLikesCount = previousState?.likesCount ?? workout.likes_count;
-
-      optimisticState = {
-        hasLiked: !currentHasLiked,
-        likesCount: Math.max(0, currentLikesCount + (!currentHasLiked ? 1 : -1)),
-        isPending: true,
-      };
-
-      return {
-        ...currentState,
-        [workout.id]: optimisticState,
-      };
-    });
-
-    if (!optimisticState) {
-      return;
-    }
-
-    const optimisticSnapshot = optimisticState;
-
-    try {
-      const result = await toggleLike(workout.id);
+  const handleToggleLike = useCallback(
+    async (workout: WorkoutFeedItem) => {
+      let previousState: FeedLikeInteractionState | undefined;
+      let optimisticState: FeedLikeInteractionState | null = null;
 
       setOptimisticLikeState((currentState) => {
-        const existingState = currentState[workout.id] ?? optimisticSnapshot;
-        let resolvedLikesCount = existingState.likesCount;
+        previousState = currentState[workout.id];
 
-        if (result.liked !== existingState.hasLiked) {
-          resolvedLikesCount = Math.max(0, existingState.likesCount + (result.liked ? 1 : -1));
+        if (previousState?.isPending) {
+          return currentState;
         }
+
+        const currentHasLiked = previousState?.hasLiked ?? workout.has_liked;
+        const currentLikesCount = previousState?.likesCount ?? workout.likes_count;
+
+        optimisticState = {
+          hasLiked: !currentHasLiked,
+          likesCount: Math.max(0, currentLikesCount + (!currentHasLiked ? 1 : -1)),
+          isPending: true,
+        };
 
         return {
           ...currentState,
-          [workout.id]: {
-            hasLiked: result.liked,
-            likesCount: resolvedLikesCount,
-            isPending: false,
-          },
+          [workout.id]: optimisticState,
         };
       });
-    } catch (toggleError) {
-      setOptimisticLikeState((currentState) => {
-        const nextState = { ...currentState };
 
-        if (previousState) {
-          nextState[workout.id] = {
-            ...previousState,
-            isPending: false,
+      if (!optimisticState) {
+        return;
+      }
+
+      const optimisticSnapshot = optimisticState;
+
+      try {
+        const result = await toggleLike(workout.id);
+
+        setOptimisticLikeState((currentState) => {
+          const existingState = currentState[workout.id] ?? optimisticSnapshot;
+          let resolvedLikesCount = existingState.likesCount;
+
+          if (result.liked !== existingState.hasLiked) {
+            resolvedLikesCount = Math.max(0, existingState.likesCount + (result.liked ? 1 : -1));
+          }
+
+          return {
+            ...currentState,
+            [workout.id]: {
+              hasLiked: result.liked,
+              likesCount: resolvedLikesCount,
+              isPending: false,
+            },
           };
-        } else {
-          delete nextState[workout.id];
-        }
+        });
+      } catch (toggleError) {
+        setOptimisticLikeState((currentState) => {
+          const nextState = { ...currentState };
 
-        return nextState;
-      });
+          if (previousState) {
+            nextState[workout.id] = {
+              ...previousState,
+              isPending: false,
+            };
+          } else {
+            delete nextState[workout.id];
+          }
 
-      showAlert(showToast, t('publicProfile.likeUpdateError'), getErrorMessage(toggleError), 'error');
-    }
-  }, [showToast, t]);
+          return nextState;
+        });
 
-  const displayName = useMemo(() => profileDisplayName(profile, t('publicProfile.athleteFallback')), [profile, t]);
+        showAlert(showToast, t('publicProfile.likeUpdateError'), getErrorMessage(toggleError), 'error');
+      }
+    },
+    [showToast, t],
+  );
+
+  const displayName = useMemo(
+    () => profileDisplayName(profile, t('publicProfile.athleteFallback')),
+    [profile, t],
+  );
 
   const selectedWorkoutComments = selectedWorkoutForComments
-    ? commentsByWorkoutId[selectedWorkoutForComments.id] ?? []
+    ? (commentsByWorkoutId[selectedWorkoutForComments.id] ?? [])
     : [];
+
+  const locale = i18n.resolvedLanguage?.startsWith('en') ? 'en-GB' : 'pt-PT';
+  const totalWorkouts = historyMonths.reduce((total, month) => total + month.count, 0);
+  const firstMonth = historyMonths[historyMonths.length - 1];
+  const firstMonthLabel = firstMonth
+    ? new Date(firstMonth.year, firstMonth.month - 1, 1).toLocaleDateString(locale, {
+        month: 'long',
+        year: 'numeric',
+      })
+    : null;
+  const profileReady = !isLoadingProfile && !error && profile !== null;
 
   return (
     <>
-      <ScrollView
+      <FlatList
+        data={profileReady && !isRestrictedProfile ? workouts : []}
+        keyExtractor={(item) => item.id}
         style={styles.screen}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void loadData('refresh')} tintColor={palette.accent} />}
-      >
-        <View style={styles.topRow}>
-          <TouchableOpacity style={styles.backButton} activeOpacity={ACTIVE_OPACITY} onPress={handleBack}>
-            <Ionicons name="arrow-back" size={20} color={palette.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.title}>{t('publicProfile.title')}</Text>
-          <View style={styles.backButtonPlaceholder} />
-        </View>
-
-        {isLoading ? (
-          <View style={styles.statusCard}>
-            <ActivityIndicator size="small" color={palette.accent} />
-            <Text style={styles.statusText}>{t('publicProfile.loadingProfile')}</Text>
-          </View>
-        ) : error ? (
-          <View style={styles.statusCard}>
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} activeOpacity={ACTIVE_OPACITY} onPress={() => void loadData('initial')}>
-              <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
+        initialNumToRender={5}
+        maxToRenderPerBatch={5}
+        windowSize={7}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => void refresh()}
+            tintColor={palette.accent}
+          />
+        }
+        renderItem={({ item }) => {
+          const interaction = optimisticLikeState[item.id];
+          return (
+            <WorkoutFeedCard
+              workout={item}
+              variant="history"
+              likeCount={interaction?.likesCount ?? item.likes_count}
+              commentsCount={commentCountByWorkoutId[item.id] ?? item.comments_count}
+              hasLiked={interaction?.hasLiked ?? item.has_liked}
+              isLikePending={interaction?.isPending ?? false}
+              onToggleLike={() => void handleToggleLike(item)}
+              onOpenComments={() => openCommentsModal(item)}
+            />
+          );
+        }}
+        ListHeaderComponent={
           <>
-            <View style={styles.profileCard}>
-              {profile?.avatar_url ? (
-                <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
-              ) : (
-                <View style={styles.avatarFallback}>
-                  <Text style={styles.avatarFallbackText}>{initialsFromName(displayName)}</Text>
-                </View>
-              )}
-
-              <Text style={styles.nameText}>{displayName}</Text>
-              <Text style={styles.usernameText}>@{profile?.username}</Text>
-
-              {profile?.bio ? <Text style={styles.bioText}>{profile.bio}</Text> : null}
-
-              <View style={styles.metricChip}>
-                <Ionicons name="barbell-outline" size={14} color={palette.accent} />
-                <Text style={styles.metricChipText}>{t('publicProfile.recentWorkouts', { count: workouts.length })}</Text>
+            <View style={styles.topRow}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={t('common.back')}
+                style={styles.backButton}
+                activeOpacity={ACTIVE_OPACITY}
+                onPress={handleBack}
+              >
+                <Ionicons name="arrow-back" size={20} color={palette.textPrimary} />
+              </TouchableOpacity>
+              <Text style={styles.title}>{t('publicProfile.title')}</Text>
+              <View style={styles.backButtonPlaceholder} />
+            </View>
+            {isLoadingProfile ? (
+              <View style={styles.statusCard}>
+                <ActivityIndicator size="small" color={palette.accent} />
+                <Text style={styles.statusText}>{t('publicProfile.loadingProfile')}</Text>
               </View>
-
-              {relation ? (
-                <View style={styles.friendActionsWrap}>
-                  <FriendActions
-                    relation={relation.relation}
-                    isBusy={isRelationBusy}
-                    onAdd={handleAddFriend}
-                    onAccept={handleAcceptRequest}
-                    onReject={handleRejectRequest}
-                    onRemove={handleRemoveFriend}
-                  />
-                </View>
-              ) : null}
-            </View>
-
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{t('publicProfile.workoutsSectionTitle')}</Text>
-            </View>
-
-            {!isRestrictedProfile ? (
-              <HistoryJumpBar
-                months={historyMonths}
-                selectedPeriodKey={historyPeriodKey}
-                onSelectPeriod={setHistoryPeriodKey}
-                query={historySearchInput}
-                onChangeQuery={setHistorySearchInput}
-                searchPlaceholder={t('historyJump.searchPlaceholder')}
-                allLabel={t('historyJump.all')}
-                locale={i18n.resolvedLanguage ?? i18n.language ?? 'pt'}
-              />
-            ) : null}
-
-            {workouts.length === 0 ? (
-              <EmptyState
-                icon={isRestrictedProfile ? 'lock-closed-outline' : 'trophy-outline'}
-                title={
-                  isRestrictedProfile
-                    ? t('publicProfile.restrictedTitle')
-                    : historyPeriodKey || historySearch
-                      ? t('historyJump.noResultsTitle')
-                      : t('publicProfile.noPublicWorkoutsTitle')
-                }
-                description={
-                  isRestrictedProfile
-                    ? t('publicProfile.restrictedDescription')
-                    : historyPeriodKey || historySearch
-                      ? t('historyJump.noResultsDescription')
-                      : t('publicProfile.noPublicWorkoutsDescription')
-                }
-                containerStyle={styles.statusCard}
-                descriptionStyle={styles.statusText}
-              />
+            ) : !profileReady ? (
+              <View style={styles.statusCard}>
+                <Text style={styles.errorText}>
+                  {error ?? t(profileId ? 'publicProfile.notFound' : 'publicProfile.invalidId')}
+                </Text>
+                <TouchableOpacity
+                  style={styles.retryButton}
+                  activeOpacity={ACTIVE_OPACITY}
+                  onPress={() => void refresh()}
+                >
+                  <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
+                </TouchableOpacity>
+              </View>
             ) : (
-              workouts.map((workout) => {
-                const interactionState = optimisticLikeState[workout.id];
-
-                return (
-                  <WorkoutFeedCard
-                    key={workout.id}
-                    workout={workout}
-                    likeCount={interactionState?.likesCount ?? workout.likes_count}
-                    commentsCount={commentCountByWorkoutId[workout.id] ?? workout.comments_count}
-                    hasLiked={interactionState?.hasLiked ?? workout.has_liked}
-                    isLikePending={interactionState?.isPending ?? false}
-                    onToggleLike={() => void handleToggleLike(workout)}
-                    onOpenComments={() => openCommentsModal(workout)}
+              <>
+                <View style={styles.profileCard}>
+                  <View style={styles.identityRow}>
+                    {profile?.avatar_url ? (
+                      <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
+                    ) : (
+                      <View style={styles.avatarFallback}>
+                        <Text style={styles.avatarFallbackText}>{initialsFromName(displayName)}</Text>
+                      </View>
+                    )}
+                    <View style={styles.identityText}>
+                      <Text style={styles.nameText}>{displayName}</Text>
+                      <Text style={styles.usernameText}>@{profile?.username}</Text>
+                      <View style={styles.visibility}>
+                        <Ionicons
+                          name={profile?.visibility === 'public' ? 'globe-outline' : 'lock-closed-outline'}
+                          size={12}
+                          color={palette.accentLight}
+                        />
+                        <Text style={styles.visibilityText}>
+                          {t(`publicProfile.visibility.${profile?.visibility ?? 'private'}`)}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                  {profile?.bio ? <Text style={styles.bioText}>{profile.bio}</Text> : null}
+                  {!isRestrictedProfile && hasSummary ? (
+                    <>
+                      <View style={styles.profileMetrics}>
+                        <View style={styles.profileMetric}>
+                          <Text style={styles.profileMetricValue}>
+                            {totalWorkouts.toLocaleString(locale)}
+                          </Text>
+                          <Text style={styles.profileMetricLabel}>{t('publicProfile.totalSessions')}</Text>
+                        </View>
+                        <View style={styles.profileMetric}>
+                          <Text style={styles.profileMetricValue}>{historyMonths.length}</Text>
+                          <Text style={styles.profileMetricLabel}>{t('publicProfile.activeMonths')}</Text>
+                        </View>
+                      </View>
+                      {firstMonthLabel ? (
+                        <Text style={styles.historySince}>
+                          {t('publicProfile.historySince', { date: firstMonthLabel })}
+                        </Text>
+                      ) : null}
+                    </>
+                  ) : null}
+                  {summaryError && !isRestrictedProfile ? (
+                    <View style={styles.statusCard}>
+                      <Text style={styles.statusText}>{t('publicProfile.summaryUnavailable')}</Text>
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        style={styles.loadMore}
+                        onPress={() => void refresh()}
+                      >
+                        <Text style={styles.loadMoreText}>{t('common.retry')}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+                  {relation && relation.relation !== 'self' ? (
+                    <View style={styles.friendActionsWrap}>
+                      <FriendActions
+                        relation={relation.relation}
+                        isBusy={isRelationBusy}
+                        onAdd={handleAddFriend}
+                        onAccept={handleAcceptRequest}
+                        onReject={handleRejectRequest}
+                        onRemove={handleRemoveFriend}
+                      />
+                    </View>
+                  ) : null}
+                </View>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>{t('publicProfile.workoutsSectionTitle')}</Text>
+                </View>
+                {!isRestrictedProfile ? (
+                  <HistoryJumpBar
+                    months={historyMonths}
+                    selectedPeriodKey={historyPeriodKey}
+                    onSelectPeriod={setHistoryPeriodKey}
+                    query={historySearchInput}
+                    onChangeQuery={setHistorySearchInput}
+                    searchPlaceholder={t('historyJump.searchPlaceholder')}
+                    allLabel={t('historyJump.all')}
+                    locale={locale}
                   />
-                );
-              })
+                ) : (
+                  <EmptyState
+                    icon="lock-closed-outline"
+                    title={t('publicProfile.restrictedTitle')}
+                    description={t(
+                      profile?.visibility === 'private'
+                        ? 'publicProfile.privateDescription'
+                        : 'publicProfile.restrictedDescription',
+                    )}
+                    containerStyle={styles.statusCard}
+                  />
+                )}
+              </>
             )}
           </>
-        )}
-      </ScrollView>
+        }
+        ListEmptyComponent={
+          profileReady && !isRestrictedProfile && !isLoadingHistory && !historyError ? (
+            <EmptyState
+              icon={historyPeriodKey || historySearch ? 'search-outline' : 'barbell-outline'}
+              title={t(
+                historyPeriodKey || historySearch
+                  ? 'historyJump.noResultsTitle'
+                  : 'publicProfile.noPublicWorkoutsTitle',
+              )}
+              description={t(
+                historyPeriodKey || historySearch
+                  ? 'historyJump.noResultsDescription'
+                  : 'publicProfile.noPublicWorkoutsDescription',
+              )}
+              containerStyle={styles.statusCard}
+            />
+          ) : null
+        }
+        ListFooterComponent={
+          profileReady && !isRestrictedProfile ? (
+            <View style={styles.footer}>
+              {isLoadingHistory ? (
+                <View style={styles.statusCard}>
+                  <ActivityIndicator color={palette.accent} />
+                  <Text style={styles.statusText}>{t('common.loading')}</Text>
+                </View>
+              ) : historyError ? (
+                <View style={styles.statusCard}>
+                  <Text style={styles.errorText}>{historyError}</Text>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    style={styles.loadMore}
+                    onPress={() => void retryHistory()}
+                  >
+                    <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : hasMore ? (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  style={styles.loadMore}
+                  onPress={() => void loadMore()}
+                >
+                  <Text style={styles.loadMoreText}>{t('historyJump.loadMore')}</Text>
+                  <Ionicons name="arrow-down" size={17} color={palette.accentLight} />
+                </TouchableOpacity>
+              ) : workouts.length > 0 ? (
+                <Text style={styles.statusText}>{t('historyJump.endOfHistory')}</Text>
+              ) : null}
+            </View>
+          ) : null
+        }
+      />
 
       <FeedCommentsModal
         visible={selectedWorkoutForComments !== null}
@@ -741,7 +783,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 20,
     paddingBottom: 24,
-    rowGap: 12,
   },
   topRow: {
     flexDirection: 'row',
@@ -768,26 +809,60 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0.5,
   },
+  identityRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  identityText: { flex: 1, minWidth: 0 },
+  visibility: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  visibilityText: { color: palette.accentLight, fontSize: 11, fontWeight: '600' },
+  profileMetrics: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderColor: palette.border,
+    marginTop: 18,
+    paddingTop: 14,
+    gap: 12,
+  },
+  profileMetric: { flex: 1, minWidth: 0, gap: 4 },
+  profileMetricValue: {
+    color: palette.textPrimary,
+    fontSize: 25,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  profileMetricLabel: { color: palette.textMuted, fontSize: 12, lineHeight: 17 },
+  historySince: { color: palette.textMuted, fontSize: 12, marginTop: 14 },
+  footer: { paddingVertical: 12 },
+  loadMore: {
+    minHeight: 48,
+    borderRadius: Radius.md,
+    backgroundColor: palette.accentSoft,
+    borderWidth: 1,
+    borderColor: palette.accent,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+  },
+  loadMoreText: { color: palette.accentLight, fontWeight: '700', fontSize: 14 },
   profileCard: {
     borderRadius: Radius.button,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: CARD_BG,
-    alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 18,
+    marginTop: 16,
+    marginBottom: 24,
   },
   avatar: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    marginBottom: 12,
+    width: 68,
+    height: 68,
+    borderRadius: 24,
   },
   avatarFallback: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    marginBottom: 12,
+    width: 68,
+    height: 68,
+    borderRadius: 24,
     backgroundColor: palette.accentSoft,
     alignItems: 'center',
     justifyContent: 'center',
@@ -799,24 +874,23 @@ const styles = StyleSheet.create({
   },
   nameText: {
     color: palette.textPrimary,
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '900',
     marginBottom: 3,
-    textAlign: 'center',
     letterSpacing: -0.5,
   },
   usernameText: {
     color: palette.textMuted,
     fontSize: 14,
     fontWeight: '700',
-    marginBottom: 12,
+    marginBottom: 6,
   },
   bioText: {
     color: palette.textSecondary,
     fontSize: 14,
     lineHeight: 20,
-    textAlign: 'center',
-    marginBottom: 10,
+    marginTop: 16,
+    marginBottom: 4,
   },
   friendActionsWrap: {
     alignSelf: 'stretch',
@@ -839,6 +913,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   sectionHeader: {
+    marginBottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

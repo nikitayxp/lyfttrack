@@ -381,10 +381,41 @@ export async function getExercisePersonalRecords(exerciseId: string): Promise<Ex
 export async function getExerciseStats(
   exerciseId: string, metric: ProgressMetric = 'volume', localeTag?: string, options?: ExerciseProgressOptions
 ): Promise<{ progress: ExerciseProgressPoint[]; records: ExercisePersonalRecords }> {
-  const rows = await getExerciseSetRowsForUser(exerciseId);
+  await getSessionUserOrThrow();
+  const normalizedExerciseId = exerciseId.trim();
+  if (!normalizedExerciseId) throw new Error('Exercise id is required to load progress.');
+  const { data, error } = await supabase.rpc('exercise_stats_summary', { p_exercise_id: normalizedExerciseId });
+  if (error) throw new Error(`Unable to load exercise statistics: ${error.message}`);
+  const summary = data as {
+    progress: Omit<ExerciseProgressPoint, 'label' | 'value'>[];
+    records: Omit<ExercisePersonalRecords, 'bestDayVolume'>;
+  } | null;
+  if (!summary || !Array.isArray(summary.progress) || !summary.records) {
+    throw new Error('Unable to load exercise statistics: invalid summary.');
+  }
+  const allProgress = summary.progress.map(point => {
+    const volumeTotal = Math.round(point.volumeTotal);
+    const repsTotal = Math.round(point.repsTotal);
+    const durationMinutes = Math.round(point.durationMinutes);
+    const estimated1RMMax = Number(point.estimated1RMMax.toFixed(1));
+    const maxWeight = Number(point.maxWeight.toFixed(1));
+    const maxWeightReps = Math.round(point.maxWeightReps);
+    const value = metric === 'duration' ? durationMinutes
+      : metric === 'reps' ? repsTotal
+        : metric === 'weight' ? maxWeight
+          : metric === 'e1rm' ? estimated1RMMax : volumeTotal;
+    return { date: point.date, label: formatProgressLabel(point.date, localeTag), value,
+      volumeTotal, repsTotal, durationMinutes, estimated1RMMax, maxWeight, maxWeightReps };
+  });
+  const sinceDate = options?.sinceDate?.trim() || null;
   return {
-    progress: buildExerciseProgress(rows, metric, localeTag, options),
-    records: buildExercisePersonalRecords(rows),
+    progress: sinceDate ? allProgress.filter(point => point.date >= sinceDate) : allProgress,
+    records: {
+      heaviestWeight: Number(summary.records.heaviestWeight.toFixed(1)),
+      bestEstimated1RM: Number(summary.records.bestEstimated1RM.toFixed(1)),
+      bestDayVolume: allProgress.reduce((best, point) => Math.max(best, point.volumeTotal), 0),
+      completedSetCount: summary.records.completedSetCount,
+    },
   };
 }
 

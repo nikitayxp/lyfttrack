@@ -107,3 +107,44 @@ returns jsonb language sql stable security invoker set search_path = '' as $$
 $$;
 revoke all on function public.exercise_history_page(uuid,integer,integer) from public, anon;
 grant execute on function public.exercise_history_page(uuid,integer,integer) to authenticated;
+
+create or replace function public.exercise_stats_summary(p_exercise_id uuid)
+returns jsonb language sql stable security invoker set search_path = '' as $$
+  with own_sets as materialized (
+    select s.id, w.id as workout_id, (w.start_time at time zone 'UTC')::date as day,
+      case when s.weight::text in ('NaN','Infinity','-Infinity') then 0::double precision
+        else greatest(coalesce(s.weight,0),0)::double precision end as weight,
+      greatest(coalesce(s.reps,0),0)::double precision as reps,
+      s.rir, lower(btrim(coalesce(s.set_type,''))) = 'warmup' as is_warmup,
+      greatest(0, floor((floor(extract(epoch from w.end_time)*1000)
+        - floor(extract(epoch from w.start_time)*1000))/60000 + 0.5)) as duration_minutes
+    from public.sets s join public.workouts w on w.id=s.workout_id
+    where s.exercise_id=p_exercise_id and w.user_id=(select auth.uid()) and w.end_time is not null
+  ), samples as materialized (
+    select h.*, case when h.weight > 0 and h.reps > 0
+      then h.weight * (1::double precision + (h.reps + case when h.rir >= 0 then h.rir::double precision else 0::double precision end) / 30::double precision)
+      else 0::double precision end as e1rm
+    from own_sets h
+  ), workouts_per_day as (
+    select day, sum(duration_minutes) as duration_minutes
+    from (select distinct day,workout_id,duration_minutes from samples) w group by day
+  ), heaviest as (
+    select distinct on(day) day,weight,reps from samples where not is_warmup
+    order by day,weight desc,reps desc
+  ), days as (
+    select s.day, sum(s.weight*s.reps order by s.id) as volume_total,
+      sum(s.reps order by s.id) as reps_total,
+      coalesce(max(s.e1rm) filter(where not s.is_warmup),0) as estimated_1rm_max
+    from samples s where s.day is not null group by s.day
+  ) select jsonb_build_object(
+    'progress', coalesce((select jsonb_agg(jsonb_build_object(
+      'date',d.day::text,'volumeTotal',d.volume_total,'repsTotal',d.reps_total,
+      'durationMinutes',w.duration_minutes,'estimated1RMMax',d.estimated_1rm_max,
+      'maxWeight',coalesce(h.weight,0),'maxWeightReps',coalesce(h.reps,0)) order by d.day)
+      from days d join workouts_per_day w on w.day=d.day left join heaviest h on h.day=d.day), '[]'::jsonb),
+    'records', (select jsonb_build_object('heaviestWeight',coalesce(max(s.weight),0),
+      'bestEstimated1RM',coalesce(max(s.e1rm),0),'completedSetCount',count(*)) from samples s)
+  );
+$$;
+revoke all on function public.exercise_stats_summary(uuid) from public, anon;
+grant execute on function public.exercise_stats_summary(uuid) to authenticated;

@@ -1,3 +1,4 @@
+import { getSessionUserOrThrow } from '@/services/authUserService';
 import { supabase } from '@/services/supabase';
 import { getAuthenticatedUserOrThrow } from '@/services/workoutService';
 import type { Tables, TablesInsert } from '@/types/database';
@@ -95,48 +96,11 @@ function normalizeResultLimit(value: number | null | undefined, fallback: number
   return Math.max(1, Math.min(max, Math.trunc(value)));
 }
 
-async function getActiveUserIdsByRecentWorkouts(currentUserId: string): Promise<string[]> {
-  const pageSize = 500;
-  const maxRowsToScan = 5000;
-  const orderedActiveUserIds: string[] = [];
-  const seenUserIds = new Set<string>();
-
-  for (let from = 0; from < maxRowsToScan; from += pageSize) {
-    const to = from + pageSize - 1;
-
-    const { data: workoutRows, error: workoutError } = await supabase
-      .from('workouts')
-      .select('user_id, start_time')
-      .neq('user_id', currentUserId)
-      .not('end_time', 'is', null)
-      .order('start_time', { ascending: false })
-      .range(from, to);
-
-    if (workoutError) {
-      throw new Error(`Unable to load active users: ${workoutError.message}`);
-    }
-
-    if (!workoutRows || workoutRows.length === 0) {
-      break;
-    }
-
-    for (const row of workoutRows) {
-      const candidateUserId = normalizeOptionalId(row.user_id);
-
-      if (!candidateUserId || seenUserIds.has(candidateUserId)) {
-        continue;
-      }
-
-      seenUserIds.add(candidateUserId);
-      orderedActiveUserIds.push(candidateUserId);
-    }
-
-    if (workoutRows.length < pageSize) {
-      break;
-    }
-  }
-
-  return orderedActiveUserIds;
+async function getActiveUserIdsByRecentWorkouts(candidateIds: string[]): Promise<string[]> {
+  if (!candidateIds.length) return [];
+  const {data, error} = await supabase.rpc('recent_candidate_activity', {p_user_ids: candidateIds});
+  if (error) throw new Error(`Unable to load active users: ${error.message}`);
+  return ((data ?? []) as {user_id: string}[]).map(row => row.user_id);
 }
 
 async function getRelationsByUserIds(currentUserId: string, candidateIds: string[]): Promise<Map<string, SocialRelation>> {
@@ -223,7 +187,7 @@ function toErrorCode(error: unknown): string | null {
 }
 
 export async function searchUsers(query: string): Promise<SocialSearchResult[]> {
-  const user = await getAuthenticatedUserOrThrow();
+  const user = await getSessionUserOrThrow();
   const normalizedQuery = normalizeSearchTerm(query);
 
   if (normalizedQuery.length < 2) {
@@ -262,7 +226,7 @@ export async function searchUsers(query: string): Promise<SocialSearchResult[]> 
 }
 
 export async function getActiveUsers(query = '', limit: number | null = null): Promise<SocialSearchResult[]> {
-  const user = await getAuthenticatedUserOrThrow();
+  const user = await getSessionUserOrThrow();
   const normalizedQuery = normalizeSearchTerm(query);
 
   if (normalizedQuery.length === 0) {
@@ -305,7 +269,7 @@ export async function getActiveUsers(query = '', limit: number | null = null): P
     relation: relationByUserId.get(candidate.id) ?? 'none',
   }));
 
-  const recentActiveUserIds = await getActiveUserIdsByRecentWorkouts(user.id);
+  const recentActiveUserIds = await getActiveUserIdsByRecentWorkouts(candidates.map(candidate => candidate.id));
 
   if (recentActiveUserIds.length === 0) {
     return results;
@@ -326,7 +290,7 @@ export async function getActiveUsers(query = '', limit: number | null = null): P
 }
 
 export async function getAllAthletes(limit: number | null = null): Promise<SocialSearchResult[]> {
-  const user = await getAuthenticatedUserOrThrow();
+  const user = await getSessionUserOrThrow();
   const safeLimit = normalizeResultLimit(limit, 120);
 
   const { data: profiles, error: profilesError } = await supabase
@@ -356,7 +320,7 @@ export async function getAllAthletes(limit: number | null = null): Promise<Socia
     relation: relationByUserId.get(candidate.id) ?? 'none',
   }));
 
-  const recentActiveUserIds = await getActiveUserIdsByRecentWorkouts(user.id);
+  const recentActiveUserIds = await getActiveUserIdsByRecentWorkouts(candidates.map(candidate => candidate.id));
 
   if (recentActiveUserIds.length === 0) {
     return results;
@@ -452,7 +416,7 @@ export async function sendFriendRequest(userId: string): Promise<FriendRequestRo
 }
 
 export async function getPendingRequests(): Promise<PendingFriendRequest[]> {
-  const user = await getAuthenticatedUserOrThrow();
+  const user = await getSessionUserOrThrow();
 
   const { data: requests, error: requestsError } = await supabase
     .from('friend_requests')
@@ -483,7 +447,7 @@ async function respondToPendingRequest(
   requestId: string,
   action: 'accepted' | 'rejected'
 ): Promise<FriendRequestRow> {
-  const user = await getAuthenticatedUserOrThrow();
+  const user = await getSessionUserOrThrow();
   const normalizedRequestId = normalizeOptionalId(requestId);
 
   if (!normalizedRequestId) {
@@ -532,7 +496,7 @@ export async function rejectRequest(requestId: string): Promise<FriendRequestRow
 }
 
 export async function getRelationWithUser(userId: string): Promise<UserRelation> {
-  const user = await getAuthenticatedUserOrThrow();
+  const user = await getSessionUserOrThrow();
   const targetUserId = normalizeOptionalId(userId);
 
   if (!targetUserId) {
@@ -593,7 +557,7 @@ export async function removeFriend(userId: string): Promise<void> {
 }
 
 export async function getFriends(): Promise<FriendListItem[]> {
-  const user = await getAuthenticatedUserOrThrow();
+  const user = await getSessionUserOrThrow();
 
   const { data: friendships, error: friendshipsError } = await supabase
     .from('friends')

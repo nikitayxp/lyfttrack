@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, processLock } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
@@ -156,5 +156,6 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: authStorage !== undefined,
     persistSession: authStorage !== undefined,
     detectSessionInUrl: false,
+    ...(Platform.OS !== 'web' ? { flowType: 'pkce' as const, lock: processLock } : {}),
   },
 });

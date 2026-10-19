@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { AntDesign, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -13,7 +14,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
-import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
+import { Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
 import { AuthLanguageToggle } from '@/components/auth/AuthLanguageToggle';
 import { AppButton } from '@/components/ui/AppButton';
@@ -27,6 +28,9 @@ export default function SignInScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const googlePending = useRef(false);
+  const isBusy = loading || googleLoading;
   const [showPassword, setShowPassword] = useState(false);
   const [feedback, setFeedback] = useState<{ message: string; type: 'error' | 'success' | 'info' } | null>(null);
 
@@ -91,6 +95,9 @@ export default function SignInScreen() {
   }
 
   async function handleGooglePress() {
+    if (isBusy || googlePending.current) return;
+    googlePending.current = true;
+    setGoogleLoading(true);
     setFeedback(null);
 
     try {
@@ -102,6 +109,9 @@ export default function SignInScreen() {
         : t('auth.signIn.googleError');
 
       setFeedback({ message, type: 'error' });
+    } finally {
+      googlePending.current = false;
+      setGoogleLoading(false);
     }
   }
 
@@ -172,7 +182,7 @@ export default function SignInScreen() {
               <TouchableOpacity
                 onPress={() => setShowPassword((current) => !current)}
                 style={styles.eyeButton}
-                disabled={loading}
+                disabled={isBusy}
                 accessibilityRole="button"
                 accessibilityLabel={showPassword ? t('accessibility.hidePassword', { defaultValue: 'Hide password' }) : t('accessibility.showPassword', { defaultValue: 'Show password' })}
               >
@@ -183,7 +193,7 @@ export default function SignInScreen() {
             <AppButton
               label={t('auth.signIn.signInAction')}
               onPress={() => void handleSignIn()}
-              disabled={loading}
+              disabled={isBusy}
               loading={loading}
               style={styles.submitButton}
             />
@@ -197,11 +207,12 @@ export default function SignInScreen() {
             <TouchableOpacity 
               style={styles.googleButton} 
               onPress={handleGooglePress} 
-              disabled={loading}
+              disabled={isBusy}
               accessibilityRole="button"
               accessibilityLabel={t('auth.signIn.continueWithGoogle')}
+              accessibilityState={{ busy: googleLoading, disabled: isBusy }}
             >
-              <AntDesign name="google" size={16} color={palette.textPrimary} />
+              {googleLoading ? <ActivityIndicator size="small" color={palette.textPrimary} /> : <AntDesign name="google" size={16} color={palette.textPrimary} />}
               <Text style={styles.googleButtonText}>{t('auth.signIn.continueWithGoogle')}</Text>
             </TouchableOpacity>
 
@@ -220,7 +231,7 @@ export default function SignInScreen() {
             <TouchableOpacity 
               style={styles.secondaryAction} 
               onPress={() => void handleForgotPassword()} 
-              disabled={loading}
+              disabled={isBusy}
               accessibilityRole="button"
               accessibilityLabel={t('auth.signIn.forgotPassword')}
             >
@@ -230,7 +241,7 @@ export default function SignInScreen() {
             <TouchableOpacity
               style={styles.switchAction}
               onPress={() => router.push('/(auth)/sign-up' as any)}
-              disabled={loading}
+              disabled={isBusy}
               accessibilityRole="button"
               accessibilityLabel={t('auth.signIn.createAccountPrompt')}
             >

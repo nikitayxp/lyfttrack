@@ -23,17 +23,13 @@ import { BackButton } from '@/components/common/BackButton';
 import { usePreferences } from '@/context/PreferencesContext';
 import { useWorkoutContext } from '@/context/WorkoutContext';
 import type { Tables } from '@/types/database';
-import { getAuthenticatedUserOrThrow } from '@/services/authUserService';
+import { getSessionUserOrThrow } from '@/services/authUserService';
 import { getExercisesByIds } from '@/services/workoutService';
+import { useExerciseDetailsData } from '@/hooks/useExerciseDetailsData';
 import {
   formatExerciseAxisDate,
   formatExerciseHistoryDate,
-  getExercisePersonalRecords,
-  getExerciseProgress,
-  getExerciseWorkoutHistory,
-  type ExercisePersonalRecords,
   type ExerciseProgressPoint,
-  type ExerciseWorkoutHistoryEntry,
   type ProgressMetric,
 } from '@/services/statsService';
 import { estimateOneRepMax } from '@/utils/estimateOneRepMax';
@@ -291,10 +287,7 @@ export default function ExerciseDetailScreen() {
 
   const [metric, setMetric] = useState<ChartMetric>('weight');
   const [range, setRange] = useState<ChartRange>('3m');
-  const [progress, setProgress] = useState<ExerciseProgressPoint[]>([]);
-  const [records, setRecords] = useState<ExercisePersonalRecords | null>(null);
-  const [history, setHistory] = useState<ExerciseWorkoutHistoryEntry[]>([]);
-  const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const { progress, records, history, isLoadingStats, isLoadingMoreHistory, hasMoreHistory, statsError, reloadStats, loadMoreHistory } = useExerciseDetailsData(detailsAccess === 'open' ? exerciseId : null);
   const [chartScrollPosition, setChartScrollPosition] = useState({ x: 0, max: 0 });
   const [chartDragging, setChartDragging] = useState(false);
   const [selectedChartDate, setSelectedChartDate] = useState<string | null>(null);
@@ -585,7 +578,7 @@ export default function ExerciseDetailScreen() {
         return;
       }
 
-      const user = await getAuthenticatedUserOrThrow();
+      const user = await getSessionUserOrThrow();
       setExercise(found);
       setDetailsAccess(found.is_custom && found.created_by !== user.id ? 'custom' : 'open');
     } catch (err) {
@@ -595,36 +588,7 @@ export default function ExerciseDetailScreen() {
     }
   }, [exerciseId, t]);
 
-  const loadStats = useCallback(async () => {
-    if (!exerciseId || detailsAccess !== 'open') return;
-
-    setIsLoadingStats(true);
-
-    try {
-      // Load the whole history once; metric and range switch client-side so the
-      // chart does not remount and flash when toggling the filter buttons. The
-      // service reads every set for the exercise either way, so dropping the
-      // cut-off costs nothing and is what makes "all time" possible.
-      const [pts, prs, hist] = await Promise.all([
-        getExerciseProgress(exerciseId, 'weight', language),
-        getExercisePersonalRecords(exerciseId),
-        getExerciseWorkoutHistory(exerciseId),
-      ]);
-
-      setProgress(pts);
-      setRecords(prs);
-      setHistory(hist);
-    } catch {
-      setProgress([]);
-      setRecords(null);
-      setHistory([]);
-    } finally {
-      setIsLoadingStats(false);
-    }
-  }, [detailsAccess, exerciseId, language]);
-
   useEffect(() => { void loadExercise(); }, [loadExercise]);
-  useEffect(() => { void loadStats(); }, [loadStats]);
 
   const imageUrl = useMemo(() => {
     if (!exercise) return null;
@@ -1057,10 +1021,18 @@ export default function ExerciseDetailScreen() {
         {/* Workout History */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>{t('exercise.detail.historyTitle')}</Text>
+          {statsError ? (
+            <View>
+              <Text style={styles.placeholderText}>{statsError}</Text>
+              <TouchableOpacity onPress={() => void reloadStats()} accessibilityRole="button">
+                <Text style={styles.cardTitle}>{t('common.retry')}</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
           {history.length === 0 ? (
             <Text style={styles.placeholderText}>{t('exercise.detail.noHistory')}</Text>
           ) : (
-            history.slice(0, 20).map((entry) => (
+            history.map((entry) => (
               <TouchableOpacity
                 key={entry.workoutId}
                 style={styles.historyCard}
@@ -1116,6 +1088,11 @@ export default function ExerciseDetailScreen() {
               </TouchableOpacity>
             ))
           )}
+          {hasMoreHistory ? (
+            <TouchableOpacity onPress={() => void loadMoreHistory()} disabled={isLoadingMoreHistory} accessibilityRole="button">
+              {isLoadingMoreHistory ? <ActivityIndicator color={palette.accent} /> : <Text style={styles.cardTitle}>{t('publicProfile.loadMore')}</Text>}
+            </TouchableOpacity>
+          ) : null}
         </View>
       </ScrollView>
     </SafeAreaView>

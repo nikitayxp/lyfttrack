@@ -3,6 +3,17 @@ import { supabase } from '@/services/supabase';
 
 const pendingUserRequests = new Map<string, Promise<User>>();
 
+export async function getSessionUserOrThrow(): Promise<User> {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) {
+    throw new Error(`Unable to load authenticated session: ${error.message}`);
+  }
+  if (!data.session?.user) {
+    throw new Error('Authenticated session not found. Please log in again.');
+  }
+  return data.session.user;
+}
+
 async function validateUser(accessToken: string): Promise<User> {
   const { data, error } = await supabase.auth.getUser(accessToken);
   if (error) {

@@ -3,6 +3,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 import { getGoogleOAuthRedirectTo, supabase } from '@/services/supabase';
 import { getAuthenticatedUserOrThrow } from '@/services/authUserService';
+import { beginGoogleOAuthReturn, cancelGoogleOAuthReturn, completeGoogleOAuthReturn } from '@/services/oauthReturn';
 
 /**
  * OAuth leaves the app before a session exists, so the acceptance recorded on
@@ -66,8 +67,24 @@ export async function applyPendingTermsAcceptance(): Promise<void> {
   }
 }
 
+let pendingGoogleOAuth: Promise<void> | null = null;
+
 export async function startGoogleOAuth(): Promise<void> {
+  if (pendingGoogleOAuth) return pendingGoogleOAuth;
+  pendingGoogleOAuth = performGoogleOAuth();
+  try {
+    await pendingGoogleOAuth;
+  } catch (error) {
+    await cancelGoogleOAuthReturn();
+    throw error;
+  } finally {
+    pendingGoogleOAuth = null;
+  }
+}
+
+async function performGoogleOAuth(): Promise<void> {
   const redirectTo = getGoogleOAuthRedirectTo();
+  await beginGoogleOAuthReturn();
 
   if (__DEV__) {
     console.info('[oauth] startGoogleOAuth redirectTo', redirectTo);
@@ -130,4 +147,6 @@ export async function startGoogleOAuth(): Promise<void> {
   if (result.type !== 'success') {
     throw new Error('oauth-cancelled');
   }
+
+  await completeGoogleOAuthReturn(result.url);
 }

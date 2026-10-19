@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const loadSource = require('./load-source.cjs');
-function setup({ count = 1005, oneWorkoutPerSet = false, failLater = false, fractionalRecords = false, distinctExercises = false, unfinished = false, equalWeightRecords = false } = {}) {
+function setup({ count = 1005, oneWorkoutPerSet = false, failLater = false, fractionalRecords = false, distinctExercises = false, unfinished = false, equalWeightRecords = false, nestedSetCap } = {}) {
     const user = 'owner';
     const now = Date.now();
     const workouts = Array.from({ length: oneWorkoutPerSet ? count : Math.ceil(count / 100) }, (_, i) => ({ id: `w${String(i).padStart(6, '0')}`, user_id: user, start_time: new Date(now - 86400000).toISOString(), end_time: new Date(now - 82800000).toISOString() }));
@@ -29,7 +29,7 @@ function setup({ count = 1005, oneWorkoutPerSet = false, failLater = false, frac
     const exercises = [...new Map(sets.map(row => [row.exercise_id, row.exercises])).values()];
     const calls = [];
     function value(row, key) { return key.split('.').reduce((v, k) => v?.[k], row); }
-    const supabase = { from(table) {
+    const supabase = { rpc: async (name, args) => { calls.push({rpc:name}); return {error:null,data:relations.slice(args.p_offset,args.p_offset+args.p_limit)}; }, from(table) {
             const call = { table, filters: [], orders: [], nestedFilters: [], nestedOrders: [], range: [0, 999] };
             function filter(key, predicate) {
                 if (key.startsWith('sets.')) call.nestedFilters.push(row => predicate(value(row, key.slice(5))));
@@ -57,6 +57,7 @@ function setup({ count = 1005, oneWorkoutPerSet = false, failLater = false, frac
                             return 0;
                         }).slice(0, call.nestedLimit) })).filter(exercise => exercise.sets.length > 0);
                     }
+                    if (table === 'workout_exercises' && nestedSetCap) rows=rows.map(row=>({...row,sets:row.sets.slice(0,nestedSetCap)}));
                     rows.sort((a, b) => { for (const order of call.orders) {
                     const av = value(a, order.key), bv = value(b, order.key);
                     const c = av === bv ? 0 : av > bv ? 1 : -1;
@@ -66,7 +67,7 @@ function setup({ count = 1005, oneWorkoutPerSet = false, failLater = false, frac
             };
             return query;
         } };
-    const stats = loadSource({ '@/services/supabase': { supabase }, '@/services/workoutService': { getAuthenticatedUserOrThrow: async () => ({ id: user }), normalizeSetType: v => v ?? 'normal' } })('app/src/services/statsService.ts');
+    const stats = loadSource({ '@/services/supabase': { supabase }, '@/services/authUserService': {getSessionUserOrThrow:async()=>({id:user})}, '@/services/workoutService': { getAuthenticatedUserOrThrow: async () => ({ id: user }), normalizeSetType: v => v ?? 'normal' } })('app/src/services/statsService.ts');
     return { stats, calls, now };
 }
 test('tracked exercises include an exercise appearing after the server row cap', async () => {
@@ -114,13 +115,13 @@ test('a later page failure rejects instead of presenting incomplete statistics',
 test('tracked exercises do not download a page for each 1000 historical sets', async () => {
     const { stats, calls } = setup({ count: 3001 });
     assert.equal((await stats.getTrackedExercises()).length, 2);
-    assert.equal(calls.length, 1);
+    assert.equal(calls.length, 2);
 });
 
 test('trophy reads return the same records without downloading every historical set', async () => {
     const { stats, calls } = setup({ count: 3001 });
     assert.equal((await stats.getAllTimePRs()).length, 2);
-    assert.equal(calls.length, 1);
+    assert.equal(calls.length, 2);
 });
 
 test('the exercise catalog itself remains complete beyond 1000 tracked exercises', async () => {
@@ -159,4 +160,23 @@ test('empty accounts return empty charts and zero records', async () => {
     assert.equal((await stats.getWeeklyDashboardMetrics()).length, 0);
     assert.equal((await stats.getWeeklyVolumeByMuscle()).length, 0);
     assert.equal((await stats.getExercisePersonalRecords('first')).completedSetCount, 0);
+});
+
+test('combined exercise statistics use one complete set history for chart and records', async () => {
+    const { stats, calls } = setup({count: 3001});
+    const result = await stats.getExerciseStats('first');
+    assert.equal(result.records.completedSetCount, 3000);
+    assert.equal(result.progress.reduce((n, p) => n + p.volumeTotal, 0), 60000);
+    assert.equal(calls.filter(c => c.table === 'sets').length, 4);
+});
+
+test('exercise history accepts a bounded page without fetching the full history', async()=>{
+ const {stats,calls}=setup({count:3001,oneWorkoutPerSet:true});
+ const page=await stats.getExerciseWorkoutHistory('first',{limit:20,offset:0});
+ assert.equal(page.length,20);assert.equal(calls.length,1);assert.equal(calls[0].rpc,'exercise_history_page');
+});
+
+test('complete exercise history does not inherit a nested relation row cap',async()=>{
+ const {stats}=setup({count:65,nestedSetCap:13});
+ assert.equal((await stats.getExerciseWorkoutHistory('first'))[0].sets.length,64);
 });

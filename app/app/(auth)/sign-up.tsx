@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { AntDesign, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import {
@@ -52,6 +52,9 @@ export default function SignUpScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const googlePending = useRef(false);
+  const isBusy = loading || googleLoading;
   const [showPassword, setShowPassword] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -189,6 +192,9 @@ export default function SignUpScreen() {
   }
 
   async function handleGooglePress() {
+    if (isBusy || googlePending.current) return;
+    googlePending.current = true;
+    setGoogleLoading(true);
     setFeedback(null);
 
     try {
@@ -201,6 +207,9 @@ export default function SignUpScreen() {
         : t('auth.signUp.googleError');
 
       setFeedback({ message, type: 'error' });
+    } finally {
+      googlePending.current = false;
+      setGoogleLoading(false);
     }
   }
 
@@ -316,7 +325,7 @@ export default function SignUpScreen() {
               <TouchableOpacity
                 onPress={() => setShowPassword((current) => !current)}
                 style={styles.eyeButton}
-                disabled={loading}
+                disabled={isBusy}
                 accessibilityRole="button"
                 accessibilityLabel={showPassword ? t('accessibility.hidePassword', { defaultValue: 'Hide password' }) : t('accessibility.showPassword', { defaultValue: 'Show password' })}
               >
@@ -349,7 +358,7 @@ export default function SignUpScreen() {
               style={styles.termsRow}
               onPress={() => setTermsAccepted((prev) => !prev)}
               activeOpacity={ACTIVE_OPACITY}
-              disabled={loading}
+              disabled={isBusy}
               accessibilityRole="checkbox"
               accessibilityState={{ checked: termsAccepted }}
               accessibilityLabel={t('accessibility.acceptTerms', { defaultValue: 'Accept terms and conditions' })}
@@ -384,7 +393,7 @@ export default function SignUpScreen() {
             <AppButton
               label={t('auth.signUp.createAccountAction')}
               onPress={() => void handleSignUp()}
-              disabled={!termsAccepted}
+              disabled={isBusy || !termsAccepted}
               loading={loading}
               style={styles.submitButton}
             />
@@ -398,11 +407,12 @@ export default function SignUpScreen() {
             <TouchableOpacity
               style={styles.googleButton}
               onPress={handleGooglePress}
-              disabled={loading}
+              disabled={isBusy}
               accessibilityRole="button"
               accessibilityLabel={t('auth.signUp.continueWithGoogle')}
+              accessibilityState={{ busy: googleLoading, disabled: isBusy }}
             >
-              <AntDesign name="google" size={16} color={palette.textPrimary} />
+              {googleLoading ? <ActivityIndicator size="small" color={palette.textPrimary} /> : <AntDesign name="google" size={16} color={palette.textPrimary} />}
               <Text style={styles.googleButtonText}>{t('auth.signUp.continueWithGoogle')}</Text>
             </TouchableOpacity>
 
@@ -421,7 +431,7 @@ export default function SignUpScreen() {
             <TouchableOpacity
               style={styles.switchAction}
               onPress={() => router.push('/(auth)/sign-in' as any)}
-              disabled={loading}
+              disabled={isBusy}
               accessibilityRole="button"
               accessibilityLabel={t('auth.signUp.signInPrompt')}
             >

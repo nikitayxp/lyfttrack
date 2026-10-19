@@ -39,8 +39,7 @@ import {
   getExercisesCatalog,
   getLastExerciseRestTimes,
   getRecentExerciseIds,
-  getExercisePersonalBests,
-  getPreviousExercisePerformance,
+  getExerciseReferenceData,
   getWorkoutDetails,
   orderExercisesByIds,
   type PreviousExercisePerformanceSet,
@@ -63,7 +62,7 @@ import {
   type ExerciseRow,
   type SummaryExercise,
 } from '@/hooks/useActiveWorkoutState';
-import { useWorkoutContext } from '@/context/WorkoutContext';
+import { useWorkoutContext, useWorkoutElapsedSeconds } from '@/context/WorkoutContext';
 
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -212,7 +211,6 @@ export default function ActiveWorkout() {
   const {
     workoutStartedAtMs,
     workoutSessionStartedAtMs,
-    elapsedSeconds,
     safeDeactivateKeepAwake,
     ensureWorkoutStarted,
     activeTemplateId,
@@ -242,6 +240,7 @@ export default function ActiveWorkout() {
     isTimerPaused,
     toggleTimerPause,
   } = useWorkoutContext();
+  const elapsedSeconds = useWorkoutElapsedSeconds();
 
   const [exercisePickerVisible, setExercisePickerVisible] = useState(false);
   const [exercisePickerQuery, setExercisePickerQuery] = useState('');
@@ -289,33 +288,22 @@ export default function ActiveWorkout() {
     [activeExercises]
   );
 
-  // All-time bests, not the previous session shown in the Anterior column.
-  // Beating the last workout is not the same as setting a record, and using the
-  // wrong one here would contradict the count on the finish screen.
   useEffect(() => {
-    const exerciseIds = activeExerciseIdsKey ? activeExerciseIdsKey.split(',') : [];
-
-    if (exerciseIds.length === 0) {
+    const ids = activeExerciseIdsKey ? activeExerciseIdsKey.split(',') : [];
+    if (!ids.length) {
       setPersonalBestsByExerciseId({});
+      setPreviousPerformanceByExerciseId({});
       return;
     }
-
-    let isMounted = true;
-
-    void getExercisePersonalBests(exerciseIds, null)
-      .then((bests) => {
-        if (isMounted) {
-          setPersonalBestsByExerciseId(bests);
-        }
-      })
-      .catch(() => {
-        // Non-critical: without bests no set is flagged, which is the safe
-        // direction to fail — a missing badge beats a wrong one.
-      });
-
-    return () => {
-      isMounted = false;
-    };
+    let cancelled = false;
+    void getExerciseReferenceData(ids, null).then(data => {
+      if (cancelled) return;
+      setPreviousPerformanceByExerciseId(data.previousByExerciseId);
+      setPersonalBestsByExerciseId(current => Object.fromEntries(ids.map(id => [id, current[id] ?? data.bests[id] ?? EMPTY_PERSONAL_BEST])));
+    }).catch(error => {
+      if (!cancelled) console.warn('Unable to load workout references', getErrorMessage(error));
+    });
+    return () => { cancelled = true; };
   }, [activeExerciseIdsKey]);
 
   const toggleSetAndCheckRecord = useCallback(
@@ -365,56 +353,6 @@ export default function ActiveWorkout() {
     },
     [handleSetCompletionToggle, personalBestsByExerciseId]
   );
-
-  const activeExerciseIds = useMemo(
-    () => activeExercises.map((exercise) => exercise.exercise.id).filter(Boolean),
-    [activeExercises]
-  );
-
-  // Keyed by exercise id so the fetch only runs for exercises we have not seen
-  // yet — re-ordering or adding sets must not re-query.
-  useEffect(() => {
-    const missingIds = activeExerciseIds.filter((id) => !(id in previousPerformanceByExerciseId));
-
-    if (missingIds.length === 0) {
-      return;
-    }
-
-    let cancelled = false;
-
-    void (async () => {
-      const entries = await Promise.all(
-        missingIds.map(async (exerciseId) => {
-          try {
-            const sets = await getPreviousExercisePerformance(exerciseId, null);
-            return [exerciseId, sets] as const;
-          } catch {
-            // A missing previous reference is not an error worth surfacing —
-            // the column simply stays empty.
-            return [exerciseId, [] as PreviousExercisePerformanceSet[]] as const;
-          }
-        })
-      );
-
-      if (cancelled) {
-        return;
-      }
-
-      setPreviousPerformanceByExerciseId((current) => {
-        const next = { ...current };
-
-        for (const [exerciseId, sets] of entries) {
-          next[exerciseId] = sets;
-        }
-
-        return next;
-      });
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeExerciseIds, previousPerformanceByExerciseId]);
 
   const loadExercises = useCallback(async (filters: ExerciseCatalogFilters, forceRefresh = false) => {
     const cacheKey = buildCatalogCacheKey(filters);
@@ -1781,6 +1719,7 @@ export default function ActiveWorkout() {
         completedWorkingSetCount={finishSummary?.completedWorkingSetCount ?? 0}
         exerciseNames={summaryExerciseNames}
         prExerciseIds={finishSummary?.prExerciseIds ?? []}
+        prCheckFailed={finishSummary?.prCheckFailed}
         onShareAndFinish={handleShareAndFinish}
       />
 

@@ -14,6 +14,13 @@ export type Database = {
   }
   public: {
     Tables: {
+      client_mutation_receipts: {
+        Row: { user_id: string; mutation_id: string; fingerprint: string; result_id: string; result_data: Json | null; created_at: string }
+        Insert: { user_id: string; mutation_id: string; fingerprint: string; result_id: string; result_data?: Json | null; created_at?: string }
+        Update: { user_id?: string; mutation_id?: string; fingerprint?: string; result_id?: string; result_data?: Json | null; created_at?: string }
+        Relationships: []
+      }
+
       exercises: {
         Row: {
           created_at: string | null
@@ -610,6 +617,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      save_template_atomic: {
+        Args: { p_expected_user_id: string; p_mutation_id: string; p_template_id: string; p_name: string; p_exercises: Json; p_expected_snapshot?: Json }
+        Returns: string
+      }
+      import_workouts_atomic: {
+        Args: { p_expected_user_id: string; p_mutation_id: string; p_batch: Json }
+        Returns: Json
+      }
+      repair_imported_workout_atomic: {
+        Args: { p_expected_user_id: string; p_mutation_id: string; p_workout_id: string; p_workout: Json; p_exercises: Json; p_sets: Json; p_mode: string; p_expected_snapshot: Json }
+        Returns: string
+      }
+      ensure_import_exercises: {
+        Args: { p_expected_user_id: string; p_exercises: Json }
+        Returns: Json
+      }
+      template_snapshot: { Args: { p_template_id: string }; Returns: Json }
+      import_workout_snapshots: { Args: { p_workout_ids: string[] }; Returns: Json }
+      import_workout_snapshot: { Args: { p_workout_id: string }; Returns: Json }
+
       create_workout_atomic: {
         Args: { p_expected_user_id: string; p_workout: Json; p_exercises: Json; p_sets: Json }
         Returns: Json

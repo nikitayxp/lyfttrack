@@ -610,6 +610,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      exercise_stats_summary: { Args: { p_exercise_id: string }; Returns: Json }
       exercise_history_page: { Args: { p_exercise_id: string; p_limit?: number; p_offset?: number }; Returns: Json }
       exercise_training_references: { Args: { p_exercise_ids: string[]; p_excluded_workout_id?: string }; Returns: Json }
       workout_record_summaries: { Args: { p_workout_ids: string[] }; Returns: Json }

@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const loadSource = require('./load-source.cjs');
-function setup({ count = 1005, oneWorkoutPerSet = false, failLater = false, fractionalRecords = false, distinctExercises = false, unfinished = false, equalWeightRecords = false, nestedSetCap } = {}) {
+function setup({ count = 1005, oneWorkoutPerSet = false, failLater = false, fractionalRecords = false, distinctExercises = false, unfinished = false, equalWeightRecords = false, nestedSetCap, summaryFixture } = {}) {
     const user = 'owner';
     const now = Date.now();
     const workouts = Array.from({ length: oneWorkoutPerSet ? count : Math.ceil(count / 100) }, (_, i) => ({ id: `w${String(i).padStart(6, '0')}`, user_id: user, start_time: new Date(now - 86400000).toISOString(), end_time: new Date(now - 82800000).toISOString() }));
@@ -29,7 +29,7 @@ function setup({ count = 1005, oneWorkoutPerSet = false, failLater = false, frac
     const exercises = [...new Map(sets.map(row => [row.exercise_id, row.exercises])).values()];
     const calls = [];
     function value(row, key) { return key.split('.').reduce((v, k) => v?.[k], row); }
-    const supabase = { rpc: async (name, args) => { calls.push({rpc:name}); return {error:null,data:relations.slice(args.p_offset,args.p_offset+args.p_limit)}; }, from(table) {
+    const supabase = { rpc: async (name, args) => { calls.push({rpc:name}); return {error:null,data:name === 'exercise_stats_summary' ? summaryFixture : relations.slice(args.p_offset,args.p_offset+args.p_limit)}; }, from(table) {
             const call = { table, filters: [], orders: [], nestedFilters: [], nestedOrders: [], range: [0, 999] };
             function filter(key, predicate) {
                 if (key.startsWith('sets.')) call.nestedFilters.push(row => predicate(value(row, key.slice(5))));
@@ -162,12 +162,17 @@ test('empty accounts return empty charts and zero records', async () => {
     assert.equal((await stats.getExercisePersonalRecords('first')).completedSetCount, 0);
 });
 
-test('combined exercise statistics use one complete set history for chart and records', async () => {
-    const { stats, calls } = setup({count: 3001});
+test('combined exercise statistics use one summary RPC without downloading historical sets', async () => {
+    const { stats, calls } = setup({count: 3001, summaryFixture: {
+        progress: [{date:'2026-10-01',volumeTotal:60000,repsTotal:6000,durationMinutes:1800,estimated1RMMax:10*(1+4/30),maxWeight:10,maxWeightReps:2}],
+        records: {heaviestWeight:10,bestEstimated1RM:10*(1+4/30),completedSetCount:3000},
+    }});
     const result = await stats.getExerciseStats('first');
     assert.equal(result.records.completedSetCount, 3000);
     assert.equal(result.progress.reduce((n, p) => n + p.volumeTotal, 0), 60000);
-    assert.equal(calls.filter(c => c.table === 'sets').length, 4);
+    assert.equal(calls.filter(c => c.table === 'sets').length, 0);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].rpc, 'exercise_stats_summary');
 });
 
 test('exercise history accepts a bounded page without fetching the full history', async()=>{

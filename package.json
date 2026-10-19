@@ -17,6 +17,6 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.10",
-    "react-test-renderer": "19.1.0"
+    "react-test-renderer": "19.3.1"
   }
 }

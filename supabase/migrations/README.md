@@ -6,6 +6,20 @@ File names must be `<14-digit timestamp>_name.sql`. The timestamp is the version
 CLI records, so two files can never share one, and the order they sort in is the order
 they run in. The first four here used 8 digits until #149, and two of them collided.
 
+## Existing-project boundary
+
+These are forward migrations over the existing LyftTrack Supabase project, not a
+complete schema for a fresh database. The original tables, auth/profile triggers,
+Storage avatar bucket/read policy, and some deployed RPCs predate the tracked
+history. A fresh `supabase db reset` is therefore not a supported reconstruction
+of production yet. Do not mark older migrations applied or fabricate a baseline
+without first comparing the actual project schema and migration history.
+
+The issue #274 PGlite tests create minimal fixtures of the captured policies/RPC
+and run the new SQL against them. They verify PostgreSQL permissions and RLS;
+they do not provision Supabase Storage or validate a remote deployment. Apply and
+test the migrations separately in staging before an authorized production rollout.
+
 ## Current baseline migrations
 
 1. 20260407000000_fix_body_measurements_rls.sql
@@ -75,6 +89,20 @@ they run in. The first four here used 8 digits until #149, and two of them colli
 12. 20260804230000_default_profile_visibility_public.sql
     - Changes profiles.visibility default from 'friends' to 'public' for new accounts.
       Existing rows are left unchanged.
+
+13. 20261019140000_avatar_storage_ownership.sql
+    - Restricts avatar INSERT/UPDATE/DELETE to the authenticated user's first path
+      segment, including the destination of an UPDATE; public reads stay available.
+
+14. 20261019141000_restore_exercise_privacy.sql
+    - Restores catalogue/own-custom SELECT and own-custom write policies after
+      deployed policy drift, without changing existing exercise data.
+
+15. 20261019142000_username_availability_contract.sql
+    - Versions the previously untracked `check_username_available(text)` RPC.
+    - Preserves lower/trim lookup; rejects null, invalid or out-of-range names.
+    - Uses an empty search_path and a qualified profiles lookup; grants only
+      boolean availability to anon/authenticated so signup works before sign-in.
 
 ## Rollout notes
 

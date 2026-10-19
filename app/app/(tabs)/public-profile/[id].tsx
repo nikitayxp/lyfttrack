@@ -386,7 +386,6 @@ export default function PublicProfileScreen() {
     currentCommentAuthor,
     ensureCurrentCommentAuthor,
     isSendingComment,
-    loadCommentsForWorkout,
     selectedWorkoutForComments,
     showToast,
     t,

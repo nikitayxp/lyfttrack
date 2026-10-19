@@ -710,7 +710,6 @@ export default function ProfileScreen() {
     currentCommentAuthor,
     ensureCurrentCommentAuthor,
     isSendingComment,
-    loadCommentsForWorkout,
     selectedWorkoutForComments,
     showToast,
     t,

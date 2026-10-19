@@ -21,6 +21,7 @@ test('returning to the feed preserves existing cards instead of replaying their 
     'expo-router': { router: {}, useFocusEffect: callback => { React.useEffect(() => { focus = callback; return callback(); }, [callback]); } },
     'react-i18next': { useTranslation: () => ({ t: translate }) },
     '@/services/interactionService': {},
+    '@/services/authUserService': { getSessionUserOrThrow: async () => ({ id: 'owner' }) },
     '@/services/workoutService': { getAuthenticatedUserOrThrow: async () => ({ id: 'owner' }), getFeedWorkouts: async () => [{ id: 'w1', user_id: 'owner' }], getErrorMessage: error => error.message },
     '@/services/import/importEvents': { WORKOUTS_IMPORTED_EVENT: 'import' },
     '@/components/common/EmptyState': { EmptyState: () => null },

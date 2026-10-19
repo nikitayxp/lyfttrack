@@ -2,7 +2,8 @@ import type { User } from '@supabase/supabase-js';
 import * as ImagePicker from 'expo-image-picker';
 import { decode as decodeBase64 } from 'base64-arraybuffer';
 import { supabase } from '@/services/supabase';
-import { getAuthenticatedUserOrThrow } from '@/services/workoutService';
+import { getAuthenticatedUserOrThrow, getSessionUserOrThrow } from '@/services/authUserService';
+import { onAuthAccountChange } from '@/services/authSessionStore';
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/database';
 import { resolveAuthAvatarUrl } from '@/utils/authAvatarUrl';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
@@ -12,6 +13,19 @@ export type PublicProfileView = Pick<
   ProfileRow,
   'id' | 'username' | 'full_name' | 'avatar_url' | 'bio' | 'visibility'
 >;
+
+const PROFILE_COLUMNS = 'id,username,full_name,avatar_url,bio,height_cm,visibility,updated_at';
+let profileEpoch = 0;
+let profileCache: { accountId: string; value: ProfileRow; expiresAt: number } | null = null;
+const pendingProfiles = new Map<string, Promise<ProfileRow>>();
+
+export function invalidateProfileCache(): void {
+  profileEpoch++;
+  profileCache = null;
+  pendingProfiles.clear();
+}
+
+onAuthAccountChange(invalidateProfileCache);
 
 export type UpdateProfileInput = {
   username?: string;
@@ -136,6 +150,11 @@ async function syncAuthMetadataFromProfile(user: User, profile: ProfileRow): Pro
     return;
   }
 
+  const current = await getSessionUserOrThrow();
+  if (current.id !== user.id) {
+    throw new Error('Session changed before syncing profile metadata.');
+  }
+
   const { error } = await supabase.auth.updateUser({
     data: {
       ...currentMetadata,
@@ -213,15 +232,13 @@ async function createProfileForExistingUser(user: User): Promise<ProfileRow> {
     const { data, error } = await supabase
       .from('profiles')
       .upsert(insertRow, { onConflict: 'id' })
-      .select('*')
+      .select(PROFILE_COLUMNS)
       .single();
 
     if (!error && data) {
-      try {
-        await syncAuthMetadataFromProfile(user, data);
-      } catch (syncError) {
+      void syncAuthMetadataFromProfile(user, data).catch((syncError) => {
         console.warn('[profileService] Metadata sync skipped after profile bootstrap', syncError);
-      }
+      });
 
       return data;
     }
@@ -236,12 +253,10 @@ async function createProfileForExistingUser(user: User): Promise<ProfileRow> {
   throw new Error('Unable to initialize profile: could not generate a unique username.');
 }
 
-export async function getProfile(): Promise<ProfileRow> {
-  const user = await getAuthenticatedUserOrThrow();
-
+async function loadProfile(user: User): Promise<ProfileRow> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('*')
+    .select(PROFILE_COLUMNS)
     .eq('id', user.id)
     .maybeSingle();
 
@@ -249,17 +264,29 @@ export async function getProfile(): Promise<ProfileRow> {
     throw new Error(`Unable to load profile: ${error.message}`);
   }
 
-  if (data) {
-    try {
-      await syncAuthMetadataFromProfile(user, data);
-    } catch (syncError) {
-      console.warn('[profileService] Metadata sync skipped during profile load', syncError);
-    }
+  return data ?? createProfileForExistingUser(user);
+}
 
-    return data;
+export async function getProfile(): Promise<ProfileRow> {
+  const user = await getSessionUserOrThrow();
+  if (profileCache && profileCache.accountId !== user.id) invalidateProfileCache();
+  if (profileCache && profileCache.expiresAt > Date.now()) return profileCache.value;
+  let pending = pendingProfiles.get(user.id);
+  if (!pending) {
+    const epoch = profileEpoch;
+    pending = loadProfile(user).then(async value => {
+      const current = await getSessionUserOrThrow();
+      if (current.id !== user.id) throw new Error('Session changed while loading profile. Please try again.');
+      if (epoch === profileEpoch) profileCache = { accountId: user.id, value, expiresAt: Date.now() + 30_000 };
+      return value;
+    });
+    pendingProfiles.set(user.id, pending);
   }
-
-  return createProfileForExistingUser(user);
+  try {
+    return await pending;
+  } finally {
+    if (pendingProfiles.get(user.id) === pending) pendingProfiles.delete(user.id);
+  }
 }
 
 export async function getPublicProfileById(profileId: string): Promise<PublicProfileView | null> {
@@ -336,6 +363,8 @@ export async function deleteOwnAccount(): Promise<void> {
     throw new Error(`Unable to delete account: ${error.message}`);
   }
 
+  invalidateProfileCache();
+
   try {
     await supabase.auth.signOut();
   } catch (signOutError) {
@@ -406,12 +435,17 @@ export async function updateProfile(input: UpdateProfileInput): Promise<ProfileR
     .from('profiles')
     .update(updateRow)
     .eq('id', user.id)
-    .select('*')
+    .select(PROFILE_COLUMNS)
     .single();
 
   if (error || !data) {
     throw new Error(`Unable to update profile: ${error?.message ?? 'Unknown error'}`);
   }
+
+  invalidateProfileCache();
+  const current = await getSessionUserOrThrow();
+  if (current.id !== user.id) throw new Error('Session changed while updating profile. Please try again.');
+  profileCache = { accountId: user.id, value: data, expiresAt: Date.now() + 30_000 };
 
   try {
     await syncAuthMetadataFromProfile(user, data);

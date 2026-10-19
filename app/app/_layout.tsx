@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Platform,
   StyleSheet,
+  Text,
   useWindowDimensions,
   View,
   type ViewStyle,
@@ -12,14 +12,16 @@ import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
+import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/theme';
 import { applyPendingTermsAcceptance } from '@/services/authService';
 import { needsOptionalOnboarding, needsUsernameReview } from '@/services/authSetup';
-import { supabase } from '@/services/supabase';
+import { retryAuthSessionBootstrap, subscribeAuthSession } from '@/services/authSessionStore';
 import { getWebVisibleViewportHeight } from '@/utils/webVisibleViewport';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import NeuralBackground from '@/components/ui/flow-field-background';
 import { SplashLoader } from '@/components/ui/SplashLoader';
+import { AppButton } from '@/components/ui/AppButton';
 import { MinimizedWorkoutBar } from '@/components/workout/MinimizedWorkoutBar';
 import { AppToastHost } from '@/components/common/AppToastHost';
 import { ConfirmHost } from '@/components/common/ConfirmHost';
@@ -28,19 +30,6 @@ import { ConfirmProvider } from '@/context/ConfirmContext';
 import { ToastProvider } from '@/context/ToastContext';
 import { WorkoutProvider } from '@/context/WorkoutContext';
 import type { Session } from '@supabase/supabase-js';
-
-function shouldSkipAuthSplashDelay(): boolean {
-  if (typeof window === 'undefined' || !window.location) {
-    return false;
-  }
-
-  // OAuth return must not wait on the branded splash — tokens are already in the URL.
-  if (window.location.pathname === '/callback' || window.location.pathname.endsWith('/callback')) {
-    return true;
-  }
-
-  return false;
-}
 
 function useWebVisibleViewportHeight(enabled: boolean): number | null {
   const [height, setHeight] = useState<number | null>(null);
@@ -180,9 +169,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  authRecovery: {
+    position: 'absolute',
+    left: 32,
+    right: 32,
+    bottom: 32,
+    gap: 16,
+  },
+  authRecoveryText: {
+    color: palette.textSecondary,
+    textAlign: 'center',
+  },
 });
 
 export default function RootLayout() {
+  const { t } = useTranslation();
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
   const isDesktopWeb = isWeb && width > DESKTOP_WEB_MOCKUP_MIN_WIDTH;
@@ -192,6 +193,7 @@ export default function RootLayout() {
   const childSegment = String(segments[1] ?? '');
   const [session, setSession] = useState<Session | null>(null);
   const [isAuthBootstrapPending, setIsAuthBootstrapPending] = useState(true);
+  const [hasAuthBootstrapTimedOut, setHasAuthBootstrapTimedOut] = useState(false);
   const isTabsRoute = rootSegment === '(tabs)';
   const inAuthGroup = rootSegment === '(auth)';
   const isOAuthCallbackRoute = rootSegment === 'callback' || childSegment === 'callback';
@@ -306,52 +308,14 @@ export default function RootLayout() {
     };
   }, [isWeb, isDesktopWeb]);
 
-  useEffect(() => {
-    let isMounted = true;
-    let hasReceivedAuthEvent = false;
-
-    Promise.all([
-      supabase.auth.getSession(),
-      shouldSkipAuthSplashDelay()
-        ? Promise.resolve()
-        : new Promise((resolve) => setTimeout(resolve, 1500)),
-    ]).then(([{ data: { session: initialSession } }]) => {
-      if (!isMounted || hasReceivedAuthEvent) {
-        return;
-      }
-
-      setSession(initialSession);
-      setIsAuthBootstrapPending(false);
-    }).catch(() => {
-      if (!isMounted || hasReceivedAuthEvent) {
-        return;
-      }
-
-      setSession(null);
-      setIsAuthBootstrapPending(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, nextSession) => {
-        if (!isMounted) {
-          return;
-        }
-
-        hasReceivedAuthEvent = true;
-        setSession(nextSession);
-        setIsAuthBootstrapPending(false);
-
-        if (event === 'SIGNED_IN' && nextSession) {
-          void applyPendingTermsAcceptance();
-        }
-      }
-    );
-
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
+  useEffect(() => subscribeAuthSession((next, event) => {
+    setSession(next.session);
+    setIsAuthBootstrapPending(next.isPending);
+    setHasAuthBootstrapTimedOut(next.hasTimedOut);
+    if (event === 'SIGNED_IN' && next.session) {
+      void applyPendingTermsAcceptance();
+    }
+  }), []);
 
   useEffect(() => {
     if (isAuthBootstrapPending) {
@@ -405,6 +369,12 @@ export default function RootLayout() {
     return (
       <View style={styles.root}>
         <SplashLoader />
+        {hasAuthBootstrapTimedOut ? (
+          <View style={styles.authRecovery}>
+            <Text style={styles.authRecoveryText}>{t('auth.bootstrapSlow')}</Text>
+            <AppButton label={t('common.retry')} onPress={retryAuthSessionBootstrap} />
+          </View>
+        ) : null}
         <StatusBar style="light" />
       </View>
     );

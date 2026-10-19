@@ -1,8 +1,8 @@
 import { loadAllRows } from '@/services/queryPages';
-import type { User } from '@supabase/supabase-js';
+import { getWorkoutRecordSummaries } from '@/services/workoutReadModels';
 import { supabase } from '@/services/supabase';
-import { getAuthenticatedUserOrThrow } from '@/services/authUserService';
-export { getAuthenticatedUserOrThrow } from '@/services/authUserService';
+import { getAuthenticatedUserOrThrow, getSessionUserOrThrow } from '@/services/authUserService';
+import { exerciseCatalogCache, workoutReferenceCache, invalidateExerciseCatalogCache, invalidateWorkoutDataCache } from '@/services/dataCache';
 import {
   EXERCISE_EQUIPMENT_FILTER_KEYWORDS,
   EXERCISE_MUSCLE_FILTER_KEYWORDS,
@@ -17,15 +17,14 @@ import { INPUT_LIMITS, sanitizeText, toSafeInteger, toSafeNumber } from '@/utils
 import type { WorkoutSetDraft, WorkoutSetProgressDraft, WorkoutSetType } from './workoutSession.types';
 import {
   EMPTY_PERSONAL_BEST,
-  countPersonalRecords,
   isRecordSet,
-  mergePersonalBest,
-  summarizePersonalBest,
   type PersonalBest,
   type PersonalRecordSetSample,
 } from '@/utils/personalRecords';
 import { dedupeExerciseNames, type ExerciseNameSource } from '@/utils/exerciseLocalization';
 import { generateId } from '@/utils/uuid';
+
+export { getAuthenticatedUserOrThrow } from '@/services/authUserService';
 
 export type ExerciseCatalogItem = Tables<'exercises'>;
 export type ExerciseLibraryMuscleFilter = 'all' | ExerciseMuscleKey;
@@ -162,6 +161,7 @@ export type WorkoutDetails = Pick<
 > & {
   profile: PublicProfile | null;
   exercises: WorkoutDetailsExercise[];
+  prCheckFailed?: boolean;
   totalVolume: number;
   totalSets: number;
   /** Sets excluding warm-ups, for the "count working sets only" preference. */
@@ -298,7 +298,6 @@ type RawWorkoutFeedSetRow = Pick<
     | null;
 };
 
-type RawExerciseRestTimeRow = Pick<WorkoutExerciseRow, 'exercise_id' | 'rest_time'>;
 
 type SupabaseErrorMeta = {
   code: string | null;
@@ -548,100 +547,24 @@ function samplesFromFeedAggregate(aggregate: WorkoutFeedAggregate | undefined): 
 }
 
 async function resolvePrCountsByWorkoutId(
-  workouts: Array<Pick<Tables<'workouts'>, 'id' | 'user_id' | 'start_time'>>,
-  currentSetsByWorkoutId: Map<string, PersonalRecordSetSample[]>
+  workouts: Pick<Tables<'workouts'>, 'id' | 'user_id' | 'start_time'>[],
+  currentSetsByWorkoutId: Map<string, PersonalRecordSetSample[]>,
+  preparedSummaries?: Awaited<ReturnType<typeof getWorkoutRecordSummaries>>
 ): Promise<Map<string, number>> {
-  const prCountByWorkoutId = new Map<string, number>();
-
+  const summaries = preparedSummaries ?? await getWorkoutRecordSummaries(workouts.map(workout => workout.id));
+  const counts = new Map<string, number>();
   for (const workout of workouts) {
-    prCountByWorkoutId.set(workout.id, 0);
+    const previous = new Map(summaries.filter(row => row.workout_id === workout.id).map(row => [row.exercise_id, row]));
+    const recordExercises = new Set<string>();
+    for (const sample of currentSetsByWorkoutId.get(workout.id) ?? []) {
+      const best = previous.get(sample.exerciseId);
+      if (!best?.has_history) continue;
+      const e1rm = estimateOneRepMax(sample.weight, sample.reps) ?? 0;
+      if ((sample.weight ?? 0) > best.best_weight || e1rm > best.best_e1rm) recordExercises.add(sample.exerciseId);
+    }
+    counts.set(workout.id, recordExercises.size);
   }
-
-  const workoutsByUserId = new Map<string, typeof workouts>();
-
-  for (const workout of workouts) {
-    const list = workoutsByUserId.get(workout.user_id) ?? [];
-    list.push(workout);
-    workoutsByUserId.set(workout.user_id, list);
-  }
-
-  for (const [userId, userWorkouts] of workoutsByUserId) {
-    const exerciseIds = new Set<string>();
-
-    for (const workout of userWorkouts) {
-      for (const sample of currentSetsByWorkoutId.get(workout.id) ?? []) {
-        if (sample.exerciseId) {
-          exerciseIds.add(sample.exerciseId);
-        }
-      }
-    }
-
-    if (exerciseIds.size === 0) {
-      continue;
-    }
-
-    const historyWorkouts = await loadAllRows(() => supabase
-      .from('workouts')
-      .select('id, start_time')
-      .eq('user_id', userId)
-      .not('end_time', 'is', null),
-      'Unable to load record history workouts'
-    );
-
-    if (historyWorkouts.length === 0) {
-      continue;
-    }
-
-    const historySets = await loadAllRows(() => supabase
-      .from('sets')
-      .select('id, workout_id, exercise_id, weight, reps, workouts!inner()')
-      .eq('workouts.user_id', userId)
-      .not('workouts.end_time', 'is', null)
-      .in('exercise_id', [...exerciseIds]),
-      'Unable to load record history sets'
-    );
-
-    const historySetsByWorkoutId = new Map<string, PersonalRecordSetSample[]>();
-
-    for (const row of historySets ?? []) {
-      const workoutId = normalizeOptionalId(row.workout_id);
-      const exerciseId = (row.exercise_id ?? '').trim();
-      if (!workoutId || !exerciseId) {
-        continue;
-      }
-
-      const list = historySetsByWorkoutId.get(workoutId) ?? [];
-      list.push({
-        exerciseId,
-        weight: row.weight,
-        reps: row.reps,
-      });
-      historySetsByWorkoutId.set(workoutId, list);
-    }
-
-    for (const workout of userWorkouts) {
-      const previousSamples: PersonalRecordSetSample[] = [];
-
-      for (const historyWorkout of historyWorkouts) {
-        if (historyWorkout.id === workout.id) {
-          continue;
-        }
-
-        if (historyWorkout.start_time >= workout.start_time) {
-          continue;
-        }
-
-        previousSamples.push(...(historySetsByWorkoutId.get(historyWorkout.id) ?? []));
-      }
-
-      prCountByWorkoutId.set(
-        workout.id,
-        countPersonalRecords(currentSetsByWorkoutId.get(workout.id) ?? [], previousSamples)
-      );
-    }
-  }
-
-  return prCountByWorkoutId;
+  return counts;
 }
 
 function estimateOneRepMax(weight: number | null, reps: number | null): number | null {
@@ -1008,7 +931,7 @@ function matchesEquipmentFilter(exercise: ExerciseCatalogItem, filter: ExerciseL
 }
 
 export async function getRecentExerciseIds(limit = 20): Promise<string[]> {
-  const user = await getAuthenticatedUserOrThrow();
+  const user = await getSessionUserOrThrow();
 
   const { data, error } = await supabase
     .from('workout_exercises')
@@ -1018,7 +941,7 @@ export async function getRecentExerciseIds(limit = 20): Promise<string[]> {
     .order('workouts(start_time)', { ascending: false })
     .limit(200);
 
-  if (error) return [];
+  if (error) throw new Error(`Unable to load recent exercises: ${error.message}`);
 
   const seen = new Set<string>();
   const result: string[] = [];
@@ -1047,13 +970,11 @@ export async function getExercisesCatalog(filters: ExerciseCatalogFilters = {}):
   const muscleFilter = filters.muscle ?? 'all';
   const equipmentFilter = filters.equipment ?? 'all';
 
-  const { data, error } = await supabase.from('exercises').select('*').order('name', { ascending: true });
-
-  if (error) {
-    throw new Error(`Unable to load exercises: ${error.message}`);
-  }
-
-  const rows = data ?? [];
+  const user = await getSessionUserOrThrow();
+  const rows = await exerciseCatalogCache.get(user.id, 'catalog', () => loadAllRows(() =>
+    supabase.from('exercises').select('id,name,name_en,name_pt,aliases,listed,muscle_group,muscle_en,muscle_pt,equipment,is_custom,image_url,description,created_at,created_by'),
+    'Unable to load exercises'
+  ));
 
   const filteredRows = rows.filter(
     (exercise) => matchesMuscleFilter(exercise, muscleFilter) && matchesEquipmentFilter(exercise, equipmentFilter)
@@ -1078,13 +999,9 @@ export async function getExercisesByIds(exerciseIds: string[]): Promise<Exercise
     return [];
   }
 
-  const { data, error } = await supabase.from('exercises').select('*').in('id', normalizedIds);
-
-  if (error) {
-    throw new Error(`Unable to load exercises: ${error.message}`);
-  }
-
-  return data ?? [];
+  return loadAllRows(() => supabase.from('exercises')
+    .select('id,name,name_en,name_pt,aliases,listed,muscle_group,muscle_en,muscle_pt,equipment,is_custom,image_url,description,created_at,created_by')
+    .in('id', normalizedIds), 'Unable to load exercises');
 }
 
 export async function createExercise(input: CreateExerciseInput): Promise<ExerciseCatalogItem> {
@@ -1113,6 +1030,7 @@ export async function createExercise(input: CreateExerciseInput): Promise<Exerci
     throw new Error(`Unable to create exercise: ${error?.message ?? 'Unknown error'}`);
   }
 
+  invalidateExerciseCatalogCache(user.id);
   return data;
 }
 
@@ -1158,58 +1076,48 @@ export async function createCustomExercisesForImport(
     throw new Error(`Unable to create exercises: ${error.message}`);
   }
 
+  invalidateExerciseCatalogCache(userId);
   return rows.map((row) => row.id as string);
 }
 
+export type ExerciseReferenceData = {
+  previousByExerciseId: Record<string, PreviousExercisePerformanceSet[]>;
+  restTimes: Record<string, number>;
+  bests: Record<string, PersonalBest>;
+};
+
+export async function getExerciseReferenceData(exerciseIds: string[], currentWorkoutId: string | null): Promise<ExerciseReferenceData> {
+  const user = await getSessionUserOrThrow();
+  const ids = normalizeExerciseIdList(exerciseIds).sort();
+  if (!ids.length) return {previousByExerciseId: {}, restTimes: {}, bests: {}};
+  return workoutReferenceCache.get(user.id, JSON.stringify([ids, currentWorkoutId]), async () => {
+    const { data, error } = await supabase.rpc('exercise_training_references', {
+      p_exercise_ids: ids, p_excluded_workout_id: normalizeOptionalId(currentWorkoutId) ?? undefined,
+    });
+    if (error) throw new Error(`Unable to load exercise references: ${error.message}`);
+    const result: ExerciseReferenceData = {previousByExerciseId: {}, restTimes: {}, bests: {}};
+    for (const row of (data ?? []) as {exercise_id: string; best_weight: number; best_e1rm: number; rest_time: number | null; last_sets: PreviousExercisePerformanceSet[]}[]) {
+      result.previousByExerciseId[row.exercise_id] = row.last_sets.map(set => ({...set, setType: normalizeSetType(set.setType)}));
+      result.bests[row.exercise_id] = {bestWeight: row.best_weight, bestE1rm: row.best_e1rm};
+      if (row.rest_time !== null) result.restTimes[row.exercise_id] = row.rest_time;
+    }
+    return result;
+  });
+}
+
 export async function getLastExerciseRestTimes(exerciseIds: string[]): Promise<Record<string, number>> {
-  const user = await getAuthenticatedUserOrThrow();
-  const normalizedExerciseIds = normalizeExerciseIdList(exerciseIds);
-
-  if (normalizedExerciseIds.length === 0) {
-    return {};
-  }
-
-  const { data, error } = await supabase
-    .from('workout_exercises')
-    .select('exercise_id, rest_time, workouts!inner(user_id, start_time, end_time)')
-    .eq('workouts.user_id', user.id)
-    .not('workouts.end_time', 'is', null)
-    .in('exercise_id', normalizedExerciseIds)
-    .not('rest_time', 'is', null)
-    .order('start_time', { foreignTable: 'workouts', ascending: false });
-
-  if (error) {
-    if (isWorkoutExercisesTableMissing(error)) {
-      return {};
-    }
-
-    throw new Error(`Unable to load exercise rest history: ${error.message}`);
-  }
-
-  const latestByExerciseId: Record<string, number> = {};
-
-  for (const row of (data as RawExerciseRestTimeRow[] | null) ?? []) {
-    const exerciseId = normalizeOptionalId(row.exercise_id);
-
-    if (!exerciseId || latestByExerciseId[exerciseId] !== undefined) {
-      continue;
-    }
-
-    latestByExerciseId[exerciseId] = toSafeInteger(row.rest_time, { min: 0, max: 3600 }) ?? 0;
-  }
-
-  return latestByExerciseId;
+  return (await getExerciseReferenceData(exerciseIds, null)).restTimes;
 }
 
 
 // ---------- Workout History ----------
 
 export async function getWorkoutHistory(limit = 20): Promise<WorkoutHistoryItem[]> {
-  const user = await getAuthenticatedUserOrThrow();
+  const user = await getSessionUserOrThrow();
 
   const { data: workouts, error: workoutsError } = await supabase
     .from('workouts')
-    .select('*')
+    .select('id,user_id,name,notes,start_time,end_time')
     .eq('user_id', user.id)
     .order('start_time', { ascending: false })
     .limit(limit);
@@ -1224,14 +1132,9 @@ export async function getWorkoutHistory(limit = 20): Promise<WorkoutHistoryItem[
 
   const workoutIds = workouts.map((w) => w.id);
 
-  const { data: allSets, error: setsError } = await supabase
-    .from('sets')
-    .select('*, exercises(name, name_en, name_pt, muscle_group)')
-    .in('workout_id', workoutIds);
-
-  if (setsError) {
-    throw new Error(`Unable to load workout sets: ${setsError.message}`);
-  }
+  const allSets = await loadAllRows(() => supabase.from('sets')
+    .select('id,workout_id,set_number,weight,reps,rir,set_type,exercises(name,name_en,name_pt,muscle_group)')
+    .in('workout_id', workoutIds), 'Unable to load workout sets');
 
   const setsByWorkout = new Map<string, WorkoutHistorySet[]>();
 
@@ -1310,61 +1213,10 @@ export async function getWorkoutStats(): Promise<WorkoutStats> {
   };
 }
 
-export async function getPreviousExercisePerformance(
-  exerciseId: string,
-  currentWorkoutId: string | null
-): Promise<PreviousExercisePerformanceSet[]> {
-  const user = await getAuthenticatedUserOrThrow();
-  const normalizedExerciseId = normalizeOptionalId(exerciseId);
-  const normalizedCurrentWorkoutId = normalizeOptionalId(currentWorkoutId);
-
-  if (!normalizedExerciseId) {
-    throw new Error('Exercise id is required to load previous performance.');
-  }
-
-  const latestWorkoutQuery = supabase
-    .from('workouts')
-    .select('id, sets!inner(exercise_id)')
-    .eq('user_id', user.id)
-    .eq('sets.exercise_id', normalizedExerciseId)
-    .not('end_time', 'is', null)
-    .order('start_time', { ascending: false })
-    .limit(1);
-
-  if (normalizedCurrentWorkoutId) {
-    latestWorkoutQuery.neq('id', normalizedCurrentWorkoutId);
-  }
-
-  const { data: latestWorkoutRows, error: latestWorkoutError } = await latestWorkoutQuery;
-
-  if (latestWorkoutError) {
-    throw new Error(`Unable to load previous workout reference: ${latestWorkoutError.message}`);
-  }
-
-  const latestWorkoutId = latestWorkoutRows?.[0]?.id;
-
-  if (!latestWorkoutId) {
-    return [];
-  }
-
-  const { data: previousSets, error: previousSetsError } = await supabase
-    .from('sets')
-    .select('set_number, weight, reps, rir, set_type')
-    .eq('workout_id', latestWorkoutId)
-    .eq('exercise_id', normalizedExerciseId)
-    .order('set_number', { ascending: true });
-
-  if (previousSetsError) {
-    throw new Error(`Unable to load previous exercise sets: ${previousSetsError.message}`);
-  }
-
-  return (previousSets ?? []).map((setRow) => ({
-    setNumber: setRow.set_number,
-    weight: setRow.weight,
-    reps: setRow.reps,
-    rir: setRow.rir,
-    setType: normalizeSetType(setRow.set_type),
-  }));
+export async function getPreviousExercisePerformance(exerciseId: string, currentWorkoutId: string | null): Promise<PreviousExercisePerformanceSet[]> {
+  const id = normalizeOptionalId(exerciseId);
+  if (!id) throw new Error('Exercise id is required to load previous performance.');
+  return (await getExerciseReferenceData([id], currentWorkoutId)).previousByExerciseId[id] ?? [];
 }
 
 /**
@@ -1376,63 +1228,8 @@ export async function getPreviousExercisePerformance(
  * setting a record. Using it for a live "PR" hint would contradict the count on
  * the finish screen, which compares against the whole history.
  */
-export async function getExercisePersonalBests(
-  exerciseIds: string[],
-  currentWorkoutId: string | null
-): Promise<Record<string, PersonalBest>> {
-  const user = await getAuthenticatedUserOrThrow();
-  const normalizedIds = [...new Set(exerciseIds.map((id) => normalizeOptionalId(id)).filter(Boolean))] as string[];
-
-  if (normalizedIds.length === 0) {
-    return {};
-  }
-
-  const priorWorkoutsQuery = supabase
-    .from('workouts')
-    .select('id')
-    .eq('user_id', user.id)
-    .not('end_time', 'is', null);
-
-  const normalizedCurrentWorkoutId = normalizeOptionalId(currentWorkoutId);
-
-  if (normalizedCurrentWorkoutId) {
-    priorWorkoutsQuery.neq('id', normalizedCurrentWorkoutId);
-  }
-
-  const { data: priorWorkouts, error: priorWorkoutsError } = await priorWorkoutsQuery;
-
-  if (priorWorkoutsError || !priorWorkouts || priorWorkouts.length === 0) {
-    return {};
-  }
-
-  const { data: previousSets, error: previousSetsError } = await supabase
-    .from('sets')
-    .select('exercise_id, weight, reps')
-    .in('workout_id', priorWorkouts.map((workout) => workout.id))
-    .in('exercise_id', normalizedIds);
-
-  if (previousSetsError || !previousSets) {
-    return {};
-  }
-
-  const samplesByExerciseId = new Map<string, PersonalRecordSetSample[]>();
-
-  for (const row of previousSets) {
-    const exerciseId = row.exercise_id ?? '';
-    if (!exerciseId) continue;
-
-    const current = samplesByExerciseId.get(exerciseId) ?? [];
-    current.push({ exerciseId, weight: row.weight, reps: row.reps });
-    samplesByExerciseId.set(exerciseId, current);
-  }
-
-  const bests: Record<string, PersonalBest> = {};
-
-  for (const [exerciseId, samples] of samplesByExerciseId) {
-    bests[exerciseId] = summarizePersonalBest(samples);
-  }
-
-  return bests;
+export async function getExercisePersonalBests(exerciseIds: string[], currentWorkoutId: string | null): Promise<Record<string, PersonalBest>> {
+  return (await getExerciseReferenceData(exerciseIds, currentWorkoutId)).bests;
 }
 
 async function getFeedParticipantIds(userId: string): Promise<string[]> {
@@ -1458,7 +1255,6 @@ async function getFeedParticipantIds(userId: string): Promise<string[]> {
   return [...participantIds];
 }
 
-const START_TIME_PAGE_SIZE = 1000;
 
 export function periodRangeIso(periodKey: string): { from: string; to: string } | null {
   const yearMatch = /^(\d{4})$/.exec(periodKey);
@@ -1510,81 +1306,17 @@ function wordPrefixOrFilter(columns: string[], search: string): string {
     .join(',');
 }
 
-function monthKeyFromIso(value: string): string | null {
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) {
-    return null;
-  }
-
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  return `${year}-${month}`;
-}
-
-function bucketsFromStartTimes(startTimes: string[]): WorkoutMonthBucket[] {
-  const counts = new Map<string, number>();
-
-  for (const startTime of startTimes) {
-    const key = monthKeyFromIso(startTime);
-    if (!key) {
-      continue;
-    }
-
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-
-  return [...counts.entries()]
-    .sort((left, right) => (left[0] < right[0] ? 1 : -1))
-    .map(([key, count]) => {
-      const year = Number(key.slice(0, 4));
-      const month = Number(key.slice(5, 7));
-      return { key, year, month, count };
-    });
-}
-
-async function fetchStartTimesForUsers(userIds: string[]): Promise<string[]> {
-  if (userIds.length === 0) {
-    return [];
-  }
-
-  const startTimes: string[] = [];
-
-  for (let page = 0; page < 20; page += 1) {
-    const from = page * START_TIME_PAGE_SIZE;
-    const to = from + START_TIME_PAGE_SIZE - 1;
-    const { data, error } = await supabase
-      .from('workouts')
-      .select('start_time')
-      .in('user_id', userIds)
-      .order('start_time', { ascending: false })
-      .range(from, to);
-
-    if (error) {
-      throw new Error(`Unable to load workout months: ${error.message}`);
-    }
-
-    const rows = data ?? [];
-    for (const row of rows) {
-      if (typeof row.start_time === 'string') {
-        startTimes.push(row.start_time);
-      }
-    }
-
-    if (rows.length < START_TIME_PAGE_SIZE) {
-      break;
-    }
-  }
-
-  return startTimes;
-}
-
 export async function getUserWorkoutMonthBuckets(userId: string): Promise<WorkoutMonthBucket[]> {
   const normalizedUserId = normalizeOptionalId(userId);
-  if (!normalizedUserId) {
-    return [];
-  }
-
-  return bucketsFromStartTimes(await fetchStartTimesForUsers([normalizedUserId]));
+  if (!normalizedUserId) return [];
+  const { data, error } = await supabase.rpc('workout_month_buckets', {
+    p_user_id: normalizedUserId,
+    p_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+  });
+  if (error) throw new Error(`Unable to load workout months: ${error.message}`);
+  return ((data ?? []) as {year: number; month: number; count: number}[]).map(row => ({
+    ...row, key: `${row.year}-${String(row.month).padStart(2, '0')}`,
+  }));
 }
 
 async function workoutIdsMatchingExerciseSearch(search: string, userIds: string[]): Promise<string[]> {
@@ -1662,12 +1394,12 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
   const from = safePage * safeLimit;
   const to = from + safeLimit - 1;
 
-  const user = await getAuthenticatedUserOrThrow();
+  const user = await getSessionUserOrThrow();
   const participantIds = await getFeedParticipantIds(user.id);
 
   const { data: workouts, error: workoutsError } = await supabase
     .from('workouts')
-    .select('*, workout_likes(count), workout_comments(count)')
+    .select('id,user_id,name,notes,start_time,end_time,workout_likes(count),workout_comments(count)')
     .in('user_id', participantIds)
     .order('start_time', { ascending: false })
     .range(from, to);
@@ -1683,26 +1415,29 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
   const rawWorkouts = workouts as RawWorkoutFeedRow[];
 
   const workoutIds = rawWorkouts.map((w) => w.id);
-  const profileByUserId = await getPublicProfilesByIds(rawWorkouts.map((w) => w.user_id));
-
-  const { data: ownLikes, error: ownLikesError } = await supabase
+  const latestCommentsPromise = Promise.resolve(supabase.rpc('latest_workout_comments', { p_workout_ids: workoutIds }))
+    .catch(error => ({data: null, error: {message: toErrorMessage(error)}}));
+  const [profileByUserId, {data: ownLikes, error: ownLikesError}, allSets, recordSummaries] = await Promise.all([
+    getPublicProfilesByIds(rawWorkouts.map(workout => workout.user_id)),
+    supabase
     .from('workout_likes')
     .select('workout_id')
     .eq('user_id', user.id)
-    .in('workout_id', workoutIds);
-
-  if (ownLikesError) {
-    throw new Error(`Unable to load your like status for feed workouts: ${ownLikesError.message}`);
-  }
-
-  const likedWorkoutIds = new Set((ownLikes ?? []).map((row) => row.workout_id));
-
-  const allSets = await loadAllRows(() => supabase
+    .in('workout_id', workoutIds),
+    loadAllRows(() => supabase
     .from('sets')
     .select('id, workout_id, exercise_id, set_number, weight, reps, rir, set_type, exercises(id, name, name_en, name_pt)')
     .in('workout_id', workoutIds),
     'Unable to load workout feed sets'
-  );
+  ),
+    getWorkoutRecordSummaries(workoutIds).catch(error => {
+      console.warn('[workout-records] Unable to load record counts', {message: toErrorMessage(error)});
+      return null;
+    }),
+  ]);
+  if (ownLikesError) throw new Error(`Unable to load like status: ${ownLikesError.message}`);
+  const likedWorkoutIds = new Set((ownLikes ?? []).map(row => row.workout_id));
+
   allSets.sort((a, b) => (a.exercise_id ?? '').localeCompare(b.exercise_id ?? '') || sortWorkoutFeedExerciseSets(a, b));
 
   const aggregateByWorkout = aggregateWorkoutFeedSets((allSets as RawWorkoutFeedSetRow[] | null) ?? []);
@@ -1712,36 +1447,20 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
     currentSetsByWorkoutId.set(workout.id, samplesFromFeedAggregate(aggregateByWorkout.get(workout.id)));
   }
 
-  let prCountByWorkoutId = new Map<string, number>();
-  try {
-    prCountByWorkoutId = await resolvePrCountsByWorkoutId(
+  const prCountByWorkoutId = recordSummaries === null ? null : await resolvePrCountsByWorkoutId(
       rawWorkouts.map((workout) => ({
         id: workout.id,
         user_id: workout.user_id,
         start_time: workout.start_time,
       })),
-      currentSetsByWorkoutId
+      currentSetsByWorkoutId, recordSummaries
     );
-  } catch {
-    // Non-critical — feed still loads with 0 PRs
-  }
 
-  const { data: latestCommentsData } = await supabase
-    .from('workout_comments')
-    .select('workout_id, content, profiles(username)')
-    .in('workout_id', workoutIds)
-    .order('created_at', { ascending: false });
-
+  const { data: latestCommentsData, error: latestCommentsError } = await latestCommentsPromise;
+  if (latestCommentsError) console.warn('[workout-comments] Unable to load previews', {message: latestCommentsError.message});
   const latestCommentByWorkout = new Map<string, { content: string; author: string }>();
-
-  for (const comment of latestCommentsData ?? []) {
-    const wId = normalizeOptionalId(comment.workout_id);
-    if (!wId || latestCommentByWorkout.has(wId)) continue;
-    
-    latestCommentByWorkout.set(wId, {
-      content: comment.content,
-      author: (comment.profiles as any)?.username ?? 'Atleta',
-    });
+  for (const comment of (latestCommentsData ?? []) as {workout_id: string; content: string; author: string | null}[]) {
+    latestCommentByWorkout.set(comment.workout_id, { content: comment.content, author: comment.author ?? 'Atleta' });
   }
 
   return rawWorkouts.map((workout) => {
@@ -1758,7 +1477,7 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
       totalVolume: Math.round(aggregate?.totalVolume ?? 0),
       totalSets: aggregate?.totalSets ?? 0,
       workingSets: aggregate?.workingSets ?? 0,
-      prCount: prCountByWorkoutId.get(workout.id) ?? 0,
+      prCount: prCountByWorkoutId === null ? null : prCountByWorkoutId.get(workout.id) ?? 0,
       exerciseNames: aggregate?.exerciseNames ?? [],
       exerciseGroups: aggregate?.exerciseGroups ?? [],
       likes_count: extractRelationCount(workout.workout_likes),
@@ -1776,7 +1495,7 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
  * when it is public, or when it is friends-only and you are friends.
  */
 async function canViewUserContent(targetUserId: string): Promise<boolean> {
-  const viewer = await getAuthenticatedUserOrThrow();
+  const viewer = await getSessionUserOrThrow();
 
   if (viewer.id === targetUserId) {
     return true;
@@ -1817,7 +1536,7 @@ async function canViewUserContent(targetUserId: string): Promise<boolean> {
 }
 
 export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetails> {
-  const viewer = await getAuthenticatedUserOrThrow();
+  const viewer = await getSessionUserOrThrow();
   const normalizedWorkoutId = normalizeOptionalId(workoutId);
 
   if (!normalizedWorkoutId) {
@@ -1886,28 +1605,26 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
     });
   }
 
+  async function readDetailSets(projection: string) {
+    try {
+      const data = await loadAllRows(() => supabase.from('sets').select(projection)
+        .eq('workout_id', normalizedWorkoutId!), 'Unable to load workout sets');
+      return {data: data as unknown as RawWorkoutDetailsSetRow[], error: null as unknown};
+    } catch (error) { return {data: null, error}; }
+  }
+
   let rawSetRows: RawWorkoutDetailsSetRow[] | null = null;
   let setRowsError: unknown = null;
 
   {
-    const result = await supabase
-      .from('sets')
-      .select('id, set_number, weight, reps, rir, set_type, side, workout_exercise_id, exercise_id')
-      .eq('workout_id', normalizedWorkoutId)
-      .order('set_number', { ascending: true })
-      .order('id', { ascending: true });
+    const result = await readDetailSets('id, set_number, weight, reps, rir, set_type, side, workout_exercise_id, exercise_id');
 
     rawSetRows = (result.data as RawWorkoutDetailsSetRow[] | null) ?? null;
     setRowsError = result.error;
   }
 
   if (setRowsError && isWorkoutExerciseIdColumnMissing(setRowsError)) {
-    const legacyResult = await supabase
-      .from('sets')
-      .select('id, set_number, weight, reps, rir, set_type, side, exercise_id')
-      .eq('workout_id', normalizedWorkoutId)
-      .order('set_number', { ascending: true })
-      .order('id', { ascending: true });
+    const legacyResult = await readDetailSets('id, set_number, weight, reps, rir, set_type, side, exercise_id');
 
     if (legacyResult.error) {
       setRowsError = legacyResult.error;
@@ -1933,12 +1650,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
       (sideMissingMessage.includes('column') || sideMissingMessage.includes('schema cache'));
 
     if (isSideMissing) {
-      const fallbackResult = await supabase
-        .from('sets')
-        .select('id, set_number, weight, reps, rir, set_type, workout_exercise_id, exercise_id')
-        .eq('workout_id', normalizedWorkoutId)
-        .order('set_number', { ascending: true })
-        .order('id', { ascending: true });
+      const fallbackResult = await readDetailSets('id, set_number, weight, reps, rir, set_type, workout_exercise_id, exercise_id');
 
       if (!fallbackResult.error) {
         rawSetRows = ((fallbackResult.data ?? []) as Omit<RawWorkoutDetailsSetRow, 'side'>[]).map((row) => ({
@@ -2158,7 +1870,8 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
   }
 
   let prCount = 0;
-  let recordSetIds: string[] = [];
+  const recordSetIds: string[] = [];
+  let prCheckFailed = false;
   try {
     const currentSamples: PersonalRecordSetSample[] = detailsExercises.flatMap((exercise) =>
       exercise.sets.map((setItem) => ({
@@ -2171,31 +1884,9 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
     const exerciseIds = [...new Set(currentSamples.map((sample) => sample.exerciseId).filter(Boolean))];
 
     if (exerciseIds.length > 0) {
-      const { data: priorWorkouts } = await supabase
-        .from('workouts')
-        .select('id')
-        .eq('user_id', workout.user_id)
-        .neq('id', workout.id)
-        .not('end_time', 'is', null)
-        .lt('start_time', workout.start_time);
-
-      if (priorWorkouts && priorWorkouts.length > 0) {
-        const { data: previousSets } = await supabase
-          .from('sets')
-          .select('exercise_id, weight, reps')
-          .in(
-            'workout_id',
-            priorWorkouts.map((row) => row.id)
-          )
-          .in('exercise_id', exerciseIds);
-
-        const previousSamples = (previousSets ?? []).map((row) => ({
-          exerciseId: row.exercise_id ?? '',
-          weight: row.weight,
-          reps: row.reps,
-        }));
-
-        prCount = countPersonalRecords(currentSamples, previousSamples);
+      const summaries = await getWorkoutRecordSummaries([workout.id]);
+      if (summaries.length > 0) {
+        prCount = (await resolvePrCountsByWorkoutId([workout], new Map([[workout.id, currentSamples]]), summaries)).get(workout.id) ?? 0;
 
         // Naming the set, not just counting it.
         //
@@ -2205,14 +1896,9 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
         // the stored best, the strongest is the one credited — the trophy
         // belongs on the best lift of the session, not on whichever set edged
         // past the old number first.
-        const bestByExerciseId = new Map<string, PersonalBest>();
-
-        for (const sample of previousSamples) {
-          bestByExerciseId.set(
-            sample.exerciseId,
-            mergePersonalBest(bestByExerciseId.get(sample.exerciseId) ?? EMPTY_PERSONAL_BEST, sample)
-          );
-        }
+        const bestByExerciseId = new Map<string, PersonalBest>(summaries.filter(row => row.has_history).map(row => [
+          row.exercise_id, {bestWeight: row.best_weight, bestE1rm: row.best_e1rm},
+        ]));
 
         for (const exercise of detailsExercises) {
           const previousBest = bestByExerciseId.get(exercise.exercise_id) ?? EMPTY_PERSONAL_BEST;
@@ -2231,8 +1917,9 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
         }
       }
     }
-  } catch {
-    // Non-critical
+  } catch (error) {
+    prCheckFailed = true;
+    console.warn('[workout-records] Unable to load detail records', {message: toErrorMessage(error)});
   }
 
   return {
@@ -2243,6 +1930,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
     start_time: workout.start_time,
     end_time: workout.end_time,
     profile: profileByUserId.get(workout.user_id) ?? null,
+    prCheckFailed,
     exercises: detailsExercises,
     totalVolume: Math.round(totalVolume),
     totalSets: allSets.length,
@@ -2278,6 +1966,7 @@ export async function deleteWorkout(workoutId: string): Promise<void> {
   if (!deleted || deleted.length === 0) {
     throw new Error('Workout not found.');
   }
+  invalidateWorkoutDataCache(user.id);
 }
 
 export async function getUserWorkouts(
@@ -2291,7 +1980,7 @@ export async function getUserWorkouts(
   const from = safePage * safeLimit;
   const to = from + safeLimit - 1;
 
-  const viewer = await getAuthenticatedUserOrThrow();
+  const viewer = await getSessionUserOrThrow();
   const normalizedUserId = normalizeOptionalId(userId);
 
   if (!normalizedUserId) {
@@ -2303,7 +1992,7 @@ export async function getUserWorkouts(
   const filteredQuery = applyWorkoutListFilter(
     supabase
       .from('workouts')
-      .select('*, workout_likes(count), workout_comments(count)')
+      .select('id,user_id,name,notes,start_time,end_time,workout_likes(count),workout_comments(count)')
       .eq('user_id', normalizedUserId),
     filter,
     exerciseWorkoutIds
@@ -2323,26 +2012,27 @@ export async function getUserWorkouts(
 
   const rawWorkouts = workouts as RawWorkoutFeedRow[];
   const workoutIds = rawWorkouts.map((workout) => workout.id);
-  const profileByUserId = await getPublicProfilesByIds(rawWorkouts.map((workout) => workout.user_id));
-
-  const { data: ownLikes, error: ownLikesError } = await supabase
+  const [profileByUserId, {data: ownLikes, error: ownLikesError}, allSets, recordSummaries] = await Promise.all([
+    getPublicProfilesByIds(rawWorkouts.map(workout => workout.user_id)),
+    supabase
     .from('workout_likes')
     .select('workout_id')
     .eq('user_id', viewer.id)
-    .in('workout_id', workoutIds);
-
-  if (ownLikesError) {
-    throw new Error(`Unable to load like status for workout history: ${ownLikesError.message}`);
-  }
-
-  const likedWorkoutIds = new Set((ownLikes ?? []).map((row) => row.workout_id));
-
-  const allSets = await loadAllRows(() => supabase
+    .in('workout_id', workoutIds),
+    loadAllRows(() => supabase
     .from('sets')
     .select('id, workout_id, exercise_id, set_number, weight, reps, rir, set_type, exercises(id, name, name_en, name_pt)')
     .in('workout_id', workoutIds),
     'Unable to load workout history sets'
-  );
+  ),
+    getWorkoutRecordSummaries(workoutIds).catch(error => {
+      console.warn('[workout-records] Unable to load record counts', {message: toErrorMessage(error)});
+      return null;
+    }),
+  ]);
+  if (ownLikesError) throw new Error(`Unable to load like status: ${ownLikesError.message}`);
+  const likedWorkoutIds = new Set((ownLikes ?? []).map(row => row.workout_id));
+
   allSets.sort((a, b) => (a.exercise_id ?? '').localeCompare(b.exercise_id ?? '') || sortWorkoutFeedExerciseSets(a, b));
 
   const aggregateByWorkout = aggregateWorkoutFeedSets((allSets as RawWorkoutFeedSetRow[] | null) ?? []);
@@ -2352,19 +2042,14 @@ export async function getUserWorkouts(
     currentSetsByWorkoutId.set(workout.id, samplesFromFeedAggregate(aggregateByWorkout.get(workout.id)));
   }
 
-  let prCountByWorkoutId = new Map<string, number>();
-  try {
-    prCountByWorkoutId = await resolvePrCountsByWorkoutId(
+  const prCountByWorkoutId = recordSummaries === null ? null : await resolvePrCountsByWorkoutId(
       rawWorkouts.map((workout) => ({
         id: workout.id,
         user_id: workout.user_id,
         start_time: workout.start_time,
       })),
-      currentSetsByWorkoutId
+      currentSetsByWorkoutId, recordSummaries
     );
-  } catch {
-    // Non-critical
-  }
 
   return rawWorkouts.map((workout) => {
     const aggregate = aggregateByWorkout.get(workout.id);
@@ -2380,7 +2065,7 @@ export async function getUserWorkouts(
       totalVolume: Math.round(aggregate?.totalVolume ?? 0),
       totalSets: aggregate?.totalSets ?? 0,
       workingSets: aggregate?.workingSets ?? 0,
-      prCount: prCountByWorkoutId.get(workout.id) ?? 0,
+      prCount: prCountByWorkoutId === null ? null : prCountByWorkoutId.get(workout.id) ?? 0,
       exerciseNames: aggregate?.exerciseNames ?? [],
       exerciseGroups: aggregate?.exerciseGroups ?? [],
       likes_count: extractRelationCount(workout.workout_likes),

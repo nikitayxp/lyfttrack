@@ -1,3 +1,5 @@
+import { getWorkoutRecordSummaries } from '@/services/workoutReadModels';
+import { invalidateWorkoutDataCache } from '@/services/dataCache';
 import { supabase } from '@/services/supabase';
 import type { Json } from '@/types/database';
 import { INPUT_LIMITS, sanitizeText, toSafeInteger, toSafeNumber } from '@/utils/inputValidation';
@@ -21,7 +23,7 @@ import {
   type WorkoutSetDraft,
   WorkoutSaveValidationError,
 } from './workoutSession.types';
-import { findPersonalRecordExerciseIds, type PersonalRecordSetSample } from '@/utils/personalRecords';
+import { type PersonalRecordSetSample } from '@/utils/personalRecords';
 
 // ---------- Create Workout ----------
 
@@ -44,47 +46,15 @@ async function findNewPersonalRecordExerciseIds(
 
   if (currentSamples.length === 0) return [];
 
-  const { data: currentWorkout, error: currentWorkoutError } = await supabase
-    .from('workouts')
-    .select('id, user_id, start_time')
-    .eq('id', currentWorkoutId)
-    .maybeSingle();
-
-  if (currentWorkoutError || !currentWorkout) {
-    return [];
-  }
-
-  const exerciseIds = [...new Set(currentSamples.map((sample) => sample.exerciseId))];
-
-  const { data: priorWorkouts } = await supabase
-    .from('workouts')
-    .select('id')
-    .eq('user_id', currentWorkout.user_id)
-    .neq('id', currentWorkoutId)
-    .not('end_time', 'is', null)
-    .lt('start_time', currentWorkout.start_time);
-
-  if (!priorWorkouts || priorWorkouts.length === 0) {
-    return [];
-  }
-
-  const { data: previousSets } = await supabase
-    .from('sets')
-    .select('exercise_id, weight, reps')
-    .in(
-      'workout_id',
-      priorWorkouts.map((workout) => workout.id)
-    )
-    .in('exercise_id', exerciseIds);
-
-  return findPersonalRecordExerciseIds(
-    currentSamples,
-    (previousSets ?? []).map((row) => ({
-      exerciseId: row.exercise_id ?? '',
-      weight: row.weight,
-      reps: row.reps,
-    }))
-  );
+  const summaries = await getWorkoutRecordSummaries([currentWorkoutId]);
+  const bestByExercise = new Map(summaries.map(row => [row.exercise_id, row]));
+  return [...new Set(currentSamples.filter(sample => {
+    const best = bestByExercise.get(sample.exerciseId);
+    if (!best?.has_history) return false;
+    const weight = sample.weight ?? 0;
+    const e1rm = weight > 0 && (sample.reps ?? 0) > 0 ? weight * (1 + sample.reps! / 30) : 0;
+    return weight > best.best_weight || e1rm > best.best_e1rm;
+  }).map(sample => sample.exerciseId))];
 }
 
 export async function finishWorkout(input: FinishWorkoutInput): Promise<FinishWorkoutResult> {
@@ -130,9 +100,12 @@ export async function finishWorkout(input: FinishWorkoutInput): Promise<FinishWo
   }
 
   let prExerciseIds: string[] = [];
+  let prCheckFailed = false;
   try {
     prExerciseIds = await findNewPersonalRecordExerciseIds(saveResult.workoutId, completedSetDrafts);
-  } catch {
+  } catch (error) {
+    prCheckFailed = true;
+    console.warn('[finishWorkout] Unable to load records', {message: error instanceof Error ? error.message : 'Unknown error'});
     // Non-critical — default to none if PR check fails
   }
 
@@ -147,6 +120,7 @@ export async function finishWorkout(input: FinishWorkoutInput): Promise<FinishWo
     endTime: saveResult.endTime,
     prCount: prExerciseIds.length,
     prExerciseIds,
+    prCheckFailed,
   };
 }
 
@@ -193,6 +167,7 @@ export async function createWorkoutWithSets(
   if (!result?.workout_id || !Number.isInteger(result.inserted_set_count) || result.inserted_set_count! <= 0 || !result.start_time || !result.end_time) {
     throw new Error('The server did not confirm the saved workout. Please retry.');
   }
+  invalidateWorkoutDataCache(user.id);
   const currentUser = await getAuthenticatedUserOrThrow();
   if (currentUser.id !== user.id) throw new Error('Account changed while saving. Return to the original account to check the saved workout.');
   return {
@@ -272,4 +247,5 @@ export async function updateWorkoutSets(input: UpdateWorkoutSetsInput): Promise<
   if (error) {
     throw new Error(`Unable to update workout: ${error.message}`);
   }
+  invalidateWorkoutDataCache();
 }

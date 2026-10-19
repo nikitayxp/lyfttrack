@@ -19,10 +19,11 @@ async function setup(t, options = {}) {
   const values = new Map();
   let authListener;
   let context;
+  let elapsedSeconds;
   const load = createSourceLoader({
     'react-native': {
       Platform: { OS: 'ios' },
-      AppState: { addEventListener: () => ({ remove() {} }) },
+      AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) },
       Animated: { Value: class { setValue() {} stopAnimation() {} } },
       Vibration: { vibrate() {} },
     },
@@ -39,26 +40,49 @@ async function setup(t, options = {}) {
         authListener = callback;
         return { data: { subscription: { unsubscribe() {} } } };
       },
+      startAutoRefresh() {}, stopAutoRefresh() {},
     } } },
     '@/services/workoutService': { getPreviousExercisePerformance: options.getPerformance ?? (async () => []) },
   }, { Date: options.Date ?? Date });
-  const { WorkoutProvider, useWorkoutContext } = load('app/src/context/WorkoutContext.tsx');
+  const { WorkoutProvider, useWorkoutContext, useWorkoutElapsedSeconds } = load('app/src/context/WorkoutContext.tsx');
   const storage = load('app/src/services/offlineSyncService.ts');
   function Consumer() {
     context = useWorkoutContext();
+    options.onRender?.();
+    return null;
+  }
+  function TimerConsumer() {
+    elapsedSeconds = useWorkoutElapsedSeconds();
     return null;
   }
   let tree;
-  await act(async () => { tree = create(React.createElement(WorkoutProvider, null, React.createElement(Consumer))); });
+  await act(async () => { tree = create(React.createElement(WorkoutProvider, null, React.createElement(Consumer), React.createElement(TimerConsumer))); });
   t.after(async () => { await act(async () => tree.unmount()); });
   return {
-    get current() { return context; },
+    get current() { return { ...context, elapsedSeconds }; },
     storage,
     values,
     changeUser: id => act(async () => authListener('SIGNED_IN', session(id))),
     run: fn => act(async () => fn(context)),
   };
 }
+
+test('workout data consumers are not rendered by each clock tick', async t => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  let now = Date.UTC(2026, 9, 19, 12);
+  let renders = 0;
+  class Clock extends Date {
+    constructor(...args) { super(...(args.length ? args : [now])); }
+    static now() { return now; }
+  }
+  const app = await setup(t, { Date: Clock, onRender: () => { renders += 1; } });
+  await app.run(c => c.setActiveExercisesWithRef([exercise('A')]));
+  const before = renders;
+  now += 2000;
+  await act(async () => t.mock.timers.tick(2000));
+  assert.equal(app.current.elapsedSeconds, 2);
+  assert.equal(renders, before, 'the clock notified a data-only consumer');
+});
 
 test('discarding a paused workout resets pause and its saved elapsed value', async t => {
   const app = await setup(t);

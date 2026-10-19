@@ -88,6 +88,7 @@ export const resources = {
         publicProfile: 'Profile',
       },
       auth: {
+        bootstrapSlow: 'Restoring your session is taking longer than expected. Check your connection and try again.',
         signIn: {
           title: 'ENTER. TRAIN. EVOLVE.',
           subtitle: 'Total focus. No distractions.',
@@ -471,6 +472,7 @@ export const resources = {
         recoverAction: 'Recover',
         summaryTitle: 'WORKOUT COMPLETE',
         summarySubtitle: 'Session saved. Keep the momentum and stay consistent.',
+        summaryPrsUnavailable: 'Workout saved. Personal records could not be confirmed.',
         summaryDurationLabel: 'Time',
         summarySetsLabel: 'Sets',
         summaryPrsLabel: 'Records',
@@ -704,6 +706,7 @@ export const resources = {
         comments: {
           title: 'Comments',
           loading: 'Loading comments...',
+          loadMore: 'Load more comments',
           loadErrorTitle: 'Unable to load comments',
           retry: 'Try again',
           empty: 'No comments yet. Be the first.',
@@ -944,6 +947,7 @@ export const resources = {
         publicProfile: 'Perfil',
       },
       auth: {
+        bootstrapSlow: 'O restauro da sessão está a demorar mais do que o esperado. Verifica a ligação e tenta novamente.',
         signIn: {
           title: 'ENTRA. TREINA. EVOLUI.',
           subtitle: 'Foco total. Sem distracoes.',
@@ -1327,6 +1331,7 @@ export const resources = {
         recoverAction: 'Recuperar',
         summaryTitle: 'TREINO CONCLUIDO',
         summarySubtitle: 'Sessao guardada. Mantem o ritmo e continua consistente.',
+        summaryPrsUnavailable: 'Treino guardado. Não foi possível confirmar os recordes.',
         summaryDurationLabel: 'Tempo',
         summarySetsLabel: 'Series',
         summaryPrsLabel: 'Recordes',
@@ -1560,6 +1565,7 @@ export const resources = {
         comments: {
           title: 'Comentarios',
           loading: 'A carregar comentarios...',
+          loadMore: 'Carregar mais comentários',
           loadErrorTitle: 'Nao foi possivel carregar comentarios',
           retry: 'Tentar novamente',
           empty: 'Ainda sem comentarios. Se o primeiro.',

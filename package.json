@@ -16,7 +16,7 @@
     "check": "npm run lint && npm run typecheck && npm test"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "0.5.10",
-    "react-test-renderer": "19.1.0"
+    "@electric-sql/pglite": "0.5.11",
+    "react-test-renderer": "19.3.1"
   }
 }

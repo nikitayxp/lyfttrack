@@ -23,10 +23,10 @@ async function setup(t, options = {}) {
     'react-native': {
       Platform: { OS: 'ios' },
       AppState: { addEventListener: () => ({ remove() {} }) },
-      Animated: { Value: class { setValue() {} stopAnimation() {} } },
+      Animated: { Value: class { setValue() {} stopAnimation() {} }, timing() {}, sequence: () => ({ start() {} }) },
       Vibration: { vibrate() {} },
     },
-    'expo-haptics': {},
+    'expo-haptics': { impactAsync: async () => {}, ImpactFeedbackStyle: { Light: 'light' } },
     'expo-keep-awake': { activateKeepAwakeAsync: async () => {}, deactivateKeepAwake: async () => {} },
     '@react-native-async-storage/async-storage': {
       getItem: async key => values.get(key) ?? null,
@@ -143,4 +143,120 @@ test('a cleared completed draft is not recreated when the account changes', asyn
   await app.run(c => c.clearDraft());
   await app.changeUser('B');
   assert.equal(await app.storage.loadWorkoutDraft('A'), null);
+});
+
+const deferred = () => {
+  let resolve;
+  let reject;
+  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+};
+const pastSets = [{ setType: 'warmup' }, { setType: 'normal' }, { setType: 'drop' }];
+const types = block => Array.from(block.sets, set => set.set_type);
+
+test('an added exercise shows up before its history and only takes the past set types', async t => {
+  const history = deferred();
+  let requests = 0;
+  const app = await setup(t, { getPerformance: () => { requests += 1; return history.promise; } });
+  await app.run(c => c.addExercise({ id: 'press', name: 'Press' }));
+  assert.equal(app.current.activeExercises.length, 1, 'exercise waited for history before appearing');
+  const initial = app.current.activeExercises[0];
+  assert.deepEqual(types(initial), ['warmup', 'normal']);
+  assert.equal(app.current.hasActiveWorkout, true);
+  await app.run(() => history.resolve(pastSets.map(set => ({ ...set, weight: 100, reps: 12, rir: 2 }))));
+  const seeded = app.current.activeExercises[0];
+  assert.equal(seeded.id, initial.id);
+  assert.equal(seeded.sets[0].id, initial.sets[0].id);
+  assert.deepEqual(types(seeded), ['warmup', 'normal', 'drop']);
+  assert.ok(seeded.sets.every(set => set.weightInput === '' && set.repsInput === '' && set.rirInput === '' && !set.completed));
+  assert.equal(requests, 1);
+});
+
+for (const [name, edit] of [
+  ['input', (c, block) => c.updateSetInput(block.id, block.sets[0].id, 'weightInput', '32.5')],
+  ['set type', (c, block) => c.updateSetType(block.id, block.sets[0].id, 'failure')],
+  ['set side', (c, block) => c.updateSetSide(block.id, block.sets[0].id, 'left')],
+  ['added set', (c, block) => c.addSet(block.id)],
+  ['removed set', (c, block) => c.removeSet(block.id, block.sets[0].id)],
+  ['notes', (c, block) => c.updateExerciseNotes(block.id, 'Changed notes')],
+  ['completed set', (c, block) => c.handleSetCompletionToggle(block.id, block.sets[0].id, { weightInput: '50', repsInput: '10' })],
+]) {
+  test(`late history keeps ${name} edits`, async t => {
+    const history = deferred();
+    const app = await setup(t, { getPerformance: () => history.promise });
+    await app.run(c => c.addExercise({ id: 'press', name: 'Press' }));
+    assert.equal(app.current.activeExercises.length, 1);
+    await app.run(c => edit(c, c.activeExercises[0]));
+    const edited = app.current.activeExercises[0];
+    await app.run(() => history.resolve(pastSets));
+    assert.equal(app.current.activeExercises[0], edited, 'history replaced a block the user edited');
+  });
+}
+
+test('late history follows its block after reordering', async t => {
+  const history = deferred();
+  const app = await setup(t, { getPerformance: () => history.promise });
+  await app.run(c => c.setActiveExercisesWithRef([exercise('other')]));
+  await app.run(c => c.addExercise({ id: 'press', name: 'Press' }));
+  const id = app.current.activeExercises[1]?.id;
+  assert.ok(id);
+  await app.run(c => c.moveExercise(1, 'up'));
+  await app.run(() => history.resolve(pastSets));
+  assert.equal(app.current.activeExercises[0].id, id);
+  assert.deepEqual(types(app.current.activeExercises[0]), ['warmup', 'normal', 'drop']);
+  assert.deepEqual(app.current.activeExercises[1].sets, []);
+});
+
+for (const action of ['discard', 'remove']) {
+  test(`${action} and add again ignores the old history response`, async t => {
+    const oldHistory = deferred();
+    const newHistory = deferred();
+    let requests = 0;
+    const app = await setup(t, { getPerformance: () => (++requests === 1 ? oldHistory.promise : newHistory.promise) });
+    await app.run(c => c.addExercise({ id: 'press', name: 'Press' }));
+    await app.run(c => action === 'discard' ? c.clearExercises() : c.removeExercise(0));
+    await app.run(c => c.addExercise({ id: 'press', name: 'Press' }));
+    const replacement = app.current.activeExercises[0];
+    assert.ok(replacement);
+    await app.run(() => oldHistory.resolve(pastSets));
+    assert.equal(app.current.activeExercises.length, 1);
+    assert.equal(app.current.activeExercises[0], replacement);
+    await app.run(() => newHistory.resolve([{ setType: 'failure' }]));
+    assert.deepEqual(types(app.current.activeExercises[0]), ['failure']);
+  });
+}
+
+test('a failed history request leaves the blank exercise usable', async t => {
+  const history = deferred();
+  const app = await setup(t, { getPerformance: () => history.promise });
+  await app.run(c => c.addExercise({ id: 'press', name: 'Press' }));
+  const initial = app.current.activeExercises[0];
+  assert.ok(initial);
+  await app.run(() => history.reject(new Error('offline')));
+  assert.equal(app.current.activeExercises.length, 1);
+  assert.equal(app.current.activeExercises[0], initial);
+});
+
+test('resetting the session drops pending history even if the block stays', async t => {
+  const history = deferred();
+  const app = await setup(t, { getPerformance: () => history.promise });
+  await app.run(c => c.addExercise({ id: 'press', name: 'Press' }));
+  const block = app.current.activeExercises[0];
+  assert.ok(block);
+  await app.run(c => c.resetWorkoutSession());
+  await app.run(() => history.resolve(pastSets));
+  assert.equal(app.current.activeExercises[0], block);
+});
+
+test('history from before an account switch cannot touch the restored draft', async t => {
+  const history = deferred();
+  const app = await setup(t, { getPerformance: () => history.promise });
+  await app.run(c => c.addExercise({ id: 'press', name: 'Press' }));
+  await app.changeUser('B');
+  await app.changeUser('A');
+  const restored = app.current.activeExercises[0];
+  assert.ok(restored);
+  await app.run(() => history.resolve(pastSets));
+  assert.equal(app.current.activeExercises[0], restored);
+  assert.deepEqual(types(restored), ['warmup', 'normal']);
 });

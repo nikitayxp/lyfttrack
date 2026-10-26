@@ -180,6 +180,20 @@ export function createExerciseBlockFromSets(
   };
 }
 
+export function withHistoricalSetTypes(block: ActiveExercise, setTypes: (SetTypeOption | null | undefined)[]): ActiveExercise {
+  if (setTypes.length === 0) {
+    return block;
+  }
+
+  return {
+    ...block,
+    sets: setTypes.map((setType, index) => {
+      const set = createSet(block.exercise.id, index + 1, { setType: setType ?? 'normal' });
+      return { ...set, id: block.sets[index]?.id ?? set.id };
+    }),
+  };
+}
+
 export function getCompletedExerciseNames(exercises: ActiveExercise[]): SummaryExercise[] {
   const names = exercises
     .filter((exercise) => exercise.sets.some((setItem) => setItem.completed))

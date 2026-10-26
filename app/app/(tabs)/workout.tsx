@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Platform,
   ScrollView,
+  SectionList,
   StyleSheet,
   Text,
   TextInput,
@@ -12,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeInDown, FadeInUp, LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/theme';
 import { ACTIVE_OPACITY, HIT_SLOP, Radius, Spacing } from '@/constants/Styles';
@@ -138,7 +139,6 @@ export default function WorkoutScreen() {
   const deferredEquipmentFilter = useDeferredValue(selectedEquipmentFilter);
   const deferredExerciseQuery = useDeferredValue(exerciseQuery);
   const [recentExerciseIds, setRecentExerciseIds] = useState<string[]>([]);
-  const [visibleGroupCount, setVisibleGroupCount] = useState(Number.POSITIVE_INFINITY);
   const [isCreateExerciseModalVisible, setIsCreateExerciseModalVisible] = useState(false);
   const [isCreatingExercise, setIsCreatingExercise] = useState(false);
   const [exerciseNameInput, setExerciseNameInput] = useState('');
@@ -258,36 +258,10 @@ export default function WorkoutScreen() {
     t,
   ]);
 
-  useEffect(() => {
-    const isExercisePickerOpen = activeMode === 'exercises' || isCreateTemplateModalVisible;
-    if (!isExercisePickerOpen || deferredMuscleFilter === 'recent' || deferredMuscleFilter === 'custom') {
-      setVisibleGroupCount(Number.POSITIVE_INFINITY);
-      return;
-    }
-
-    // Reveal "All" groups in small batches so Recents → All does not mount every image at once.
-    setVisibleGroupCount(2);
-    let shown = 2;
-    const timer = setInterval(() => {
-      shown += 3;
-      if (shown >= groupedExercises.length) {
-        setVisibleGroupCount(Number.POSITIVE_INFINITY);
-        clearInterval(timer);
-        return;
-      }
-      setVisibleGroupCount(shown);
-    }, 24);
-
-    return () => clearInterval(timer);
-  }, [activeMode, deferredMuscleFilter, groupedExercises.length, isCreateTemplateModalVisible]);
-
-  const visibleGroupedExercises = useMemo(
-    () =>
-      Number.isFinite(visibleGroupCount)
-        ? groupedExercises.slice(0, visibleGroupCount)
-        : groupedExercises,
-    [groupedExercises, visibleGroupCount]
-  );
+  const catalogSections = useMemo(() => groupedExercises.map(([title, data]) => ({ title, data })), [groupedExercises]);
+  const unselectedSections = useMemo(() => catalogSections
+    .map(section => ({ ...section, data: section.data.filter(exercise => !selectionOrder.has(exercise.id)) }))
+    .filter(section => section.data.length > 0), [catalogSections, selectionOrder]);
 
   const shouldLoadCatalog = useMemo(() => {
     return (
@@ -642,8 +616,8 @@ export default function WorkoutScreen() {
     </>
   );
 
-  return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+  const listHeader = (
+    <>
       <Text style={styles.title}>{t('workout.title')}</Text>
       <Text style={styles.subtitle}>{t('workout.subtitle')}</Text>
 
@@ -930,42 +904,48 @@ export default function WorkoutScreen() {
               <Text style={styles.emptySubtitle}>{t('exercise.emptySearchSubtitle')}</Text>
             </View>
           ) : (
-            <View>
-              {visibleGroupedExercises.map(([muscle, groupedItems]) => (
-                <View key={muscle} style={styles.groupSection}>
-                  <Text style={styles.groupTitle}>{muscle}</Text>
-                  {groupedItems.map((exercise) => {
-                    const exerciseLabel = getDisplayExerciseName(exercise);
-                    return (
-                      <TouchableOpacity
-                        key={exercise.id}
-                        style={styles.libraryExerciseRow}
-                        activeOpacity={ACTIVE_OPACITY}
-                        onPress={() => router.push(`/exercise/${exercise.id}` as any)}
-                        accessibilityRole="button"
-                        accessibilityLabel={t('accessibility.viewExerciseDetails', {
-                          name: exerciseLabel,
-                          defaultValue: 'View exercise details',
-                        })}
-                      >
-                        <ExerciseThumbnail exercise={exercise} size={34} />
-                        <View style={styles.libraryExerciseTextWrap}>
-                          <Text style={styles.libraryExerciseName}>{exerciseLabel}</Text>
-                          <Text style={styles.libraryExerciseMeta}>
-                            {getDisplayMuscle(exercise)} - {getDisplayEquipment(exercise)}
-                          </Text>
-                        </View>
-                        <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              ))}
-            </View>
+            null
           )}
         </>
       ) : null}
 
+    </>
+  );
+
+  return (
+    <>
+      <SectionList
+        style={styles.screen}
+        contentContainerStyle={styles.content}
+        sections={activeMode === 'exercises' && !isLoadingCatalog && !catalogError ? catalogSections : []}
+        keyExtractor={exercise => exercise.id}
+        ListHeaderComponent={listHeader}
+        stickySectionHeadersEnabled={false}
+        initialNumToRender={12}
+        maxToRenderPerBatch={12}
+        windowSize={7}
+        keyboardShouldPersistTaps="handled"
+        renderSectionHeader={({ section }) => <Text style={styles.groupTitle}>{section.title}</Text>}
+        renderItem={({ item: exercise }) => {
+          const exerciseLabel = getDisplayExerciseName(exercise);
+          return (
+            <TouchableOpacity
+              style={styles.libraryExerciseRow}
+              activeOpacity={ACTIVE_OPACITY}
+              onPress={() => router.push(`/exercise/${exercise.id}` as any)}
+              accessibilityRole="button"
+              accessibilityLabel={t('accessibility.viewExerciseDetails', { name: exerciseLabel, defaultValue: 'View exercise details' })}
+            >
+              <ExerciseThumbnail exercise={exercise} size={34} />
+              <View style={styles.libraryExerciseTextWrap}>
+                <Text style={styles.libraryExerciseName}>{exerciseLabel}</Text>
+                <Text style={styles.libraryExerciseMeta}>{getDisplayMuscle(exercise)} - {getDisplayEquipment(exercise)}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
+            </TouchableOpacity>
+          );
+        }}
+      />
       <DismissibleBottomSheet
         visible={isCreateTemplateModalVisible}
         onClose={() => {
@@ -1037,14 +1017,17 @@ export default function WorkoutScreen() {
 
             {exerciseLibraryFilters}
 
-            <ScrollView
+            <SectionList
               style={styles.templateCatalogList}
               contentContainerStyle={styles.templateCatalogListContent}
-              nestedScrollEnabled
+              sections={!isLoadingCatalog && !catalogError ? unselectedSections : []}
+              keyExtractor={exercise => exercise.id}
               keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            >
-              {isLoadingCatalog ? (
+              stickySectionHeadersEnabled={false}
+              initialNumToRender={10}
+              maxToRenderPerBatch={10}
+              windowSize={5}
+              ListEmptyComponent={isLoadingCatalog ? (
                 <View style={styles.modalStatusContainer}>
                   <ActivityIndicator size="small" color={palette.accent} />
                   <Text style={styles.modalStatusText}>{t('workout.loadingExerciseCatalog')}</Text>
@@ -1073,48 +1056,28 @@ export default function WorkoutScreen() {
                   <Text style={styles.emptyTitle}>{t('exercise.emptySearchTitle')}</Text>
                   <Text style={styles.emptySubtitle}>{t('exercise.emptySearchSubtitle')}</Text>
                 </View>
-              ) : (
-                visibleGroupedExercises.map(([muscle, groupedItems]) => {
-                  const unselected = groupedItems.filter((exercise) => !selectionOrder.has(exercise.id));
-                  if (unselected.length === 0) {
-                    return null;
-                  }
-
-                  return (
-                    <View key={muscle} style={styles.groupSection}>
-                      <Text style={styles.groupTitle}>{muscle}</Text>
-                      {unselected.map((exercise) => {
-                        const exerciseLabel = getDisplayExerciseName(exercise);
-
-                        return (
-                          <TouchableOpacity
-                            key={exercise.id}
-                            style={styles.libraryExerciseRow}
-                            activeOpacity={ACTIVE_OPACITY}
-                            onPress={() => toggleExerciseSelection(exercise.id)}
-                            accessibilityRole="button"
-                            accessibilityLabel={t('accessibility.addSpecificExercise', { name: exerciseLabel, defaultValue: 'Add exercise' })}
-                          >
-                            <ExerciseThumbnail exercise={exercise} size={34} />
-                            <View style={styles.libraryExerciseTextWrap}>
-                              <Text style={styles.libraryExerciseName} numberOfLines={1}>
-                                {exerciseLabel}
-                              </Text>
-                              <Text style={styles.libraryExerciseMeta} numberOfLines={1}>
-                                {getDisplayMuscle(exercise)} - {getDisplayEquipment(exercise)}
-                              </Text>
-                            </View>
-                            <View style={styles.addActionButton}>
-                              <Ionicons name="add" size={16} color={palette.accent} />
-                            </View>
-                          </TouchableOpacity>
-                        );
-                      })}
+              ) : null}
+              renderSectionHeader={({ section }) => <Text style={styles.groupTitle}>{section.title}</Text>}
+              renderItem={({ item: exercise }) => {
+                const exerciseLabel = getDisplayExerciseName(exercise);
+                return (
+                  <TouchableOpacity
+                    style={styles.libraryExerciseRow}
+                    activeOpacity={ACTIVE_OPACITY}
+                    onPress={() => toggleExerciseSelection(exercise.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('accessibility.addSpecificExercise', { name: exerciseLabel, defaultValue: 'Add exercise' })}
+                  >
+                    <ExerciseThumbnail exercise={exercise} size={34} />
+                    <View style={styles.libraryExerciseTextWrap}>
+                      <Text style={styles.libraryExerciseName} numberOfLines={1}>{exerciseLabel}</Text>
+                      <Text style={styles.libraryExerciseMeta} numberOfLines={1}>{getDisplayMuscle(exercise)} - {getDisplayEquipment(exercise)}</Text>
                     </View>
-                  );
-                })
-              )}
-            </ScrollView>
+                    <View style={styles.addActionButton}><Ionicons name="add" size={16} color={palette.accent} /></View>
+                  </TouchableOpacity>
+                );
+              }}
+            />
 
             <View style={styles.modalButtonRow}>
               <TouchableOpacity
@@ -1238,7 +1201,7 @@ export default function WorkoutScreen() {
               </TouchableOpacity>
             </View>
       </DismissibleBottomSheet>
-    </ScrollView>
+    </>
   );
 }
 

@@ -49,6 +49,7 @@ export type FinishWorkoutInput = {
 };
 
 export type FinishWorkoutResult = {
+  prCheckFailed?: boolean;
   workoutId: string;
   insertedSetCount: number;
   completedSetCount: number;

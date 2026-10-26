@@ -1,3 +1,4 @@
+import { getSessionUserOrThrow } from '@/services/authUserService';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -27,7 +28,7 @@ import { useAppToast } from '@/context/ToastContext';
 import { useWorkoutDelete } from '@/hooks/useWorkoutDelete';
 import { useWorkoutShare } from '@/hooks/useWorkoutShare';
 import {
-  getAuthenticatedUserOrThrow,
+
   getErrorMessage,
   getWorkoutDetails,
   type WorkoutDetails,
@@ -145,7 +146,7 @@ export default function WorkoutDetailsScreen() {
   useEffect(() => {
     let cancelled = false;
 
-    getAuthenticatedUserOrThrow()
+    getSessionUserOrThrow()
       .then((user) => {
         if (!cancelled) {
           setCurrentUserId(user.id);
@@ -397,7 +398,7 @@ export default function WorkoutDetailsScreen() {
                   color={hasRecords ? palette.warningText : palette.textMuted}
                   accessibilityLabel={t('workoutDetails.recordsLabel')}
                 />
-                <Text style={[styles.statValue, hasRecords && styles.statValueRecord]}>{details.prCount}</Text>
+                <Text style={[styles.statValue, hasRecords && styles.statValueRecord]}>{details.prCheckFailed ? '—' : details.prCount}</Text>
               </View>
             </View>
 

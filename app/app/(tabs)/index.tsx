@@ -1,3 +1,5 @@
+import { getSessionUserOrThrow } from '@/services/authUserService';
+import { useWorkoutComments } from '@/hooks/useWorkoutComments';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -17,13 +19,11 @@ import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import {
   addComment,
   getCurrentCommentAuthorProfile,
-  getWorkoutComments,
   toggleLike,
   type CommentAuthorProfile,
   type WorkoutCommentWithProfile,
 } from '@/services/interactionService';
 import {
-  getAuthenticatedUserOrThrow,
   getErrorMessage,
   getFeedWorkouts,
   type WorkoutFeedItem,
@@ -62,12 +62,9 @@ export default function FeedScreen() {
   const [feedError, setFeedError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [optimisticLikeState, setOptimisticLikeState] = useState<Record<string, FeedLikeInteractionState>>({});
-  const [commentsByWorkoutId, setCommentsByWorkoutId] = useState<Record<string, WorkoutCommentWithProfile[]>>({});
-  const [commentCountByWorkoutId, setCommentCountByWorkoutId] = useState<Record<string, number>>({});
+  const { commentsByWorkoutId, setCommentsByWorkoutId, commentCountByWorkoutId, setCommentCountByWorkoutId, hasMoreCommentsByWorkoutId, isCommentsLoading, isLoadingMoreComments, commentsError, setCommentsError, loadCommentsForWorkout } = useWorkoutComments();
   const [selectedWorkoutForComments, setSelectedWorkoutForComments] = useState<WorkoutFeedItem | null>(null);
-  const [isCommentsLoading, setIsCommentsLoading] = useState(false);
   const [isSendingComment, setIsSendingComment] = useState(false);
-  const [commentsError, setCommentsError] = useState<string | null>(null);
   const [commentInputValue, setCommentInputValue] = useState('');
   const [currentCommentAuthor, setCurrentCommentAuthor] = useState<CommentAuthorProfile | null>(null);
 
@@ -75,7 +72,7 @@ export default function FeedScreen() {
   useEffect(() => {
     let cancelled = false;
 
-    getAuthenticatedUserOrThrow()
+    getSessionUserOrThrow()
       .then((user) => {
         if (!cancelled) {
           setCurrentUserId(user.id);
@@ -171,7 +168,7 @@ export default function FeedScreen() {
     } catch (error) {
       setFeedError(getErrorMessage(error));
     }
-  }, []);
+  }, [setCommentsByWorkoutId, setCommentCountByWorkoutId]);
 
   const openAthletesExplorer = useCallback(() => {
     router.push('/athletes' as any);
@@ -203,26 +200,7 @@ export default function FeedScreen() {
     }
   }, [currentCommentAuthor]);
 
-  const loadCommentsForWorkout = useCallback(async (workoutId: string) => {
-    setCommentsError(null);
-    setIsCommentsLoading(true);
 
-    try {
-      const comments = await getWorkoutComments(workoutId);
-      setCommentsByWorkoutId((currentState) => ({
-        ...currentState,
-        [workoutId]: comments,
-      }));
-      setCommentCountByWorkoutId((currentState) => ({
-        ...currentState,
-        [workoutId]: comments.length,
-      }));
-    } catch (error) {
-      setCommentsError(getErrorMessage(error));
-    } finally {
-      setIsCommentsLoading(false);
-    }
-  }, []);
 
   useEffect(() => {
     const run = async () => {
@@ -284,14 +262,14 @@ export default function FeedScreen() {
       void ensureCurrentCommentAuthor();
       void loadCommentsForWorkout(workout.id);
     },
-    [ensureCurrentCommentAuthor, loadCommentsForWorkout]
+    [ensureCurrentCommentAuthor, loadCommentsForWorkout, setCommentsError]
   );
 
   const closeCommentsModal = useCallback(() => {
     setSelectedWorkoutForComments(null);
     setCommentInputValue('');
     setCommentsError(null);
-  }, []);
+  }, [setCommentsError]);
 
   const sendComment = useCallback(async () => {
     if (!selectedWorkoutForComments || isSendingComment) {
@@ -362,7 +340,6 @@ export default function FeedScreen() {
         };
       });
 
-      void loadCommentsForWorkout(workoutId);
       void ensureCurrentCommentAuthor();
     } catch (error) {
       setCommentsByWorkoutId((currentState) => {
@@ -393,10 +370,11 @@ export default function FeedScreen() {
     currentCommentAuthor,
     ensureCurrentCommentAuthor,
     isSendingComment,
-    loadCommentsForWorkout,
     selectedWorkoutForComments,
     showToast,
     t,
+    setCommentsByWorkoutId,
+    setCommentCountByWorkoutId,
   ]);
 
   const handleToggleLike = useCallback(async (workout: WorkoutFeedItem) => {
@@ -599,6 +577,9 @@ export default function FeedScreen() {
       />
 
       <FeedCommentsModal
+        hasMore={Boolean(selectedWorkoutForComments && hasMoreCommentsByWorkoutId[selectedWorkoutForComments.id])}
+        isLoadingMore={isLoadingMoreComments}
+        onLoadMore={() => { if (selectedWorkoutForComments) void loadCommentsForWorkout(selectedWorkoutForComments.id, true); }}
         visible={selectedWorkoutForComments !== null}
         workoutName={selectedWorkoutForComments?.name ?? t('workout.title')}
         comments={selectedWorkoutComments}

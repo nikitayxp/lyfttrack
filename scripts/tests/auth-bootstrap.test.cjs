@@ -16,6 +16,7 @@ async function setup(t, segments = ['(tabs)']) {
   let authListener;
   let unsubscribed = false;
   let acceptedTerms = 0;
+  let sessionReads = 0;
   const routes = [];
   const passthrough = ({ children }) => children;
   const empty = () => null;
@@ -24,8 +25,9 @@ async function setup(t, segments = ['(tabs)']) {
   const load = createSourceLoader({
     '@react-navigation/native': { DarkTheme: { dark: true, colors: {} }, ThemeProvider: 'NavigationTheme' },
     'react-native': {
-      ActivityIndicator: 'ActivityIndicator', View: 'View',
+      ActivityIndicator: 'ActivityIndicator', View: 'View', Text: 'Text',
       Platform: { OS: 'ios' }, useWindowDimensions: () => ({ width: 390, height: 844 }),
+      AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) },
       StyleSheet: { create: value => value, absoluteFillObject: {} },
     },
     'expo-router': { Stack, useSegments: () => segments, router: { replace: route => routes.push(route) } },
@@ -37,7 +39,8 @@ async function setup(t, segments = ['(tabs)']) {
     '@/services/authService': { applyPendingTermsAcceptance: async () => { acceptedTerms += 1; } },
     '@/services/authSetup': { needsUsernameReview: () => false, needsOptionalOnboarding: () => false },
     '@/services/supabase': { supabase: { auth: {
-      getSession: () => pendingSession,
+      startAutoRefresh() {}, stopAutoRefresh() {},
+      getSession: () => { sessionReads++; return pendingSession; },
       onAuthStateChange: listener => {
         authListener = listener;
         return { data: { subscription: { unsubscribe() { unsubscribed = true; } } } };
@@ -45,6 +48,8 @@ async function setup(t, segments = ['(tabs)']) {
     } } },
     '@/components/ui/flow-field-background': { default: empty },
     '@/components/ui/SplashLoader': { SplashLoader: 'SplashLoader' },
+    '@/components/ui/AppButton': { AppButton: 'AppButton' },
+    'react-i18next': { useTranslation: () => ({ t: key => key }) },
     '@/components/workout/MinimizedWorkoutBar': { MinimizedWorkoutBar: empty },
     '@/components/common/AppToastHost': { AppToastHost: empty },
     '@/components/common/ConfirmHost': { ConfirmHost: empty },
@@ -63,6 +68,8 @@ async function setup(t, segments = ['(tabs)']) {
     get loading() { return tree.root.findAllByType('SplashLoader').length > 0; },
     get acceptedTerms() { return acceptedTerms; },
     get unsubscribed() { return unsubscribed; },
+    get retries() { return tree.root.findAllByType('AppButton'); },
+    get sessionReads() { return sessionReads; },
     async event(name, value) { await act(async () => authListener(name, value)); },
     async resolve(value) { await act(async () => { resolveSession({ data: { session: value }, error: null }); t.mock.timers.tick(1500); }); },
     async reject() { await act(async () => { rejectSession(new Error('Session storage unavailable')); t.mock.timers.tick(1500); }); },
@@ -125,4 +132,26 @@ test('unmount unsubscribes and ignores a late initial session', async t => {
   assert.equal(screen.unsubscribed, true);
   await screen.resolve(session);
   assert.deepEqual(screen.routes, []);
+});
+
+test('a stalled bootstrap offers recovery without signing out and a retry can restore the session', async t => {
+  const screen = await setup(t, ['(auth)', 'sign-in']);
+  await act(async () => t.mock.timers.tick(10_000));
+  assert.equal(screen.retries.length, 1);
+  assert.deepEqual(screen.routes, []);
+  await act(async () => screen.retries[0].props.onPress());
+  assert.equal(screen.sessionReads, 2);
+  assert.equal(screen.retries.length, 0);
+  await screen.resolve(session);
+  assert.equal(screen.loading, false);
+  assert.deepEqual(screen.routes, ['/(tabs)']);
+});
+
+test('a session arriving after a slow bootstrap dismisses recovery without a retry', async t => {
+  const screen = await setup(t, ['(auth)', 'sign-in']);
+  await act(async () => t.mock.timers.tick(10_000));
+  assert.equal(screen.retries.length, 1);
+  await screen.event('SIGNED_IN', session);
+  assert.equal(screen.retries.length, 0);
+  assert.equal(screen.loading, false);
 });

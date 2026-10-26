@@ -25,7 +25,7 @@ import {
   withAvatarCacheBuster,
 } from '@/services/profileService';
 import { BackButton } from '@/components/common/BackButton';
-import { getAuthenticatedUserOrThrow } from '@/services/authUserService';
+import { getSessionUserOrThrow } from '@/services/authUserService';
 import { useAppToast } from '@/context/ToastContext';
 import { useWorkoutContext } from '@/context/WorkoutContext';
 import { getTabBarHeight, MINIMIZED_WORKOUT_BAR_GAP, MINIMIZED_WORKOUT_BAR_HEIGHT } from '@/constants/tabBar';
@@ -95,7 +95,7 @@ export default function EditProfileScreen() {
     setErrorMessage(null);
 
     try {
-      const [profile, user] = await Promise.all([getProfile(), getAuthenticatedUserOrThrow()]);
+      const [profile, user] = await Promise.all([getProfile(), getSessionUserOrThrow()]);
       setUsernameInput(profile.username ?? '');
       setFullNameInput(profile.full_name ?? '');
       setBioInput(profile.bio ?? '');

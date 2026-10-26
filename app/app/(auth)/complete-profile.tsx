@@ -23,7 +23,7 @@ import {
 } from '@/services/authSetup';
 import { checkUsernameAvailability, getProfile, updateProfile } from '@/services/profileService';
 import { supabase } from '@/services/supabase';
-import { getAuthenticatedUserOrThrow } from '@/services/authUserService';
+import { getSessionUserOrThrow } from '@/services/authUserService';
 
 const palette = Colors.dark;
 const USERNAME_MAX_LENGTH = 24;
@@ -55,7 +55,7 @@ export default function CompleteProfileScreen() {
 
     void (async () => {
       try {
-        const [user, profile] = await Promise.all([getAuthenticatedUserOrThrow(), getProfile()]);
+        const [user, profile] = await Promise.all([getSessionUserOrThrow(), getProfile()]);
         if (!mounted) {
           return;
         }

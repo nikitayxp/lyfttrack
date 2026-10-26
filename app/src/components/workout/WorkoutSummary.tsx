@@ -27,6 +27,7 @@ type WorkoutSummaryProps = {
   completedWorkingSetCount: number;
   exerciseNames: SummaryExercise[];
   prExerciseIds?: string[];
+  prCheckFailed?: boolean;
   onShareAndFinish: () => void;
 };
 
@@ -51,6 +52,7 @@ export function WorkoutSummary({
   completedWorkingSetCount,
   exerciseNames,
   prExerciseIds,
+  prCheckFailed = false,
   onShareAndFinish,
 }: WorkoutSummaryProps) {
   const { t } = useTranslation();
@@ -75,6 +77,7 @@ export function WorkoutSummary({
               </View>
               <Text style={styles.heroTitle}>{t('workout.summaryTitle')}</Text>
               <Text style={styles.heroSubtitle}>{t('workout.summarySubtitle')}</Text>
+              {prCheckFailed ? <Text style={styles.heroSubtitle}>{t('workout.summaryPrsUnavailable')}</Text> : null}
             </View>
 
             <View style={styles.metricRow}>
@@ -92,7 +95,7 @@ export function WorkoutSummary({
 
               <View style={styles.metricCard}>
                 <Text style={styles.metricLabel}>{t('workout.summaryPrsLabel')}</Text>
-                <Text style={styles.metricValue}>{prCount}</Text>
+                <Text style={styles.metricValue}>{prCheckFailed ? '—' : prCount}</Text>
               </View>
             </View>
 

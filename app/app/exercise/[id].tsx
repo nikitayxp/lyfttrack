@@ -23,6 +23,7 @@ import { BackButton } from '@/components/common/BackButton';
 import { usePreferences } from '@/context/PreferencesContext';
 import { useWorkoutContext } from '@/context/WorkoutContext';
 import type { Tables } from '@/types/database';
+import { getAuthenticatedUserOrThrow } from '@/services/authUserService';
 import { getExercisesByIds } from '@/services/workoutService';
 import {
   formatExerciseAxisDate,
@@ -286,6 +287,7 @@ export default function ExerciseDetailScreen() {
   const [exercise, setExercise] = useState<Tables<'exercises'> | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [detailsAccess, setDetailsAccess] = useState<'pending' | 'open' | 'custom'>('pending');
 
   const [metric, setMetric] = useState<ChartMetric>('weight');
   const [range, setRange] = useState<ChartRange>('3m');
@@ -571,6 +573,7 @@ export default function ExerciseDetailScreen() {
 
     setIsLoading(true);
     setError(null);
+    setDetailsAccess('pending');
 
     try {
       const results = await getExercisesByIds([exerciseId]);
@@ -579,9 +582,12 @@ export default function ExerciseDetailScreen() {
       if (!found) {
         setError(t('exercise.detail.notFound'));
         setExercise(null);
-      } else {
-        setExercise(found);
+        return;
       }
+
+      const user = await getAuthenticatedUserOrThrow();
+      setExercise(found);
+      setDetailsAccess(found.is_custom && found.created_by !== user.id ? 'custom' : 'open');
     } catch (err) {
       setError(err instanceof Error ? err.message : t('common.unknownError'));
     } finally {
@@ -590,7 +596,7 @@ export default function ExerciseDetailScreen() {
   }, [exerciseId, t]);
 
   const loadStats = useCallback(async () => {
-    if (!exerciseId) return;
+    if (!exerciseId || detailsAccess !== 'open') return;
 
     setIsLoadingStats(true);
 
@@ -615,7 +621,7 @@ export default function ExerciseDetailScreen() {
     } finally {
       setIsLoadingStats(false);
     }
-  }, [exerciseId, language]);
+  }, [detailsAccess, exerciseId, language]);
 
   useEffect(() => { void loadExercise(); }, [loadExercise]);
   useEffect(() => { void loadStats(); }, [loadStats]);
@@ -780,6 +786,26 @@ export default function ExerciseDetailScreen() {
         <View style={styles.centered}>
           <ActivityIndicator size="small" color={palette.accent} />
           <Text style={styles.loadingText}>{t('exercise.detail.loading')}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (detailsAccess === 'custom' && exercise) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['top']}>
+        <StatusBar style="light" />
+        <View style={styles.headerRow}>
+          <BackButton fallback="/(tabs)/exercises" />
+        </View>
+        <View style={styles.centered}>
+          {imageUrl ? (
+            <Image source={{ uri: imageUrl }} style={styles.customNoticeImage} />
+          ) : null}
+          <Text style={styles.customNoticeTitle}>{exerciseName}</Text>
+          <Text style={styles.customNoticeBody}>
+            {t('workoutDetails.customExerciseBody', { name: exerciseName })}
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -1432,6 +1458,26 @@ const styles = StyleSheet.create({
     color: palette.labelMuted,
     fontSize: 14,
     marginTop: 10,
+  },
+  customNoticeImage: {
+    width: 96,
+    height: 96,
+    borderRadius: Radius.card,
+    marginBottom: 16,
+    backgroundColor: CARD_BG,
+  },
+  customNoticeTitle: {
+    color: palette.textPrimary,
+    fontSize: 18,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  customNoticeBody: {
+    color: palette.labelMuted,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
   },
   errorText: {
     color: '#F87171',

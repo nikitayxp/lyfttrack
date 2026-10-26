@@ -482,6 +482,8 @@ export const resources = {
       workoutDetails: {
         missingRouteId: 'Workout ID is missing in route.',
         headerTitle: 'Workout details',
+        customExerciseTitle: 'Custom exercise',
+        customExerciseBody: '{{name}} is a custom exercise. You can see the name and the image.',
         loadingDetails: 'Loading workout details...',
         loadErrorTitle: 'Unable to load workout',
         retryAction: 'Try again',
@@ -1338,6 +1340,8 @@ export const resources = {
       workoutDetails: {
         missingRouteId: 'ID do treino em falta na rota.',
         headerTitle: 'Detalhes do treino',
+        customExerciseTitle: 'Exercício personalizado',
+        customExerciseBody: '{{name}} é um exercício personalizado. Dá para ver o nome e a imagem.',
         loadingDetails: 'A carregar detalhes do treino...',
         loadErrorTitle: 'Nao foi possivel carregar o treino',
         retryAction: 'Tentar novamente',

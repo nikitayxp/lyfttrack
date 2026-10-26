@@ -149,6 +149,7 @@ export type WorkoutDetailsExercise = {
   name_en: string | null;
   name_pt: string | null;
   is_custom: boolean;
+  created_by: string | null;
   image_url: string | null;
   muscle_group: string | null;
   equipment: string | null;
@@ -276,7 +277,7 @@ type RawWorkoutFeedRow = Tables<'workouts'> & {
 
 type ExerciseSummary = Pick<
   ExerciseCatalogItem,
-  'id' | 'name' | 'name_en' | 'name_pt' | 'muscle_group' | 'equipment' | 'is_custom' | 'image_url'
+  'id' | 'name' | 'name_en' | 'name_pt' | 'muscle_group' | 'equipment' | 'is_custom' | 'created_by' | 'image_url'
 >;
 
 type RawWorkoutExerciseDetailsRow = Pick<WorkoutExerciseRow, 'id' | 'order' | 'rest_time' | 'exercise_id' | 'notes'> & {
@@ -1053,13 +1054,16 @@ export async function getExercisesCatalog(filters: ExerciseCatalogFilters = {}):
     throw new Error(`Unable to load exercises: ${error.message}`);
   }
 
+  const user = await getAuthenticatedUserOrThrow();
   const rows = data ?? [];
 
   const filteredRows = rows.filter(
     (exercise) => matchesMuscleFilter(exercise, muscleFilter) && matchesEquipmentFilter(exercise, equipmentFilter)
   );
 
-  const customRows = filteredRows.filter((exercise) => exercise.is_custom);
+  const customRows = filteredRows.filter(
+    (exercise) => exercise.is_custom && exercise.created_by === user.id
+  );
   const builtInRows = filteredRows.filter(
     (exercise) =>
       !exercise.is_custom && (filters.includeUnlisted || exercise.listed !== false)
@@ -1850,7 +1854,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
 
   const { data: rawWorkoutExercisesData, error: workoutExercisesError } = await supabase
     .from('workout_exercises')
-    .select('id, order, rest_time, exercise_id, notes, exercises(id, name, name_en, name_pt, muscle_group, equipment, is_custom, image_url)')
+    .select('id, order, rest_time, exercise_id, notes, exercises(id, name, name_en, name_pt, muscle_group, equipment, is_custom, created_by, image_url)')
     .eq('workout_id', normalizedWorkoutId)
     .order('order', { ascending: true });
 
@@ -1866,7 +1870,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
     if (isNotesMissing) {
       const fallback = await supabase
         .from('workout_exercises')
-        .select('id, order, rest_time, exercise_id, exercises(id, name, name_en, name_pt, muscle_group, equipment, is_custom, image_url)')
+        .select('id, order, rest_time, exercise_id, exercises(id, name, name_en, name_pt, muscle_group, equipment, is_custom, created_by, image_url)')
         .eq('workout_id', normalizedWorkoutId)
         .order('order', { ascending: true });
 
@@ -1984,7 +1988,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
   if (missingExerciseIds.length > 0) {
     const { data: missingExercises, error: missingExercisesError } = await supabase
       .from('exercises')
-      .select('id, name, name_en, name_pt, aliases, muscle_group, equipment, is_custom, image_url')
+      .select('id, name, name_en, name_pt, aliases, muscle_group, equipment, is_custom, created_by, image_url')
       .in('id', missingExerciseIds);
 
     if (missingExercisesError) {
@@ -2046,6 +2050,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
       name_en: exerciseInfo?.name_en ?? null,
       name_pt: exerciseInfo?.name_pt ?? null,
       is_custom: exerciseInfo?.is_custom ?? false,
+      created_by: exerciseInfo?.created_by ?? null,
       image_url: exerciseInfo?.image_url ?? null,
       muscle_group: exerciseInfo?.muscle_group ?? null,
       equipment: exerciseInfo?.equipment ?? null,
@@ -2082,6 +2087,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
       name_en: exerciseInfo?.name_en ?? null,
       name_pt: exerciseInfo?.name_pt ?? null,
       is_custom: exerciseInfo?.is_custom ?? false,
+      created_by: exerciseInfo?.created_by ?? null,
       image_url: exerciseInfo?.image_url ?? null,
       muscle_group: exerciseInfo?.muscle_group ?? null,
       equipment: exerciseInfo?.equipment ?? null,
@@ -2110,6 +2116,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
       name_en: exerciseInfo?.name_en ?? null,
       name_pt: exerciseInfo?.name_pt ?? null,
       is_custom: exerciseInfo?.is_custom ?? false,
+      created_by: exerciseInfo?.created_by ?? null,
       image_url: exerciseInfo?.image_url ?? null,
       muscle_group: exerciseInfo?.muscle_group ?? null,
       equipment: exerciseInfo?.equipment ?? null,

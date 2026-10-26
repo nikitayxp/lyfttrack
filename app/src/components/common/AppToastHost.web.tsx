@@ -15,6 +15,7 @@ import { Colors } from '@/constants/Colors';
 import { Radius, Spacing } from '@/constants/Styles';
 import { getTabBarHeight } from '@/constants/tabBar';
 import { useAppToast, type AppToastTone } from '@/context/ToastContext';
+import { createWebOverlayNode } from '@/utils/webOverlayNode';
 
 const palette = Colors.dark;
 const AUTO_DISMISS_MS = 3800;
@@ -44,12 +45,7 @@ export function AppToastHost({ aboveTabBar = false }: AppToastHostProps) {
 
   const portalNodeRef = useRef<HTMLDivElement | null>(null);
   if (typeof document !== 'undefined' && !portalNodeRef.current) {
-    const el = document.createElement('div');
-    el.style.position = 'fixed';
-    el.style.inset = '0';
-    el.style.zIndex = '99999';
-    el.style.pointerEvents = 'none';
-    portalNodeRef.current = el;
+    portalNodeRef.current = createWebOverlayNode(99999);
   }
 
   useLayoutEffect(() => {

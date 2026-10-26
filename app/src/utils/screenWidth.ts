@@ -1,9 +1,8 @@
 import { Platform } from 'react-native';
+import { DEVICE_FRAME } from '@/constants/deviceFrame';
 
-/** Must match `deviceMockup` in app/_layout.tsx. */
-const DEVICE_MOCKUP_WIDTH = 393;
-/** Must match `DESKTOP_WEB_MOCKUP_MIN_WIDTH` in app/_layout.tsx. */
-const DEVICE_MOCKUP_MIN_WINDOW_WIDTH = 768;
+const DEVICE_MOCKUP_WIDTH = DEVICE_FRAME.width;
+const DEVICE_MOCKUP_MIN_WINDOW_WIDTH = DEVICE_FRAME.minWindowWidth;
 /** The scrollbar and the mockup border eat into the width a screen really gets. */
 const WEB_CHROME_ALLOWANCE = 32;
 

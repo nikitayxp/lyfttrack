@@ -1,5 +1,17 @@
 import { type PropsWithChildren } from 'react';
 import { ScrollViewStyleReset } from 'expo-router/html';
+import { DEVICE_SCREEN, PHONE_OVERLAY_ATTRIBUTE } from '@/constants/deviceFrame';
+
+const MODAL_PORTAL = 'body.desktop-mockup-active > div:not(#root)';
+const PHONE_OVERLAYS = [
+  `${MODAL_PORTAL}:has([aria-modal="true"])`,
+  `${MODAL_PORTAL}:has([role="dialog"])`,
+  `body.desktop-mockup-active > [${PHONE_OVERLAY_ATTRIBUTE}]`,
+].join(',\n  ');
+const MODAL_PORTAL_CHILDREN = [
+  `${MODAL_PORTAL}:has([aria-modal="true"]) > *`,
+  `${MODAL_PORTAL}:has([role="dialog"]) > *`,
+].join(',\n  ');
 
 const BASE_WEB_BG_STYLE = `
   html, body, #root {
@@ -26,25 +38,22 @@ const BASE_WEB_BG_STYLE = `
     overflow: clip !important;
   }
 
-  /* Constrain only RN Web modal portals inside the desktop phone mockup. */
-  body.desktop-mockup-active > div:has([aria-modal="true"]),
-  body.desktop-mockup-active > div:has([role="dialog"]) {
+  ${PHONE_OVERLAYS} {
     position: absolute !important;
-    width: 393px !important;
-    height: 852px !important;
-    max-height: 95vh !important;
+    width: ${DEVICE_SCREEN.width}px !important;
+    height: ${DEVICE_SCREEN.height}px !important;
+    max-height: ${DEVICE_SCREEN.maxHeightCss} !important;
     left: 50% !important;
     top: 50% !important;
     right: auto !important;
     bottom: auto !important;
     transform: translate(-50%, -50%) !important;
-    border-radius: 40px !important;
+    border-radius: ${DEVICE_SCREEN.radius}px !important;
     overflow: hidden !important;
     pointer-events: none !important;
   }
 
-  body.desktop-mockup-active > div:has([aria-modal="true"]) > *,
-  body.desktop-mockup-active > div:has([role="dialog"]) > * {
+  ${MODAL_PORTAL_CHILDREN} {
     pointer-events: auto !important;
   }
 

@@ -18,6 +18,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/Colors';
 import { Radius, Spacing } from '@/constants/Styles';
 
@@ -55,7 +56,9 @@ export function DismissibleBottomSheet({
   scrollable = false,
 }: DismissibleBottomSheetProps) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === 'web';
+  const webSheetInset = isWeb ? { marginBottom: Spacing.lg + insets.bottom } : null;
   const [mounted, setMounted] = useState(visible);
   /** Block taps on the sheet until the enter slide finishes (avoids accidental presses). */
   const [sheetInteractive, setSheetInteractive] = useState(false);
@@ -221,7 +224,7 @@ export function DismissibleBottomSheet({
           {scrollable ? (
             <Animated.View
               pointerEvents={sheetInteractive ? 'auto' : 'none'}
-              style={[styles.sheet, isWeb && styles.sheetWeb, sheetStyle, sheetAnimatedStyle]}
+              style={[styles.sheet, isWeb && styles.sheetWeb, webSheetInset, sheetStyle, sheetAnimatedStyle]}
             >
               <GestureDetector gesture={pan}>{handle}</GestureDetector>
               <View style={styles.scrollableBody}>{children}</View>
@@ -230,7 +233,7 @@ export function DismissibleBottomSheet({
             <GestureDetector gesture={pan}>
               <Animated.View
                 pointerEvents={sheetInteractive ? 'auto' : 'none'}
-                style={[styles.sheet, isWeb && styles.sheetWeb, sheetStyle, sheetAnimatedStyle]}
+                style={[styles.sheet, isWeb && styles.sheetWeb, webSheetInset, sheetStyle, sheetAnimatedStyle]}
               >
                 {handle}
                 {children}

@@ -13,6 +13,7 @@ import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
 import { Colors } from '@/constants/theme';
+import { DEVICE_FRAME } from '@/constants/deviceFrame';
 import { applyPendingTermsAcceptance } from '@/services/authService';
 import { needsOptionalOnboarding, needsUsernameReview } from '@/services/authSetup';
 import { supabase } from '@/services/supabase';
@@ -85,8 +86,7 @@ const navigationTheme = {
   },
 };
 
-/** Largura mínima (px) para mostrar o mockup de telemóvel na Web; ≤ isto = app a fullscreen como no device. */
-const DESKTOP_WEB_MOCKUP_MIN_WIDTH = 768;
+const DESKTOP_WEB_MOCKUP_MIN_WIDTH = DEVICE_FRAME.minWindowWidth;
 
 const webViewportFill: ViewStyle = {
   width: '100%',
@@ -157,14 +157,14 @@ const styles = StyleSheet.create({
     pointerEvents: 'none' as any,
   },
   deviceMockup: {
-    width: 393,
-    height: 852,
-    maxHeight: '95vh' as ViewStyle['maxHeight'],
+    width: DEVICE_FRAME.width,
+    height: DEVICE_FRAME.height,
+    maxHeight: `${DEVICE_FRAME.maxHeightVh}vh` as ViewStyle['maxHeight'],
     margin: 'auto' as any,
     backgroundColor: palette.bgPrimary,
-    borderRadius: 40,
+    borderRadius: DEVICE_FRAME.radius,
     overflow: 'hidden',
-    borderWidth: 8,
+    borderWidth: DEVICE_FRAME.border,
     borderColor: palette.surfaceAlt,
     zIndex: 10,
     alignSelf: 'center',

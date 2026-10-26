@@ -53,7 +53,7 @@ async function setup(t) {
     insert into sets select ('30000000-0000-0000-0000-' || lpad(i::text,12,'0'))::uuid, '${uuid(1)}', '${exercise}', 0.1, 3, i, 2, 'normal' from generate_series(1,1250) i;
     insert into sets values('${uuid(99999)}','${uuid(1)}','${exercise}',90000,100,1,10,'normal');
   `);
-  await db.exec(fs.readFileSync('supabase/migrations/20261019120000_batched_read_models.sql', 'utf8'));
+  await db.exec(fs.readFileSync('supabase/migrations/20261026221000_batched_read_models.sql', 'utf8'));
   await db.exec(`set role authenticated; set test.user_id='${owner}'; set timezone='Pacific/Honolulu';`);
   let currentUser = owner;
   const calls = [];

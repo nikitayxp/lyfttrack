@@ -34,7 +34,7 @@ test('batch read RPCs preserve PR chronology and obey caller RLS', async t => {
  create policy own_comment on workout_comments for select to authenticated using(exists(select 1 from workouts w where w.id=workout_id));
  grant select on profiles,workouts,sets,workout_comments,workout_exercises to authenticated;
  `);
- await db.exec(fs.readFileSync('supabase/migrations/20261019120000_batched_read_models.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/20261026221000_batched_read_models.sql','utf8'));
  await db.exec(`set role authenticated; set test.user_id='${owner}'`);
  const rpc = async (name, arg) => (await db.query(`select public.${name}($1::uuid[]) value`, [arg])).rows[0].value;
  const rows = await rpc('workout_record_summaries', ids);

@@ -40,9 +40,9 @@ test('RLS optimization preserves all public policies and visibility permissions'
  for(const p of policies){await db.exec(`alter table public.${p.tablename} enable row level security; create policy ${p.policyname} on public.${p.tablename} for ${p.cmd} to ${p.roles.join(',')} ${p.qual?'using ('+p.qual+')':''} ${p.with_check?'with check ('+p.with_check+')':''}`);}
  const tables=[...new Set(policies.map(p=>p.tablename))];
  async function capture(){const result=[];await db.exec('set role authenticated');for(const actor of [...ids.slice(0,4),'']){await db.query(`select set_config('test.user_id',$1,false)`,[actor]);for(const table of tables){result.push({actor,table,rows:(await db.query(`select id from public.${table} order by id`)).rows});}for(const target of [...ids.slice(0,4),null])result.push({actor,target,value:(await db.query('select public.can_view_user_content($1::uuid) value',[target])).rows[0].value});}await db.exec('reset role');return result;}
- await db.exec(fs.readFileSync('supabase/migrations/20261019120000_batched_read_models.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/20261026221000_batched_read_models.sql','utf8'));
  const before=await capture();
- await db.exec(fs.readFileSync('supabase/migrations/20261019121000_rls_initplans.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/20261026222000_rls_initplans.sql','utf8'));
  assert.deepEqual(await capture(),before);
  const after=(await db.query("select policyname,qual,with_check from pg_policies where schemaname='public'")).rows;
  assert.equal(after.length,policies.length);
@@ -60,7 +60,7 @@ test('RLS optimization preserves all public policies and visibility permissions'
  await db.exec(`reset role; alter policy exercises_update_own_custom on public.exercises
    using (is_custom=true and created_by=(select auth.uid()))
    with check (is_custom=true and created_by=(select auth.uid()));`);
- await db.exec(fs.readFileSync('supabase/migrations/20261019121000_rls_initplans.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/20261026222000_rls_initplans.sql','utf8'));
  const customPolicy=(await db.query("select qual,with_check from pg_policies where schemaname='public' and policyname='exercises_update_own_custom'")).rows[0];
  assert.match(customPolicy.qual,/is_custom = true/);
  assert.match(customPolicy.with_check,/is_custom = true/);

@@ -26,7 +26,7 @@ test('SQL record baselines match JavaScript arithmetic for repeated and fraction
   for (const workoutId of [previous,current]) for (const sample of samples) {
     await db.query('insert into sets(workout_id,exercise_id,weight,reps) values($1,$2,$3,$4)', [workoutId,sample.exerciseId,sample.weight,sample.reps]);
   }
-  await db.exec(fs.readFileSync('supabase/migrations/20261019120000_batched_read_models.sql','utf8'));
+  await db.exec(fs.readFileSync('supabase/migrations/20261026221000_batched_read_models.sql','utf8'));
   const workout = {id:current,user_id:owner,name:'Current',start_time:'2026-10-01T00:00:00Z',end_time:'2026-10-01T00:00:00Z'};
   const sets = samples.map((sample,i) => ({id:`s${i}`,workout_id:current,exercise_id:sample.exerciseId,weight:sample.weight,reps:sample.reps,set_number:1,set_type:'normal',exercises:{id:sample.exerciseId,name:`Exercise ${i}`}}));
   const supabase = {

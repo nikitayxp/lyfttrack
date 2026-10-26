@@ -40,7 +40,7 @@ test('atomic imports, repairs and templates retain data and identity', async t =
   `);
   await db.exec(fs.readFileSync(path.resolve(__dirname, '../../supabase/migrations/20261018140000_atomic_workout_creation.sql'), 'utf8'));
 
-  const migration = path.resolve(__dirname, '../../supabase/migrations/20261019130000_atomic_import_templates.sql');
+  const migration = path.resolve(__dirname, '../../supabase/migrations/20261026220000_atomic_import_templates.sql');
   assert.ok(fs.existsSync(migration), 'atomic import/template migration must exist');
   await db.exec(fs.readFileSync(migration, 'utf8'));
   await db.exec(`

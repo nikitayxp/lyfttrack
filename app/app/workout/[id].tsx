@@ -5,6 +5,8 @@ import { StatusBar } from 'expo-status-bar';
 import {
   ActivityIndicator,
   Image,
+  Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -129,6 +131,12 @@ export default function WorkoutDetailsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [customExerciseNotice, setCustomExerciseNotice] = useState<{
+    name: string;
+    nameEn: string | null;
+    namePt: string | null;
+    imageUrl: string | null;
+  } | null>(null);
   const [sheetMode, setSheetMode] = useState<'closed' | 'menu' | 'share'>('closed');
   const share = useWorkoutShare();
   const { confirmAndDelete } = useWorkoutDelete();
@@ -436,7 +444,23 @@ export default function WorkoutDetailsScreen() {
                 <TouchableOpacity
                   style={styles.exerciseHeaderRow}
                   activeOpacity={ACTIVE_OPACITY}
-                  onPress={() => router.push(`/exercise/${exercise.exercise_id}` as any)}
+                  onPress={() => {
+                    if (!currentUserId) {
+                      return;
+                    }
+
+                    if (exercise.is_custom && exercise.created_by !== currentUserId) {
+                      setCustomExerciseNotice({
+                        name: localizedName,
+                        nameEn: exercise.name_en,
+                        namePt: exercise.name_pt,
+                        imageUrl: exercise.image_url,
+                      });
+                      return;
+                    }
+
+                    router.push(`/exercise/${exercise.exercise_id}` as any);
+                  }}
                 >
                   <ExerciseThumbnail
                     exercise={{
@@ -503,6 +527,41 @@ export default function WorkoutDetailsScreen() {
           )}
         </ScrollView>
       )}
+
+      <Modal
+        visible={customExerciseNotice !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCustomExerciseNotice(null)}
+      >
+        <Pressable style={styles.noticeBackdrop} onPress={() => setCustomExerciseNotice(null)}>
+          <Pressable style={styles.noticeCard} onPress={(event) => event.stopPropagation()}>
+            {customExerciseNotice ? (
+              <ExerciseThumbnail
+                exercise={{
+                  name: customExerciseNotice.name,
+                  name_en: customExerciseNotice.nameEn,
+                  name_pt: customExerciseNotice.namePt,
+                  image_url: customExerciseNotice.imageUrl,
+                }}
+                size={72}
+              />
+            ) : null}
+            <Text style={styles.noticeTitle}>{t('workoutDetails.customExerciseTitle')}</Text>
+            <Text style={styles.noticeBody}>
+              {t('workoutDetails.customExerciseBody', { name: customExerciseNotice?.name ?? '' })}
+            </Text>
+            <TouchableOpacity
+              style={styles.noticeButton}
+              activeOpacity={ACTIVE_OPACITY}
+              onPress={() => setCustomExerciseNotice(null)}
+              accessibilityRole="button"
+            >
+              <Text style={styles.noticeButtonText}>{t('common.ok')}</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -791,5 +850,53 @@ const styles = StyleSheet.create({
   },
   cellType: {
     flex: 1.45,
+  },
+  noticeBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(4, 9, 20, 0.74)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  noticeCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: palette.surface,
+    borderRadius: Radius.sheet,
+    borderWidth: 1,
+    borderColor: palette.borderStrong,
+    paddingHorizontal: 22,
+    paddingTop: 22,
+    paddingBottom: 18,
+    alignItems: 'center',
+  },
+  noticeTitle: {
+    color: palette.textPrimary,
+    fontSize: 18,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginTop: 14,
+  },
+  noticeBody: {
+    color: palette.labelMuted,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  noticeButton: {
+    marginTop: 18,
+    minHeight: 42,
+    minWidth: 120,
+    borderRadius: Radius.button,
+    backgroundColor: palette.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+  noticeButtonText: {
+    color: palette.textPrimary,
+    fontSize: 15,
+    fontWeight: '800',
   },
 });

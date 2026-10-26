@@ -95,8 +95,10 @@ test the migrations separately in staging before an authorized production rollou
       segment, including the destination of an UPDATE; public reads stay available.
 
 14. 20261019141000_restore_exercise_privacy.sql
-    - Restores catalogue/own-custom SELECT and own-custom write policies after
-      deployed policy drift, without changing existing exercise data.
+    - Catalogue stays readable. Custom rows stay private to the owner, unless
+      the exercise is already in a workout the viewer can open.
+    - Own-custom insert, update and delete stay limited to that owner.
+    - Does not change existing exercise data.
 
 15. 20261019142000_username_availability_contract.sql
     - Versions the previously untracked `check_username_available(text)` RPC.

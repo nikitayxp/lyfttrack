@@ -1,12 +1,26 @@
--- Restore the versioned custom-exercise ownership contract after deployed policy
--- drift. Only policies change; do not repeat the catalogue/data cleanup from
--- 20260727194500. Existing schema/auth baseline is required (see README.md).
+-- Restore custom-exercise ownership after deployed policy drift. Catalogue rows
+-- stay public. A custom row stays private to its owner unless that exercise is
+-- already inside a workout the viewer can open. Writes stay owner-only.
+-- Does not repeat the catalogue cleanup from 20260727194500.
 begin;
+
+create index if not exists workout_exercises_exercise_id_idx
+  on public.workout_exercises (exercise_id);
 
 drop policy if exists exercises_select_authenticated on public.exercises;
 create policy exercises_select_authenticated
 on public.exercises for select to authenticated
-using (is_custom = false or created_by = (select auth.uid()));
+using (
+  is_custom = false
+  or created_by = (select auth.uid())
+  or exists (
+    select 1
+    from public.workout_exercises we
+    join public.workouts w on w.id = we.workout_id
+    where we.exercise_id = public.exercises.id
+      and public.can_view_user_content(w.user_id)
+  )
+);
 
 drop policy if exists exercises_insert_own_custom on public.exercises;
 create policy exercises_insert_own_custom

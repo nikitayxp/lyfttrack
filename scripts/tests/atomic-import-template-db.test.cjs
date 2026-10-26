@@ -44,6 +44,7 @@ test('atomic imports, repairs and templates retain data and identity', async t =
   const migration = path.resolve(__dirname, '../../supabase/migrations/20261026220000_atomic_import_templates.sql');
   assert.ok(fs.existsSync(migration), 'atomic import/template migration must exist');
   await db.exec(fs.readFileSync(migration, 'utf8'));
+  await assert.doesNotReject(db.exec(fs.readFileSync(migration, 'utf8')), 'the migration must be safe to apply again');
   await db.exec(`
     alter table workout_templates enable row level security; alter table template_exercises enable row level security;
     create policy template_owner on workout_templates for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());

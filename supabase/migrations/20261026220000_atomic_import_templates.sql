@@ -1,6 +1,6 @@
 begin;
 
-create table public.client_mutation_receipts (
+create table if not exists public.client_mutation_receipts (
   user_id uuid not null references auth.users(id) on delete cascade,
   mutation_id uuid not null,
   fingerprint text not null,
@@ -10,13 +10,14 @@ create table public.client_mutation_receipts (
   primary key (user_id, mutation_id)
 );
 alter table public.client_mutation_receipts enable row level security;
+drop policy if exists client_mutation_receipts_owner on public.client_mutation_receipts;
 create policy client_mutation_receipts_owner on public.client_mutation_receipts
   for all to authenticated using (user_id = (select auth.uid()))
   with check (user_id = (select auth.uid()));
 revoke all on public.client_mutation_receipts from public, anon, authenticated;
 grant select, insert on public.client_mutation_receipts to authenticated;
 
-create function public.template_snapshot(p_template_id uuid) returns jsonb
+create or replace function public.template_snapshot(p_template_id uuid) returns jsonb
 language sql stable security invoker set search_path = '' as $$
   select jsonb_build_object('name', t.name, 'notes', t.notes, 'exercises',
     coalesce((select jsonb_agg(jsonb_build_object('exercise_id', e.exercise_id,
@@ -25,7 +26,7 @@ language sql stable security invoker set search_path = '' as $$
   from public.workout_templates t where t.id=p_template_id and t.user_id=(select auth.uid())
 $$;
 
-create function public.import_workout_snapshot(p_workout_id uuid) returns jsonb
+create or replace function public.import_workout_snapshot(p_workout_id uuid) returns jsonb
 language sql stable security invoker set search_path = '' as $$
   select jsonb_build_object('name', w.name, 'notes', w.notes,
     'exercises',coalesce((select jsonb_agg(to_jsonb(e) order by e.id) from public.workout_exercises e where e.workout_id=w.id),'[]'::jsonb),
@@ -33,7 +34,7 @@ language sql stable security invoker set search_path = '' as $$
   from public.workouts w where w.id=p_workout_id and w.user_id=(select auth.uid())
 $$;
 
-create function public.import_workout_snapshots(p_workout_ids uuid[]) returns jsonb
+create or replace function public.import_workout_snapshots(p_workout_ids uuid[]) returns jsonb
 language plpgsql stable security invoker set search_path = '' as $$
 begin
   if cardinality(p_workout_ids)>100 then raise exception 'Too many repair snapshots'; end if;
@@ -42,7 +43,7 @@ begin
 end;
 $$;
 
-create function public.save_template_atomic(
+create or replace function public.save_template_atomic(
   p_expected_user_id uuid, p_mutation_id uuid, p_template_id uuid,
   p_name text, p_exercises jsonb, p_expected_snapshot jsonb default null
 ) returns uuid language plpgsql security invoker set search_path = '' as $$
@@ -109,7 +110,7 @@ begin
 end;
 $$;
 
-create function public.import_workouts_atomic(p_expected_user_id uuid,p_mutation_id uuid,p_batch jsonb) returns jsonb
+create or replace function public.import_workouts_atomic(p_expected_user_id uuid,p_mutation_id uuid,p_batch jsonb) returns jsonb
 language plpgsql security invoker set search_path = '' as $$
 declare
   v_user uuid:=auth.uid(); v_item jsonb; v_result jsonb; v_existing uuid;
@@ -145,7 +146,7 @@ begin
 end;
 $$;
 
-create function public.repair_imported_workout_atomic(
+create or replace function public.repair_imported_workout_atomic(
   p_expected_user_id uuid,p_mutation_id uuid,p_workout_id uuid,p_workout jsonb,
   p_exercises jsonb,p_sets jsonb,p_mode text,p_expected_snapshot jsonb
 ) returns uuid language plpgsql security invoker set search_path = '' as $$
@@ -258,7 +259,7 @@ begin
 end;
 $$;
 
-create function public.ensure_import_exercises(p_expected_user_id uuid,p_exercises jsonb) returns jsonb
+create or replace function public.ensure_import_exercises(p_expected_user_id uuid,p_exercises jsonb) returns jsonb
 language plpgsql security invoker set search_path = '' as $$
 declare v_user uuid:=auth.uid(); v_entry jsonb; v_id uuid; v_name text; v_ids jsonb:='[]'::jsonb; v_created integer:=0;
 begin

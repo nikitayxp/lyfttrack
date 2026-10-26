@@ -37,6 +37,7 @@ import {
   saveTemplate,
   startWorkoutFromTemplate,
   updateTemplate,
+  type TemplateDetail,
   type TemplateSummary,
 } from '@/services/templateService';
 import { Chip } from '@/components/ui/Chip';
@@ -118,6 +119,7 @@ export default function WorkoutScreen() {
   const [startingTemplateId, setStartingTemplateId] = useState<string | null>(null);
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [editingTemplateOriginal, setEditingTemplateOriginal] = useState<TemplateDetail | null>(null);
   const [restSecondsByExerciseId, setRestSecondsByExerciseId] = useState<Record<string, number>>({});
 
   const [isCreateTemplateModalVisible, setIsCreateTemplateModalVisible] = useState(false);
@@ -401,6 +403,7 @@ export default function WorkoutScreen() {
     setTemplateNameInput('');
     setSelectedTemplateExercises([]);
     setEditingTemplateId(null);
+    setEditingTemplateOriginal(null);
     setRestSecondsByExerciseId({});
     setExerciseQuery('');
     setSelectedMuscleFilter('all');
@@ -422,6 +425,7 @@ export default function WorkoutScreen() {
     setTemplateNameInput('');
     setSelectedTemplateExercises([]);
     setEditingTemplateId(null);
+    setEditingTemplateOriginal(null);
     setRestSecondsByExerciseId({});
     setExerciseQuery('');
     setSelectedMuscleFilter('all');
@@ -496,13 +500,17 @@ export default function WorkoutScreen() {
 
     try {
       if (editingTemplateId) {
+        if (!editingTemplateOriginal) {
+          throw new Error('Original template snapshot is required. Reopen the template before saving.');
+        }
         await updateTemplate(
           editingTemplateId,
           normalizedName,
           selectedTemplateExercises.map((exerciseId) => ({
             exerciseId,
             restSeconds: restSecondsByExerciseId[exerciseId],
-          }))
+          })),
+          editingTemplateOriginal
         );
         showAlert(showToast, t('workout.editTemplateSuccess'));
       } else {
@@ -539,6 +547,7 @@ export default function WorkoutScreen() {
       });
 
       setEditingTemplateId(detail.id);
+      setEditingTemplateOriginal(detail);
       setTemplateNameInput(detail.name);
       setSelectedTemplateExercises(exerciseIds);
       setRestSecondsByExerciseId(restById);

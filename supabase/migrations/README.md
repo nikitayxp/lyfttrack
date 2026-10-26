@@ -106,6 +106,13 @@ test the migrations separately in staging before an authorized production rollou
     - Uses an empty search_path and a qualified profiles lookup; grants only
       boolean availability to anon/authenticated so signup works before sign-in.
 
+16. 20261026220000_atomic_import_templates.sql
+    - Imports, history repairs and template saves run inside one transaction each.
+    - `client_mutation_receipts` stores the client mutation id, so a retry after a
+      lost response returns the first result instead of writing twice.
+    - Repairs and template edits compare against the snapshot the client loaded and
+      refuse to write if the rows changed in between.
+
 ## Rollout notes
 
 - Apply first in staging and validate app flows:

@@ -37,6 +37,7 @@ test('atomic imports, repairs and templates retain data and identity', async t =
     create policy set_insert on sets for insert to authenticated with check (exists(select 1 from workouts w where w.id = workout_id and w.user_id = auth.uid()));
     grant select on exercises, workout_templates to authenticated;
     grant select, insert, update on workouts to authenticated; grant select, insert on workout_exercises, sets to authenticated;
+    alter default privileges in schema public grant all on tables to authenticated, anon;
   `);
   await db.exec(fs.readFileSync(path.resolve(__dirname, '../../supabase/migrations/20261018140000_atomic_workout_creation.sql'), 'utf8'));
 
@@ -166,6 +167,12 @@ test('atomic imports, repairs and templates retain data and identity', async t =
     assert.equal(await rpc('import_workout_snapshot',[id]),null);
     await db.exec('reset role');
     assert.equal((await db.query("select count(*)::int n from pg_proc where proname in ('save_template_atomic','repair_imported_workout_atomic','import_workouts_atomic') and prosecdef")).rows[0].n,0);
+  });
+  await t.test('mutation receipts cannot be rewritten or removed by their owner',async()=>{
+    await db.exec(`set role authenticated; set test.user_id='${owner}'`);
+    await assert.rejects(db.query("update public.client_mutation_receipts set fingerprint='forged'"),/permission denied/);
+    await assert.rejects(db.query('delete from public.client_mutation_receipts'),/permission denied/);
+    await db.exec('reset role');
   });
   await t.test('anonymous execution is denied',async()=>{
     await db.exec('set role anon');

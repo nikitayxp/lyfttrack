@@ -13,7 +13,7 @@ alter table public.client_mutation_receipts enable row level security;
 create policy client_mutation_receipts_owner on public.client_mutation_receipts
   for all to authenticated using (user_id = (select auth.uid()))
   with check (user_id = (select auth.uid()));
-revoke all on public.client_mutation_receipts from public, anon;
+revoke all on public.client_mutation_receipts from public, anon, authenticated;
 grant select, insert on public.client_mutation_receipts to authenticated;
 
 create function public.template_snapshot(p_template_id uuid) returns jsonb

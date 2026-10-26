@@ -29,6 +29,26 @@ test('exercise detail shares its statistics load and pages only the visible hist
   assert.equal(statsCalls, 1);
 });
 
+test('the first render of an exercise reports loading until its statistics settle', async t => {
+  let finish;
+  const states = [];
+  const load = loadSource({ '@/services/workoutService': { getErrorMessage: e => e.message }, '@/services/statsService': {
+    getExerciseStats: () => new Promise(resolve => { finish = resolve; }),
+    getExerciseWorkoutHistory: async () => [],
+  } });
+  const { useExerciseDetailsData } = load('app/src/hooks/useExerciseDetailsData.ts');
+  function Consumer({ id }) { const result = useExerciseDetailsData(id); states.push(result.isLoadingStats); return null; }
+  let tree;
+  await act(async () => { tree = create(React.createElement(Consumer, { id: null })); });
+  t.after(async () => { await act(async () => tree.unmount()); });
+  assert.deepEqual([...new Set(states)], [false]);
+  states.length = 0;
+  await act(async () => tree.update(React.createElement(Consumer, { id: 'exercise' })));
+  assert.equal(states[0], true, 'the first frame showed an empty history instead of loading');
+  await act(async () => finish({ progress: [], records: null }));
+  assert.equal(states[states.length - 1], false);
+});
+
 test('late exercise results cannot replace a newer exercise or turn an error into empty success', async t => {
   let finish;
   let result;

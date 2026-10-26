@@ -18,6 +18,7 @@ export function useExerciseDetailsData(exerciseId: string | null) {
   const [isLoadingMoreHistory, setIsLoadingMoreHistory] = useState(false);
   const [hasMoreHistory, setHasMoreHistory] = useState(false);
   const [statsError, setStatsError] = useState<string | null>(null);
+  const [settledExerciseId, setSettledExerciseId] = useState<string | null>(null);
   const generation = useRef(0);
   const historyOffset = useRef(0);
   const loadingMore = useRef(false);
@@ -47,7 +48,10 @@ export function useExerciseDetailsData(exerciseId: string | null) {
     } catch (error) {
       if (request === generation.current) setStatsError(getErrorMessage(error));
     } finally {
-      if (request === generation.current) setIsLoadingStats(false);
+      if (request === generation.current) {
+        setIsLoadingStats(false);
+        setSettledExerciseId(exerciseId);
+      }
     }
   }, [exerciseId]);
 
@@ -82,5 +86,7 @@ export function useExerciseDetailsData(exerciseId: string | null) {
     }
   }, [exerciseId, hasMoreHistory, isLoadingStats]);
 
-  return { progress, records, history, isLoadingStats, isLoadingMoreHistory, hasMoreHistory, statsError, reloadStats, loadMoreHistory };
+  const isAwaitingFirstLoad = exerciseId !== null && settledExerciseId !== exerciseId;
+
+  return { progress, records, history, isLoadingStats: isLoadingStats || isAwaitingFirstLoad, isLoadingMoreHistory, hasMoreHistory, statsError, reloadStats, loadMoreHistory };
 }

@@ -1016,6 +1016,18 @@ export default function ExerciseDetailScreen() {
               </View>
             </View>
           </View>
+        ) : isLoadingStats ? (
+          <View style={styles.card} accessibilityLabel={t('common.loading')}>
+            <Text style={styles.cardTitle}>{t('exercise.detail.prsTitle')}</Text>
+            <View style={styles.prGrid}>
+              {[0, 1, 2, 3].map((index) => (
+                <View key={index} style={styles.prCard}>
+                  <View style={[styles.skeletonLine, styles.skeletonLineShort]} />
+                  <View style={[styles.skeletonLine, styles.skeletonLineValue]} />
+                </View>
+              ))}
+            </View>
+          </View>
         ) : null}
 
         {/* Workout History */}
@@ -1029,7 +1041,16 @@ export default function ExerciseDetailScreen() {
               </TouchableOpacity>
             </View>
           ) : null}
-          {history.length === 0 ? (
+          {history.length === 0 && isLoadingStats ? (
+            <View accessibilityLabel={t('common.loading')}>
+              {[0, 1, 2].map((index) => (
+                <View key={index} style={styles.historyCard}>
+                  <View style={[styles.skeletonLine, styles.skeletonLineTitle]} />
+                  <View style={[styles.skeletonLine, styles.skeletonLineShort]} />
+                </View>
+              ))}
+            </View>
+          ) : history.length === 0 ? (
             <Text style={styles.placeholderText}>{t('exercise.detail.noHistory')}</Text>
           ) : (
             history.map((entry) => (
@@ -1430,6 +1451,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     marginRight: 8,
+    fontVariant: ['tabular-nums'],
+  },
+  skeletonLine: {
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: palette.inputFill,
+  },
+  skeletonLineTitle: {
+    width: '55%',
+    marginBottom: 8,
+  },
+  skeletonLineShort: {
+    width: '35%',
+  },
+  skeletonLineValue: {
+    width: '45%',
+    height: 18,
+    marginTop: 8,
   },
   loadingText: {
     color: palette.labelMuted,

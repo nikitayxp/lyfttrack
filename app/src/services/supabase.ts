@@ -3,11 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 import { Database } from '@/types/database';
-import {
-  buildLanOAuthBounceRedirectTo,
-  isIpHostname,
-  isLoopbackHostname,
-} from '@/services/oauthLanReturn';
+import { isIpHostname, isLoopbackHostname } from '@/utils/hostname';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -88,19 +84,20 @@ export function getEmailChangeRedirectTo(): string {
   return `${resolveAuthWebBaseUrl()}${SIGN_IN_PATH}`;
 }
 
+export function isNonLoopbackIpOrigin(): boolean {
+  if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.location) {
+    return false;
+  }
+
+  const hostname = window.location.hostname;
+  return isIpHostname(hostname) && !isLoopbackHostname(hostname);
+}
+
 export function getGoogleOAuthRedirectTo(): string {
   if (Platform.OS === 'web') {
     if (typeof window !== 'undefined' && window.location?.origin) {
       const origin = removeTrailingSlashes(window.location.origin);
       const lanCallback = `${origin}${GOOGLE_OAUTH_CALLBACK_PATH}`;
-      const hostname = window.location.hostname;
-
-      // GoTrue rejects non-loopback IP redirects → Site URL. Bounce via HTTPS host.
-      if (__DEV__ && isIpHostname(hostname) && !isLoopbackHostname(hostname)) {
-        const redirectTo = buildLanOAuthBounceRedirectTo(resolveAuthWebBaseUrl(), lanCallback);
-        console.info('[oauth] Google redirectTo (web LAN bounce)', redirectTo);
-        return redirectTo;
-      }
 
       if (__DEV__) {
         console.info('[oauth] Google redirectTo (web)', lanCallback);

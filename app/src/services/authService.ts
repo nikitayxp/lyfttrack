@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
-import { getGoogleOAuthRedirectTo, supabase } from '@/services/supabase';
+import { getGoogleOAuthRedirectTo, isNonLoopbackIpOrigin, supabase } from '@/services/supabase';
 import { getAuthenticatedUserOrThrow } from '@/services/authUserService';
 
 /**
@@ -67,6 +67,11 @@ export async function applyPendingTermsAcceptance(): Promise<void> {
 }
 
 export async function startGoogleOAuth(): Promise<void> {
+  if (__DEV__ && isNonLoopbackIpOrigin()) {
+    window.alert('Login Google em dev: abre a app pelo hostname do PC (ex. http://desktop-b00buva:8081), não pelo IP.');
+    throw new Error('oauth-start-failed');
+  }
+
   const redirectTo = getGoogleOAuthRedirectTo();
 
   if (__DEV__) {
@@ -94,15 +99,11 @@ export async function startGoogleOAuth(): Promise<void> {
       const asked = authorizeUrl.searchParams.get('redirect_to');
       console.info('[oauth] authorize redirect_to', asked);
 
-      // Production bounce with ?lan_return= is intentional for Tailscale/Wi-Fi IPs.
-      const isLanBounce = Boolean(asked && /[?&]lan_return=/.test(asked));
-
       if (
         Platform.OS === 'web' &&
         typeof window !== 'undefined' &&
         asked &&
-        /vercel\.app|lyfttrack\.app/i.test(asked) &&
-        !isLanBounce
+        /vercel\.app|lyfttrack\.app/i.test(asked)
       ) {
         window.alert(`ERRO: redirect_to ainda e producao:\n${asked}`);
         throw new Error('oauth-start-failed');

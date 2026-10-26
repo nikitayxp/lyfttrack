@@ -7,7 +7,6 @@ import {
   FlatList,
   Image,
   Modal,
-  Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -216,7 +215,6 @@ export default function ProfileScreen() {
   const { t, i18n } = useTranslation();
   const { showToast } = useAppToast();
   const { activeExercises } = useWorkoutContext();
-  const isWeb = Platform.OS === 'web';
   const { confirmAndDelete } = useWorkoutDelete();
   const migrationPath = 'supabase/migrations/20260407000000_fix_body_measurements_rls.sql';
   const [profile, setProfile] = useState<ProfileRow | null>(null);
@@ -1190,8 +1188,6 @@ export default function ProfileScreen() {
     ? commentsByWorkoutId[selectedWorkoutForComments.id] ?? []
     : [];
 
-  const ModalWrapper = isWeb ? View : Modal;
-
   return (
     <>
       <FlatList
@@ -1259,13 +1255,13 @@ export default function ProfileScreen() {
         onClose={() => setTrophySelection(null)}
       /> : null}
 
-      {(!isWeightModalVisible && isWeb) ? null : (
-      <ModalWrapper
-        {...(isWeb 
-          ? { style: [StyleSheet.absoluteFill, { zIndex: 10000 }] } 
-          : { visible: isWeightModalVisible, transparent: true, animationType: 'fade' as const, onRequestClose: closeWeightModal })}
+      <Modal
+        visible={isWeightModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeWeightModal}
       >
-        <View style={[styles.quickLogBackdrop, isWeb && styles.quickLogBackdropWeb]}>
+        <View style={styles.quickLogBackdrop}>
           <Pressable 
             style={styles.quickLogDismissArea} 
             onPress={closeWeightModal} 
@@ -1273,7 +1269,7 @@ export default function ProfileScreen() {
             accessibilityLabel={t('accessibility.closeModal', { defaultValue: 'Close modal' })}
           />
 
-          <View style={[styles.quickLogCard, isWeb && styles.quickLogCardWeb]}>
+          <View style={styles.quickLogCard}>
             <Text style={styles.quickLogTitle}>{t('profile.logWeightTitle')}</Text>
             <Text style={styles.quickLogSubtitle}>{t('profile.logWeightSubtitle')}</Text>
 
@@ -1318,8 +1314,7 @@ export default function ProfileScreen() {
             </View>
           </View>
         </View>
-      </ModalWrapper>
-      )}
+      </Modal>
 
       <FeedCommentsModal
         visible={selectedWorkoutForComments !== null}
@@ -1717,15 +1712,6 @@ const styles = StyleSheet.create({
     backgroundColor: palette.overlay,
     paddingHorizontal: 12,
   },
-  quickLogBackdropWeb: {
-    width: 393,
-    maxWidth: '100%',
-    marginLeft: 'auto',
-    marginRight: 'auto',
-    left: 0,
-    right: 0,
-    alignSelf: 'center',
-  },
   quickLogDismissArea: {
     ...StyleSheet.absoluteFillObject,
   },
@@ -1736,13 +1722,6 @@ const styles = StyleSheet.create({
     backgroundColor: CARD_BG,
     paddingHorizontal: 10,
     paddingVertical: 10,
-  },
-  quickLogCardWeb: {
-    width: 393,
-    maxWidth: '100%',
-    marginLeft: 'auto',
-    marginRight: 'auto',
-    backgroundColor: CARD_BG,
   },
   quickLogTitle: {
     color: palette.textPrimary,

@@ -69,7 +69,6 @@ export function FeedCommentsModal({
   const { t } = useTranslation();
   const { language } = usePreferences();
   const insets = useSafeAreaInsets();
-  const isWeb = Platform.OS === 'web';
   const athleteFallback = t('publicProfile.athleteFallback');
 
   const listEmptyState = useMemo(() => {
@@ -107,23 +106,14 @@ export function FeedCommentsModal({
     );
   }, [errorMessage, isLoading, onRetry, t]);
 
-  if (!visible && isWeb) {
-    return null;
-  }
-
-  const ModalWrapper = isWeb ? View : Modal;
-  const wrapperProps = isWeb 
-    ? { style: [StyleSheet.absoluteFill, { zIndex: 9999, backgroundColor: SHEET_BG }] }
-    : { visible, animationType: 'slide' as const, presentationStyle: 'fullScreen' as const, onRequestClose: onClose };
-
   return (
-    <ModalWrapper {...wrapperProps}>
+    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
       <KeyboardAvoidingView
-        style={[styles.screen, isWeb && styles.screenWeb]}
+        style={styles.screen}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
       >
-        <View style={[styles.screenFrame, isWeb && styles.screenFrameWeb]}>
+        <View style={styles.screenFrame}>
           <View style={[styles.header, { paddingTop: insets.top + 10 }]}> 
             <TouchableOpacity 
               style={styles.closeButton} 
@@ -201,7 +191,7 @@ export function FeedCommentsModal({
           </View>
         </View>
       </KeyboardAvoidingView>
-    </ModalWrapper>
+    </Modal>
   );
 }
 
@@ -210,22 +200,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: SHEET_BG,
   },
-  screenWeb: {
-    alignItems: 'center',
-    backgroundColor: 'transparent',
-  },
   screenFrame: {
     flex: 1,
     width: '100%',
-    backgroundColor: SHEET_BG,
-  },
-  screenFrameWeb: {
-    width: 393,
-    maxWidth: '100%',
-    marginLeft: 'auto',
-    marginRight: 'auto',
-    left: 0,
-    right: 0,
     backgroundColor: SHEET_BG,
   },
   header: {

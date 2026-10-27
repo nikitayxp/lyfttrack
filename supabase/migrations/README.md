@@ -108,6 +108,24 @@ test the migrations separately in staging before an authorized production rollou
 
 ## Rollout notes
 
+- `20261027090000_own_exercise_references.sql` restricts new workout, set,
+  routine and template references to catalogue exercises or the current user's
+  custom exercises.
+- `20261027090100_repair_copied_exercise_references.sql` gives each affected
+  account its own copy of historically shared custom exercises. It preserves
+  translations, aliases, listing state, training row IDs and values. Legacy sets
+  linked to a different workout are detached after retaining their exercise;
+  linked sets without a workout inherit their existing block's workout.
+- A custom-exercise set without either a workout or a block stops the repair
+  with an explicit error. Its owner must be established before retrying; the
+  migration never guesses ownership or deletes the set.
+- The repair also requires every new or updated linked set to match its block's
+  workout and exercise. Unlinked legacy sets remain supported.
+- The repair runs in one transaction and briefly blocks writes to the affected
+  tables, including account deletion. A five-second lock timeout or sixty-second
+  statement timeout aborts it without a partial repair. Validate on staging and
+  reconcile the earlier migration PRs before applying it in production.
+
 - Apply first in staging and validate app flows:
    - onboarding weight save
    - profile weight history

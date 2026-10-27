@@ -5,8 +5,20 @@ import { generateId } from '@/utils/uuid';
 
 type ExerciseRow = Tables<'exercises'>;
 
-function nameKey(name: string): string {
-  return name.trim().toLocaleLowerCase();
+function exerciseContentKey(row: ExerciseRow): string {
+  return JSON.stringify([
+    row.name.trim().toLocaleLowerCase(),
+    row.name_en ?? null,
+    row.name_pt ?? null,
+    row.description ?? null,
+    row.equipment ?? null,
+    row.image_url ?? null,
+    row.muscle_group ?? null,
+    row.muscle_en ?? null,
+    row.muscle_pt ?? null,
+    row.aliases ?? [],
+    row.listed ?? true,
+  ]);
 }
 
 export async function adoptForeignCustomExercises(rows: ExerciseRow[]): Promise<Map<string, ExerciseRow>> {
@@ -28,12 +40,12 @@ export async function adoptForeignCustomExercises(rows: ExerciseRow[]): Promise<
     throw new Error(`Unable to load exercises: ${ownError.message}`);
   }
 
-  const ownByName = new Map((ownRows ?? []).map((row) => [nameKey(row.name), row] as const));
+  const ownByContent = new Map((ownRows ?? []).map((row) => [exerciseContentKey(row), row] as const));
   const pendingCopies = new Map<string, TablesInsert<'exercises'>>();
 
   for (const row of foreignRows) {
-    const key = nameKey(row.name);
-    if (ownByName.has(key) || pendingCopies.has(key)) {
+    const key = exerciseContentKey(row);
+    if (ownByContent.has(key) || pendingCopies.has(key)) {
       continue;
     }
 
@@ -48,6 +60,8 @@ export async function adoptForeignCustomExercises(rows: ExerciseRow[]): Promise<
       muscle_group: row.muscle_group,
       muscle_en: row.muscle_en,
       muscle_pt: row.muscle_pt,
+      aliases: row.aliases ?? [],
+      listed: row.listed ?? true,
       created_by: user.id,
       is_custom: true,
     });
@@ -64,16 +78,16 @@ export async function adoptForeignCustomExercises(rows: ExerciseRow[]): Promise<
     }
 
     for (const row of created ?? []) {
-      ownByName.set(nameKey(row.name), row);
+      ownByContent.set(exerciseContentKey(row), row);
     }
   }
 
   for (const row of foreignRows) {
-    const ownRow = ownByName.get(nameKey(row.name));
+    const ownRow = ownByContent.get(exerciseContentKey(row));
     if (ownRow) {
       byOriginalId.set(row.id, ownRow);
     } else {
-      byOriginalId.delete(row.id);
+      throw new Error('Unable to copy exercises: an owned copy was not returned');
     }
   }
 

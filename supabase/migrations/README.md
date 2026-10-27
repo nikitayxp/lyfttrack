@@ -108,6 +108,20 @@ test the migrations separately in staging before an authorized production rollou
 
 ## Rollout notes
 
+- 20261027094000_tighten_role_privileges.sql removes anonymous and PUBLIC access
+  to app tables, keeps authenticated CRUD and existing column restrictions,
+  and removes table administration privileges, including MAINTAIN on PostgreSQL 17+.
+  Cleanup, account deletion, visibility and friendship helpers use an empty
+  search_path and remain available only to authenticated callers. Username
+  availability remains callable before sign-in. Remote-only trigger functions
+  are handled only when present. The unversioned projeto_ativo table and its
+  existing data stay in place with client privileges removed.
+- Apply the #290 migration after the earlier timestamped integrity, performance,
+  exercise, comment, profile and avatar migrations. It has not been applied to
+  production as part of this change. Validate grants, signup username lookup,
+  workout CRUD, friendship, profile updates and own-account cleanup in staging
+  before authorizing rollout. Do not use real user accounts for cleanup tests.
+
 - Apply first in staging and validate app flows:
    - onboarding weight save
    - profile weight history

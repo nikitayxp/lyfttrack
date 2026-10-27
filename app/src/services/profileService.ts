@@ -162,16 +162,39 @@ function inferExtension(fileUri: string, fileName?: string): string {
   return match[1];
 }
 
+export const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+
+const AVATAR_EXTENSION_BY_TYPE: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
+
+export class AvatarValidationError extends Error {
+  constructor(readonly reason: 'too-large' | 'unsupported-type') {
+    super(reason === 'too-large' ? 'Avatar file is too large.' : 'Avatar file type is not supported.');
+    this.name = 'AvatarValidationError';
+  }
+}
+
+const AVATAR_TYPE_BY_EXTENSION: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+};
+
 function inferContentType(extension: string, providedType?: string): string {
-  if (providedType) {
-    return providedType;
+  const normalizedType = providedType?.trim().toLowerCase();
+  const candidate = normalizedType === 'image/jpg'
+    ? 'image/jpeg'
+    : normalizedType || AVATAR_TYPE_BY_EXTENSION[extension];
+
+  if (!candidate || !AVATAR_EXTENSION_BY_TYPE[candidate]) {
+    throw new AvatarValidationError('unsupported-type');
   }
 
-  if (extension === 'png') return 'image/png';
-  if (extension === 'webp') return 'image/webp';
-  if (extension === 'gif') return 'image/gif';
-  if (extension === 'svg') return 'image/svg+xml';
-  return 'image/jpeg';
+  return candidate;
 }
 
 export async function pickAvatarFromLibrary(): Promise<UploadAvatarInput | null> {
@@ -449,9 +472,13 @@ export async function uploadAvatar(input: UploadAvatarInput): Promise<ProfileRow
     fileData = decodeBase64(input.base64Data);
   }
 
-  const extension = inferExtension(normalizedUri, input.fileName);
-  const contentType = inferContentType(extension, input.contentType);
-  const filePath = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
+  const contentType = inferContentType(inferExtension(normalizedUri, input.fileName), input.contentType);
+
+  if (fileData.byteLength > AVATAR_MAX_BYTES) {
+    throw new AvatarValidationError('too-large');
+  }
+
+  const filePath = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${AVATAR_EXTENSION_BY_TYPE[contentType]}`;
 
   const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, fileData, {
     contentType,

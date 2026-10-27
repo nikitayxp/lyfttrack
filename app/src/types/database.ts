@@ -607,7 +607,14 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      profile_details: {
+        Row: {
+          bio: string | null
+          height_cm: number | null
+          id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       create_workout_atomic: {

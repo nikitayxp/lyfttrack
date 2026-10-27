@@ -45,6 +45,7 @@ import {
   orderExercisesByIds,
   type PreviousExercisePerformanceSet,
 } from '@/services/workoutService';
+import { adoptForeignCustomExercises } from '@/services/exerciseAdoptionService';
 import { finishWorkout } from '@/services/sessionRepository';
 import { getTemplateById } from '@/services/templateService';
 import {
@@ -617,7 +618,7 @@ export default function ActiveWorkout() {
 
         const uniqueExerciseIds = [...new Set(details.exercises.map((entry) => entry.exercise_id).filter(Boolean))];
         const catalogRows = uniqueExerciseIds.length > 0 ? await getExercisesByIds(uniqueExerciseIds) : [];
-        const catalogById = new Map(catalogRows.map((row) => [row.id, row] as const));
+        const catalogById = await adoptForeignCustomExercises(catalogRows);
 
         const blocks = details.exercises
           .filter((entry) => catalogById.has(entry.exercise_id))

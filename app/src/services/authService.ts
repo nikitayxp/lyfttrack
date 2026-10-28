@@ -1,8 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
-import { getGoogleOAuthRedirectTo, isNonLoopbackIpOrigin, supabase } from '@/services/supabase';
+import { getGoogleOAuthRedirectTo, supabase } from '@/services/supabase';
 import { getAuthenticatedUserOrThrow } from '@/services/authUserService';
+import { completeGoogleOAuthReturn } from '@/services/oauthReturn';
 
 /**
  * OAuth leaves the app before a session exists, so the acceptance recorded on
@@ -67,16 +68,11 @@ export async function applyPendingTermsAcceptance(): Promise<void> {
 }
 
 export async function startGoogleOAuth(): Promise<void> {
-  if (__DEV__ && isNonLoopbackIpOrigin()) {
-    window.alert('Login Google em dev: abre a app pelo hostname do PC (ex. http://desktop-b00buva:8081), não pelo IP.');
-    throw new Error('oauth-start-failed');
+  if (Platform.OS === 'web' && (typeof window === 'undefined' || !window.isSecureContext || !globalThis.crypto?.subtle)) {
+    throw new Error('oauth-insecure-context');
   }
 
   const redirectTo = getGoogleOAuthRedirectTo();
-
-  if (__DEV__) {
-    console.info('[oauth] startGoogleOAuth redirectTo', redirectTo);
-  }
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
@@ -93,30 +89,6 @@ export async function startGoogleOAuth(): Promise<void> {
     throw new Error('oauth-start-failed');
   }
 
-  if (__DEV__) {
-    try {
-      const authorizeUrl = new URL(data.url);
-      const asked = authorizeUrl.searchParams.get('redirect_to');
-      console.info('[oauth] authorize redirect_to', asked);
-
-      if (
-        Platform.OS === 'web' &&
-        typeof window !== 'undefined' &&
-        asked &&
-        /vercel\.app|lyfttrack\.app/i.test(asked)
-      ) {
-        window.alert(`ERRO: redirect_to ainda e producao:\n${asked}`);
-        throw new Error('oauth-start-failed');
-      }
-    } catch (probeError) {
-      if (probeError instanceof Error && probeError.message === 'oauth-start-failed') {
-        throw probeError;
-      }
-
-      console.info('[oauth] authorize url', data.url);
-    }
-  }
-
   if (Platform.OS === 'web') {
     if (typeof window === 'undefined') {
       throw new Error('oauth-start-failed');
@@ -131,4 +103,6 @@ export async function startGoogleOAuth(): Promise<void> {
   if (result.type !== 'success') {
     throw new Error('oauth-cancelled');
   }
+
+  await completeGoogleOAuthReturn(result.url);
 }

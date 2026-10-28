@@ -147,6 +147,7 @@ export const resources = {
           googleError: 'Unable to continue with Google right now.',
           googleSoon: 'Google login is in progress.',
         },
+        googleSecureContext: 'Use HTTPS or open the app on localhost to continue with Google.',
         googleLegal: {
           prefix: 'By continuing with Google, you agree to the ',
           terms: 'Terms',
@@ -209,6 +210,7 @@ export const resources = {
           verifyCodeAction: 'VERIFY CODE',
           invalidCodeTitle: 'Invalid code',
           invalidCodeDescription: 'The code is invalid or expired. Request a new one.',
+          invalidLink: 'This recovery link is invalid or expired. Enter the email code below or request a new email.',
           missingCodeFields: 'Fill in your email and the 6-digit code.',
           newPasswordSubtitle: 'Choose a new password to secure your account.',
           newPasswordLabel: 'New password',
@@ -1005,6 +1007,7 @@ export const resources = {
           googleError: 'Nao foi possivel continuar com Google neste momento.',
           googleSoon: 'Login via Google em desenvolvimento.',
         },
+        googleSecureContext: 'Para continuar com Google, abre a app por HTTPS ou em localhost.',
         googleLegal: {
           prefix: 'Ao continuar com Google, aceitas os ',
           terms: 'Termos',
@@ -1067,6 +1070,7 @@ export const resources = {
           verifyCodeAction: 'VERIFICAR CODIGO',
           invalidCodeTitle: 'Codigo invalido',
           invalidCodeDescription: 'O codigo e invalido ou expirou. Solicita um novo.',
+          invalidLink: 'Este link de recuperação é inválido ou expirou. Introduz o código do email abaixo ou pede um novo email.',
           missingCodeFields: 'Preenche o email e o codigo de 6 digitos.',
           newPasswordSubtitle: 'Escolhe uma nova password para proteger a tua conta.',
           newPasswordLabel: 'Nova password',

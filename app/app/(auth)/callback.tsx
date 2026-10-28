@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -7,135 +7,36 @@ import { Colors } from '@/constants/Colors';
 import { Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
 import { AppButton } from '@/components/ui/AppButton';
-import { supabase } from '@/services/supabase';
+import { authReturnParamsKey, clearedAuthReturnParams, completeGoogleOAuthReturn, readAuthReturnUrl } from '@/services/oauthReturn';
 
 const palette = Colors.dark;
-
-function readRouteValue(value: string | string[] | undefined): string {
-  if (Array.isArray(value)) {
-    return value[0]?.trim() ?? '';
-  }
-
-  return value?.trim() ?? '';
-}
-
-/** Web OAuth may return PKCE `?code=` or implicit `#access_token=` / `#refresh_token=`. */
-function readBrowserOAuthParams(): {
-  error: string;
-  code: string;
-  accessToken: string;
-  refreshToken: string;
-} {
-  if (typeof window === 'undefined' || !window.location) {
-    return { error: '', code: '', accessToken: '', refreshToken: '' };
-  }
-
-  const url = new URL(window.location.href);
-  const hash = new URLSearchParams(url.hash.startsWith('#') ? url.hash.slice(1) : url.hash);
-
-  return {
-    error:
-      url.searchParams.get('error_description') ||
-      url.searchParams.get('error') ||
-      hash.get('error_description') ||
-      hash.get('error') ||
-      '',
-    code: url.searchParams.get('code') || '',
-    accessToken: hash.get('access_token') || '',
-    refreshToken: hash.get('refresh_token') || '',
-  };
-}
 
 export default function OAuthCallbackScreen() {
   const { t } = useTranslation();
   const params = useLocalSearchParams<Record<string, string | string[]>>();
-  const routeCode = readRouteValue(params.code);
-  const routeError = readRouteValue(params.error);
-  const routeErrorDescription = readRouteValue(params.error_description);
+  const returnParamsKey = authReturnParamsKey(params);
   const [messageKey, setMessageKey] = useState('auth.callback.loading');
   const [isError, setIsError] = useState(false);
+  const didHandleReturn = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
 
     const exchangeSession = async () => {
-      const browser = readBrowserOAuthParams();
-      const errorDescription =
-        browser.error || routeErrorDescription || routeError;
-
-      if (errorDescription) {
-        if (!cancelled) {
-          setIsError(true);
-          setMessageKey('auth.callback.errorDescription');
-        }
-        return;
-      }
-
       try {
-        // Production currently returns the implicit hash form.
-        if (browser.accessToken && browser.refreshToken) {
-          const { error } = await supabase.auth.setSession({
-            access_token: browser.accessToken,
-            refresh_token: browser.refreshToken,
-          });
-
-          if (cancelled) {
-            return;
-          }
-
-          if (error) {
-            console.warn('[auth-callback] setSession from hash failed', error);
-            setIsError(true);
-            setMessageKey('auth.callback.errorDescription');
-            return;
-          }
-
-          // Do not router.replace here: the root auth guard redirects once
-          // `session` is set. Navigating early races a null session → sign-in.
-          return;
-        }
-
-        const code = browser.code || routeCode;
-
-        if (!code) {
-          const { data } = await supabase.auth.getSession();
-
-          if (cancelled) {
-            return;
-          }
-
-          // Remount after hash clear / guard redirect — session already exists.
-          if (data.session) {
-            return;
-          }
-
-          setIsError(true);
-          setMessageKey('auth.callback.missingCode');
-          return;
-        }
-
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-
-        if (cancelled) {
-          return;
-        }
-
-        if (error) {
-          console.warn('[auth-callback] exchangeCodeForSession failed', error);
-          setIsError(true);
-          setMessageKey('auth.callback.errorDescription');
-          return;
-        }
-
-        // Auth guard redirects on session; terms apply on SIGNED_IN in _layout.
+        const url = readAuthReturnUrl(returnParamsKey, 'lyfttrack://callback');
+        if (didHandleReturn.current && !url.hash && !Object.keys(clearedAuthReturnParams).some(key => url.searchParams.has(key))) return;
+        didHandleReturn.current = true;
+        setIsError(false);
+        setMessageKey('auth.callback.loading');
+        await completeGoogleOAuthReturn(url.toString());
       } catch (exchangeError) {
-        if (cancelled) {
-          return;
-        }
-
-        console.warn('[auth-callback] unexpected OAuth callback failure', exchangeError);
+        if (cancelled) return;
         setIsError(true);
-        setMessageKey('auth.callback.errorDescription');
+        setMessageKey(exchangeError instanceof Error && exchangeError.message === 'oauth-missing-code'
+          ? 'auth.callback.missingCode' : 'auth.callback.errorDescription');
+      } finally {
+        if (!cancelled) router.setParams(clearedAuthReturnParams);
       }
     };
 
@@ -144,7 +45,7 @@ export default function OAuthCallbackScreen() {
     return () => {
       cancelled = true;
     };
-  }, [routeCode, routeError, routeErrorDescription]);
+  }, [returnParamsKey]);
 
   return (
     <AuthAmbientGlow>

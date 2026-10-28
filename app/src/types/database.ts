@@ -607,6 +607,26 @@ export type Database = {
       }
     }
     Views: {
+      profile_cards: {
+        Row: {
+          id: string
+          username: string
+          avatar_url: string | null
+          visibility: "public" | "friends" | "private"
+          updated_at: string
+          full_name: string | null
+        }
+        Relationships: []
+      }
+      profile_private_details: {
+        Row: {
+          bio: string | null
+          full_name: string | null
+          height_cm: number | null
+          id: string | null
+        }
+        Relationships: []
+      }
       profile_details: {
         Row: {
           bio: string | null

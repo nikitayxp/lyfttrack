@@ -13,14 +13,14 @@ export type PublicProfileView = Pick<
   'id' | 'username' | 'full_name' | 'avatar_url' | 'bio' | 'visibility'
 >;
 
-const PROFILE_CARD_COLUMNS = 'id, username, full_name, avatar_url, visibility, updated_at';
+const PROFILE_CARD_COLUMNS = 'id, username, avatar_url, visibility, updated_at';
 
-type ProfileCard = Omit<ProfileRow, 'bio' | 'height_cm'>;
+type ProfileCard = Omit<ProfileRow, 'bio' | 'height_cm' | 'full_name'>;
 
-async function getProfileDetails(profileId: string): Promise<Pick<ProfileRow, 'bio' | 'height_cm'>> {
+async function getProfileDetails(profileId: string): Promise<Pick<ProfileRow, 'bio' | 'height_cm' | 'full_name'>> {
   const { data, error } = await supabase
-    .from('profile_details')
-    .select('bio, height_cm')
+    .from('profile_private_details')
+    .select('bio, height_cm, full_name')
     .eq('id', profileId)
     .maybeSingle();
 
@@ -28,7 +28,7 @@ async function getProfileDetails(profileId: string): Promise<Pick<ProfileRow, 'b
     throw new Error(`Unable to load profile: ${error.message}`);
   }
 
-  return { bio: data?.bio ?? null, height_cm: data?.height_cm ?? null };
+  return { bio: data?.bio ?? null, height_cm: data?.height_cm ?? null, full_name: data?.full_name ?? null };
 }
 
 async function withProfileDetails(card: ProfileCard): Promise<ProfileRow> {
@@ -234,7 +234,7 @@ async function createProfileForExistingUser(user: User): Promise<ProfileRow> {
 
     const { data: card, error } = await supabase
       .from('profiles')
-      .upsert(insertRow, { onConflict: 'id' })
+      .insert(insertRow)
       .select(PROFILE_CARD_COLUMNS)
       .single();
 
@@ -251,6 +251,20 @@ async function createProfileForExistingUser(user: User): Promise<ProfileRow> {
     }
 
     if (error?.code === '23505') {
+      const { data: existingCard, error: existingError } = await supabase
+        .from('profiles')
+        .select(PROFILE_CARD_COLUMNS)
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (existingError) {
+        throw new Error(`Unable to load profile: ${existingError.message}`);
+      }
+
+      if (existingCard) {
+        return withProfileDetails(existingCard);
+      }
+
       continue;
     }
 
@@ -296,7 +310,7 @@ export async function getPublicProfileById(profileId: string): Promise<PublicPro
   }
 
   const { data, error } = await supabase
-    .from('profiles')
+    .from('profile_cards')
     .select('id, username, full_name, avatar_url, visibility')
     .eq('id', normalizedProfileId)
     .maybeSingle();

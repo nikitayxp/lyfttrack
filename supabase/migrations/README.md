@@ -108,6 +108,39 @@ test the migrations separately in staging before an authorized production rollou
 
 ## Rollout notes
 
+- I split the profile privacy rollout into additive views, compatible clients,
+  then permission revocation. `supabase/rollouts/profile_read_views.sql` only
+  prepares `profile_cards` and `profile_private_details`; it does not revoke
+  table access, modify profile data or mark migrations as applied. It requires
+  a separately authorized execution in each target environment.
+- I validate the additive views in staging before deploying this client. The
+  new client needs both views to exist. Hidden cards retain username/avatar;
+  the name is null unless `can_view_user_content` permits access. The private
+  details endpoint uses the same visibility rule and keeps height owner-only.
+  The old `profile_details` view remains unchanged.
+- I distribute and validate a compatible APK before authorizing the cutover.
+  Old clients that use `profiles.select('*')` fail after revocation. There is
+  no automatic compatibility guarantee or forced-update mechanism here. I do
+  not treat web deployment alone as proof that mobile clients are ready.
+- `20261027092000_private_profile_fields.sql` remains unchanged.
+  `20261027092100_private_profile_cards.sql` then removes the globally readable
+  name, including stale column/PUBLIC grants, and recreates the prepared views.
+  I must reconcile recorded manual changes and earlier pending migrations
+  before applying either; I do not skip or falsely mark the older migration.
+- Production migration application now requires a manual workflow run on
+  `main`, `apply_migrations=true`, and the full approved commit SHA matching
+  both the event revision and the actual checkout. The confirmation defaults
+  to false. Automatic pushes only print a notice. Approval is checked before
+  linking with production credentials. The manual run applies **all** pending
+  migrations, so the SHA review covers that entire set, not only profiles.
+- Before that run I verify two-account profile visibility, hidden-name search,
+  friendship/request cards, comments, feed, onboarding and profile edits through
+  the real staging API and compatible app. I still require separate approval
+  for merge and production changes; automated tests do not record it.
+- The currently accessible project inventory contains only the linked
+  production project. Real staging API and device checks are still pending;
+  I have not created a staging project or applied this rollout remotely.
+
 - Apply first in staging and validate app flows:
    - onboarding weight save
    - profile weight history

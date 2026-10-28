@@ -8,6 +8,7 @@ const own = '00000000-0000-0000-0000-000000000001';
 const other = '00000000-0000-0000-0000-000000000002';
 const ownership = path.resolve(__dirname, '../../supabase/migrations/20261019140000_avatar_storage_ownership.sql');
 const migration = path.resolve(__dirname, '../../supabase/migrations/20261027093000_avatar_bucket_limits.sql');
+const limitMigration = path.resolve(__dirname, '../../supabase/migrations/20261027093100_avatar_two_megabyte_limit.sql');
 
 async function createDb() {
   const db = await PGlite.create();
@@ -55,6 +56,8 @@ test('avatar listing is limited to the own folder and the bucket only takes smal
   t.after(() => db.close());
   await db.exec(fs.readFileSync(migration, 'utf8'));
   await assert.doesNotReject(db.exec(fs.readFileSync(migration, 'utf8')), 'the migration must be safe to apply again');
+  await db.exec(fs.readFileSync(limitMigration, 'utf8'));
+  await db.exec(fs.readFileSync(limitMigration, 'utf8'));
 
   assert.deepEqual(await names(db, 'anon'), []);
   assert.deepEqual(await names(db, 'authenticated', own), [`${own}/me.jpg`]);
@@ -62,6 +65,6 @@ test('avatar listing is limited to the own folder and the bucket only takes smal
 
   const bucket = (await db.query(`select public, file_size_limit, allowed_mime_types from storage.buckets where id='avatars'`)).rows[0];
   assert.equal(bucket.public, true);
-  assert.equal(Number(bucket.file_size_limit), 5 * 1024 * 1024);
+  assert.equal(Number(bucket.file_size_limit), 2 * 1024 * 1024);
   assert.deepEqual(bucket.allowed_mime_types, ['image/jpeg', 'image/png', 'image/webp']);
 });

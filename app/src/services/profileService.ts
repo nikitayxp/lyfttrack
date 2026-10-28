@@ -162,7 +162,7 @@ function inferExtension(fileUri: string, fileName?: string): string {
   return match[1];
 }
 
-export const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+export const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 
 const AVATAR_EXTENSION_BY_TYPE: Record<string, string> = {
   'image/jpeg': 'jpg',
@@ -217,11 +217,16 @@ export async function pickAvatarFromLibrary(): Promise<UploadAvatarInput | null>
   }
 
   const asset = pickerResult.assets[0];
+  const contentType = inferContentType(inferExtension(asset.uri, asset.fileName ?? undefined), asset.mimeType ?? undefined);
+  const selectedSize = asset.fileSize ?? (asset.base64 ? decodeBase64(asset.base64).byteLength : undefined);
+  if (selectedSize != null && selectedSize > AVATAR_MAX_BYTES) {
+    throw new AvatarValidationError('too-large');
+  }
 
   return {
     fileUri: asset.uri,
     fileName: asset.fileName ?? `avatar-${Date.now()}.${inferExtension(asset.uri)}`,
-    contentType: asset.mimeType ?? undefined,
+    contentType,
     base64Data: asset.base64,
   };
 }
@@ -447,7 +452,6 @@ export async function updateProfile(input: UpdateProfileInput): Promise<ProfileR
 
 export async function uploadAvatar(input: UploadAvatarInput): Promise<ProfileRow> {
   const user = await getAuthenticatedUserOrThrow();
-  await getProfile();
 
   const normalizedUri = input.fileUri.trim();
   if (!normalizedUri) {
@@ -472,10 +476,23 @@ export async function uploadAvatar(input: UploadAvatarInput): Promise<ProfileRow
     fileData = decodeBase64(input.base64Data);
   }
 
-  const contentType = inferContentType(inferExtension(normalizedUri, input.fileName), input.contentType);
+  inferContentType(inferExtension(normalizedUri, input.fileName), input.contentType);
 
   if (fileData.byteLength > AVATAR_MAX_BYTES) {
     throw new AvatarValidationError('too-large');
+  }
+
+  const bytes = new Uint8Array(fileData);
+  let contentType: string;
+  if (bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) {
+    contentType = 'image/jpeg';
+  } else if ([137, 80, 78, 71, 13, 10, 26, 10].every((byte, index) => bytes[index] === byte)) {
+    contentType = 'image/png';
+  } else if ([82, 73, 70, 70].every((byte, index) => bytes[index] === byte)
+    && [87, 69, 66, 80].every((byte, index) => bytes[index + 8] === byte)) {
+    contentType = 'image/webp';
+  } else {
+    throw new AvatarValidationError('unsupported-type');
   }
 
   const filePath = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${AVATAR_EXTENSION_BY_TYPE[contentType]}`;
@@ -490,5 +507,16 @@ export async function uploadAvatar(input: UploadAvatarInput): Promise<ProfileRow
   }
 
   const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
-  return updateProfile({ avatarUrl: data.publicUrl });
+  const { data: updatedProfile, error: updateError } = await supabase
+    .from('profiles')
+    .update({ avatar_url: data.publicUrl })
+    .eq('id', user.id)
+    .select('*')
+    .single();
+
+  if (updateError || !updatedProfile || updatedProfile.id !== user.id) {
+    throw new Error(`Unable to update profile: ${updateError?.message ?? 'Unknown error'}`);
+  }
+
+  return updatedProfile;
 }

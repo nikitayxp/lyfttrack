@@ -108,6 +108,19 @@ test the migrations separately in staging before an authorized production rollou
 
 ## Rollout notes
 
+- `20261027093000_avatar_bucket_limits.sql` restricts avatar listing to the
+  authenticated owner's folder and permits JPEG/PNG/WebP uploads. Its original
+  5 MiB setting is superseded by `20261027093100_avatar_two_megabyte_limit.sql`,
+  which applies the issue's requested 2 MiB limit without deleting stored files.
+- The original avatar migration was reported as manually applied before this
+  follow-up. I keep it unchanged and apply the new limit only after staging
+  validation and production approval. Existing public avatar URLs remain valid;
+  the new limit affects future uploads, not existing objects.
+- I validate the picker and actual upload body in the client. Onboarding keeps
+  the stored photo separate from a pending preview and permits discarding the
+  selection after validation or network failures. A network failure can also be
+  retried without selecting the image again.
+
 - Apply first in staging and validate app flows:
    - onboarding weight save
    - profile weight history

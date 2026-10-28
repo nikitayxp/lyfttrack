@@ -39,6 +39,7 @@ module.exports = function createSourceLoader(replacements = {}, globals = {}) {
       module: sourceModule,
       exports: sourceModule.exports,
       console,
+      Error,
       window: globals.window,
       URL,
       URLSearchParams,
@@ -47,6 +48,7 @@ module.exports = function createSourceLoader(replacements = {}, globals = {}) {
       clearTimeout,
       setInterval,
       clearInterval,
+      ...globals,
     }, { filename: absolutePath });
     return sourceModule.exports;
   }

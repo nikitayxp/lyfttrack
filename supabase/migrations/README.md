@@ -138,8 +138,14 @@ test the migrations separately in staging before an authorized production rollou
   the real staging API and compatible app. I still require separate approval
   for merge and production changes; automated tests do not record it.
 - The currently accessible project inventory contains only the linked
-  production project. Real staging API and device checks are still pending;
-  I have not created a staging project or applied this rollout remotely.
+  production project. I have not created a staging project. On 29 October 2026
+  I tested both privacy migrations on the real database in a transaction that
+  rolled back, then applied only the explicitly approved additive view script.
+  Profile rows, friendship rows and migration history were verified unchanged.
+  I have not applied the table permission cutover or merged this PR. Actual API
+  reads confirmed hidden names/details are masked; functional validation found
+  the separate username-underscore search bug #298, which remains a release
+  dependency. Device validation and the final permission rollout are pending.
 
 - Apply first in staging and validate app flows:
    - onboarding weight save

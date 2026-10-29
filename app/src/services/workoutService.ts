@@ -371,7 +371,7 @@ async function getPublicProfilesByIds(userIds: string[]): Promise<Map<string, Pu
   }
 
   const { data: profiles, error: profilesError } = await supabase
-    .from('profiles')
+    .from('profile_cards')
     .select('id, username, full_name, avatar_url')
     .in('id', uniqueUserIds);
 

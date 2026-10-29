@@ -118,10 +118,10 @@ test the migrations separately in staging before an authorized production rollou
   the name is null unless `can_view_user_content` permits access. The private
   details endpoint uses the same visibility rule and keeps height owner-only.
   The old `profile_details` view remains unchanged.
-- I distribute and validate a compatible APK before authorizing the cutover.
-  Old clients that use `profiles.select('*')` fail after revocation. There is
-  no automatic compatibility guarantee or forced-update mechanism here. I do
-  not treat web deployment alone as proof that mobile clients are ready.
+- My active client for this rollout is the web app. I validate the compatible
+  web deployment before the permission cutover. Old APK clients that use
+  `profiles.select('*')` fail after revocation and require an update if used.
+  I do not claim native compatibility or device validation from web checks.
 - `20261027092000_private_profile_fields.sql` remains unchanged.
   `20261027092100_private_profile_cards.sql` then removes the globally readable
   name, including stale column/PUBLIC grants, and recreates the prepared views.
@@ -143,9 +143,10 @@ test the migrations separately in staging before an authorized production rollou
   rolled back, then applied only the explicitly approved additive view script.
   Profile rows, friendship rows and migration history were verified unchanged.
   I have not applied the table permission cutover or merged this PR. Actual API
-  reads confirmed hidden names/details are masked; functional validation found
-  the separate username-underscore search bug #298, which remains a release
-  dependency. Device validation and the final permission rollout are pending.
+  reads confirmed hidden names/details are masked. Functional validation found
+  the separate username-underscore search bug #298, corrected in PR #299.
+  Combined validation passes 197 tests and real API/browser checks with two
+  test accounts. The final web deployment and permission rollout are pending.
 
 - Apply first in staging and validate app flows:
    - onboarding weight save

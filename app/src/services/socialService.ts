@@ -206,7 +206,7 @@ async function getProfilesByIds(ids: string[]): Promise<Map<string, SocialProfil
   }
 
   const { data, error } = await supabase
-    .from('profiles')
+    .from('profile_cards')
     .select('id, username, full_name, avatar_url')
     .in('id', uniqueIds);
 
@@ -240,7 +240,7 @@ export async function searchUsers(query: string): Promise<SocialSearchResult[]> 
   const pattern = buildSearchPattern(normalizedQuery);
 
   const { data: users, error: usersError } = await supabase
-    .from('profiles')
+    .from('profile_cards')
     .select('id, username, full_name, avatar_url')
     .or(`username.ilike.${pattern},full_name.ilike.${pattern}`)
     .neq('id', user.id)
@@ -280,7 +280,7 @@ export async function getActiveUsers(query = '', limit: number | null = null): P
   const pattern = buildSearchPattern(normalizedQuery);
 
   let profilesQuery = supabase
-    .from('profiles')
+    .from('profile_cards')
     .select('id, username, full_name, avatar_url')
     .neq('id', user.id)
     .or(`username.ilike.${pattern},full_name.ilike.${pattern}`)
@@ -337,7 +337,7 @@ export async function getAllAthletes(limit: number | null = null): Promise<Socia
   const safeLimit = normalizeResultLimit(limit, 120);
 
   const { data: profiles, error: profilesError } = await supabase
-    .from('profiles')
+    .from('profile_cards')
     .select('id, username, full_name, avatar_url')
     .neq('id', user.id)
     .order('username', { ascending: true })

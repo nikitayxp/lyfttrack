@@ -5,9 +5,11 @@ uses `/reset-password?token_hash=...&type=recovery`; older app versions do not
 process that link. I keep the six-digit email code available for recovery in a
 different browser or device, including when a link is expired.
 
-I validate the web flow and a newly built Android preview before production
-rollout. The native build must include Expo Crypto 15.0.9 for secure PKCE random
-bytes and SHA-256. Existing installed APKs are not updated by a web deployment.
+My active delivery scope is the web app. I validate the published web flow
+before changing its production configuration. Native-device validation is a
+separate gate if APK delivery resumes: that build must include Expo Crypto
+15.0.9 for secure PKCE random bytes and SHA-256. Existing installed APKs are not
+updated by a web deployment, and web checks do not establish their behavior.
 
 I use this production Site URL: `https://lyfttrack-app.vercel.app`.
 The proposed production redirect allow-list contains only:
@@ -29,5 +31,6 @@ before using it. No auth configuration or template is applied by this PR.
 
 I reconcile the overlapping OAuth work in PR #277 without restoring implicit
 callbacks or LAN forwarding. Google sign-in must continue using S256 PKCE on
-both web and native. I verify the external Google login, recovery email delivery
-and physical-device return separately from local SDK and renderer tests.
+both web and native. I verify the external Google login and recovery email
+delivery separately from local SDK and renderer tests. Physical-device return
+remains unverified and is not a requirement for this web-only delivery.

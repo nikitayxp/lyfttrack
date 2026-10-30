@@ -1,13 +1,10 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, processLock, type Session } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 import { Database } from '@/types/database';
-import {
-  buildLanOAuthBounceRedirectTo,
-  isIpHostname,
-  isLoopbackHostname,
-} from '@/services/oauthLanReturn';
+import { isIpHostname, isLoopbackHostname } from '@/utils/hostname';
+import '@/utils/authCrypto';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -88,19 +85,20 @@ export function getEmailChangeRedirectTo(): string {
   return `${resolveAuthWebBaseUrl()}${SIGN_IN_PATH}`;
 }
 
+export function isNonLoopbackIpOrigin(): boolean {
+  if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.location) {
+    return false;
+  }
+
+  const hostname = window.location.hostname;
+  return isIpHostname(hostname) && !isLoopbackHostname(hostname);
+}
+
 export function getGoogleOAuthRedirectTo(): string {
   if (Platform.OS === 'web') {
     if (typeof window !== 'undefined' && window.location?.origin) {
       const origin = removeTrailingSlashes(window.location.origin);
       const lanCallback = `${origin}${GOOGLE_OAUTH_CALLBACK_PATH}`;
-      const hostname = window.location.hostname;
-
-      // GoTrue rejects non-loopback IP redirects → Site URL. Bounce via HTTPS host.
-      if (__DEV__ && isIpHostname(hostname) && !isLoopbackHostname(hostname)) {
-        const redirectTo = buildLanOAuthBounceRedirectTo(resolveAuthWebBaseUrl(), lanCallback);
-        console.info('[oauth] Google redirectTo (web LAN bounce)', redirectTo);
-        return redirectTo;
-      }
 
       if (__DEV__) {
         console.info('[oauth] Google redirectTo (web)', lanCallback);
@@ -153,8 +151,33 @@ const authStorage = createAuthStorage();
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
     ...(authStorage ? { storage: authStorage } : {}),
+    flowType: 'pkce',
+    ...(Platform.OS !== 'web' ? { lock: processLock } : {}),
     autoRefreshToken: authStorage !== undefined,
     persistSession: authStorage !== undefined,
     detectSessionInUrl: false,
   },
 });
+
+export async function updateRecoveredPassword(session: Session, password: string): Promise<void> {
+  const recoveryClient = createClient<Database>(supabaseUrl!, supabaseAnonKey!, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      storageKey: `lyfttrack.recovery.${session.user.id}.${Date.now()}`,
+    },
+  });
+  try {
+    const { data, error } = await recoveryClient.auth.setSession({
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+    });
+    if (error) throw error;
+    if (data.session?.user.id !== session.user.id) throw new Error('recovery-session-changed');
+    const { error: updateError } = await recoveryClient.auth.updateUser({ password });
+    if (updateError) throw updateError;
+  } finally {
+    recoveryClient.auth.stopAutoRefresh();
+  }
+}

@@ -5,19 +5,43 @@ on:
     branches: [main]
     paths:
       - "supabase/migrations/**"
+  workflow_dispatch:
+    inputs:
+      apply_migrations:
+        description: "Apply all pending production migrations after client rollout validation"
+        type: boolean
+        default: false
+      approved_sha:
+        description: "Full main commit SHA reviewed for this production rollout"
+        type: string
+        required: true
 
 concurrency:
   group: db-migrations
   cancel-in-progress: false
 
 jobs:
+  notice:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Production migrations require a confirmed manual run after client rollout validation.'
   push:
+    if: github.event_name == 'workflow_dispatch' && inputs.apply_migrations
     name: Apply pending migrations
     runs-on: ubuntu-latest
     environment: production
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Verify production approval
+        run: node scripts/check-migration-approval.cjs
+        env:
+          APPLY_MIGRATIONS: ${{ inputs.apply_migrations }}
+          APPROVED_SHA: ${{ inputs.approved_sha }}
 
       - name: Install the Supabase CLI
         uses: supabase/setup-cli@v1

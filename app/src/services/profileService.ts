@@ -13,6 +13,28 @@ export type PublicProfileView = Pick<
   'id' | 'username' | 'full_name' | 'avatar_url' | 'bio' | 'visibility'
 >;
 
+const PROFILE_CARD_COLUMNS = 'id, username, avatar_url, visibility, updated_at';
+
+type ProfileCard = Omit<ProfileRow, 'bio' | 'height_cm' | 'full_name'>;
+
+async function getProfileDetails(profileId: string): Promise<Pick<ProfileRow, 'bio' | 'height_cm' | 'full_name'>> {
+  const { data, error } = await supabase
+    .from('profile_private_details')
+    .select('bio, height_cm, full_name')
+    .eq('id', profileId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Unable to load profile: ${error.message}`);
+  }
+
+  return { bio: data?.bio ?? null, height_cm: data?.height_cm ?? null, full_name: data?.full_name ?? null };
+}
+
+async function withProfileDetails(card: ProfileCard): Promise<ProfileRow> {
+  return { ...card, ...(await getProfileDetails(card.id)) };
+}
+
 export type UpdateProfileInput = {
   username?: string;
   fullName?: string | null;
@@ -238,13 +260,15 @@ async function createProfileForExistingUser(user: User): Promise<ProfileRow> {
     const username = attempt === 0 ? baseUsername : `${baseUsername}_${Math.floor(Math.random() * 9000) + 1000}`;
     const insertRow = buildCreateProfileRow(user, username);
 
-    const { data, error } = await supabase
+    const { data: card, error } = await supabase
       .from('profiles')
-      .upsert(insertRow, { onConflict: 'id' })
-      .select('*')
+      .insert(insertRow)
+      .select(PROFILE_CARD_COLUMNS)
       .single();
 
-    if (!error && data) {
+    if (!error && card) {
+      const data = await withProfileDetails(card);
+
       try {
         await syncAuthMetadataFromProfile(user, data);
       } catch (syncError) {
@@ -255,6 +279,20 @@ async function createProfileForExistingUser(user: User): Promise<ProfileRow> {
     }
 
     if (error?.code === '23505') {
+      const { data: existingCard, error: existingError } = await supabase
+        .from('profiles')
+        .select(PROFILE_CARD_COLUMNS)
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (existingError) {
+        throw new Error(`Unable to load profile: ${existingError.message}`);
+      }
+
+      if (existingCard) {
+        return withProfileDetails(existingCard);
+      }
+
       continue;
     }
 
@@ -267,9 +305,9 @@ async function createProfileForExistingUser(user: User): Promise<ProfileRow> {
 export async function getProfile(): Promise<ProfileRow> {
   const user = await getAuthenticatedUserOrThrow();
 
-  const { data, error } = await supabase
+  const { data: card, error } = await supabase
     .from('profiles')
-    .select('*')
+    .select(PROFILE_CARD_COLUMNS)
     .eq('id', user.id)
     .maybeSingle();
 
@@ -277,7 +315,9 @@ export async function getProfile(): Promise<ProfileRow> {
     throw new Error(`Unable to load profile: ${error.message}`);
   }
 
-  if (data) {
+  if (card) {
+    const data = await withProfileDetails(card);
+
     try {
       await syncAuthMetadataFromProfile(user, data);
     } catch (syncError) {
@@ -298,8 +338,8 @@ export async function getPublicProfileById(profileId: string): Promise<PublicPro
   }
 
   const { data, error } = await supabase
-    .from('profiles')
-    .select('id, username, full_name, avatar_url, bio, visibility')
+    .from('profile_cards')
+    .select('id, username, full_name, avatar_url, visibility')
     .eq('id', normalizedProfileId)
     .maybeSingle();
 
@@ -307,7 +347,12 @@ export async function getPublicProfileById(profileId: string): Promise<PublicPro
     throw new Error(`Unable to load profile: ${error.message}`);
   }
 
-  return data;
+  if (!data) {
+    return null;
+  }
+
+  const { bio } = await getProfileDetails(data.id);
+  return { ...data, bio };
 }
 
 /**
@@ -430,16 +475,18 @@ export async function updateProfile(input: UpdateProfileInput): Promise<ProfileR
     return existingProfile;
   }
 
-  const { data, error } = await supabase
+  const { data: card, error } = await supabase
     .from('profiles')
     .update(updateRow)
     .eq('id', user.id)
-    .select('*')
+    .select(PROFILE_CARD_COLUMNS)
     .single();
 
-  if (error || !data) {
+  if (error || !card) {
     throw new Error(`Unable to update profile: ${error?.message ?? 'Unknown error'}`);
   }
+
+  const data = await withProfileDetails(card);
 
   try {
     await syncAuthMetadataFromProfile(user, data);
@@ -511,12 +558,12 @@ export async function uploadAvatar(input: UploadAvatarInput): Promise<ProfileRow
     .from('profiles')
     .update({ avatar_url: data.publicUrl })
     .eq('id', user.id)
-    .select('*')
+    .select(PROFILE_CARD_COLUMNS)
     .single();
 
   if (updateError || !updatedProfile || updatedProfile.id !== user.id) {
     throw new Error(`Unable to update profile: ${updateError?.message ?? 'Unknown error'}`);
   }
 
-  return updatedProfile;
+  return withProfileDetails(updatedProfile);
 }

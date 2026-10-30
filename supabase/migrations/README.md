@@ -125,6 +125,46 @@ test the migrations separately in staging before an authorized production rollou
   tables, including account deletion. A five-second lock timeout or sixty-second
   statement timeout aborts it without a partial repair. Validate on staging and
   reconcile the earlier migration PRs before applying it in production.
+- I split the profile privacy rollout into additive views, compatible clients,
+  then permission revocation. `supabase/rollouts/profile_read_views.sql` only
+  prepares `profile_cards` and `profile_private_details`; it does not revoke
+  table access, modify profile data or mark migrations as applied. It requires
+  a separately authorized execution in each target environment.
+- I validate the additive views in staging before deploying this client. The
+  new client needs both views to exist. Hidden cards retain username/avatar;
+  the name is null unless `can_view_user_content` permits access. The private
+  details endpoint uses the same visibility rule and keeps height owner-only.
+  The old `profile_details` view remains unchanged.
+- My active client for this rollout is the web app. I validate the compatible
+  web deployment before the permission cutover. Old APK clients that use
+  `profiles.select('*')` fail after revocation and require an update if used.
+  I do not claim native compatibility or device validation from web checks.
+- `20261027092000_private_profile_fields.sql` remains unchanged.
+  `20261027092100_private_profile_cards.sql` then removes the globally readable
+  name, including stale column/PUBLIC grants, and recreates the prepared views.
+  I must reconcile recorded manual changes and earlier pending migrations
+  before applying either; I do not skip or falsely mark the older migration.
+- Production migration application now requires a manual workflow run on
+  `main`, `apply_migrations=true`, and the full approved commit SHA matching
+  both the event revision and the actual checkout. The confirmation defaults
+  to false. Automatic pushes only print a notice. Approval is checked before
+  linking with production credentials. The manual run applies **all** pending
+  migrations, so the SHA review covers that entire set, not only profiles.
+- Before that run I verify two-account profile visibility, hidden-name search,
+  friendship/request cards, comments, feed, onboarding and profile edits through
+  the real staging API and compatible app. I still require separate approval
+  for merge and production changes; automated tests do not record it.
+- The currently accessible project inventory contains only the linked
+  production project. I have not created a staging project. On 29 October 2026
+  I tested both privacy migrations on the real database in a transaction that
+  rolled back, then applied only the explicitly approved additive view script.
+  Profile rows, friendship rows and migration history were verified unchanged.
+  On 30 October 2026 the approved #295/#299 merges were deployed at main
+  `9c3482bfc227b5c6710af49d8bcb324493a57411`. The confirmed manual workflow applied
+  only 092000 and 092100. Live grants and API/browser tests verified the cutover;
+  test profile/friendship digests stayed unchanged. #288/#298 are closed for web.
+  The earlier exercise timestamps 090000/090100 are still pending and require
+  an explicitly reviewed include-all dry run; I do not mark them falsely applied.
 
 - Apply first in staging and validate app flows:
    - onboarding weight save

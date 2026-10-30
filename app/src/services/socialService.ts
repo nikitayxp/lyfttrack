@@ -43,11 +43,18 @@ function normalizeOptionalId(value: string | null | undefined): string | null {
 }
 
 function normalizeSearchTerm(value: string): string {
+  if (value.includes('*')) {
+    return '';
+  }
+
   return value
-    .trim()
-    .replace(/[%_]/g, '')
     .replace(/[(),]/g, ' ')
-    .replace(/\s+/g, ' ');
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildSearchPattern(value: string): string {
+  return `%${value.replace(/[\\%_]/g, (character) => `\\${character}`)}%`;
 }
 
 function normalizeUuidSortKey(value: string): string {
@@ -199,7 +206,7 @@ async function getProfilesByIds(ids: string[]): Promise<Map<string, SocialProfil
   }
 
   const { data, error } = await supabase
-    .from('profiles')
+    .from('profile_cards')
     .select('id, username, full_name, avatar_url')
     .in('id', uniqueIds);
 
@@ -230,10 +237,10 @@ export async function searchUsers(query: string): Promise<SocialSearchResult[]> 
     return [];
   }
 
-  const pattern = `%${normalizedQuery}%`;
+  const pattern = buildSearchPattern(normalizedQuery);
 
   const { data: users, error: usersError } = await supabase
-    .from('profiles')
+    .from('profile_cards')
     .select('id, username, full_name, avatar_url')
     .or(`username.ilike.${pattern},full_name.ilike.${pattern}`)
     .neq('id', user.id)
@@ -270,10 +277,10 @@ export async function getActiveUsers(query = '', limit: number | null = null): P
   }
 
   const safeLimit = limit === null ? null : normalizeResultLimit(limit, 60);
-  const pattern = `%${normalizedQuery}%`;
+  const pattern = buildSearchPattern(normalizedQuery);
 
   let profilesQuery = supabase
-    .from('profiles')
+    .from('profile_cards')
     .select('id, username, full_name, avatar_url')
     .neq('id', user.id)
     .or(`username.ilike.${pattern},full_name.ilike.${pattern}`)
@@ -330,7 +337,7 @@ export async function getAllAthletes(limit: number | null = null): Promise<Socia
   const safeLimit = normalizeResultLimit(limit, 120);
 
   const { data: profiles, error: profilesError } = await supabase
-    .from('profiles')
+    .from('profile_cards')
     .select('id, username, full_name, avatar_url')
     .neq('id', user.id)
     .order('username', { ascending: true })

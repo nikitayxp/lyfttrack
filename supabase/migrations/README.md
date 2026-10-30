@@ -108,6 +108,23 @@ test the migrations separately in staging before an authorized production rollou
 
 ## Rollout notes
 
+- `20261027090000_own_exercise_references.sql` restricts new workout, set,
+  routine and template references to catalogue exercises or the current user's
+  custom exercises.
+- `20261027090100_repair_copied_exercise_references.sql` gives each affected
+  account its own copy of historically shared custom exercises. It preserves
+  translations, aliases, listing state, training row IDs and values. Legacy sets
+  linked to a different workout are detached after retaining their exercise;
+  linked sets without a workout inherit their existing block's workout.
+- A custom-exercise set without either a workout or a block stops the repair
+  with an explicit error. Its owner must be established before retrying; the
+  migration never guesses ownership or deletes the set.
+- The repair also requires every new or updated linked set to match its block's
+  workout and exercise. Unlinked legacy sets remain supported.
+- The repair runs in one transaction and briefly blocks writes to the affected
+  tables, including account deletion. A five-second lock timeout or sixty-second
+  statement timeout aborts it without a partial repair. Validate on staging and
+  reconcile the earlier migration PRs before applying it in production.
 - I split the profile privacy rollout into additive views, compatible clients,
   then permission revocation. `supabase/rollouts/profile_read_views.sql` only
   prepares `profile_cards` and `profile_private_details`; it does not revoke
@@ -142,11 +159,12 @@ test the migrations separately in staging before an authorized production rollou
   I tested both privacy migrations on the real database in a transaction that
   rolled back, then applied only the explicitly approved additive view script.
   Profile rows, friendship rows and migration history were verified unchanged.
-  I have not applied the table permission cutover or merged this PR. Actual API
-  reads confirmed hidden names/details are masked. Functional validation found
-  the separate username-underscore search bug #298, corrected in PR #299.
-  Combined validation passes 197 tests and real API/browser checks with two
-  test accounts. The final web deployment and permission rollout are pending.
+  On 30 October 2026 the approved #295/#299 merges were deployed at main
+  `9c3482bfc227b5c6710af49d8bcb324493a57411`. The confirmed manual workflow applied
+  only 092000 and 092100. Live grants and API/browser tests verified the cutover;
+  test profile/friendship digests stayed unchanged. #288/#298 are closed for web.
+  The earlier exercise timestamps 090000/090100 are still pending and require
+  an explicitly reviewed include-all dry run; I do not mark them falsely applied.
 
 - Apply first in staging and validate app flows:
    - onboarding weight save

@@ -6,7 +6,9 @@ const createSourceLoader = require('./load-source.cjs');
 
 global.IS_REACT_ACT_ENVIRONMENT = true;
 
-async function setup(t, { route = 'reset-password', params = {}, verificationError = null, language = 'pt', returnUrl, platform = 'web' } = {}) {
+async function setup(t, { route = 'reset-password', params = {}, verificationError = null, language = 'pt', returnUrl, platform = 'web', recoveryRequest = async () => ({ error: null }), controlledTimers = false } = {}) {
+  const recoveryRequests = [];
+  const timers = [];
   const verifications = [];
   const exchanges = [];
   const updates = [];
@@ -34,20 +36,24 @@ async function setup(t, { route = 'reset-password', params = {}, verificationErr
     '@/services/authService': { markTermsAcceptedForOAuth: async () => {}, startGoogleOAuth: async () => { throw new Error('oauth-insecure-context'); } },
     '@/services/profileService': { checkUsernameAvailability: async () => true },
     '@/services/signUpDraft': { loadSignUpDraft: async () => null, saveSignUpDraft: async () => {} },
-    '@/services/supabase': { updateRecoveredPassword: async (verifiedSession, password) => { updates.push({ userId: verifiedSession.user.id, password }); }, supabase: { auth: {
+    '@/services/supabase': { getPasswordResetRedirectTo: () => 'https://app.example.test/reset-password', updateRecoveredPassword: async (verifiedSession, password) => { updates.push({ userId: verifiedSession.user.id, password }); }, supabase: { auth: {
+      resetPasswordForEmail: async (...args) => { recoveryRequests.push(args); return recoveryRequest(...args); },
       verifyOtp: async value => { verifications.push(value); if (!verificationError) session = { user: { id: 'test-user' } }; return { data: { session }, error: verificationError }; },
       exchangeCodeForSession: async code => { exchanges.push(code); if (!verificationError) session = { user: { id: 'test-user' } }; return { data: { session, user: session?.user }, error: verificationError }; },
       getSession: async () => { const snapshot = session; if (switchOnSessionRead) { switchOnSessionRead = false; session = { user: { id: 'different-account' } }; } return { data: { session: snapshot }, error: null }; },
       updateUser: async value => { assert.ok(session, 'password updates require a verified recovery session'); updates.push({ userId: session.user.id, ...value }); return { error: null }; },
     } } },
-  }, { window: platform === 'web' ? browserWindow : undefined });
+  }, { window: platform === 'web' ? browserWindow : undefined, ...(controlledTimers ? {
+    setTimeout: (callback, delay) => { const timer = { callback, delay }; timers.push(timer); return timer; },
+    clearTimeout: timer => { const index = timers.indexOf(timer); if (index >= 0) timers.splice(index, 1); },
+  } : {}) });
   const Screen = load(`app/app/(auth)/${route}.tsx`).default;
   let tree;
   await act(async () => { tree = create(React.createElement(Screen)); });
   t.after(async () => { await act(async () => tree.unmount()); });
-  return { get tree() { return tree; }, translate, verifications, exchanges, updates, alerts, browserWindow, routeUpdates,
+  return { get tree() { return tree; }, translate, verifications, exchanges, updates, alerts, browserWindow, routeUpdates, recoveryRequests, timers,
     async input(key, value) { await act(async () => tree.root.findByProps({ accessibilityLabel: translate(key) }).props.onChangeText(value)); },
-    async press(key) { await act(async () => tree.root.findAllByType('Action').find(button => button.props.label === translate(key)).props.onPress()); },
+    async press(key) { const button = tree.root.findAllByType('Action').find(button => button.props.label === translate(key)); assert.ok(button, 'Missing action: '+key); await act(async () => button.props.onPress()); },
     async remount() { await act(async () => tree.unmount()); await act(async () => { tree = create(React.createElement(Screen)); }); },
     switchAccount(userId) { session = { user: { id: userId } }; },
     switchDuringNextSessionRead() { switchOnSessionRead = true; },
@@ -181,3 +187,74 @@ for (const route of ['sign-in', 'sign-up']) {
     });
   }
 }
+
+for (const language of ['pt','en']) {
+  test(`recovery offers a new code without leaving the screen (${language})`, async t => {
+    const app = await setup(t, { language, controlledTimers: true, params: { '#': 'access_token=old&refresh_token=old' } });
+    await app.press('auth.resetPassword.requestCodeAction');
+    assert.equal(app.recoveryRequests.length, 0);
+    await app.input('auth.resetPassword.emailLabel', '  TEST@example.com ');
+    await app.input('auth.resetPassword.codeLabel', '123456');
+    await app.press('auth.resetPassword.requestCodeAction');
+    assert.equal(app.recoveryRequests.length, 1);
+    assert.equal(app.recoveryRequests[0][0], 'test@example.com');
+    assert.equal(app.recoveryRequests[0][1].redirectTo, 'https://app.example.test/reset-password');
+    assert.equal(app.verifications.length, 0);
+    assert.equal(app.updates.length, 0);
+    assert.ok(JSON.stringify(app.tree.toJSON()).includes(app.translate('auth.resetPassword.requestCodeSent')));
+    assert.equal(app.tree.root.findByProps({ accessibilityLabel: app.translate('auth.resetPassword.codeLabel') }).props.value, '');
+    await app.press('auth.resetPassword.requestCodeAction');
+    assert.equal(app.recoveryRequests.length, 1, 'successful request must have a cooldown');
+    const timer = app.timers.find(timer => timer.delay === 60000);
+    assert.ok(timer);
+    await act(async () => timer.callback());
+    await app.press('auth.resetPassword.requestCodeAction');
+    assert.equal(app.recoveryRequests.length, 2);
+  });
+}
+
+test('a failed new-code request keeps the entered code and permits retry', async t => {
+  let fail = true;
+  const app = await setup(t, { controlledTimers: true, recoveryRequest: async () => { if (fail) throw new Error('network unavailable'); return { error: null }; } });
+  await app.input('auth.resetPassword.emailLabel', 'test@example.com');
+  await app.input('auth.resetPassword.codeLabel', '123456');
+  await app.press('auth.resetPassword.requestCodeAction');
+  assert.equal(app.tree.root.findByProps({ accessibilityLabel: app.translate('auth.resetPassword.codeLabel') }).props.value, '123456');
+  assert.ok(JSON.stringify(app.alerts).includes(app.translate('auth.resetPassword.requestCodeFailed')));
+  fail = false;
+  await app.press('auth.resetPassword.requestCodeAction');
+  assert.equal(app.recoveryRequests.length, 2);
+});
+
+
+test('concurrent clicks request only one recovery email', async t => {
+  let resolveRequest;
+  const app = await setup(t, { controlledTimers: true, recoveryRequest: () => new Promise(resolve => { resolveRequest = resolve; }) });
+  await app.input('auth.resetPassword.emailLabel', 'test@example.com');
+  await app.press('auth.resetPassword.requestCodeAction');
+  await app.press('auth.resetPassword.requestCodeAction');
+  assert.equal(app.recoveryRequests.length, 1);
+  assert.equal(app.tree.root.findByProps({ accessibilityLabel: app.translate('auth.resetPassword.emailLabel') }).props.editable, false);
+  assert.equal(app.tree.root.findByProps({ accessibilityLabel: app.translate('auth.resetPassword.codeLabel') }).props.editable, false);
+  await act(async () => resolveRequest({ error: null }));
+  assert.equal(app.timers.length, 1);
+});
+
+test('an invalid email never sends a recovery request', async t => {
+  const app = await setup(t);
+  for (const email of ['not-an-email', 'a@b', 'a b@example.com']) {
+    await app.input('auth.resetPassword.emailLabel', email);
+    await app.press('auth.resetPassword.requestCodeAction');
+  }
+  assert.equal(app.recoveryRequests.length, 0);
+});
+
+test('leaving recovery during a pending request does not start a late cooldown timer', async t => {
+  let resolveRequest;
+  const app = await setup(t, { controlledTimers: true, recoveryRequest: () => new Promise(resolve => { resolveRequest = resolve; }) });
+  await app.input('auth.resetPassword.emailLabel', 'test@example.com');
+  await app.press('auth.resetPassword.requestCodeAction');
+  await act(async () => app.tree.unmount());
+  await act(async () => resolveRequest({ error: null }));
+  assert.equal(app.timers.length, 0);
+});

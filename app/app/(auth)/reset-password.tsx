@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   KeyboardAvoidingView,
@@ -15,7 +15,7 @@ import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
 import { AppButton } from '@/components/ui/AppButton';
 import { useAppToast } from '@/context/ToastContext';
-import { supabase, updateRecoveredPassword } from '@/services/supabase';
+import { getPasswordResetRedirectTo, supabase, updateRecoveredPassword } from '@/services/supabase';
 import { authReturnParamsKey, clearedAuthReturnParams, completePasswordRecoveryReturn, readAuthReturnUrl } from '@/services/oauthReturn';
 import { goBack } from '@/utils/navigation';
 import {
@@ -60,6 +60,54 @@ export default function ResetPasswordScreen() {
   const isCodeVerified = verifiedRecoveryUserId !== null;
   const [isDone, setIsDone] = useState(false);
   const [invalidRecoveryLink, setInvalidRecoveryLink] = useState(false);
+  const [requestingCode, setRequestingCode] = useState(false);
+  const [codeRequestCooldown, setCodeRequestCooldown] = useState(false);
+  const [codeRequestFeedback, setCodeRequestFeedback] = useState('');
+  const codeRequestLocked = useRef(false);
+  const codeRequestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (codeRequestTimer.current !== null) clearTimeout(codeRequestTimer.current);
+    };
+  }, []);
+
+  async function handleRequestCode() {
+    if (codeRequestLocked.current || loading) return;
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      showAlert(showToast, t('auth.resetPassword.title'), t('auth.resetPassword.requestCodeEmailRequired'), 'error');
+      return;
+    }
+    codeRequestLocked.current = true;
+    setRequestingCode(true);
+    setCodeRequestFeedback('');
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+        redirectTo: getPasswordResetRedirectTo(),
+      });
+      if (!mounted.current) return;
+      if (error) throw error;
+      setCode('');
+      setInvalidRecoveryLink(false);
+      setCodeRequestFeedback(t('auth.resetPassword.requestCodeSent'));
+      setCodeRequestCooldown(true);
+      codeRequestTimer.current = setTimeout(() => {
+        codeRequestLocked.current = false;
+        codeRequestTimer.current = null;
+        setCodeRequestCooldown(false);
+      }, 60000);
+    } catch {
+      codeRequestLocked.current = false;
+      if (!mounted.current) return;
+      showAlert(showToast, t('auth.resetPassword.title'), t('auth.resetPassword.requestCodeFailed'), 'error');
+    } finally {
+      if (mounted.current) setRequestingCode(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -278,6 +326,7 @@ export default function ResetPasswordScreen() {
                 accessibilityLabel={t('auth.resetPassword.emailLabel')}
                 value={email}
                 onChangeText={setEmail}
+                editable={!loading && !requestingCode}
                 placeholder={t('auth.verify.emailPlaceholder')}
                 placeholderTextColor={palette.textMuted}
                 keyboardType="email-address"
@@ -293,6 +342,7 @@ export default function ResetPasswordScreen() {
                 accessibilityLabel={t('auth.resetPassword.codeLabel')}
                 value={code}
                 onChangeText={setCode}
+                editable={!loading && !requestingCode}
                 placeholder={t('auth.verify.codePlaceholder')}
                 placeholderTextColor={palette.textMuted}
                 keyboardType="number-pad"
@@ -307,8 +357,20 @@ export default function ResetPasswordScreen() {
               label={t('auth.resetPassword.verifyCodeAction')}
               onPress={() => void handleVerifyCode()}
               loading={loading}
+              disabled={requestingCode}
               style={styles.submitButton}
             />
+
+            <AppButton
+              label={t('auth.resetPassword.requestCodeAction')}
+              onPress={() => void handleRequestCode()}
+              loading={requestingCode}
+              disabled={loading || codeRequestCooldown}
+              style={[styles.submitButton, { backgroundColor: 'transparent', borderWidth: 1, borderColor: palette.border }]}
+            />
+            {codeRequestFeedback ? (
+              <Text accessibilityLiveRegion="polite" style={styles.codeHint}>{codeRequestFeedback}</Text>
+            ) : null}
 
             <TouchableOpacity
               style={styles.switchAction}

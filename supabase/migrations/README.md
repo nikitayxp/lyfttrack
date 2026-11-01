@@ -108,6 +108,23 @@ test the migrations separately in staging before an authorized production rollou
 
 ## Rollout notes
 
+- `20261027090000_own_exercise_references.sql` restricts new workout, set,
+  routine and template references to catalogue exercises or the current user's
+  custom exercises.
+- `20261027090100_repair_copied_exercise_references.sql` gives each affected
+  account its own copy of historically shared custom exercises. It preserves
+  translations, aliases, listing state, training row IDs and values. Legacy sets
+  linked to a different workout are detached after retaining their exercise;
+  linked sets without a workout inherit their existing block's workout.
+- A custom-exercise set without either a workout or a block stops the repair
+  with an explicit error. Its owner must be established before retrying; the
+  migration never guesses ownership or deletes the set.
+- The repair also requires every new or updated linked set to match its block's
+  workout and exercise. Unlinked legacy sets remain supported.
+- The repair runs in one transaction and briefly blocks writes to the affected
+  tables, including account deletion. A five-second lock timeout or sixty-second
+  statement timeout aborts it without a partial repair. Validate on staging and
+  reconcile the earlier migration PRs before applying it in production.
 - 20261027094000_tighten_role_privileges.sql removes anonymous and PUBLIC access
   to app tables, keeps authenticated CRUD and existing column restrictions,
   and removes table administration privileges, including MAINTAIN on PostgreSQL 17+.
@@ -173,6 +190,8 @@ test the migrations separately in staging before an authorized production rollou
   verified the privacy cutover; test profile/friendship digests stayed unchanged.
   Both #288 and the separate username-search bug #298 are closed for web delivery.
   This does not authorize later avatar migrations or claim native validation.
+  The earlier exercise timestamps 090000/090100 are still pending and require
+  an explicitly reviewed include-all dry run; I do not mark them falsely applied.
 
 - Apply first in staging and validate app flows:
    - onboarding weight save

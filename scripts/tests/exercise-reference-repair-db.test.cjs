@@ -95,6 +95,26 @@ async function seedHistoricalReferences(db) {
   }
 }
 
+test('original exercise deletion waits for its own workout to be removed', async t => {
+  const db = await createDb(t);
+  await seedHistoricalReferences(db);
+  await db.query('insert into workout_exercises(id,workout_id,exercise_id) values ($1,$1,$2)', [owner, source]);
+  await db.query('insert into sets(id,workout_id,exercise_id,workout_exercise_id,weight,reps,set_number) values ($1,$1,$2,$1,12,5,1)', [owner, source]);
+  await migrate(db);
+  const before = await snapshot(db);
+  await assert.rejects(db.query('delete from exercises where id=$1', [source]), /sets_exercise_id_fkey/);
+  assert.deepEqual(await snapshot(db), before);
+  await db.query('delete from workouts where id=$1', [owner]);
+  await db.query('delete from exercises where id=$1', [source]);
+  assert.deepEqual(await snapshot(db), {
+    ...before,
+    exercises: before.exercises.filter(row => row.id !== source),
+    workouts: before.workouts.filter(row => row.id !== owner),
+    workout_exercises: before.workout_exercises.filter(row => row.workout_id !== owner),
+    sets: before.sets.filter(row => row.workout_id !== owner),
+  });
+});
+
 test('historical references become independent per account without changing training data', async t => {
   const db = await createDb(t);
   await seedHistoricalReferences(db);

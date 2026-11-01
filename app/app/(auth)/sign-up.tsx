@@ -196,7 +196,9 @@ export default function SignUpScreen() {
       await markTermsAcceptedForOAuth();
       await startGoogleOAuth();
     } catch (error) {
-      const message = error instanceof Error && error.message === 'oauth-cancelled'
+      const message = error instanceof Error && error.message === 'oauth-insecure-context'
+        ? t('auth.googleSecureContext')
+        : error instanceof Error && error.message === 'oauth-cancelled'
         ? t('auth.signUp.googleCancelled')
         : t('auth.signUp.googleError');
 

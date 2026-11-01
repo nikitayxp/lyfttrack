@@ -184,16 +184,39 @@ function inferExtension(fileUri: string, fileName?: string): string {
   return match[1];
 }
 
+export const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+
+const AVATAR_EXTENSION_BY_TYPE: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
+
+export class AvatarValidationError extends Error {
+  constructor(readonly reason: 'too-large' | 'unsupported-type') {
+    super(reason === 'too-large' ? 'Avatar file is too large.' : 'Avatar file type is not supported.');
+    this.name = 'AvatarValidationError';
+  }
+}
+
+const AVATAR_TYPE_BY_EXTENSION: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+};
+
 function inferContentType(extension: string, providedType?: string): string {
-  if (providedType) {
-    return providedType;
+  const normalizedType = providedType?.trim().toLowerCase();
+  const candidate = normalizedType === 'image/jpg'
+    ? 'image/jpeg'
+    : normalizedType || AVATAR_TYPE_BY_EXTENSION[extension];
+
+  if (!candidate || !AVATAR_EXTENSION_BY_TYPE[candidate]) {
+    throw new AvatarValidationError('unsupported-type');
   }
 
-  if (extension === 'png') return 'image/png';
-  if (extension === 'webp') return 'image/webp';
-  if (extension === 'gif') return 'image/gif';
-  if (extension === 'svg') return 'image/svg+xml';
-  return 'image/jpeg';
+  return candidate;
 }
 
 export async function pickAvatarFromLibrary(): Promise<UploadAvatarInput | null> {
@@ -216,11 +239,16 @@ export async function pickAvatarFromLibrary(): Promise<UploadAvatarInput | null>
   }
 
   const asset = pickerResult.assets[0];
+  const contentType = inferContentType(inferExtension(asset.uri, asset.fileName ?? undefined), asset.mimeType ?? undefined);
+  const selectedSize = asset.fileSize ?? (asset.base64 ? decodeBase64(asset.base64).byteLength : undefined);
+  if (selectedSize != null && selectedSize > AVATAR_MAX_BYTES) {
+    throw new AvatarValidationError('too-large');
+  }
 
   return {
     fileUri: asset.uri,
     fileName: asset.fileName ?? `avatar-${Date.now()}.${inferExtension(asset.uri)}`,
-    contentType: asset.mimeType ?? undefined,
+    contentType,
     base64Data: asset.base64,
   };
 }
@@ -471,7 +499,6 @@ export async function updateProfile(input: UpdateProfileInput): Promise<ProfileR
 
 export async function uploadAvatar(input: UploadAvatarInput): Promise<ProfileRow> {
   const user = await getAuthenticatedUserOrThrow();
-  await getProfile();
 
   const normalizedUri = input.fileUri.trim();
   if (!normalizedUri) {
@@ -496,9 +523,26 @@ export async function uploadAvatar(input: UploadAvatarInput): Promise<ProfileRow
     fileData = decodeBase64(input.base64Data);
   }
 
-  const extension = inferExtension(normalizedUri, input.fileName);
-  const contentType = inferContentType(extension, input.contentType);
-  const filePath = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
+  inferContentType(inferExtension(normalizedUri, input.fileName), input.contentType);
+
+  if (fileData.byteLength > AVATAR_MAX_BYTES) {
+    throw new AvatarValidationError('too-large');
+  }
+
+  const bytes = new Uint8Array(fileData);
+  let contentType: string;
+  if (bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) {
+    contentType = 'image/jpeg';
+  } else if ([137, 80, 78, 71, 13, 10, 26, 10].every((byte, index) => bytes[index] === byte)) {
+    contentType = 'image/png';
+  } else if ([82, 73, 70, 70].every((byte, index) => bytes[index] === byte)
+    && [87, 69, 66, 80].every((byte, index) => bytes[index + 8] === byte)) {
+    contentType = 'image/webp';
+  } else {
+    throw new AvatarValidationError('unsupported-type');
+  }
+
+  const filePath = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${AVATAR_EXTENSION_BY_TYPE[contentType]}`;
 
   const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, fileData, {
     contentType,
@@ -510,5 +554,16 @@ export async function uploadAvatar(input: UploadAvatarInput): Promise<ProfileRow
   }
 
   const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
-  return updateProfile({ avatarUrl: data.publicUrl });
+  const { data: updatedProfile, error: updateError } = await supabase
+    .from('profiles')
+    .update({ avatar_url: data.publicUrl })
+    .eq('id', user.id)
+    .select(PROFILE_CARD_COLUMNS)
+    .single();
+
+  if (updateError || !updatedProfile || updatedProfile.id !== user.id) {
+    throw new Error(`Unable to update profile: ${updateError?.message ?? 'Unknown error'}`);
+  }
+
+  return withProfileDetails(updatedProfile);
 }

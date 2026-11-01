@@ -21,10 +21,16 @@ function exerciseContentKey(row: ExerciseRow): string {
   ]);
 }
 
-export async function adoptForeignCustomExercises(rows: ExerciseRow[]): Promise<Map<string, ExerciseRow>> {
+export async function adoptForeignCustomExercises(
+  rows: ExerciseRow[],
+  requiredExerciseIds: readonly string[] = rows.map((row) => row.id),
+): Promise<Map<string, ExerciseRow>> {
   const byOriginalId = new Map(rows.map((row) => [row.id, row] as const));
+  if (requiredExerciseIds.some((id) => !byOriginalId.has(id))) {
+    throw new Error('Unable to copy exercises: source exercises are unavailable');
+  }
   const user = await getAuthenticatedUserOrThrow();
-  const foreignRows = rows.filter((row) => row.is_custom && row.created_by !== user.id);
+  const foreignRows = [...byOriginalId.values()].filter((row) => row.is_custom && row.created_by !== user.id);
 
   if (foreignRows.length === 0) {
     return byOriginalId;
@@ -40,16 +46,24 @@ export async function adoptForeignCustomExercises(rows: ExerciseRow[]): Promise<
     throw new Error(`Unable to load exercises: ${ownError.message}`);
   }
 
-  const ownByContent = new Map((ownRows ?? []).map((row) => [exerciseContentKey(row), row] as const));
-  const pendingCopies = new Map<string, TablesInsert<'exercises'>>();
+  const ownByContent = new Map<string, ExerciseRow[]>();
+  for (const row of [...(ownRows ?? [])].sort((a, b) => a.id.localeCompare(b.id))) {
+    const key = exerciseContentKey(row);
+    ownByContent.set(key, [...(ownByContent.get(key) ?? []), row]);
+  }
+  const usedIds = new Set(rows.filter((row) => !row.is_custom || row.created_by === user.id).map((row) => row.id));
+  const pendingCopies = new Map<string, TablesInsert<'exercises'> & { id: string }>();
 
   for (const row of foreignRows) {
     const key = exerciseContentKey(row);
-    if (ownByContent.has(key) || pendingCopies.has(key)) {
+    const reusable = ownByContent.get(key)?.find((candidate) => !usedIds.has(candidate.id));
+    if (reusable) {
+      byOriginalId.set(row.id, reusable);
+      usedIds.add(reusable.id);
       continue;
     }
 
-    pendingCopies.set(key, {
+    pendingCopies.set(row.id, {
       id: generateId(),
       name: row.name,
       name_en: row.name_en,
@@ -77,17 +91,14 @@ export async function adoptForeignCustomExercises(rows: ExerciseRow[]): Promise<
       throw new Error(`Unable to create exercises: ${createError.message}`);
     }
 
-    for (const row of created ?? []) {
-      ownByContent.set(exerciseContentKey(row), row);
-    }
-  }
-
-  for (const row of foreignRows) {
-    const ownRow = ownByContent.get(exerciseContentKey(row));
-    if (ownRow) {
-      byOriginalId.set(row.id, ownRow);
-    } else {
-      throw new Error('Unable to copy exercises: an owned copy was not returned');
+    const createdById = new Map((created ?? []).map((row) => [row.id, row] as const));
+    for (const [originalId, copy] of pendingCopies) {
+      const ownRow = createdById.get(copy.id);
+      if (!ownRow || ownRow.created_by !== user.id || !ownRow.is_custom
+        || exerciseContentKey(ownRow) !== exerciseContentKey(byOriginalId.get(originalId)!)) {
+        throw new Error('Unable to copy exercises: an owned copy was not returned');
+      }
+      byOriginalId.set(originalId, ownRow);
     }
   }
 

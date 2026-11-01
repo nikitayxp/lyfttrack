@@ -106,6 +106,45 @@ test('an incomplete copy result aborts instead of silently omitting an exercise'
   await assert.rejects(adoptForeignCustomExercises([friendNew]), /Unable to (copy|create) exercises/);
 });
 
+test('missing source rows abort before creating any owned exercises', async () => {
+  const { adoptForeignCustomExercises, inserted } = loadService([]);
+  await assert.rejects(
+    adoptForeignCustomExercises([catalog, friendNew], [catalog.id, friendNew.id, 'missing-source']),
+    /source exercises.*unavailable/i,
+  );
+  assert.equal(inserted.length, 0);
+});
+
+test('distinct source ids with identical content keep separate exercise identities', async () => {
+  const second = { ...friendNew, id: 'friend-twin' };
+  const { adoptForeignCustomExercises, inserted } = loadService([]);
+  const result = await adoptForeignCustomExercises([friendNew, second, friendNew]);
+  assert.equal(inserted.length, 2);
+  assert.notEqual(result.get(friendNew.id).id, result.get(second.id).id);
+});
+
+test('identical owned copies are each reused at most once in the same workout', async () => {
+  const firstOwn = { ...friendNew, id: 'own-a', created_by: me };
+  const secondOwn = { ...firstOwn, id: 'own-b' };
+  const secondSource = { ...friendNew, id: 'friend-twin' };
+  const { adoptForeignCustomExercises, inserted } = loadService([secondOwn, firstOwn]);
+  const first = await adoptForeignCustomExercises([friendNew, secondSource]);
+  const next = await adoptForeignCustomExercises([friendNew, secondSource]);
+  assert.equal(inserted.length, 0);
+  assert.notEqual(first.get(friendNew.id).id, first.get(secondSource.id).id);
+  assert.equal(next.get(friendNew.id).id, first.get(friendNew.id).id);
+  assert.equal(next.get(secondSource.id).id, first.get(secondSource.id).id);
+});
+
+test('an own exercise already in the source cannot also replace a foreign block', async () => {
+  const own = { ...friendNew, id: 'own-in-workout', created_by: me };
+  const { adoptForeignCustomExercises, inserted } = loadService([own]);
+  const result = await adoptForeignCustomExercises([friendNew, own]);
+  assert.equal(result.get(own.id).id, own.id);
+  assert.notEqual(result.get(friendNew.id).id, own.id);
+  assert.equal(inserted.length, 1);
+});
+
 test('a database failure aborts adoption without returning foreign references', async () => {
   for (const failure of [{ loadError: { message: 'Read failed' } }, { createError: { message: 'Write failed' } }]) {
     const { adoptForeignCustomExercises } = loadService([], failure);

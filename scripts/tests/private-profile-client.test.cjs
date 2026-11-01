@@ -20,6 +20,9 @@ function setup({ bootstrap = false, failCards = false, bootstrapRace = false, us
     const method = options.method ?? 'GET';
     requests.push({ table, columns, method, url });
     const reply = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+    if (url.pathname.startsWith('/storage/v1/object/avatars/')) {
+      return reply({ Key: url.pathname.split('/object/')[1] });
+    }
     if ((table === 'profiles' && /full_name|bio|height_cm|\*/.test(columns)) || /profiles\([^)]*full_name/.test(columns)) {
       return reply({ code: '42501', message: 'permission denied for protected profile columns' }, 403);
     }
@@ -70,6 +73,23 @@ test('own profile load and edits request only public columns from the table', as
   assert.equal(saved.full_name, 'Updated name');
   assert.equal(saved.bio, 'Updated bio');
   assert.equal(saved.height_cm, 182);
+});
+
+test('avatar upload returns own details without selecting revoked table columns', async () => {
+  const { load, requests } = setup();
+  const profile = await load('app/src/services/profileService.ts').uploadAvatar({
+    fileUri: 'file:///avatar.jpg',
+    base64Data: Buffer.from([255, 216, 255, 1, 1, 1, 1, 1]).toString('base64'),
+  });
+  assert.equal(profile.id, ownId);
+  assert.equal(profile.full_name, 'Own name');
+  assert.equal(profile.bio, 'Own bio');
+  assert.equal(profile.height_cm, 180);
+  assert.match(profile.avatar_url, /\/avatars\/00000000-0000-0000-0000-000000000001\//);
+  const writes = requests.filter(request => request.table === 'profiles' && request.method === 'PATCH');
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].url.searchParams.get('id'), `eq.${ownId}`);
+  assert.ok(requests.some(request => request.table === 'profile_private_details'));
 });
 
 test('onboarding profile bootstrap does not request revoked columns in RETURNING', async () => {

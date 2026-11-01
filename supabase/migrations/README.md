@@ -125,6 +125,18 @@ test the migrations separately in staging before an authorized production rollou
   tables, including account deletion. A five-second lock timeout or sixty-second
   statement timeout aborts it without a partial repair. Validate on staging and
   reconcile the earlier migration PRs before applying it in production.
+- `20261027093000_avatar_bucket_limits.sql` restricts avatar listing to the
+  authenticated owner's folder and permits JPEG/PNG/WebP uploads. Its original
+  5 MiB setting is superseded by `20261027093100_avatar_two_megabyte_limit.sql`,
+  which applies the issue's requested 2 MiB limit without deleting stored files.
+- The original avatar migration was reported as manually applied before this
+  follow-up. I keep it unchanged and apply the new limit only after staging
+  validation and production approval. Existing public avatar URLs remain valid;
+  the new limit affects future uploads, not existing objects.
+- I validate the picker and actual upload body in the client. Onboarding keeps
+  the stored photo separate from a pending preview and permits discarding the
+  selection after validation or network failures. A network failure can also be
+  retried without selecting the image again.
 - I split the profile privacy rollout into additive views, compatible clients,
   then permission revocation. `supabase/rollouts/profile_read_views.sql` only
   prepares `profile_cards` and `profile_private_details`; it does not revoke
@@ -159,10 +171,12 @@ test the migrations separately in staging before an authorized production rollou
   I tested both privacy migrations on the real database in a transaction that
   rolled back, then applied only the explicitly approved additive view script.
   Profile rows, friendship rows and migration history were verified unchanged.
-  On 30 October 2026 the approved #295/#299 merges were deployed at main
-  `9c3482bfc227b5c6710af49d8bcb324493a57411`. The confirmed manual workflow applied
-  only 092000 and 092100. Live grants and API/browser tests verified the cutover;
-  test profile/friendship digests stayed unchanged. #288/#298 are closed for web.
+  On 30 October 2026 the approved #295/#299 merges were deployed to production
+  at main `9c3482bfc227b5c6710af49d8bcb324493a57411`. The confirmed manual workflow
+  applied only 092000 and 092100. Live column grants and real API/browser checks
+  verified the privacy cutover; test profile/friendship digests stayed unchanged.
+  Both #288 and the separate username-search bug #298 are closed for web delivery.
+  This does not authorize later avatar migrations or claim native validation.
   The earlier exercise timestamps 090000/090100 are still pending and require
   an explicitly reviewed include-all dry run; I do not mark them falsely applied.
 

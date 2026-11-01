@@ -275,16 +275,44 @@ test('friendship RPC and trigger execution survive anonymous function revocation
 test('profile column restrictions stay intact after table privilege hardening', async t => {
   const db = await createDb({ remoteObjects: true });
   t.after(() => db.close());
+  await db.exec(readMigration('20261027092000_private_profile_fields.sql'));
+  await db.exec(readMigration('20261027092100_private_profile_cards.sql'));
   await db.exec(`
-    revoke select on public.profiles from authenticated;
-    grant select(id,username,full_name,avatar_url,visibility,updated_at) on public.profiles to authenticated;
+    update public.profiles set full_name = 'Private owner' where id = '${owner}';
+    update public.profiles set full_name = 'Private other' where id = '${other}';
   `);
+  await apply(db);
   await apply(db);
   await asRole(db, 'authenticated', async () => {
     assert.equal((await db.query('select username from public.profiles where id=$1', [owner])).rows[0].username, 'owner');
-    await assert.rejects(db.query('select bio,height_cm from public.profiles where id=$1', [other]), /permission denied/);
+    for (const column of ['full_name', 'bio', 'height_cm', '*']) {
+      await assert.rejects(db.query('select ' + column + ' from public.profiles where id=$1', [other]), /permission denied/);
+    }
+    assert.equal((await db.query('select full_name from public.profile_cards where id=$1', [other])).rows[0].full_name, null);
+    for (const view of ['profile_details', 'profile_private_details']) {
+      assert.equal((await db.query('select * from public.' + view + ' where id=$1', [other])).rows.length, 0);
+    }
+    const own = (await db.query('select * from public.profile_private_details where id=$1', [owner])).rows[0];
+    assert.equal(own.full_name, 'Private owner');
+    assert.equal(own.bio, 'Owner bio');
+    assert.equal(Number(own.height_cm), 180);
     await db.query("update public.profiles set full_name='Still editable' where id=$1", [owner]);
+    assert.equal((await db.query('select full_name from public.profile_cards where id=$1', [owner])).rows[0].full_name, 'Still editable');
   });
+  await db.query("update public.profiles set visibility='public' where id=$1", [other]);
+  await asRole(db, 'authenticated', async () => {
+    const visible = (await db.query('select * from public.profile_private_details where id=$1', [other])).rows[0];
+    assert.equal(visible.full_name, 'Private other');
+    assert.equal(visible.bio, 'Other bio');
+    assert.equal(visible.height_cm, null);
+  });
+  await asRole(db, 'anon', async () => {
+    for (const view of ['profile_details', 'profile_cards', 'profile_private_details']) {
+      await assert.rejects(db.query('select * from public.' + view), /permission denied/);
+    }
+    await assert.rejects(db.query('select public.can_view_user_content($1)', [other]), /permission denied/);
+    assert.equal((await db.query("select public.check_username_available('available_user') available")).rows[0].available, true);
+  }, '');
 });
 
 test('the unversioned project table is quarantined without deleting its row', async t => {

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useLocalSearchParams } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -15,7 +15,8 @@ import { ACTIVE_OPACITY, Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
 import { AppButton } from '@/components/ui/AppButton';
 import { useAppToast } from '@/context/ToastContext';
-import { supabase } from '@/services/supabase';
+import { getPasswordResetRedirectTo, supabase, updateRecoveredPassword } from '@/services/supabase';
+import { authReturnParamsKey, clearedAuthReturnParams, completePasswordRecoveryReturn, readAuthReturnUrl } from '@/services/oauthReturn';
 import { goBack } from '@/utils/navigation';
 import {
   resetPasswordCameFromKnownOrigin,
@@ -36,9 +37,10 @@ function readRouteValue(value: string | string[] | undefined): string {
 export default function ResetPasswordScreen() {
   const { t } = useTranslation();
   const { showToast } = useAppToast();
-  const params = useLocalSearchParams<{ email?: string | string[]; from?: string | string[] }>();
+  const params = useLocalSearchParams<Record<string, string | string[]>>();
   const routeEmail = readRouteValue(params.email);
   const origin = readRouteValue(params.from);
+  const returnParamsKey = authReturnParamsKey(params);
   const backRoute = resolveResetPasswordBackRoute(origin);
   const backLabel = resetPasswordCameFromKnownOrigin(origin)
     ? t('auth.resetPassword.backToEditProfile')
@@ -54,8 +56,78 @@ export default function ResetPasswordScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [isCodeVerified, setIsCodeVerified] = useState(false);
+  const [verifiedRecoveryUserId, setVerifiedRecoveryUserId] = useState<string | null>(null);
+  const isCodeVerified = verifiedRecoveryUserId !== null;
   const [isDone, setIsDone] = useState(false);
+  const [invalidRecoveryLink, setInvalidRecoveryLink] = useState(false);
+  const [requestingCode, setRequestingCode] = useState(false);
+  const [codeRequestCooldown, setCodeRequestCooldown] = useState(false);
+  const [codeRequestFeedback, setCodeRequestFeedback] = useState('');
+  const codeRequestLocked = useRef(false);
+  const codeRequestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (codeRequestTimer.current !== null) clearTimeout(codeRequestTimer.current);
+    };
+  }, []);
+
+  async function handleRequestCode() {
+    if (codeRequestLocked.current || loading) return;
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      showAlert(showToast, t('auth.resetPassword.title'), t('auth.resetPassword.requestCodeEmailRequired'), 'error');
+      return;
+    }
+    codeRequestLocked.current = true;
+    setRequestingCode(true);
+    setCodeRequestFeedback('');
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+        redirectTo: getPasswordResetRedirectTo(),
+      });
+      if (!mounted.current) return;
+      if (error) throw error;
+      setCode('');
+      setInvalidRecoveryLink(false);
+      setCodeRequestFeedback(t('auth.resetPassword.requestCodeSent'));
+      setCodeRequestCooldown(true);
+      codeRequestTimer.current = setTimeout(() => {
+        codeRequestLocked.current = false;
+        codeRequestTimer.current = null;
+        setCodeRequestCooldown(false);
+      }, 60000);
+    } catch {
+      codeRequestLocked.current = false;
+      if (!mounted.current) return;
+      showAlert(showToast, t('auth.resetPassword.title'), t('auth.resetPassword.requestCodeFailed'), 'error');
+    } finally {
+      if (mounted.current) setRequestingCode(false);
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    const url = readAuthReturnUrl(returnParamsKey, 'lyfttrack://reset-password');
+    if (!url.hash && !Object.keys(clearedAuthReturnParams).some(key => url.searchParams.has(key))) return;
+    setLoading(true);
+    setVerifiedRecoveryUserId(null);
+    setInvalidRecoveryLink(false);
+    void completePasswordRecoveryReturn(url.toString()).then(userId => {
+      if (!cancelled) setVerifiedRecoveryUserId(userId);
+    }).catch(() => {
+      if (!cancelled) setInvalidRecoveryLink(true);
+    }).finally(() => {
+      if (!cancelled) {
+        setLoading(false);
+        router.setParams(clearedAuthReturnParams);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [returnParamsKey]);
 
   // Sync email from route params
   useEffect(() => {
@@ -76,18 +148,18 @@ export default function ResetPasswordScreen() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.verifyOtp({
+      const { data, error } = await supabase.auth.verifyOtp({
         email: normalizedEmail,
         token: normalizedCode,
         type: 'recovery',
       });
 
-      if (error) {
+      if (error || !data.session) {
         showAlert(showToast, t('auth.resetPassword.invalidCodeTitle'), t('auth.resetPassword.invalidCodeDescription'), 'error');
         return;
       }
 
-      setIsCodeVerified(true);
+      setVerifiedRecoveryUserId(data.session.user.id);
     } finally {
       setLoading(false);
     }
@@ -115,13 +187,13 @@ export default function ResetPasswordScreen() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: passwordValue,
-      });
-
-      if (error) {
-        throw error;
+      const { data: current, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !verifiedRecoveryUserId || current.session?.user.id !== verifiedRecoveryUserId) {
+        setVerifiedRecoveryUserId(null);
+        setInvalidRecoveryLink(true);
+        return;
       }
+      await updateRecoveredPassword(current.session, passwordValue);
 
       setIsDone(true);
     } catch (error) {
@@ -243,12 +315,18 @@ export default function ResetPasswordScreen() {
           </View>
 
           <View style={styles.formCard}>
+            {invalidRecoveryLink ? (
+              <Text accessibilityRole="alert" style={[styles.codeHint, { color: palette.error }]}>
+                {t('auth.resetPassword.invalidLink')}
+              </Text>
+            ) : null}
             <Text style={styles.label}>{t('auth.resetPassword.emailLabel')}</Text>
             <View style={styles.inputLine}>
               <TextInput
                 accessibilityLabel={t('auth.resetPassword.emailLabel')}
                 value={email}
                 onChangeText={setEmail}
+                editable={!loading && !requestingCode}
                 placeholder={t('auth.verify.emailPlaceholder')}
                 placeholderTextColor={palette.textMuted}
                 keyboardType="email-address"
@@ -264,6 +342,7 @@ export default function ResetPasswordScreen() {
                 accessibilityLabel={t('auth.resetPassword.codeLabel')}
                 value={code}
                 onChangeText={setCode}
+                editable={!loading && !requestingCode}
                 placeholder={t('auth.verify.codePlaceholder')}
                 placeholderTextColor={palette.textMuted}
                 keyboardType="number-pad"
@@ -278,8 +357,20 @@ export default function ResetPasswordScreen() {
               label={t('auth.resetPassword.verifyCodeAction')}
               onPress={() => void handleVerifyCode()}
               loading={loading}
+              disabled={requestingCode}
               style={styles.submitButton}
             />
+
+            <AppButton
+              label={t('auth.resetPassword.requestCodeAction')}
+              onPress={() => void handleRequestCode()}
+              loading={requestingCode}
+              disabled={loading || codeRequestCooldown}
+              style={[styles.submitButton, { backgroundColor: 'transparent', borderWidth: 1, borderColor: palette.border }]}
+            />
+            {codeRequestFeedback ? (
+              <Text accessibilityLiveRegion="polite" style={styles.codeHint}>{codeRequestFeedback}</Text>
+            ) : null}
 
             <TouchableOpacity
               style={styles.switchAction}

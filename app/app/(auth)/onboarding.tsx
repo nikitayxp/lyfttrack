@@ -20,6 +20,7 @@ import { AppButton } from '@/components/ui/AppButton';
 import { markOnboardingCompleted } from '@/services/authSetup';
 import { addWeight, parseBodyWeightInput } from '@/services/measurementService';
 import {
+  AvatarValidationError,
   getProfile,
   pickAvatarFromLibrary,
   updateProfile,
@@ -99,10 +100,11 @@ export default function OnboardingScreen() {
       }
 
       setPendingAvatar(picked);
-      setAvatarUrl(picked.fileUri);
       setAvatarVersion(Date.now());
     } catch (error) {
-      const message = error instanceof Error ? error.message : t('auth.onboarding.avatarError');
+      const message = error instanceof AvatarValidationError
+        ? t(error.reason === 'too-large' ? 'profileEdit.alerts.avatarTooLarge' : 'profileEdit.alerts.avatarUnsupportedType')
+        : error instanceof Error ? error.message : t('auth.onboarding.avatarError');
       setFeedback({ message, type: 'error' });
     }
   }
@@ -144,7 +146,9 @@ export default function OnboardingScreen() {
       await markOnboardingCompleted();
       router.replace('/(tabs)/workout' as any);
     } catch (error) {
-      const message = error instanceof Error ? error.message : t('auth.onboarding.saveErrorProfile');
+      const message = error instanceof AvatarValidationError
+        ? t(error.reason === 'too-large' ? 'profileEdit.alerts.avatarTooLarge' : 'profileEdit.alerts.avatarUnsupportedType')
+        : error instanceof Error ? error.message : t('auth.onboarding.saveErrorProfile');
       setFeedback({ message, type: 'error' });
     } finally {
       setLoading(false);
@@ -193,6 +197,18 @@ export default function OnboardingScreen() {
                 )}
                 <Text style={styles.avatarHint}>{t('auth.onboarding.photoHint')}</Text>
               </TouchableOpacity>
+              {pendingAvatar ? (
+                <TouchableOpacity
+                  style={styles.discardPhotoButton}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('auth.onboarding.discardPhoto')}
+                  disabled={loading}
+                  activeOpacity={ACTIVE_OPACITY}
+                  onPress={() => { setPendingAvatar(null); setFeedback(null); }}
+                >
+                  <Text style={styles.avatarHint}>{t('auth.onboarding.discardPhoto')}</Text>
+                </TouchableOpacity>
+              ) : null}
 
               <Text style={styles.label}>{t('auth.onboarding.weightLabel')}</Text>
               <View style={styles.inputLine}>
@@ -264,6 +280,7 @@ const styles = StyleSheet.create({
   },
   inputField: { flex: 1, color: palette.textPrimary, fontSize: 16, fontWeight: '600', paddingVertical: Spacing.sm },
   avatarButton: { alignItems: 'center', rowGap: Spacing.sm, paddingVertical: Spacing.sm },
+  discardPhotoButton: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', paddingHorizontal: Spacing.md },
   avatarImage: { width: 96, height: 96, borderRadius: 48 },
   avatarFallback: {
     width: 96,

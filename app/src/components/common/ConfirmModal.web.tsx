@@ -16,6 +16,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
+import { createWebOverlayNode } from '@/utils/webOverlayNode';
 import type { ConfirmModalProps } from './ConfirmModal.types';
 
 export type { ConfirmModalTone, ConfirmModalProps } from './ConfirmModal.types';
@@ -41,14 +42,20 @@ export function ConfirmModal({
 
   const portalRef = useRef<HTMLDivElement | null>(null);
   if (!portalRef.current) {
-    const el = document.createElement('div');
-    el.style.position = 'fixed';
-    el.style.inset = '0';
-    el.style.zIndex = '10000';
-    el.style.pointerEvents = 'none';
+    const el = createWebOverlayNode(10000);
     el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
     portalRef.current = el;
   }
+
+  useEffect(() => {
+    if (!visible || busy) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onCancel();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [busy, onCancel, visible]);
 
   useEffect(() => {
     if (visible) {

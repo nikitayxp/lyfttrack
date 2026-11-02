@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/Colors';
 import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import {
+  AvatarValidationError,
   getProfile,
   pickAvatarFromLibrary,
   updateProfile,
@@ -203,7 +204,9 @@ export default function EditProfileScreen() {
         Alert.alert(t('profileEdit.alerts.avatarUpdatedTitle'), successMessage);
       }
     } catch (error) {
-      const message = toErrorMessage(error, t('common.unknownError'));
+      const message = error instanceof AvatarValidationError
+        ? t(error.reason === 'too-large' ? 'profileEdit.alerts.avatarTooLarge' : 'profileEdit.alerts.avatarUnsupportedType')
+        : toErrorMessage(error, t('common.unknownError'));
       setActionFeedback({
         type: 'error',
         message,

@@ -19,13 +19,6 @@ export type ToggleLikeResult = {
   liked: boolean;
 };
 
-type RawWorkoutCommentWithProfile = Pick<
-  WorkoutCommentRow,
-  'id' | 'workout_id' | 'user_id' | 'content' | 'created_at'
-> & {
-  profiles: CommentAuthorProfile | CommentAuthorProfile[] | null;
-};
-
 function normalizeOptionalId(value: string | null | undefined): string | null {
   if (!value) {
     return null;
@@ -60,25 +53,11 @@ function toErrorCode(error: unknown): string | null {
   return null;
 }
 
-function normalizeJoinedProfile(
-  value: CommentAuthorProfile | CommentAuthorProfile[] | null
-): CommentAuthorProfile | null {
-  if (!value) {
-    return null;
-  }
-
-  if (Array.isArray(value)) {
-    return value[0] ?? null;
-  }
-
-  return value;
-}
-
 export async function getCurrentCommentAuthorProfile(): Promise<CommentAuthorProfile> {
   const user = await getAuthenticatedUserOrThrow();
 
   const { data: profile, error: profileError } = await supabase
-    .from('profiles')
+    .from('profile_cards')
     .select('id, username, full_name, avatar_url')
     .eq('id', user.id)
     .maybeSingle();
@@ -103,7 +82,7 @@ export async function getWorkoutComments(workoutId: string): Promise<WorkoutComm
 
   const { data: comments, error: commentsError } = await supabase
     .from('workout_comments')
-    .select('id, workout_id, user_id, content, created_at, profiles(id, username, full_name, avatar_url)')
+    .select('id, workout_id, user_id, content, created_at')
     .eq('workout_id', normalizedWorkoutId)
     .order('created_at', { ascending: true });
 
@@ -111,14 +90,28 @@ export async function getWorkoutComments(workoutId: string): Promise<WorkoutComm
     throw new Error(`Unable to load workout comments: ${commentsError.message}`);
   }
 
-  return (comments as RawWorkoutCommentWithProfile[] | null | undefined)?.map((row) => ({
+  if (!comments?.length) {
+    return [];
+  }
+
+  const { data: profiles, error: profilesError } = await supabase
+    .from('profile_cards')
+    .select('id, username, full_name, avatar_url')
+    .in('id', [...new Set(comments.map((row) => row.user_id))]);
+
+  if (profilesError) {
+    throw new Error(`Unable to load comment authors: ${profilesError.message}`);
+  }
+
+  const profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
+  return comments.map((row) => ({
     id: row.id,
     workout_id: row.workout_id,
     user_id: row.user_id,
     content: row.content,
     created_at: row.created_at,
-    profile: normalizeJoinedProfile(row.profiles),
-  })) ?? [];
+    profile: profileById.get(row.user_id) ?? null,
+  }));
 }
 
 export async function toggleLike(workoutId: string): Promise<ToggleLikeResult> {

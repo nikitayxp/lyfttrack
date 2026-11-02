@@ -13,6 +13,7 @@ import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
 import { Colors } from '@/constants/theme';
+import { DEVICE_FRAME } from '@/constants/deviceFrame';
 import { applyPendingTermsAcceptance } from '@/services/authService';
 import { needsOptionalOnboarding, needsUsernameReview } from '@/services/authSetup';
 import { supabase } from '@/services/supabase';
@@ -51,10 +52,18 @@ function useWebVisibleViewportHeight(enabled: boolean): number | null {
     }
 
     const visualViewport = window.visualViewport;
+    const viewportStyle = typeof document !== 'undefined' ? document.documentElement.style : null;
+    const heightProperty = '--app-visible-viewport-height';
+    const topProperty = '--app-visible-viewport-top';
+    const previousHeight = viewportStyle?.getPropertyValue(heightProperty);
+    const previousTop = viewportStyle?.getPropertyValue(topProperty);
 
     const update = () => {
       window.scrollTo(0, 0);
-      setHeight(getWebVisibleViewportHeight(window.innerHeight, visualViewport?.height ?? window.innerHeight));
+      const nextHeight = getWebVisibleViewportHeight(window.innerHeight, visualViewport?.height ?? window.innerHeight);
+      setHeight(nextHeight);
+      viewportStyle?.setProperty(heightProperty, `${nextHeight}px`);
+      viewportStyle?.setProperty(topProperty, `${Math.max(0, visualViewport?.offsetTop ?? 0)}px`);
     };
 
     update();
@@ -66,6 +75,10 @@ function useWebVisibleViewportHeight(enabled: boolean): number | null {
       visualViewport?.removeEventListener('resize', update);
       visualViewport?.removeEventListener('scroll', update);
       window.removeEventListener('resize', update);
+      if (previousHeight) viewportStyle?.setProperty(heightProperty, previousHeight);
+      else viewportStyle?.removeProperty(heightProperty);
+      if (previousTop) viewportStyle?.setProperty(topProperty, previousTop);
+      else viewportStyle?.removeProperty(topProperty);
     };
   }, [enabled]);
 
@@ -85,8 +98,7 @@ const navigationTheme = {
   },
 };
 
-/** Largura mínima (px) para mostrar o mockup de telemóvel na Web; ≤ isto = app a fullscreen como no device. */
-const DESKTOP_WEB_MOCKUP_MIN_WIDTH = 768;
+const DESKTOP_WEB_MOCKUP_MIN_WIDTH = DEVICE_FRAME.minWindowWidth;
 
 const webViewportFill: ViewStyle = {
   width: '100%',
@@ -157,14 +169,14 @@ const styles = StyleSheet.create({
     pointerEvents: 'none' as any,
   },
   deviceMockup: {
-    width: 393,
-    height: 852,
-    maxHeight: '95vh' as ViewStyle['maxHeight'],
+    width: DEVICE_FRAME.width,
+    height: DEVICE_FRAME.height,
+    maxHeight: `calc(var(--app-visible-viewport-height, 100vh) * ${DEVICE_FRAME.maxHeightVh / 100})` as ViewStyle['maxHeight'],
     margin: 'auto' as any,
     backgroundColor: palette.bgPrimary,
-    borderRadius: 40,
+    borderRadius: DEVICE_FRAME.radius,
     overflow: 'hidden',
-    borderWidth: 8,
+    borderWidth: DEVICE_FRAME.border,
     borderColor: palette.surfaceAlt,
     zIndex: 10,
     alignSelf: 'center',
@@ -174,6 +186,12 @@ const styles = StyleSheet.create({
     shadowRadius: 28,
     elevation: 20,
     transform: [{ translateY: 0 }],
+  },
+  mobileAppFrame: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    minHeight: 0,
   },
   authGuardLoadingWrap: {
     flex: 1,
@@ -186,7 +204,7 @@ export default function RootLayout() {
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
   const isDesktopWeb = isWeb && width > DESKTOP_WEB_MOCKUP_MIN_WIDTH;
-  const webVisibleViewportHeight = useWebVisibleViewportHeight(isWeb && !isDesktopWeb);
+  const webVisibleViewportHeight = useWebVisibleViewportHeight(isWeb);
   const segments: readonly string[] = useSegments();
   const rootSegment = String(segments[0] ?? '');
   const childSegment = String(segments[1] ?? '');
@@ -489,17 +507,15 @@ export default function RootLayout() {
   );
 
   if (isWeb) {
-    const mobileWebShellStyle: ViewStyle | null =
-      !isDesktopWeb
-        ? {
-            height: webVisibleViewportHeight ?? ('100dvh' as ViewStyle['height']),
-            maxHeight: webVisibleViewportHeight ?? ('100dvh' as ViewStyle['maxHeight']),
-            overflow: 'hidden',
-          }
-        : null;
+    const visibleWebShellStyle: ViewStyle = {
+      height: webVisibleViewportHeight ?? ('100dvh' as ViewStyle['height']),
+      maxHeight: webVisibleViewportHeight ?? ('100dvh' as ViewStyle['maxHeight']),
+      top: 'var(--app-visible-viewport-top, 0px)' as ViewStyle['top'],
+      overflow: 'hidden',
+    };
 
     return (
-      <View testID="app-web-shell" style={[styles.webRoot, isDesktopWeb && styles.webRootDesktop, webViewportFill, mobileWebShellStyle]}>
+      <View testID="app-web-shell" style={[styles.webRoot, isDesktopWeb && styles.webRootDesktop, webViewportFill, visibleWebShellStyle]}>
         <View style={[styles.webFlowLayer, styles.pointerEventsNone]}>
           <NeuralBackground color="#3B82F6" trailOpacity={0.12} speed={0.35} />
         </View>
@@ -517,7 +533,12 @@ export default function RootLayout() {
           style={[styles.webBlueAuraBottom, styles.pointerEventsNone]}
         />
 
-        {isDesktopWeb ? <View testID="app-device-frame" style={[styles.deviceMockup, desktopShellWebShadow]}>{layout}</View> : layout}
+        <View
+          testID={isDesktopWeb ? 'app-device-frame' : 'app-mobile-frame'}
+          style={isDesktopWeb ? [styles.deviceMockup, desktopShellWebShadow] : styles.mobileAppFrame}
+        >
+          {layout}
+        </View>
         <StatusBar style="light" />
       </View>
     );

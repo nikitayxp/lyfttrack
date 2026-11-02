@@ -1,4 +1,4 @@
-import { Check, ChevronDown, CloudOff, Dumbbell, History, Pause, Timer } from 'lucide-react';
+import { ArrowUpRight, Check, ChevronDown, CloudOff, Dumbbell, History, Pause, Timer } from 'lucide-react';
 
 type ShowcaseProps = { language: 'pt' | 'en' };
 
@@ -15,7 +15,7 @@ const COPY = {
       { icon: History, title: 'Consulta o anterior', text: 'Vê o que fizeste na última sessão antes de escolheres a carga.' },
       { icon: CloudOff, title: 'Retoma o teu rascunho', text: 'O treino fica neste dispositivo. Liga-te à internet para o terminar e guardar na conta.' },
     ],
-    open: 'Experimentar na app',
+    open: 'Abrir a app',
   },
   en: {
     example: 'Preview · sample data', active: 'Active workout', name: 'Chest and triceps',
@@ -29,7 +29,7 @@ const COPY = {
       { icon: History, title: 'Check your previous session', text: 'See what you lifted last time before choosing your next weight.' },
       { icon: CloudOff, title: 'Resume your draft', text: 'Your workout stays on this device. Connect to finish it and save it to your account.' },
     ],
-    open: 'Try the app',
+    open: 'Open the app',
   },
 };
 
@@ -97,7 +97,7 @@ export function ShowcaseDescription({ language }: ShowcaseProps) {
           </li>
         ))}
       </ul>
-      <a href="https://lyfttrack-app.vercel.app/" className="mt-6 hidden min-h-11 items-center gap-2 text-sm font-semibold text-blue-400 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-400 lg:inline-flex">{copy.open}<span aria-hidden="true">↗</span></a>
+      <a href="https://lyfttrack-app.vercel.app/" className="mt-6 hidden min-h-11 items-center gap-2 text-sm font-semibold text-blue-400 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-400 lg:inline-flex">{copy.open}<ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden="true" /></a>
     </div>
   );
 }

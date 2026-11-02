@@ -12,6 +12,11 @@ const MODAL_PORTAL_CHILDREN = [
   `${MODAL_PORTAL}:has([aria-modal="true"]) > *`,
   `${MODAL_PORTAL}:has([role="dialog"]) > *`,
 ].join(',\n  ');
+const MOBILE_PORTALS = [
+  'body:not(.desktop-mockup-active) > div:not(#root):has([aria-modal="true"])',
+  'body:not(.desktop-mockup-active) > div:not(#root):has([role="dialog"])',
+  `body:not(.desktop-mockup-active) > [${PHONE_OVERLAY_ATTRIBUTE}]`,
+].join(',\n  ');
 
 const BASE_WEB_BG_STYLE = `
   html, body, #root {
@@ -38,13 +43,26 @@ const BASE_WEB_BG_STYLE = `
     overflow: clip !important;
   }
 
+  ${MOBILE_PORTALS} {
+    position: fixed !important;
+    top: var(--app-visible-viewport-top, 0px) !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: auto !important;
+    width: 100% !important;
+    height: var(--app-visible-viewport-height, 100dvh) !important;
+    overflow: hidden !important;
+    /* Keep RN Web's fixed modal content inside the visible viewport. */
+    transform: translateZ(0);
+  }
+
   ${PHONE_OVERLAYS} {
     position: absolute !important;
     width: ${DEVICE_SCREEN.width}px !important;
     height: ${DEVICE_SCREEN.height}px !important;
     max-height: ${DEVICE_SCREEN.maxHeightCss} !important;
     left: 50% !important;
-    top: 50% !important;
+    top: calc(var(--app-visible-viewport-top, 0px) + var(--app-visible-viewport-height, 100vh) / 2) !important;
     right: auto !important;
     bottom: auto !important;
     transform: translate(-50%, -50%) !important;

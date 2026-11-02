@@ -18,11 +18,15 @@ const exercise = id => ({
 async function setup(t, options = {}) {
   const values = new Map();
   let authListener;
+  let appStateListener;
   let context;
   const load = createSourceLoader({
     'react-native': {
       Platform: { OS: 'ios' },
-      AppState: { addEventListener: () => ({ remove() {} }) },
+      AppState: { addEventListener: (_event, callback) => {
+        appStateListener = callback;
+        return { remove() {} };
+      } },
       Animated: { Value: class { setValue() {} stopAnimation() {} }, timing() {}, sequence: () => ({ start() {} }) },
       Vibration: { vibrate() {} },
     },
@@ -56,6 +60,7 @@ async function setup(t, options = {}) {
     storage,
     values,
     changeUser: id => act(async () => authListener('SIGNED_IN', session(id))),
+    background: () => act(async () => appStateListener('background')),
     run: fn => act(async () => fn(context)),
   };
 }
@@ -145,6 +150,27 @@ test('a cleared completed draft is not recreated when the account changes', asyn
   assert.equal(await app.storage.loadWorkoutDraft('A'), null);
 });
 
+test('saving suppresses background drafts but a new session can persist again', async t => {
+  let now = Date.UTC(2026, 10, 2, 12);
+  class Clock extends Date {
+    constructor(...args) { super(...(args.length ? args : [now])); }
+    static now() { return now; }
+  }
+  const app = await setup(t, { Date: Clock });
+  await app.run(c => c.addExercise({ id: 'press', name: 'Press' }));
+  await app.background();
+  assert.ok(await app.storage.loadWorkoutDraft('A'));
+  await app.run(c => c.clearDraft());
+  await app.background();
+  assert.equal(await app.storage.loadWorkoutDraft('A'), null);
+  await app.run(c => c.clearExercises());
+  now += 1000;
+  await app.run(c => c.addExercise({ id: 'squat', name: 'Squat' }));
+  await app.background();
+  const nextDraft = await app.storage.loadWorkoutDraft('A');
+  assert.equal(nextDraft?.exercises[0]?.exerciseId, 'squat');
+});
+
 const deferred = () => {
   let resolve;
   let reject;
@@ -153,6 +179,49 @@ const deferred = () => {
 };
 const pastSets = [{ setType: 'warmup' }, { setType: 'normal' }, { setType: 'drop' }];
 const types = block => Array.from(block.sets, set => set.set_type);
+
+test('history after saving cannot recreate the completed workout draft', async t => {
+  const history = deferred();
+  const app = await setup(t, { getPerformance: () => history.promise });
+  await app.run(c => c.addExercise({ id: 'press', name: 'Press' }));
+  const block = app.current.activeExercises[0];
+  await app.run(c => c.clearDraft());
+  assert.equal(await app.storage.loadWorkoutDraft('A'), null);
+  await app.run(() => history.resolve(pastSets));
+  app.storage.flushWorkoutDraftSave('A');
+  assert.equal(await app.storage.loadWorkoutDraft('A'), null, 'late history recreated a saved workout');
+  assert.equal(app.current.activeExercises[0], block, 'the summary must keep its exercise snapshot');
+});
+
+test('focusing a blank set protects its row from a shorter pending history', async t => {
+  const history = deferred();
+  const app = await setup(t, { getPerformance: () => history.promise });
+  await app.run(c => c.addExercise({ id: 'press', name: 'Press' }));
+  const block = app.current.activeExercises[0];
+  const focusedSet = block.sets[1];
+  await app.run(c => c.markExerciseInteracted?.(block.id));
+  assert.equal(app.current.activeExercises[0], block, 'focus alone should not edit or persist the workout');
+  await app.run(() => history.resolve([{ setType: 'failure' }]));
+  assert.equal(app.current.activeExercises[0].sets[1], focusedSet, 'history removed the focused row');
+  assert.deepEqual(types(app.current.activeExercises[0]), ['warmup', 'normal']);
+});
+
+test('history queued in the save batch cannot persist a completed session', async t => {
+  const history = deferred();
+  const app = await setup(t, { getPerformance: () => history.promise });
+  await app.run(c => c.addExercise({ id: 'press', name: 'Press' }));
+  await app.run(async c => {
+    history.resolve(pastSets);
+    await Promise.resolve();
+    await c.clearDraft();
+  });
+  app.storage.flushWorkoutDraftSave('A');
+  assert.equal(await app.storage.loadWorkoutDraft('A'), null, 'batched history recreated a completed session');
+  // Background persistence must also stay disabled while the summary is open.
+  await app.run(c => c.setWorkoutName('Completed workout summary'));
+  app.storage.flushWorkoutDraftSave('A');
+  assert.equal(await app.storage.loadWorkoutDraft('A'), null);
+});
 
 test('an added exercise shows up before its history and only takes the past set types', async t => {
   const history = deferred();

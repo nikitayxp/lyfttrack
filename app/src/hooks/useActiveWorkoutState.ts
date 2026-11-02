@@ -310,6 +310,7 @@ export function useActiveWorkoutState({
   const [activeExercises, setActiveExercises] = useState<ActiveExercise[]>([]);
   const activeExercisesRef = useRef<ActiveExercise[]>([]);
   const completionGlowByExerciseIdRef = useRef<Map<string, Animated.Value>>(new Map());
+  const completedDraftIdRef = useRef<string | null>(null);
 
   // Draft state exposed to the consumer so they can restore it
   const [recoveredDraft, setRecoveredDraft] = useState<RecoveredDraftState | null>(null);
@@ -326,10 +327,12 @@ export function useActiveWorkoutState({
 
   const buildCurrentDraft = useCallback((): WorkoutDraft | null => {
     if (!userId || !startTime) return null;
+    const draftId = buildDraftId(userId, sessionStartTime ?? startTime);
+    if (completedDraftIdRef.current === draftId) return null;
 
     return {
       schemaVersion: SCHEMA_VERSION,
-      draftId: buildDraftId(userId, sessionStartTime ?? startTime),
+      draftId,
       userId,
       workoutName: workoutName ?? 'Untitled Workout',
       startTime,
@@ -666,11 +669,16 @@ export function useActiveWorkoutState({
 
   /** Call after successfully saving to Supabase to remove the draft */
   const clearDraft = useCallback(async () => {
+    // Blocks stay mounted for the completion summary. A queued state update or
+    // background/unload flush must not resurrect this completed session.
+    if (userId && startTime) {
+      completedDraftIdRef.current = buildDraftId(userId, sessionStartTime ?? startTime);
+    }
     setRecoveredDraft(null);
     if (userId) {
       await clearWorkoutDraft(userId);
     }
-  }, [userId]);
+  }, [userId, startTime, sessionStartTime]);
 
   /** Accept a recovered draft — replaces current exercises with draft state */
   const acceptRecoveredDraft = useCallback((recovered: RecoveredDraftState) => {

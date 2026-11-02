@@ -225,6 +225,7 @@ export default function ActiveWorkout() {
     updateSetInput,
     updateSetSide,
     updateExerciseNotes,
+    markExerciseInteracted,
     addSet,
     removeSet,
     addExercise,
@@ -1147,6 +1148,7 @@ export default function ActiveWorkout() {
                   <TextInput
                     accessibilityLabel={t('accessibility.exerciseNotes', { defaultValue: 'Exercise notes' })}
                     value={exercise.notes ?? ''}
+                    onFocus={() => markExerciseInteracted(exercise.id)}
                     onChangeText={(value) => updateExerciseNotes(exercise.id, value)}
                     style={styles.exerciseNotesInput}
                     placeholder={t('workout.exerciseNotesPlaceholder')}
@@ -1294,6 +1296,7 @@ export default function ActiveWorkout() {
                           <TextInput
                             accessibilityLabel={t('accessibility.weightInput', { defaultValue: 'Weight' })}
                             value={setItem.weightInput}
+                            onFocus={() => markExerciseInteracted(exercise.id)}
                             onChangeText={(value) => updateSetInput(exercise.id, setItem.id, 'weightInput', value)}
                             style={[styles.numericInput, styles.kgInput, setItem.completed && styles.numericInputCompleted]}
                             keyboardType="decimal-pad"
@@ -1304,6 +1307,7 @@ export default function ActiveWorkout() {
                           <TextInput
                             accessibilityLabel={t('accessibility.repsInput', { defaultValue: 'Reps' })}
                             value={setItem.repsInput}
+                            onFocus={() => markExerciseInteracted(exercise.id)}
                             onChangeText={(value) => updateSetInput(exercise.id, setItem.id, 'repsInput', value)}
                             style={[styles.numericInput, styles.cellReps, setItem.completed && styles.numericInputCompleted]}
                             keyboardType="numeric"
@@ -1314,6 +1318,7 @@ export default function ActiveWorkout() {
                           <TextInput
                             accessibilityLabel={t('accessibility.rirInput', { defaultValue: 'RIR' })}
                             value={setItem.rirInput}
+                            onFocus={() => markExerciseInteracted(exercise.id)}
                             onChangeText={(value) => updateSetInput(exercise.id, setItem.id, 'rirInput', value)}
                             style={[styles.numericInput, styles.cellRir, setItem.completed && styles.numericInputCompleted]}
                             keyboardType="decimal-pad"

@@ -10,7 +10,7 @@ export const DEVICE_FRAME = {
 export const DEVICE_SCREEN = {
   width: DEVICE_FRAME.width - DEVICE_FRAME.border * 2,
   height: DEVICE_FRAME.height - DEVICE_FRAME.border * 2,
-  maxHeightCss: `calc(${DEVICE_FRAME.maxHeightVh}vh - ${DEVICE_FRAME.border * 2}px)`,
+  maxHeightCss: `calc(var(--app-visible-viewport-height, 100vh) * ${DEVICE_FRAME.maxHeightVh / 100} - ${DEVICE_FRAME.border * 2}px)`,
   radius: DEVICE_FRAME.radius - DEVICE_FRAME.border,
 } as const;
 

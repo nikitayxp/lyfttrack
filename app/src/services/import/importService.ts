@@ -1,16 +1,17 @@
 import { supabase } from '@/services/supabase';
 import {
   buildSetInsertRow,
-  createCustomExercisesForImport,
   getAuthenticatedUserOrThrow,
   getExercisesCatalog,
   normalizeWriteText,
   type ExerciseCatalogItem,
 } from '@/services/workoutService';
 import type { WorkoutSetDraft } from '@/services/workoutSession.types';
-import type { TablesInsert } from '@/types/database';
+import type { Json } from '@/types/database';
+import { loadAllRows } from '@/services/queryPages';
+import { completePendingMutation, getPendingMutation } from '@/services/pendingMutationService';
+import { invalidateExerciseCatalogCache, invalidateWorkoutDataCache } from '@/services/dataCache';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
-import { generateId } from '@/utils/uuid';
 import {
   EXERCISE_EQUIPMENT_FILTER_KEYWORDS,
   resolveExerciseMuscleKey,
@@ -37,6 +38,7 @@ export type ExerciseMatch = {
 };
 
 export type ImportPlan = {
+  ownerUserId: string;
   source: ImportSource;
   parse: HevyParseResult;
   matches: ExerciseMatch[];
@@ -44,6 +46,7 @@ export type ImportPlan = {
   duplicateStartTimes: string[];
   importableWorkouts: number;
   repairChanges: RepairChange[];
+  repairSnapshots: Record<string, Json>;
 };
 
 export type RepairChange = {
@@ -421,76 +424,24 @@ if (typeof __DEV__ !== 'undefined' && __DEV__) {
   );
 }
 
-/**
- * Start times already in the account, so a second run of the same file adds
- * nothing. Two sessions starting in the same minute would be indistinguishable,
- * but that is not a thing that happens.
- */
-async function findExistingStartTimes(startTimes: string[]): Promise<Set<string>> {
-  const user = await getAuthenticatedUserOrThrow();
-  const existing = new Set<string>();
-
-  if (startTimes.length === 0) return existing;
-
-  const sorted = [...startTimes].sort();
-  const { data, error } = await supabase
-    .from('workouts')
-    .select('start_time')
-    .eq('user_id', user.id)
-    .gte('start_time', sorted[0])
-    .lte('start_time', sorted[sorted.length - 1]);
-
-  if (error) {
-    throw new Error(`Unable to check for workouts already imported: ${error.message}`);
-  }
-
-  for (const row of data ?? []) {
-    const value = row.start_time;
-    if (typeof value === 'string') {
-      existing.add(new Date(value).toISOString());
-    }
-  }
-
-  return existing;
-}
-
 async function findExistingWorkouts(
-  startTimes: string[]
+  startTimes: string[], userId: string
 ): Promise<Map<string, { id: string; name: string }>> {
-  const user = await getAuthenticatedUserOrThrow();
   const existing = new Map<string, { id: string; name: string }>();
-
-  if (startTimes.length === 0) {
-    return existing;
-  }
-
+  if (startTimes.length === 0) return existing;
   const sorted = [...startTimes].sort();
-  const { data, error } = await supabase
+  const rows = await loadAllRows(() => supabase
     .from('workouts')
     .select('id, name, start_time')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .gte('start_time', sorted[0])
-    .lte('start_time', sorted[sorted.length - 1]);
-
-  if (error) {
-    throw new Error(`Unable to load imported workouts: ${error.message}`);
-  }
-
+    .lte('start_time', sorted[sorted.length - 1]), 'Unable to load imported workouts');
   const wanted = new Set(startTimes);
-
-  for (const row of data ?? []) {
-    if (typeof row.start_time !== 'string' || typeof row.id !== 'string') {
-      continue;
-    }
-
+  for (const row of rows) {
+    if (typeof row.start_time !== 'string' || typeof row.id !== 'string') continue;
     const key = new Date(row.start_time).toISOString();
-    if (!wanted.has(key)) {
-      continue;
-    }
-
-    existing.set(key, { id: row.id, name: row.name ?? 'Untitled Workout' });
+    if (wanted.has(key)) existing.set(key, { id: row.id, name: row.name ?? 'Untitled Workout' });
   }
-
   return existing;
 }
 
@@ -511,15 +462,10 @@ async function loadStoredWorkoutExercises(workoutIds: string[]): Promise<Map<str
 
   for (let start = 0; start < workoutIds.length; start += 100) {
     const chunk = workoutIds.slice(start, start + 100);
-    const { data, error } = await supabase
+    const data = await loadAllRows(() => supabase
       .from('workout_exercises')
       .select('id, workout_id, exercise_id, order, exercises(name, name_en, name_pt)')
-      .in('workout_id', chunk)
-      .order('order', { ascending: true });
-
-    if (error) {
-      throw new Error(`Unable to load imported exercises: ${error.message}`);
-    }
+      .in('workout_id', chunk), 'Unable to load imported exercises');
 
     for (const row of data ?? []) {
       if (typeof row.id !== 'string' || typeof row.workout_id !== 'string' || typeof row.exercise_id !== 'string') {
@@ -560,14 +506,15 @@ function desiredNameForTitle(title: string, matches: ExerciseMatch[]): string {
 async function buildRepairChanges(
   parse: HevyParseResult,
   matches: ExerciseMatch[],
-  duplicateStartTimes: string[]
+  duplicateStartTimes: string[],
+  existing: Map<string, { id: string; name: string }>,
+  snapshotExercises?: Map<string, StoredWorkoutExercise[]>
 ): Promise<RepairChange[]> {
   if (duplicateStartTimes.length === 0) {
     return [];
   }
 
-  const existing = await findExistingWorkouts(duplicateStartTimes);
-  const storedByWorkout = await loadStoredWorkoutExercises([...existing.values()].map((row) => row.id));
+  const storedByWorkout = snapshotExercises ?? await loadStoredWorkoutExercises([...existing.values()].map((row) => row.id));
   const idByTitle = new Map<string, string>();
 
   for (const match of matches) {
@@ -651,26 +598,77 @@ async function buildRepairChanges(
   return changes;
 }
 
+async function captureRepairSnapshots(workoutIds: string[]): Promise<Record<string, Json>> {
+  const snapshots: Record<string, Json> = {};
+  for (let start = 0; start < workoutIds.length; start += 100) {
+    const chunk = workoutIds.slice(start, start + 100);
+    const { data, error } = await supabase.rpc('import_workout_snapshots', { p_workout_ids: chunk });
+    if (error || !data || typeof data !== 'object' || Array.isArray(data)) {
+      throw new Error(`Unable to capture repair preview: ${error?.message ?? 'Invalid response'}`);
+    }
+    for (const id of chunk) {
+      const snapshot = data[id];
+      if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot) || !Array.isArray(snapshot.exercises)) {
+        throw new Error('Imported workout changed or became unavailable. Build a new preview.');
+      }
+      snapshots[id] = snapshot;
+    }
+  }
+  return snapshots;
+}
+
+function exercisesFromRepairSnapshots(
+  snapshots: Record<string, Json>, catalog: ExerciseCatalogItem[]
+): Map<string, StoredWorkoutExercise[]> {
+  const byId = new Map(catalog.map((exercise) => [exercise.id, exercise]));
+  const result = new Map<string, StoredWorkoutExercise[]>();
+  for (const [workoutId, snapshot] of Object.entries(snapshots)) {
+    if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot) || !Array.isArray(snapshot.exercises)) {
+      throw new Error('Invalid repair preview snapshot.');
+    }
+    const rows = snapshot.exercises.map((row): StoredWorkoutExercise => {
+      if (!row || typeof row !== 'object' || Array.isArray(row) || typeof row.id !== 'string'
+        || typeof row.exercise_id !== 'string' || typeof row.order !== 'number') {
+        throw new Error('Invalid exercise in repair preview snapshot.');
+      }
+      const exercise = byId.get(row.exercise_id);
+      return { id: row.id, workoutId, exerciseId: row.exercise_id, order: row.order,
+        name: exercise?.name_pt || exercise?.name_en || exercise?.name || row.exercise_id };
+    });
+    result.set(workoutId, rows.sort((left, right) => left.order - right.order));
+  }
+  return result;
+}
+
 export async function buildImportPlan(csvText: string): Promise<ImportPlan> {
+  const user = await getAuthenticatedUserOrThrow();
   const parse = parseHevyCsv(csvText);
   const titles = collectExerciseTitles(parse);
   const catalog = await getExercisesCatalog({ includeUnlisted: true });
   const matches = matchExerciseTitles(titles, catalog);
 
-  const existing = await findExistingStartTimes(parse.workouts.map((workout) => workout.startTime));
+  const existing = await findExistingWorkouts(parse.workouts.map((workout) => workout.startTime), user.id);
   const duplicateStartTimes = parse.workouts
     .map((workout) => workout.startTime)
     .filter((startTime) => existing.has(startTime));
-  const repairChanges = await buildRepairChanges(parse, matches, duplicateStartTimes);
+  const candidates = await buildRepairChanges(parse, matches, duplicateStartTimes, existing);
+  const repairIds = new Set(candidates.map((change) => change.workoutId));
+  const repairSnapshots = await captureRepairSnapshots([...repairIds]);
+  const repairExisting = new Map([...existing].filter(([, workout]) => repairIds.has(workout.id)));
+  const repairStartTimes = duplicateStartTimes.filter((time) => repairExisting.has(time));
+  const repairChanges = await buildRepairChanges(parse, matches, repairStartTimes, repairExisting,
+    exercisesFromRepairSnapshots(repairSnapshots, catalog));
 
   return {
     source: 'hevy',
+    ownerUserId: user.id,
     parse,
     matches,
     unmatchedTitles: matches.filter((match) => match.kind === 'none').map((match) => match.title),
     duplicateStartTimes,
     importableWorkouts: parse.workouts.length - duplicateStartTimes.length,
     repairChanges,
+    repairSnapshots,
   };
 }
 
@@ -702,18 +700,24 @@ async function resolveExerciseIds(
     return { idByTitle, created: 0 };
   }
 
-  // One insert for every custom exercise instead of a round-trip each — the old
-  // per-exercise createExercise also re-fetched the user every time.
-  const createdIds = await createCustomExercisesForImport(
-    userId,
-    toCreate.map((entry) => entry.input)
-  );
-
-  toCreate.forEach((entry, index) => {
-    idByTitle.set(entry.title, createdIds[index]);
+  const { data, error } = await supabase.rpc('ensure_import_exercises', {
+    p_expected_user_id: userId,
+    p_exercises: toCreate.map((entry) => ({
+      name: sanitizeText(entry.input.name, { maxLength: INPUT_LIMITS.nameMax, allowEmpty: false }),
+      muscle_group: entry.input.muscleGroup,
+      equipment: entry.input.equipment,
+    })),
   });
-
-  return { idByTitle, created: toCreate.length };
+  if (!error) invalidateExerciseCatalogCache(userId);
+  if (error || !data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error(`Unable to resolve imported exercises: ${error?.message ?? 'Invalid response'}`);
+  }
+  const ids = data.ids;
+  if (!Array.isArray(ids) || ids.length !== toCreate.length || ids.some((id) => typeof id !== 'string')) {
+    throw new Error('Invalid imported exercise identities.');
+  }
+  toCreate.forEach((entry, index) => idByTitle.set(entry.title, ids[index] as string));
+  return { idByTitle, created: typeof data.created === 'number' ? data.created : 0 };
 }
 
 type WorkoutExerciseBlock = {
@@ -736,7 +740,7 @@ function collectWorkoutExercises(
 
   for (const exercise of workout.exercises) {
     const exerciseId = idByTitle.get(exercise.title);
-    if (!exerciseId) continue;
+    if (!exerciseId) throw new Error(`Exercise mapping missing: ${exercise.title}`);
 
     let block = blockByExerciseId.get(exerciseId);
     if (!block) {
@@ -805,138 +809,61 @@ async function withWriteRetry<T>(run: () => Promise<T>): Promise<T> {
   throw lastError;
 }
 
-async function insertRowsOrThrow(
-  table: 'workouts' | 'workout_exercises' | 'sets',
-  rows: TablesInsert<'workouts'>[] | TablesInsert<'workout_exercises'>[] | TablesInsert<'sets'>[]
-): Promise<void> {
-  if (rows.length === 0) return;
-
-  await withWriteRetry(async () => {
-    // Supabase returns errors on the result instead of throwing, so surface it
-    // as a throw with the Postgres code attached for the retry classifier.
-    const { error } = await supabase.from(table).insert(rows as never[]);
-    if (error) {
-      const wrapped = new Error(`${table} insert failed: ${error.message}`);
-      (wrapped as { code?: string }).code = error.code;
-      throw wrapped;
-    }
-  });
-}
-
-/**
- * Write one batch of workouts with client-generated ids, so workouts, their
- * exercises and their sets all go in three bulk inserts instead of ~4
- * round-trips per workout. If any insert fails after the workouts landed, the
- * batch's workouts are deleted (children cascade) so a re-run re-imports them
- * cleanly rather than leaving empty sessions the dedup would then skip.
- */
-async function writeWorkoutBatch(
-  userId: string,
-  batch: HevyParsedWorkout[],
-  idByTitle: Map<string, string>
-): Promise<{ workouts: number; sets: number }> {
-  const workoutRows: TablesInsert<'workouts'>[] = [];
-  const workoutExerciseRows: TablesInsert<'workout_exercises'>[] = [];
-  const setRows: TablesInsert<'sets'>[] = [];
-
-  for (const workout of batch) {
-    const blocks = collectWorkoutExercises(workout, idByTitle);
-    if (blocks.length === 0) continue;
-
-    const workoutId = generateId();
-    workoutRows.push({
-      id: workoutId,
-      user_id: userId,
+function buildImportPayload(workout: HevyParsedWorkout, blocks: WorkoutExerciseBlock[]) {
+  if (blocks.length === 0) throw new Error('Imported workout has no exercises.');
+  const sets = blocks.flatMap((block) => block.sets.map((draft, index) => {
+    const row = buildSetInsertRow('', { ...draft, setNumber: index + 1 });
+    if (!row) throw new Error('Imported set is invalid.');
+    return {
+      exercise_id: row.exercise_id,
+      set_number: row.set_number,
+      weight: row.weight ?? null,
+      reps: row.reps ?? null,
+      rir: row.rir ?? null,
+      set_type: row.set_type ?? 'normal',
+      side: row.side ?? 'both',
+    };
+  }));
+  return {
+    workout: {
       name: sanitizeText(workout.title, { maxLength: INPUT_LIMITS.nameMax, allowEmpty: true }) ?? 'Untitled Workout',
       notes: normalizeWriteText(workout.description, INPUT_LIMITS.notesMax),
       start_time: workout.startTime,
       end_time: workout.endTime,
-    });
-
-    blocks.forEach((block, index) => {
-      const workoutExerciseId = generateId();
-      workoutExerciseRows.push({
-        id: workoutExerciseId,
-        workout_id: workoutId,
-        exercise_id: block.exerciseId,
-        order: index + 1,
-        notes: normalizeWriteText(block.notes, 1000),
-      });
-
-      for (const draft of block.sets) {
-        const row = buildSetInsertRow(workoutId, draft, workoutExerciseId);
-        if (row) setRows.push(row);
-      }
-    });
-  }
-
-  if (workoutRows.length === 0) {
-    return { workouts: 0, sets: 0 };
-  }
-
-  const workoutIds = workoutRows.map((row) => row.id as string);
-
-  try {
-    await insertRowsOrThrow('workouts', workoutRows);
-    await insertRowsOrThrow('workout_exercises', workoutExerciseRows);
-    await insertRowsOrThrow('sets', setRows);
-  } catch (error) {
-    // Best-effort rollback of this batch so the same workouts can be re-imported
-    // without the dedup mistaking a half-written session for one already there.
-    await supabase
-      .from('workouts')
-      .delete()
-      .in('id', workoutIds)
-      .then(
-        () => undefined,
-        () => undefined
-      );
-    throw error;
-  }
-
-  return { workouts: workoutRows.length, sets: setRows.length };
-}
-
-async function rewriteWorkoutExercises(workoutId: string, blocks: WorkoutExerciseBlock[]): Promise<void> {
-  const { error: setsError } = await supabase.from('sets').delete().eq('workout_id', workoutId);
-  if (setsError) {
-    throw new Error(`Unable to clear imported sets: ${setsError.message}`);
-  }
-
-  const { error: exercisesError } = await supabase.from('workout_exercises').delete().eq('workout_id', workoutId);
-  if (exercisesError) {
-    throw new Error(`Unable to clear imported exercises: ${exercisesError.message}`);
-  }
-
-  if (blocks.length === 0) {
-    return;
-  }
-
-  const workoutExerciseRows: TablesInsert<'workout_exercises'>[] = [];
-  const setRows: TablesInsert<'sets'>[] = [];
-
-  blocks.forEach((block, index) => {
-    const workoutExerciseId = generateId();
-    workoutExerciseRows.push({
-      id: workoutExerciseId,
-      workout_id: workoutId,
+      session_started_at: workout.startTime,
+      template_id: null,
+    },
+    exercises: blocks.map((block, index) => ({
       exercise_id: block.exerciseId,
       order: index + 1,
+      rest_time: 90,
       notes: normalizeWriteText(block.notes, 1000),
+    })),
+    sets,
+  };
+}
+
+async function writeWorkoutBatch(
+  userId: string, batch: HevyParsedWorkout[], idByTitle: Map<string, string>
+): Promise<{ workouts: number; sets: number; skipped: number }> {
+  const payload = batch.map((workout) => buildImportPayload(workout, collectWorkoutExercises(workout, idByTitle)));
+  const mutation = await getPendingMutation(userId, 'import-batch', payload);
+  const result = await withWriteRetry(async () => {
+    const { data, error } = await supabase.rpc('import_workouts_atomic', {
+      p_expected_user_id: userId,
+      p_mutation_id: mutation.mutationId,
+      p_batch: payload,
     });
-
-    for (const draft of block.sets) {
-      const row = buildSetInsertRow(workoutId, draft, workoutExerciseId);
-      if (row) {
-        setRows.push(row);
-      }
+    if (error) throw Object.assign(new Error(`Import failed: ${error.message}`), { code: error.code });
+    invalidateWorkoutDataCache(userId);
+    if (!data || typeof data !== 'object' || Array.isArray(data)
+      || typeof data.workouts !== 'number' || typeof data.sets !== 'number' || typeof data.skipped !== 'number') {
+      throw new Error('Invalid import response. Retry to confirm the saved batch.');
     }
+    return { workouts: data.workouts, sets: data.sets, skipped: data.skipped };
   });
-
-  await insertRowsOrThrow('workout_exercises', workoutExerciseRows);
-  if (setRows.length > 0) {
-    await insertRowsOrThrow('sets', setRows);
-  }
+  await completePendingMutation(mutation);
+  return result;
 }
 
 async function applyRepair(
@@ -947,7 +874,6 @@ async function applyRepair(
   const workoutIds = [...new Set(plan.repairChanges.map((change) => change.workoutId))];
   const csvByStartTime = new Map(plan.parse.workouts.map((workout) => [workout.startTime, workout]));
   const modeByWorkout = new Map(plan.repairChanges.map((change) => [change.workoutId, change.mode]));
-  const storedByWorkout = await loadStoredWorkoutExercises(workoutIds);
 
   const failedWorkouts: ImportSummary['failedWorkouts'] = [];
   let repairedWorkouts = 0;
@@ -962,39 +888,27 @@ async function applyRepair(
         throw new Error('Imported workout was not in the file.');
       }
 
-      const blocks = collectWorkoutExercises(csvWorkout, idByTitle);
+      const payload = buildImportPayload(csvWorkout, collectWorkoutExercises(csvWorkout, idByTitle));
       const mode = modeByWorkout.get(workoutId) ?? 'rebuild';
-      const stored = storedByWorkout.get(workoutId) ?? [];
-
-      if (mode === 'remap' && stored.length === blocks.length) {
-        for (let blockIndex = 0; blockIndex < blocks.length; blockIndex += 1) {
-          const block = blocks[blockIndex];
-          const current = stored[blockIndex];
-          if (!current || current.exerciseId === block.exerciseId) {
-            continue;
-          }
-
-          const { error: exerciseError } = await supabase
-            .from('workout_exercises')
-            .update({ exercise_id: block.exerciseId })
-            .eq('id', current.id);
-
-          if (exerciseError) {
-            throw new Error(exerciseError.message);
-          }
-
-          const { error: setError } = await supabase
-            .from('sets')
-            .update({ exercise_id: block.exerciseId })
-            .eq('workout_exercise_id', current.id);
-
-          if (setError) {
-            throw new Error(setError.message);
-          }
-        }
-      } else {
-        await rewriteWorkoutExercises(workoutId, blocks);
-      }
+      const snapshot = plan.repairSnapshots?.[workoutId];
+      if (!snapshot) throw new Error('Original repair preview is missing. Build a new preview.');
+      const userId = plan.ownerUserId;
+      const mutation = await getPendingMutation(userId, `repair:${workoutId}`, [payload, mode]);
+      await withWriteRetry(async () => {
+        const { error } = await supabase.rpc('repair_imported_workout_atomic', {
+          p_expected_user_id: userId,
+          p_mutation_id: mutation.mutationId,
+          p_workout_id: workoutId,
+          p_workout: payload.workout,
+          p_exercises: payload.exercises,
+          p_sets: payload.sets,
+          p_mode: mode,
+          p_expected_snapshot: snapshot as Json,
+        });
+        if (error) throw Object.assign(new Error(`Repair failed: ${error.message}`), { code: error.code });
+        invalidateWorkoutDataCache(userId);
+      });
+      await completePendingMutation(mutation);
 
       repairedWorkouts += 1;
     } catch (error) {
@@ -1016,6 +930,7 @@ export async function runRepair(
   options: { onProgress?: (progress: ImportProgress) => void } = {}
 ): Promise<{ repairedWorkouts: number; createdExercises: number; failedWorkouts: ImportSummary['failedWorkouts'] }> {
   const user = await getAuthenticatedUserOrThrow();
+  if (plan.ownerUserId !== user.id) throw new Error('Account changed. Build a new import preview.');
   const { idByTitle, created } = await resolveExerciseIds(plan, user.id);
   const result = await applyRepair(plan, idByTitle, options);
   return { ...result, createdExercises: created };
@@ -1030,6 +945,7 @@ export async function runImport(
   // limit part-way through a large import and stranded the rest.
   const user = await getAuthenticatedUserOrThrow();
 
+  if (plan.ownerUserId !== user.id) throw new Error('Account changed. Build a new import preview.');
   const { idByTitle, created } = await resolveExerciseIds(plan, user.id);
 
   const duplicates = new Set(plan.duplicateStartTimes);
@@ -1066,6 +982,7 @@ export async function runImport(
       const result = await writeWorkoutBatch(user.id, batch, idByTitle);
       summary.importedWorkouts += result.workouts;
       summary.importedSets += result.sets;
+      summary.skippedDuplicates += result.skipped;
     } catch (error) {
       const reason = error instanceof Error ? error.message : 'Unknown error';
       for (const workout of batch) {

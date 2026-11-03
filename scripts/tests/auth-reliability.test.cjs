@@ -31,7 +31,7 @@ test('RLS identity rejects unavailable storage and missing sessions', async () =
 test('OAuth completion shares one pending exchange and remembers a completed callback', async () => {
   const pending = gate();
   const codes = [];
-  const service = loadService({ exchangeCodeForSession: async code => { codes.push(code); await pending.promise; return { error: null }; }, getSession: async () => ({ data: { session: { user: { id: 'a' } } }, error: null }) }, 'oauthReturn');
+  const service = loadService({ exchangeCodeForSession: async code => { codes.push(code); await pending.promise; return { data: { session: { user: { id: 'a' } } }, error: null }; }, getSession: async () => ({ data: { session: { user: { id: 'a' } } }, error: null }) }, 'oauthReturn');
   assert.equal(typeof service.completeGoogleOAuthReturn, 'function');
   const calls = [service.completeGoogleOAuthReturn('lyfttrack://callback?code=one'), service.completeGoogleOAuthReturn('lyfttrack://callback?code=one')];
   pending.resolve();
@@ -40,28 +40,29 @@ test('OAuth completion shares one pending exchange and remembers a completed cal
   assert.deepEqual(codes, ['one']);
 });
 
-test('OAuth completion supports native implicit returns, provider errors and retries', async () => {
+test('OAuth completion rejects implicit returns and supports PKCE error retries', async () => {
   const tokens = [];
   let attempt = 0;
+  let session = null;
   const service = loadService({
     setSession: async value => { tokens.push(value); return { error: null }; },
-    exchangeCodeForSession: async () => ({ error: ++attempt === 1 ? { message: 'temporary' } : null }),
-    getSession: async () => ({ data: { session: null }, error: null }),
+    exchangeCodeForSession: async () => { if (++attempt === 1) return { data: { session: null }, error: { message: 'temporary' } }; session = { user: { id: 'a' } }; return { data: { session }, error: null }; },
+    getSession: async () => ({ data: { session }, error: null }),
   }, 'oauthReturn');
   assert.equal(typeof service.completeGoogleOAuthReturn, 'function');
-  await service.completeGoogleOAuthReturn('lyfttrack://callback#access_token=a&refresh_token=r');
-  assert.equal(tokens[0].access_token, 'a');
-  await assert.rejects(service.completeGoogleOAuthReturn('lyfttrack://callback?error=denied'), /denied/);
-  await service.beginGoogleOAuthReturn();
+  await assert.rejects(service.completeGoogleOAuthReturn('lyfttrack://callback#access_token=a&refresh_token=r'), /oauth-unexpected-credentials/);
+  assert.equal(tokens.length, 0);
+  await assert.rejects(service.completeGoogleOAuthReturn('lyfttrack://callback?error=denied'), /oauth-provider-error/);
   await assert.rejects(service.completeGoogleOAuthReturn('lyfttrack://callback?code=retry'), /temporary/);
   await service.completeGoogleOAuthReturn('lyfttrack://callback?code=retry');
+  session = null;
   await assert.rejects(service.completeGoogleOAuthReturn('lyfttrack://callback'), /oauth-missing-code/);
 });
 
 test('replaying a completed callback after sign-out cannot report a signed-in session', async () => {
   let session = { user: { id: 'a' } };
   const service = loadService({
-    exchangeCodeForSession: async () => ({ error: null }),
+    exchangeCodeForSession: async () => ({ data: { session }, error: null }),
     getSession: async () => ({ data: { session }, error: null }),
   }, 'oauthReturn');
   await service.completeGoogleOAuthReturn('lyfttrack://callback?code=old');
@@ -120,8 +121,8 @@ test('profile reads coalesce by account and never wait for metadata writes', asy
     '@/services/authSessionStore': { onAuthAccountChange(listener) { accountChanged = listener; } },
     '@/services/authUserService': { getSessionUserOrThrow: async () => ({ id }), getAuthenticatedUserOrThrow: async () => ({ id }) },
     '@/services/workoutService': { getAuthenticatedUserOrThrow: async () => ({ id }) },
-    '@/services/supabase': { supabase: { auth: { updateUser: async () => { updates++; await new Promise(() => {}); } }, from: () => {
-      reads++;
+    '@/services/supabase': { supabase: { auth: { updateUser: async () => { updates++; await new Promise(() => {}); } }, from: table => {
+      if (table === 'profiles') reads++;
       return { select() { return this; }, eq(_, value) { this.id = value; return this; }, async maybeSingle() { await response.promise; return { data: rows[this.id], error: null }; } };
     } } },
   });
@@ -172,10 +173,11 @@ test('native Google login consumes its browser return and concurrent starts shar
   const service = loadSource({
     '@react-native-async-storage/async-storage': storage,
     'react-native': { Platform: { OS: 'ios' } },
-    'expo-web-browser': { openAuthSessionAsync: async () => { assert.ok(await storage.getItem('lyfttrack.auth.oauth.pending')); browsers++; return browser.promise; } },
+    'expo-web-browser': { openAuthSessionAsync: async () => { browsers++; return browser.promise; } },
     '@/services/supabase': { getGoogleOAuthRedirectTo: () => 'lyfttrack://callback', supabase: { auth: {
       signInWithOAuth: async () => { starts++; return { data: { url: 'https://provider.test' }, error: null }; },
-      exchangeCodeForSession: async code => { codes.push(code); return { error: null }; },
+      exchangeCodeForSession: async code => { codes.push(code); return { data: { session: { user: { id: 'a' } } }, error: null }; },
+      getSession: async () => ({ data: { session: { user: { id: 'a' } } }, error: null }),
     } } },
   })('app/src/services/authService.ts');
   const calls = [service.startGoogleOAuth(), service.startGoogleOAuth()];
@@ -196,7 +198,7 @@ test('native client uses PKCE and processLock while web retains its default brow
       'expo-linking': {},
       'react-native': { Platform: { OS: os } },
     }, { process: { env: { EXPO_PUBLIC_SUPABASE_URL: 'https://project.test', EXPO_PUBLIC_SUPABASE_ANON_KEY: 'public-test' } } })('app/src/services/supabase.ts');
-    assert.equal(options.auth.flowType, os === 'web' ? undefined : 'pkce');
+    assert.equal(options.auth.flowType, 'pkce');
     assert.equal(options.auth.lock, os === 'web' ? undefined : processLock);
     assert.equal(options.auth.detectSessionInUrl, false);
   }

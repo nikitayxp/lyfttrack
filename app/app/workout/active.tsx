@@ -44,6 +44,7 @@ import {
   orderExercisesByIds,
   type PreviousExercisePerformanceSet,
 } from '@/services/workoutService';
+import { adoptForeignCustomExercises } from '@/services/exerciseAdoptionService';
 import { finishWorkout } from '@/services/sessionRepository';
 import { getTemplateById } from '@/services/templateService';
 import {
@@ -222,6 +223,7 @@ export default function ActiveWorkout() {
     updateSetInput,
     updateSetSide,
     updateExerciseNotes,
+    markExerciseInteracted,
     addSet,
     removeSet,
     addExercise,
@@ -555,7 +557,7 @@ export default function ActiveWorkout() {
 
         const uniqueExerciseIds = [...new Set(details.exercises.map((entry) => entry.exercise_id).filter(Boolean))];
         const catalogRows = uniqueExerciseIds.length > 0 ? await getExercisesByIds(uniqueExerciseIds) : [];
-        const catalogById = new Map(catalogRows.map((row) => [row.id, row] as const));
+        const catalogById = await adoptForeignCustomExercises(catalogRows, uniqueExerciseIds);
 
         const blocks = details.exercises
           .filter((entry) => catalogById.has(entry.exercise_id))
@@ -1084,6 +1086,7 @@ export default function ActiveWorkout() {
                   <TextInput
                     accessibilityLabel={t('accessibility.exerciseNotes', { defaultValue: 'Exercise notes' })}
                     value={exercise.notes ?? ''}
+                    onFocus={() => markExerciseInteracted(exercise.id)}
                     onChangeText={(value) => updateExerciseNotes(exercise.id, value)}
                     style={styles.exerciseNotesInput}
                     placeholder={t('workout.exerciseNotesPlaceholder')}
@@ -1231,6 +1234,7 @@ export default function ActiveWorkout() {
                           <TextInput
                             accessibilityLabel={t('accessibility.weightInput', { defaultValue: 'Weight' })}
                             value={setItem.weightInput}
+                            onFocus={() => markExerciseInteracted(exercise.id)}
                             onChangeText={(value) => updateSetInput(exercise.id, setItem.id, 'weightInput', value)}
                             style={[styles.numericInput, styles.kgInput, setItem.completed && styles.numericInputCompleted]}
                             keyboardType="decimal-pad"
@@ -1241,6 +1245,7 @@ export default function ActiveWorkout() {
                           <TextInput
                             accessibilityLabel={t('accessibility.repsInput', { defaultValue: 'Reps' })}
                             value={setItem.repsInput}
+                            onFocus={() => markExerciseInteracted(exercise.id)}
                             onChangeText={(value) => updateSetInput(exercise.id, setItem.id, 'repsInput', value)}
                             style={[styles.numericInput, styles.cellReps, setItem.completed && styles.numericInputCompleted]}
                             keyboardType="numeric"
@@ -1251,6 +1256,7 @@ export default function ActiveWorkout() {
                           <TextInput
                             accessibilityLabel={t('accessibility.rirInput', { defaultValue: 'RIR' })}
                             value={setItem.rirInput}
+                            onFocus={() => markExerciseInteracted(exercise.id)}
                             onChangeText={(value) => updateSetInput(exercise.id, setItem.id, 'rirInput', value)}
                             style={[styles.numericInput, styles.cellRir, setItem.completed && styles.numericInputCompleted]}
                             keyboardType="decimal-pad"

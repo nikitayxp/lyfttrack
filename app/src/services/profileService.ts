@@ -14,7 +14,7 @@ export type PublicProfileView = Pick<
   'id' | 'username' | 'full_name' | 'avatar_url' | 'bio' | 'visibility'
 >;
 
-const PROFILE_COLUMNS = 'id,username,full_name,avatar_url,bio,height_cm,visibility,updated_at';
+const PROFILE_CARD_COLUMNS = 'id, username, avatar_url, visibility, updated_at';
 let profileEpoch = 0;
 let profileCache: { accountId: string; value: ProfileRow; expiresAt: number } | null = null;
 const pendingProfiles = new Map<string, Promise<ProfileRow>>();
@@ -26,6 +26,26 @@ export function invalidateProfileCache(): void {
 }
 
 onAuthAccountChange(invalidateProfileCache);
+
+type ProfileCard = Omit<ProfileRow, 'bio' | 'height_cm' | 'full_name'>;
+
+async function getProfileDetails(profileId: string): Promise<Pick<ProfileRow, 'bio' | 'height_cm' | 'full_name'>> {
+  const { data, error } = await supabase
+    .from('profile_private_details')
+    .select('bio, height_cm, full_name')
+    .eq('id', profileId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Unable to load profile: ${error.message}`);
+  }
+
+  return { bio: data?.bio ?? null, height_cm: data?.height_cm ?? null, full_name: data?.full_name ?? null };
+}
+
+async function withProfileDetails(card: ProfileCard): Promise<ProfileRow> {
+  return { ...card, ...(await getProfileDetails(card.id)) };
+}
 
 export type UpdateProfileInput = {
   username?: string;
@@ -150,11 +170,6 @@ async function syncAuthMetadataFromProfile(user: User, profile: ProfileRow): Pro
     return;
   }
 
-  const current = await getSessionUserOrThrow();
-  if (current.id !== user.id) {
-    throw new Error('Session changed before syncing profile metadata.');
-  }
-
   const { error } = await supabase.auth.updateUser({
     data: {
       ...currentMetadata,
@@ -181,16 +196,39 @@ function inferExtension(fileUri: string, fileName?: string): string {
   return match[1];
 }
 
+export const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+
+const AVATAR_EXTENSION_BY_TYPE: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
+
+export class AvatarValidationError extends Error {
+  constructor(readonly reason: 'too-large' | 'unsupported-type') {
+    super(reason === 'too-large' ? 'Avatar file is too large.' : 'Avatar file type is not supported.');
+    this.name = 'AvatarValidationError';
+  }
+}
+
+const AVATAR_TYPE_BY_EXTENSION: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+};
+
 function inferContentType(extension: string, providedType?: string): string {
-  if (providedType) {
-    return providedType;
+  const normalizedType = providedType?.trim().toLowerCase();
+  const candidate = normalizedType === 'image/jpg'
+    ? 'image/jpeg'
+    : normalizedType || AVATAR_TYPE_BY_EXTENSION[extension];
+
+  if (!candidate || !AVATAR_EXTENSION_BY_TYPE[candidate]) {
+    throw new AvatarValidationError('unsupported-type');
   }
 
-  if (extension === 'png') return 'image/png';
-  if (extension === 'webp') return 'image/webp';
-  if (extension === 'gif') return 'image/gif';
-  if (extension === 'svg') return 'image/svg+xml';
-  return 'image/jpeg';
+  return candidate;
 }
 
 export async function pickAvatarFromLibrary(): Promise<UploadAvatarInput | null> {
@@ -213,11 +251,16 @@ export async function pickAvatarFromLibrary(): Promise<UploadAvatarInput | null>
   }
 
   const asset = pickerResult.assets[0];
+  const contentType = inferContentType(inferExtension(asset.uri, asset.fileName ?? undefined), asset.mimeType ?? undefined);
+  const selectedSize = asset.fileSize ?? (asset.base64 ? decodeBase64(asset.base64).byteLength : undefined);
+  if (selectedSize != null && selectedSize > AVATAR_MAX_BYTES) {
+    throw new AvatarValidationError('too-large');
+  }
 
   return {
     fileUri: asset.uri,
     fileName: asset.fileName ?? `avatar-${Date.now()}.${inferExtension(asset.uri)}`,
-    contentType: asset.mimeType ?? undefined,
+    contentType,
     base64Data: asset.base64,
   };
 }
@@ -229,21 +272,39 @@ async function createProfileForExistingUser(user: User): Promise<ProfileRow> {
     const username = attempt === 0 ? baseUsername : `${baseUsername}_${Math.floor(Math.random() * 9000) + 1000}`;
     const insertRow = buildCreateProfileRow(user, username);
 
-    const { data, error } = await supabase
+    const { data: card, error } = await supabase
       .from('profiles')
-      .upsert(insertRow, { onConflict: 'id' })
-      .select(PROFILE_COLUMNS)
+      .insert(insertRow)
+      .select(PROFILE_CARD_COLUMNS)
       .single();
 
-    if (!error && data) {
-      void syncAuthMetadataFromProfile(user, data).catch((syncError) => {
+    if (!error && card) {
+      const data = await withProfileDetails(card);
+
+      try {
+        await syncAuthMetadataFromProfile(user, data);
+      } catch (syncError) {
         console.warn('[profileService] Metadata sync skipped after profile bootstrap', syncError);
-      });
+      }
 
       return data;
     }
 
     if (error?.code === '23505') {
+      const { data: existingCard, error: existingError } = await supabase
+        .from('profiles')
+        .select(PROFILE_CARD_COLUMNS)
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (existingError) {
+        throw new Error(`Unable to load profile: ${existingError.message}`);
+      }
+
+      if (existingCard) {
+        return withProfileDetails(existingCard);
+      }
+
       continue;
     }
 
@@ -254,9 +315,9 @@ async function createProfileForExistingUser(user: User): Promise<ProfileRow> {
 }
 
 async function loadProfile(user: User): Promise<ProfileRow> {
-  const { data, error } = await supabase
+  const { data: card, error } = await supabase
     .from('profiles')
-    .select(PROFILE_COLUMNS)
+    .select(PROFILE_CARD_COLUMNS)
     .eq('id', user.id)
     .maybeSingle();
 
@@ -264,7 +325,11 @@ async function loadProfile(user: User): Promise<ProfileRow> {
     throw new Error(`Unable to load profile: ${error.message}`);
   }
 
-  return data ?? createProfileForExistingUser(user);
+  if (card) {
+    return withProfileDetails(card);
+  }
+
+  return createProfileForExistingUser(user);
 }
 
 export async function getProfile(): Promise<ProfileRow> {
@@ -297,8 +362,8 @@ export async function getPublicProfileById(profileId: string): Promise<PublicPro
   }
 
   const { data, error } = await supabase
-    .from('profiles')
-    .select('id, username, full_name, avatar_url, bio, visibility')
+    .from('profile_cards')
+    .select('id, username, full_name, avatar_url, visibility')
     .eq('id', normalizedProfileId)
     .maybeSingle();
 
@@ -306,7 +371,12 @@ export async function getPublicProfileById(profileId: string): Promise<PublicPro
     throw new Error(`Unable to load profile: ${error.message}`);
   }
 
-  return data;
+  if (!data) {
+    return null;
+  }
+
+  const { bio } = await getProfileDetails(data.id);
+  return { ...data, bio };
 }
 
 /**
@@ -362,8 +432,6 @@ export async function deleteOwnAccount(): Promise<void> {
   if (error) {
     throw new Error(`Unable to delete account: ${error.message}`);
   }
-
-  invalidateProfileCache();
 
   try {
     await supabase.auth.signOut();
@@ -431,21 +499,24 @@ export async function updateProfile(input: UpdateProfileInput): Promise<ProfileR
     return existingProfile;
   }
 
-  const { data, error } = await supabase
+  const { data: card, error } = await supabase
     .from('profiles')
     .update(updateRow)
     .eq('id', user.id)
-    .select(PROFILE_COLUMNS)
+    .select(PROFILE_CARD_COLUMNS)
     .single();
 
-  if (error || !data) {
+  if (error || !card) {
     throw new Error(`Unable to update profile: ${error?.message ?? 'Unknown error'}`);
   }
+
+  const data = await withProfileDetails(card);
 
   invalidateProfileCache();
   const current = await getSessionUserOrThrow();
   if (current.id !== user.id) throw new Error('Session changed while updating profile. Please try again.');
-  profileCache = { accountId: user.id, value: data, expiresAt: Date.now() + 30_000 };
+  // A later avatar/profile mutation may have completed while details loaded.
+  // Let the next read fetch current state instead of caching this older card.
 
   try {
     await syncAuthMetadataFromProfile(user, data);
@@ -458,7 +529,6 @@ export async function updateProfile(input: UpdateProfileInput): Promise<ProfileR
 
 export async function uploadAvatar(input: UploadAvatarInput): Promise<ProfileRow> {
   const user = await getAuthenticatedUserOrThrow();
-  await getProfile();
 
   const normalizedUri = input.fileUri.trim();
   if (!normalizedUri) {
@@ -483,9 +553,26 @@ export async function uploadAvatar(input: UploadAvatarInput): Promise<ProfileRow
     fileData = decodeBase64(input.base64Data);
   }
 
-  const extension = inferExtension(normalizedUri, input.fileName);
-  const contentType = inferContentType(extension, input.contentType);
-  const filePath = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
+  inferContentType(inferExtension(normalizedUri, input.fileName), input.contentType);
+
+  if (fileData.byteLength > AVATAR_MAX_BYTES) {
+    throw new AvatarValidationError('too-large');
+  }
+
+  const bytes = new Uint8Array(fileData);
+  let contentType: string;
+  if (bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) {
+    contentType = 'image/jpeg';
+  } else if ([137, 80, 78, 71, 13, 10, 26, 10].every((byte, index) => bytes[index] === byte)) {
+    contentType = 'image/png';
+  } else if ([82, 73, 70, 70].every((byte, index) => bytes[index] === byte)
+    && [87, 69, 66, 80].every((byte, index) => bytes[index + 8] === byte)) {
+    contentType = 'image/webp';
+  } else {
+    throw new AvatarValidationError('unsupported-type');
+  }
+
+  const filePath = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${AVATAR_EXTENSION_BY_TYPE[contentType]}`;
 
   const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, fileData, {
     contentType,
@@ -497,5 +584,17 @@ export async function uploadAvatar(input: UploadAvatarInput): Promise<ProfileRow
   }
 
   const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
-  return updateProfile({ avatarUrl: data.publicUrl });
+  const { data: updatedProfile, error: updateError } = await supabase
+    .from('profiles')
+    .update({ avatar_url: data.publicUrl })
+    .eq('id', user.id)
+    .select(PROFILE_CARD_COLUMNS)
+    .single();
+
+  if (updateError || !updatedProfile || updatedProfile.id !== user.id) {
+    throw new Error(`Unable to update profile: ${updateError?.message ?? 'Unknown error'}`);
+  }
+
+  invalidateProfileCache();
+  return withProfileDetails(updatedProfile);
 }

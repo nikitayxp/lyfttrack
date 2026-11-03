@@ -3,7 +3,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 import { getGoogleOAuthRedirectTo, supabase } from '@/services/supabase';
 import { getAuthenticatedUserOrThrow } from '@/services/authUserService';
-import { beginGoogleOAuthReturn, cancelGoogleOAuthReturn, completeGoogleOAuthReturn } from '@/services/oauthReturn';
+import { completeGoogleOAuthReturn } from '@/services/oauthReturn';
 
 /**
  * OAuth leaves the app before a session exists, so the acceptance recorded on
@@ -74,21 +74,17 @@ export async function startGoogleOAuth(): Promise<void> {
   pendingGoogleOAuth = performGoogleOAuth();
   try {
     await pendingGoogleOAuth;
-  } catch (error) {
-    await cancelGoogleOAuthReturn();
-    throw error;
   } finally {
     pendingGoogleOAuth = null;
   }
 }
 
 async function performGoogleOAuth(): Promise<void> {
-  const redirectTo = getGoogleOAuthRedirectTo();
-  await beginGoogleOAuthReturn();
-
-  if (__DEV__) {
-    console.info('[oauth] startGoogleOAuth redirectTo', redirectTo);
+  if (Platform.OS === 'web' && (typeof window === 'undefined' || !window.isSecureContext || !globalThis.crypto?.subtle)) {
+    throw new Error('oauth-insecure-context');
   }
+
+  const redirectTo = getGoogleOAuthRedirectTo();
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
@@ -103,34 +99,6 @@ async function performGoogleOAuth(): Promise<void> {
 
   if (error || !data?.url) {
     throw new Error('oauth-start-failed');
-  }
-
-  if (__DEV__) {
-    try {
-      const authorizeUrl = new URL(data.url);
-      const asked = authorizeUrl.searchParams.get('redirect_to');
-      console.info('[oauth] authorize redirect_to', asked);
-
-      // Production bounce with ?lan_return= is intentional for Tailscale/Wi-Fi IPs.
-      const isLanBounce = Boolean(asked && /[?&]lan_return=/.test(asked));
-
-      if (
-        Platform.OS === 'web' &&
-        typeof window !== 'undefined' &&
-        asked &&
-        /vercel\.app|lyfttrack\.app/i.test(asked) &&
-        !isLanBounce
-      ) {
-        window.alert(`ERRO: redirect_to ainda e producao:\n${asked}`);
-        throw new Error('oauth-start-failed');
-      }
-    } catch (probeError) {
-      if (probeError instanceof Error && probeError.message === 'oauth-start-failed') {
-        throw probeError;
-      }
-
-      console.info('[oauth] authorize url', data.url);
-    }
   }
 
   if (Platform.OS === 'web') {

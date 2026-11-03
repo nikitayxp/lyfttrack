@@ -12,7 +12,9 @@ import {
 import { Animated, Platform } from 'react-native';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import {
+  createExerciseBlock,
   useActiveWorkoutState,
+  withHistoricalSetTypes,
   type ActiveExercise,
   type ActiveExercisesUpdater,
   type ActiveSet,
@@ -43,6 +45,7 @@ type WorkoutContextValue = {
   updateSetSide: (exerciseId: string, setId: string, side: 'both' | 'left' | 'right') => void;
   updateSetType: (exerciseId: string, setId: string, setType: 'normal' | 'warmup' | 'drop' | 'failure') => void;
   updateExerciseNotes: (exerciseId: string, notes: string | null) => void;
+  markExerciseInteracted: (exerciseId: string) => void;
   addSet: (exerciseId: string) => void;
   removeSet: (exerciseId: string, setId: string) => void;
   addExercise: (exercise: ExerciseRow) => void;
@@ -108,6 +111,15 @@ function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: Pro
   const [exerciseStopwatchById, setExerciseStopwatchById] = useState<Record<string, ExerciseStopwatchEntry>>({});
   const [exerciseRestSnapshotById, setExerciseRestSnapshotById] = useState<Record<string, number>>({});
   const keepAwakeStateRef = useRef({ activated: false, deactivated: false });
+  const historyGenerationRef = useRef(0);
+  const interactedBlocksRef = useRef(new WeakSet<ActiveExercise>());
+
+  useEffect(() => {
+    const historyGeneration = historyGenerationRef;
+    return () => {
+      historyGeneration.current += 1;
+    };
+  }, []);
 
   const workoutStartedAtIso = useMemo(
     () => (workoutStartedAtMs === null ? undefined : new Date(workoutStartedAtMs).toISOString()),
@@ -125,12 +137,11 @@ function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: Pro
     updateExerciseNotes,
     addSet,
     removeSet,
-    addExercise,
     clearExercises,
     getExerciseCompletionGlowValue,
     recoveredDraft,
     isDraftRecoveryPending: isDraftReadPending,
-    clearDraft,
+    clearDraft: clearPersistedDraft,
     acceptRecoveredDraft,
     discardRecoveredDraft,
   } = useActiveWorkoutState({
@@ -159,6 +170,7 @@ function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: Pro
   }, [workoutStartedAtMs]);
 
   const resetWorkoutSession = useCallback(() => {
+    historyGenerationRef.current += 1;
     setWorkoutStartedAtMs(null);
     setWorkoutSessionStartedAtMs(null);
     setIsTimerPaused(false);
@@ -376,21 +388,45 @@ function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: Pro
     [setActiveExercisesWithRef]
   );
 
+  const markExerciseInteracted = useCallback((exerciseId: string) => {
+    const block = activeExercisesRef.current.find((candidate) => candidate.id === exerciseId);
+    if (block) {
+      interactedBlocksRef.current.add(block);
+    }
+  }, [activeExercisesRef]);
+
+  const clearDraft = useCallback(async () => {
+    // Successful saves keep the blocks visible in the summary. Pending history
+    // must not mutate them and schedule another draft for the finished workout.
+    historyGenerationRef.current += 1;
+    await clearPersistedDraft();
+  }, [clearPersistedDraft]);
+
   const addExerciseToWorkout = useCallback(
     (exercise: ExerciseRow) => {
       ensureWorkoutStarted();
+      const block = createExerciseBlock(exercise);
+      const generation = historyGenerationRef.current;
+      setActiveExercisesWithRef((currentValue) => [...currentValue, block]);
+
       getPreviousExercisePerformance(exercise.id, null)
         .then((previousSets) => {
-          const seeds = previousSets.map((s) => ({
-            setType: s.setType,
-          }));
-          addExercise(exercise, seeds);
+          if (historyGenerationRef.current !== generation || interactedBlocksRef.current.has(block)) {
+            return;
+          }
+
+          const seeded = withHistoricalSetTypes(block, previousSets.map((set) => set.setType));
+          if (seeded === block) {
+            return;
+          }
+
+          setActiveExercisesWithRef((currentValue) =>
+            currentValue.map((currentBlock) => (currentBlock === block ? seeded : currentBlock))
+          );
         })
-        .catch(() => {
-          addExercise(exercise);
-        });
+        .catch(() => {});
     },
-    [addExercise, ensureWorkoutStarted]
+    [ensureWorkoutStarted, setActiveExercisesWithRef]
   );
 
   const clearWorkout = useCallback(() => {
@@ -459,6 +495,7 @@ function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: Pro
     updateSetSide,
     updateSetType,
     updateExerciseNotes,
+    markExerciseInteracted,
     addSet,
     removeSet,
     addExercise: addExerciseToWorkout,
@@ -503,6 +540,7 @@ function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: Pro
     handleSetCompletionToggle,
     hasActiveWorkout,
     latestExerciseName,
+    markExerciseInteracted,
     moveExercise,
     recoveredDraft,
     isDraftRecoveryPending,

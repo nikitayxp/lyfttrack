@@ -3,7 +3,7 @@ const policies=require('./fixtures/rls-before-read-optimization.json');
 const ids=Array.from({length:5},(_,i)=>`00000000-0000-0000-0000-${String(i+1).padStart(12,'0')}`);
 test('RLS optimization preserves all public policies and visibility permissions',async t=>{
  const db=await PGlite.create();t.after(()=>db.close());
- await db.exec(`create role authenticated;create role anon;create schema auth;
+ await db.exec(`create role authenticated;create role anon;create schema auth;create table auth.users(id uuid primary key);
  create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('test.user_id',true),'')::uuid $$;
  grant usage on schema auth to authenticated;grant execute on function auth.uid() to authenticated;
  create table profiles(id uuid primary key,visibility text default 'friends',username text);
@@ -38,13 +38,38 @@ test('RLS optimization preserves all public policies and visibility permissions'
  const start=migration.indexOf('create or replace function public.can_view_user_content');const end=migration.indexOf('grant execute on function public.can_view_user_content(uuid) to authenticated;',start)+'grant execute on function public.can_view_user_content(uuid) to authenticated;'.length;
  await db.exec(migration.slice(start,end));
  for(const p of policies){await db.exec(`alter table public.${p.tablename} enable row level security; create policy ${p.policyname} on public.${p.tablename} for ${p.cmd} to ${p.roles.join(',')} ${p.qual?'using ('+p.qual+')':''} ${p.with_check?'with check ('+p.with_check+')':''}`);}
+ await db.exec(`alter table routine_exercises add column exercise_id uuid;
+ alter table template_exercises add column exercise_id uuid;
+ alter table exercises add column name text,add column muscle_group text,add column equipment text,
+ add column name_pt text,add column image_url text,add column name_en text,add column muscle_en text,
+ add column muscle_pt text,add column description text,add column aliases text[],add column listed boolean;
+ create function wipe_my_workouts() returns void language sql as $$ select $$;
+ create function wipe_my_custom_exercises() returns void language sql as $$ select $$;
+ create function delete_own_account() returns void language sql as $$ select $$;
+ create function respond_to_friend_request(uuid,text) returns void language sql as $$ select $$;
+ create function check_username_available(text) returns boolean language sql as $$ select false $$;`);
+ // Production already has these protections before the older optimization runs.
+ for(const file of ['20261027090000_own_exercise_references.sql','20261027090100_repair_copied_exercise_references.sql','20261027094000_tighten_role_privileges.sql']){
+   await db.exec(fs.readFileSync('supabase/migrations/'+file,'utf8'));
+ }
  const tables=[...new Set(policies.map(p=>p.tablename))];
  async function capture(){const result=[];await db.exec('set role authenticated');for(const actor of [...ids.slice(0,4),'']){await db.query(`select set_config('test.user_id',$1,false)`,[actor]);for(const table of tables){result.push({actor,table,rows:(await db.query(`select id from public.${table} order by id`)).rows});}for(const target of [...ids.slice(0,4),null])result.push({actor,target,value:(await db.query('select public.can_view_user_content($1::uuid) value',[target])).rows[0].value});}await db.exec('reset role');return result;}
  await db.exec(fs.readFileSync('supabase/migrations/20261026221000_batched_read_models.sql','utf8'));
  const before=await capture();
  await db.exec(fs.readFileSync('supabase/migrations/20261026222000_rls_initplans.sql','utf8'));
  assert.deepEqual(await capture(),before);
- const after=(await db.query("select policyname,qual,with_check from pg_policies where schemaname='public'")).rows;
+ const after=(await db.query("select policyname,qual,with_check from pg_policies where schemaname='public' order by policyname")).rows;
+ for(const table of ['sets','workout_exercises','routine_exercises','template_exercises']){
+   for(const operation of ['insert','update']){
+     const name=table+'_'+operation+'_'+(table==='template_exercises'?'owner_templates':'owner_only');
+     assert.match(after.find(policy=>policy.policyname===name).with_check,/can_reference_exercise/,'optimization removed exercise ownership protection: '+name);
+   }
+ }
+ for(const operation of ['insert','update']){
+   assert.match(after.find(policy=>policy.policyname==='sets_'+operation+'_owner_only').with_check,/we\.workout_id = sets\.workout_id/,'optimization removed set/block workout linkage');
+ }
+ await db.exec(fs.readFileSync('supabase/migrations/20261026222000_rls_initplans.sql','utf8'));
+ assert.deepEqual((await db.query("select policyname,qual,with_check from pg_policies where schemaname='public' order by policyname")).rows,after,'reapplication must not keep nesting scalar subqueries');
  assert.equal(after.length,policies.length);
  for(const p of policies){const q=after.find(q=>q.policyname===p.policyname);assert.equal(Boolean(q.qual),Boolean(p.qual));assert.equal(Boolean(q.with_check),Boolean(p.with_check));}
  await db.exec(`set role authenticated;set test.user_id='${ids[0]}'`);
@@ -65,6 +90,6 @@ test('RLS optimization preserves all public policies and visibility permissions'
  assert.match(customPolicy.qual,/is_custom = true/);
  assert.match(customPolicy.with_check,/is_custom = true/);
  await db.exec(`set role authenticated;set test.user_id='${ids[0]}'`);
- await db.query('insert into exercises values($1,$2,true)',[ids[4],ids[0]]);
+ await db.query('insert into exercises(id,created_by,is_custom) values($1,$2,true)',[ids[4],ids[0]]);
  await assert.rejects(db.query('update exercises set is_custom=false where id=$1',[ids[4]]),/row-level security/);
 });

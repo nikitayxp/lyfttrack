@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -7,79 +7,36 @@ import { Colors } from '@/constants/Colors';
 import { Radius, Spacing } from '@/constants/Styles';
 import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
 import { AppButton } from '@/components/ui/AppButton';
-import { isAllowedLanReturn } from '@/services/oauthLanReturn';
-import * as Linking from 'expo-linking';
-import { completeGoogleOAuthReturn } from '@/services/oauthReturn';
+import { authReturnParamsKey, clearedAuthReturnParams, completeGoogleOAuthReturn, readAuthReturnUrl } from '@/services/oauthReturn';
 
 const palette = Colors.dark;
-
-function readRouteValue(value: string | string[] | undefined): string {
-  if (Array.isArray(value)) {
-    return value[0]?.trim() ?? '';
-  }
-
-  return value?.trim() ?? '';
-}
 
 export default function OAuthCallbackScreen() {
   const { t } = useTranslation();
   const params = useLocalSearchParams<Record<string, string | string[]>>();
-  const routeCode = readRouteValue(params.code);
-  const routeError = readRouteValue(params.error);
-  const routeErrorDescription = readRouteValue(params.error_description);
+  const returnParamsKey = authReturnParamsKey(params);
   const [messageKey, setMessageKey] = useState('auth.callback.loading');
   const [isError, setIsError] = useState(false);
+  const didHandleReturn = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
 
     const exchangeSession = async () => {
-      // Dev LAN OAuth: production callback forwards tokens back to Metro IP (#69).
-      if (typeof window !== 'undefined' && window.location) {
-        const current = new URL(window.location.href);
-        const lanReturn = current.searchParams.get('lan_return');
-
-        if (lanReturn && isAllowedLanReturn(lanReturn)) {
-          const dest = new URL(lanReturn);
-          current.searchParams.delete('lan_return');
-          current.searchParams.forEach((value, key) => {
-            dest.searchParams.set(key, value);
-          });
-          dest.hash = current.hash;
-          window.location.replace(dest.toString());
-          return;
-        }
-      }
-
       try {
-        let returnUrl: string;
-        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
-          const url = new URL(window.location.href);
-          if (routeCode && !url.searchParams.has('code')) url.searchParams.set('code', routeCode);
-          if (routeError && !url.searchParams.has('error')) url.searchParams.set('error', routeError);
-          if (routeErrorDescription && !url.searchParams.has('error_description')) url.searchParams.set('error_description', routeErrorDescription);
-          returnUrl = url.toString();
-        } else {
-          const initialUrl = routeCode || routeError || routeErrorDescription
-            ? null
-            : await Linking.getInitialURL();
-          const url = new URL(initialUrl || 'lyfttrack://callback');
-          if (routeCode) url.searchParams.set('code', routeCode);
-          if (routeError) url.searchParams.set('error', routeError);
-          if (routeErrorDescription) url.searchParams.set('error_description', routeErrorDescription);
-          returnUrl = url.toString();
-        }
-        await completeGoogleOAuthReturn(returnUrl);
-        if (!cancelled && Platform.OS !== 'web') {
-          router.setParams({ code: undefined, access_token: undefined, refresh_token: undefined, provider_token: undefined, provider_refresh_token: undefined, id_token: undefined, token_hash: undefined });
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setIsError(true);
-          setMessageKey(error && typeof error === 'object' && 'message' in error && error.message === 'oauth-missing-code'
-            ? 'auth.callback.missingCode'
-            : 'auth.callback.errorDescription');
-        }
+        const url = readAuthReturnUrl(returnParamsKey, 'lyfttrack://callback');
+        if (didHandleReturn.current && !url.hash && !Object.keys(clearedAuthReturnParams).some(key => url.searchParams.has(key))) return;
+        didHandleReturn.current = true;
+        setIsError(false);
+        setMessageKey('auth.callback.loading');
+        await completeGoogleOAuthReturn(url.toString());
+      } catch (exchangeError) {
+        if (cancelled) return;
+        setIsError(true);
+        setMessageKey(exchangeError instanceof Error && exchangeError.message === 'oauth-missing-code'
+          ? 'auth.callback.missingCode' : 'auth.callback.errorDescription');
+      } finally {
+        if (!cancelled) router.setParams(clearedAuthReturnParams);
       }
     };
 
@@ -88,7 +45,7 @@ export default function OAuthCallbackScreen() {
     return () => {
       cancelled = true;
     };
-  }, [routeCode, routeError, routeErrorDescription]);
+  }, [returnParamsKey]);
 
   return (
     <AuthAmbientGlow>

@@ -108,6 +108,91 @@ test the migrations separately in staging before an authorized production rollou
 
 ## Rollout notes
 
+- `20261027090000_own_exercise_references.sql` restricts new workout, set,
+  routine and template references to catalogue exercises or the current user's
+  custom exercises.
+- `20261027090100_repair_copied_exercise_references.sql` gives each affected
+  account its own copy of historically shared custom exercises. It preserves
+  translations, aliases, listing state, training row IDs and values. Legacy sets
+  linked to a different workout are detached after retaining their exercise;
+  linked sets without a workout inherit their existing block's workout.
+- A custom-exercise set without either a workout or a block stops the repair
+  with an explicit error. Its owner must be established before retrying; the
+  migration never guesses ownership or deletes the set.
+- The repair also requires every new or updated linked set to match its block's
+  workout and exercise. Unlinked legacy sets remain supported.
+- The repair runs in one transaction and briefly blocks writes to the affected
+  tables, including account deletion. A five-second lock timeout or sixty-second
+  statement timeout aborts it without a partial repair. Validate on staging and
+  reconcile the earlier migration PRs before applying it in production.
+- 20261027094000_tighten_role_privileges.sql removes anonymous and PUBLIC access
+  to app tables, keeps authenticated CRUD and existing column restrictions,
+  and removes table administration privileges, including MAINTAIN on PostgreSQL 17+.
+  Cleanup, account deletion, visibility and friendship helpers use an empty
+  search_path and remain available only to authenticated callers. Username
+  availability remains callable before sign-in. Remote-only trigger functions
+  are handled only when present. The unversioned projeto_ativo table and its
+  existing data stay in place with client privileges removed.
+- Apply the #290 migration after the earlier timestamped integrity, performance,
+  exercise, comment, profile and avatar migrations. It has not been applied to
+  production as part of this change. Validate grants, signup username lookup,
+  workout CRUD, friendship, profile updates and own-account cleanup in staging
+  before authorizing rollout. Do not use real user accounts for cleanup tests.
+- `20261027093000_avatar_bucket_limits.sql` restricts avatar listing to the
+  authenticated owner's folder and permits JPEG/PNG/WebP uploads. Its original
+  5 MiB setting is superseded by `20261027093100_avatar_two_megabyte_limit.sql`,
+  which applies the issue's requested 2 MiB limit without deleting stored files.
+- The original avatar migration was reported as manually applied before this
+  follow-up. I keep it unchanged and apply the new limit only after staging
+  validation and production approval. Existing public avatar URLs remain valid;
+  the new limit affects future uploads, not existing objects.
+- I validate the picker and actual upload body in the client. Onboarding keeps
+  the stored photo separate from a pending preview and permits discarding the
+  selection after validation or network failures. A network failure can also be
+  retried without selecting the image again.
+- I split the profile privacy rollout into additive views, compatible clients,
+  then permission revocation. `supabase/rollouts/profile_read_views.sql` only
+  prepares `profile_cards` and `profile_private_details`; it does not revoke
+  table access, modify profile data or mark migrations as applied. It requires
+  a separately authorized execution in each target environment.
+- I validate the additive views in staging before deploying this client. The
+  new client needs both views to exist. Hidden cards retain username/avatar;
+  the name is null unless `can_view_user_content` permits access. The private
+  details endpoint uses the same visibility rule and keeps height owner-only.
+  The old `profile_details` view remains unchanged.
+- My active client for this rollout is the web app. I validate the compatible
+  web deployment before the permission cutover. Old APK clients that use
+  `profiles.select('*')` fail after revocation and require an update if used.
+  I do not claim native compatibility or device validation from web checks.
+- `20261027092000_private_profile_fields.sql` remains unchanged.
+  `20261027092100_private_profile_cards.sql` then removes the globally readable
+  name, including stale column/PUBLIC grants, and recreates the prepared views.
+  I must reconcile recorded manual changes and earlier pending migrations
+  before applying either; I do not skip or falsely mark the older migration.
+- Production migration application now requires a manual workflow run on
+  `main`, `apply_migrations=true`, and the full approved commit SHA matching
+  both the event revision and the actual checkout. The confirmation defaults
+  to false. Automatic pushes only print a notice. Approval is checked before
+  linking with production credentials. The manual run applies **all** pending
+  migrations, so the SHA review covers that entire set, not only profiles.
+- Before that run I verify two-account profile visibility, hidden-name search,
+  friendship/request cards, comments, feed, onboarding and profile edits through
+  the real staging API and compatible app. I still require separate approval
+  for merge and production changes; automated tests do not record it.
+- The currently accessible project inventory contains only the linked
+  production project. I have not created a staging project. On 29 October 2026
+  I tested both privacy migrations on the real database in a transaction that
+  rolled back, then applied only the explicitly approved additive view script.
+  Profile rows, friendship rows and migration history were verified unchanged.
+  On 30 October 2026 the approved #295/#299 merges were deployed to production
+  at main `9c3482bfc227b5c6710af49d8bcb324493a57411`. The confirmed manual workflow
+  applied only 092000 and 092100. Live column grants and real API/browser checks
+  verified the privacy cutover; test profile/friendship digests stayed unchanged.
+  Both #288 and the separate username-search bug #298 are closed for web delivery.
+  This does not authorize later avatar migrations or claim native validation.
+  The earlier exercise timestamps 090000/090100 are still pending and require
+  an explicitly reviewed include-all dry run; I do not mark them falsely applied.
+
 - Apply first in staging and validate app flows:
    - onboarding weight save
    - profile weight history

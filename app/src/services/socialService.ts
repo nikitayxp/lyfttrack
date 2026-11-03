@@ -119,24 +119,25 @@ async function getRelationsByUserIds(currentUserId: string, candidateIds: string
 
   const candidateIdsList = inFilterList(normalizedCandidateIds);
 
-  const { data: friends, error: friendsError } = await supabase
-    .from('friends')
-    .select('user_low_id, user_high_id')
-    .or(
-      `and(user_low_id.eq.${currentUserId},user_high_id.in.${candidateIdsList}),and(user_high_id.eq.${currentUserId},user_low_id.in.${candidateIdsList})`
-    );
+  const [{ data: friends, error: friendsError }, { data: pendingRequests, error: pendingError }] = await Promise.all([
+    supabase
+      .from('friends')
+      .select('user_low_id, user_high_id')
+      .or(
+        `and(user_low_id.eq.${currentUserId},user_high_id.in.${candidateIdsList}),and(user_high_id.eq.${currentUserId},user_low_id.in.${candidateIdsList})`
+      ),
+    supabase
+      .from('friend_requests')
+      .select('from_user_id, to_user_id')
+      .eq('status', 'pending')
+      .or(
+        `and(from_user_id.eq.${currentUserId},to_user_id.in.${candidateIdsList}),and(to_user_id.eq.${currentUserId},from_user_id.in.${candidateIdsList})`
+      ),
+  ]);
 
   if (friendsError) {
     throw new Error(`Unable to check friendships: ${friendsError.message}`);
   }
-
-  const { data: pendingRequests, error: pendingError } = await supabase
-    .from('friend_requests')
-    .select('from_user_id, to_user_id')
-    .eq('status', 'pending')
-    .or(
-      `and(from_user_id.eq.${currentUserId},to_user_id.in.${candidateIdsList}),and(to_user_id.eq.${currentUserId},from_user_id.in.${candidateIdsList})`
-    );
 
   if (pendingError) {
     throw new Error(`Unable to check pending friend requests: ${pendingError.message}`);
@@ -317,17 +318,16 @@ export async function getAllAthletes(limit: number | null = null): Promise<Socia
     return [];
   }
 
-  const relationByUserId = await getRelationsByUserIds(
-    user.id,
-    candidates.map((candidate) => candidate.id)
-  );
+  const candidateIds = candidates.map(candidate => candidate.id);
+  const [relationByUserId, recentActiveUserIds] = await Promise.all([
+    getRelationsByUserIds(user.id, candidateIds),
+    getActiveUserIdsByRecentWorkouts(candidateIds),
+  ]);
 
   const results = candidates.map((candidate) => ({
     ...candidate,
     relation: relationByUserId.get(candidate.id) ?? 'none',
   }));
-
-  const recentActiveUserIds = await getActiveUserIdsByRecentWorkouts(candidates.map(candidate => candidate.id));
 
   if (recentActiveUserIds.length === 0) {
     return results;

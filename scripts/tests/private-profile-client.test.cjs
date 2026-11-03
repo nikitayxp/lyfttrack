@@ -188,3 +188,28 @@ test('workout feed profiles use the card view after sensitive table reads are re
   assert.equal(rows[0].profile.full_name, 'Own name');
   assert.ok(requests.some(request => request.table === 'profile_cards'));
 });
+
+test('athlete discovery starts all independent reads before any of them finishes', async () => {
+  const started = new Set();
+  let release;
+  let allStarted;
+  const gate = new Promise(resolve => { release = resolve; });
+  const concurrent = new Promise(resolve => { allStarted = resolve; });
+  const reads = ['friends', 'friend_requests', 'recent_candidate_activity'];
+  const { load } = setup({ beforeReply: async table => {
+    if (!reads.includes(table)) return;
+    started.add(table);
+    if (started.size === reads.length) allStarted(true);
+    await gate;
+  } });
+  const result = load('app/src/services/socialService.ts').getAllAthletes();
+  const timeout = setTimeout(() => allStarted(false), 500);
+  const overlapped = await concurrent;
+  clearTimeout(timeout);
+  release();
+  const rows = await result;
+  assert.equal(overlapped, true);
+  assert.deepEqual(rows.map(({ username, relation }) => ({ username, relation })), [
+    { username: 'hidden', relation: 'request_received' },
+  ]);
+});

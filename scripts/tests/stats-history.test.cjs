@@ -114,13 +114,13 @@ test('a later page failure rejects instead of presenting incomplete statistics',
 test('tracked exercises do not download a page for each 1000 historical sets', async () => {
     const { stats, calls } = setup({ count: 3001 });
     assert.equal((await stats.getTrackedExercises()).length, 2);
-    assert.equal(calls.length, 1);
+    assert.equal(calls.length, 2);
 });
 
 test('trophy reads return the same records without downloading every historical set', async () => {
     const { stats, calls } = setup({ count: 3001 });
     assert.equal((await stats.getAllTimePRs()).length, 2);
-    assert.equal(calls.length, 1);
+    assert.equal(calls.length, 2);
 });
 
 test('the exercise catalog itself remains complete beyond 1000 tracked exercises', async () => {

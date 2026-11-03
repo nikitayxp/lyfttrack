@@ -20,7 +20,7 @@ export async function loadAllRows<Row>(buildQuery: () => PageQuery<Row>, context
     if (error) throw new Error(`${context}: ${error.message}`);
     const page = data ?? [];
     rows.push(...page);
-    if (page.length < PAGE_SIZE) return rows;
+    if (page.length === 0) return rows;
     const last = page[page.length - 1] as { id?: unknown };
     if (typeof last.id !== 'string' || (cursor && last.id <= cursor)) {
       throw new Error(`${context}: invalid page boundary`);

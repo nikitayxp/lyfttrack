@@ -115,6 +115,18 @@ test the migrations separately in staging before an authorized production rollou
 
 ## Rollout notes
 
+- For #273, I must apply and verify the exact reviewed
+  `20261026220000_atomic_import_templates.sql` before deploying its client:
+  imports, repairs and template saves require the new RPCs and have no fallback
+  to the earlier multi-request writes. A merge alone does not establish delivery.
+  The production project already has later ownership and privilege migrations;
+  I must review the actual pending set and dry-run the historical migration before
+  requesting scoped approval for any `--include-all` execution. I must verify the
+  RPC signatures in the API schema cache, authenticated grants and anonymous
+  denial before client rollout. I must not apply other pending migrations in the
+  same step. Local tests of security-before-atomic ordering use a minimal PGlite
+  fixture, not a staging or production database.
+
 - `20261027090000_own_exercise_references.sql` restricts new workout, set,
   routine and template references to catalogue exercises or the current user's
   custom exercises.

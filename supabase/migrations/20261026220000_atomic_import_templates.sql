@@ -223,8 +223,12 @@ begin
       or jsonb_typeof(v_set->'set_number') is distinct from 'number'
       or (v_set->>'set_number')::numeric not between 1 and 100
       or (v_set->>'set_number')::numeric <> trunc((v_set->>'set_number')::numeric)
-      or jsonb_typeof(v_set->'set_type') is distinct from 'string'
-      or v_set->>'set_type' not in ('normal', 'warmup', 'drop', 'failure')
+      -- Remap reads set types from locked stored rows, not the submitted sets.
+      -- Preserve the table's supported legacy values (dropset and NULL).
+      or (p_mode <> 'remap' and (
+        jsonb_typeof(v_set->'set_type') is distinct from 'string'
+        or v_set->>'set_type' not in ('normal', 'warmup', 'drop', 'failure')
+      ))
       or jsonb_typeof(v_set->'side') is distinct from 'string'
       or v_set->>'side' not in ('both', 'left', 'right') then
       raise exception 'Invalid set fields' using errcode = '22023';

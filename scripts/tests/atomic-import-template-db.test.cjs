@@ -117,6 +117,25 @@ test('atomic imports, repairs and templates retain data and identity', async t =
     assert.deepEqual((await db.query('select id,workout_exercise_id from sets where workout_id=$1',[id])).rows[0],before);
     assert.deepEqual((await db.query('select notes,rest_time from workout_exercises where workout_id=$1',[id])).rows[0],{notes:'Edited notes',rest_time:123});
   });
+  for (const [index, legacyType] of ['dropset', null].entries()) {
+    await t.test(`rebuild still rejects noncanonical submitted set type ${legacyType}`, async()=>{
+      const before=(await db.query('select public.import_workout_snapshot($1) s',[id])).rows[0].s;
+      await assert.rejects(repair(`60000000-0000-0000-0000-00000000003${index}`,exercises,[{...set,set_type:legacyType}],before),/Invalid set fields/);
+      assert.deepEqual((await db.query('select public.import_workout_snapshot($1) s',[id])).rows[0].s,before);
+    });
+    await t.test(`remapping preserves the supported legacy set type ${legacyType}`, async()=>{
+      await db.query('update sets set set_type=$1 where workout_id=$2',[legacyType,id]);
+      const before=(await db.query('select * from sets where workout_id=$1 order by id',[id])).rows;
+      const snapshot=(await db.query('select public.import_workout_snapshot($1) s',[id])).rows[0].s;
+      const args=[owner,`60000000-0000-0000-0000-00000000002${index}`,id,header,exercises,[{...set,set_type:'failure'}],'remap',snapshot];
+      assert.equal(await rpc('repair_imported_workout_atomic',args),id);
+      const after=(await db.query('select * from sets where workout_id=$1 order by id',[id])).rows;
+      assert.deepEqual(after,before.map(row=>({...row,exercise_id:exercise})));
+      assert.equal(await rpc('repair_imported_workout_atomic',args),id);
+      assert.deepEqual((await db.query('select * from sets where workout_id=$1 order by id',[id])).rows,after);
+      await db.query("update sets set set_type='normal' where workout_id=$1",[id]);
+    });
+  }
   await t.test('remapping refuses a legacy unlinked set without deleting or changing any history',async()=>{
     const legacyId='20000000-0000-0000-0000-000000000099';
     await db.query("insert into sets(id,workout_id,workout_exercise_id,exercise_id,set_number,weight,reps,set_type,side) values($1,$2,null,$3,2,99,4,'normal','both')",[legacyId,id,exercise]);

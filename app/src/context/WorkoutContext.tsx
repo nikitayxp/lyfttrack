@@ -21,7 +21,7 @@ import {
   type ExerciseRow,
   type RecoveredDraftState,
 } from '@/hooks/useActiveWorkoutState';
-import { supabase } from '@/services/supabase';
+import { subscribeAuthSession } from '@/services/authSessionStore';
 import { getPreviousExercisePerformance } from '@/services/workoutService';
 
 type ExerciseStopwatchEntry = {
@@ -65,7 +65,7 @@ type WorkoutContextValue = {
   discardRecoveredDraft: () => Promise<void>;
   workoutStartedAtMs: number | null;
   workoutSessionStartedAtMs: number | null;
-  elapsedSeconds: number;
+  pausedElapsedSeconds: number | null;
   isTimerPaused: boolean;
   toggleTimerPause: () => void;
   ensureWorkoutStarted: () => number;
@@ -83,34 +83,11 @@ export function WorkoutProvider({ children }: PropsWithChildren) {
   const [isAuthResolved, setIsAuthResolved] = useState(false);
 
   useEffect(() => {
-    let isMounted = true;
-    let receivedAuthEvent = false;
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!isMounted || receivedAuthEvent) {
-        return;
-      }
-
-      setCurrentUserId(session?.user?.id ?? null);
-      setIsAuthResolved(true);
-    }).catch(() => {
-      if (isMounted && !receivedAuthEvent) setIsAuthResolved(true);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!isMounted) {
-        return;
-      }
-
-      receivedAuthEvent = true;
-      setCurrentUserId(session?.user?.id ?? null);
+    return subscribeAuthSession(({ session, isPending }) => {
+      if (isPending) return;
+      setCurrentUserId(session?.user.id ?? null);
       setIsAuthResolved(true);
     });
-
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
   }, []);
 
   return (
@@ -129,7 +106,6 @@ function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: Pro
   const [didRestoreDraft, setDidRestoreDraft] = useState(false);
   const [workoutStartedAtMs, setWorkoutStartedAtMs] = useState<number | null>(null);
   const [workoutSessionStartedAtMs, setWorkoutSessionStartedAtMs] = useState<number | null>(null);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isTimerPaused, setIsTimerPaused] = useState(false);
   const [pausedElapsedSeconds, setPausedElapsedSeconds] = useState<number | null>(null);
   const [exerciseStopwatchById, setExerciseStopwatchById] = useState<Record<string, ExerciseStopwatchEntry>>({});
@@ -190,7 +166,6 @@ function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: Pro
     const now = Date.now();
     setWorkoutStartedAtMs(now);
     setWorkoutSessionStartedAtMs(now);
-    setElapsedSeconds(0);
     return now;
   }, [workoutStartedAtMs]);
 
@@ -198,7 +173,6 @@ function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: Pro
     historyGenerationRef.current += 1;
     setWorkoutStartedAtMs(null);
     setWorkoutSessionStartedAtMs(null);
-    setElapsedSeconds(0);
     setIsTimerPaused(false);
     setPausedElapsedSeconds(null);
     setActiveTemplateId(null);
@@ -218,47 +192,22 @@ function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: Pro
       const now = Date.now();
       setWorkoutStartedAtMs(now);
       setWorkoutSessionStartedAtMs(now);
-      setElapsedSeconds(0);
     }
   }, [hasActiveWorkout, resetWorkoutSession, workoutStartedAtMs]);
 
   const toggleTimerPause = useCallback(() => {
-    setIsTimerPaused((prev) => {
-      if (!prev) {
-        setPausedElapsedSeconds(elapsedSeconds);
-      } else {
-        if (pausedElapsedSeconds !== null) {
-          const now = Date.now();
-          setWorkoutStartedAtMs(now - pausedElapsedSeconds * 1000);
-        }
-        setPausedElapsedSeconds(null);
-      }
-      return !prev;
-    });
-  }, [elapsedSeconds, pausedElapsedSeconds]);
-
-  useEffect(() => {
-    if (workoutStartedAtMs === null) {
-      setElapsedSeconds(0);
-      return;
-    }
-
     if (isTimerPaused) {
+      if (pausedElapsedSeconds !== null) {
+        setWorkoutStartedAtMs(Date.now() - pausedElapsedSeconds * 1000);
+      }
+      setPausedElapsedSeconds(null);
+      setIsTimerPaused(false);
       return;
     }
-
-    const syncElapsed = () => {
-      const elapsed = Math.max(0, Math.floor((Date.now() - workoutStartedAtMs) / 1000));
-      setElapsedSeconds(elapsed);
-    };
-
-    syncElapsed();
-    const intervalId = setInterval(syncElapsed, 1000);
-
-    return () => {
-      clearInterval(intervalId);
-    };
-  }, [workoutStartedAtMs, isTimerPaused]);
+    const elapsed = workoutStartedAtMs === null ? 0 : Math.max(0, Math.floor((Date.now() - workoutStartedAtMs) / 1000));
+    setPausedElapsedSeconds(elapsed);
+    setIsTimerPaused(true);
+  }, [isTimerPaused, pausedElapsedSeconds, workoutStartedAtMs]);
 
   const activateKeepAwakeSafely = useCallback(() => {
     if (Platform.OS === 'web') {
@@ -564,7 +513,7 @@ function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: Pro
     discardRecoveredDraft,
     workoutStartedAtMs,
     workoutSessionStartedAtMs,
-    elapsedSeconds,
+    pausedElapsedSeconds,
     isTimerPaused,
     toggleTimerPause,
     ensureWorkoutStarted,
@@ -584,7 +533,7 @@ function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: Pro
     clearWorkout,
     currentUserId,
     discardRecoveredDraft,
-    elapsedSeconds,
+    pausedElapsedSeconds,
     ensureWorkoutStarted,
     getExerciseCompletionGlowValue,
     getExerciseRestSecondsByExerciseId,
@@ -625,4 +574,20 @@ export function useWorkoutContext() {
   }
 
   return context;
+}
+
+export function useWorkoutElapsedSeconds() {
+  const { workoutStartedAtMs, isTimerPaused, pausedElapsedSeconds } = useWorkoutContext();
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (workoutStartedAtMs === null || isTimerPaused) return;
+    const update = () => setElapsed(Math.max(0, Math.floor((Date.now() - workoutStartedAtMs) / 1000)));
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [isTimerPaused, workoutStartedAtMs]);
+
+  if (workoutStartedAtMs === null) return 0;
+  return isTimerPaused ? pausedElapsedSeconds ?? 0 : elapsed;
 }

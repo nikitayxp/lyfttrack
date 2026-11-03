@@ -1,3 +1,4 @@
+import { useWorkoutComments } from '@/hooks/useWorkoutComments';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
@@ -26,7 +27,6 @@ import { WorkoutFeedCard } from '@/components/feed/WorkoutFeedCard';
 import {
   addComment,
   getCurrentCommentAuthorProfile,
-  getWorkoutComments,
   toggleLike,
   type CommentAuthorProfile,
   type WorkoutCommentWithProfile,
@@ -34,7 +34,7 @@ import {
 import { getProfile, type ProfileRow } from '@/services/profileService';
 import { addWeight, getWeightHistory, parseBodyWeightInput, type BodyMeasurementEntry } from '@/services/measurementService';
 import { getAllTimePRs, type AllTimePR } from '@/services/statsService';
-import { getAuthenticatedUserOrThrow } from '@/services/authUserService';
+import { getSessionUserOrThrow } from '@/services/authUserService';
 import { HistoryJumpBar } from '@/components/history/HistoryJumpBar';
 import {
   getErrorMessage,
@@ -246,14 +246,13 @@ export default function ProfileScreen() {
   const [historyPeriodKey, setHistoryPeriodKey] = useState<string | null>(null);
   const [historyMonths, setHistoryMonths] = useState<WorkoutMonthBucket[]>([]);
   const historyFilterRef = useRef<WorkoutListFilter>({});
-  const skippedFirstHistoryFilterEffect = useRef(true);
+  const historyRequestRef = useRef(0);
+  const lastHistoryFilterRef = useRef<string | null>(null);
+  const hasFocusedProfileRef = useRef(false);
   const [optimisticLikeState, setOptimisticLikeState] = useState<Record<string, FeedLikeInteractionState>>({});
-  const [commentsByWorkoutId, setCommentsByWorkoutId] = useState<Record<string, WorkoutCommentWithProfile[]>>({});
-  const [commentCountByWorkoutId, setCommentCountByWorkoutId] = useState<Record<string, number>>({});
+  const { commentsByWorkoutId, setCommentsByWorkoutId, commentCountByWorkoutId, setCommentCountByWorkoutId, hasMoreCommentsByWorkoutId, isCommentsLoading, isLoadingMoreComments, commentsError, setCommentsError, loadCommentsForWorkout } = useWorkoutComments();
   const [selectedWorkoutForComments, setSelectedWorkoutForComments] = useState<WorkoutFeedItem | null>(null);
-  const [isCommentsLoading, setIsCommentsLoading] = useState(false);
   const [isSendingComment, setIsSendingComment] = useState(false);
-  const [commentsError, setCommentsError] = useState<string | null>(null);
   const [commentInputValue, setCommentInputValue] = useState('');
   const [currentCommentAuthor, setCurrentCommentAuthor] = useState<CommentAuthorProfile | null>(null);
 
@@ -309,12 +308,16 @@ export default function ProfileScreen() {
   }, [t, weightTrend.deltaKg, weightTrend.trend]);
 
   const loadUserHistoryPage = useCallback(async (userId: string, pageToLoad: number, mode: 'reset' | 'append') => {
+    const request = ++historyRequestRef.current;
+    const filter = { ...historyFilterRef.current };
+    lastHistoryFilterRef.current = JSON.stringify([userId, filter.periodKey ?? null, filter.search ?? '']);
     if (mode === 'reset') {
       setHistoryError(null);
     }
 
     try {
-      const data = await getUserWorkouts(userId, pageToLoad, HISTORY_PAGE_SIZE, historyFilterRef.current);
+      const data = await getUserWorkouts(userId, pageToLoad, HISTORY_PAGE_SIZE, filter);
+      if (request !== historyRequestRef.current) return;
 
       if (mode === 'reset') {
         setWorkouts(data);
@@ -385,9 +388,9 @@ export default function ProfileScreen() {
       setCurrentPage(pageToLoad);
       setHasMore(data.length === HISTORY_PAGE_SIZE);
     } catch (error) {
-      setHistoryError(getErrorMessage(error));
+      if (request === historyRequestRef.current) setHistoryError(getErrorMessage(error));
     }
-  }, []);
+  }, [setCommentsByWorkoutId, setCommentCountByWorkoutId]);
 
   const loadPerformanceData = useCallback(async () => {
     setIsLoadingPerformance(true);
@@ -423,7 +426,7 @@ export default function ProfileScreen() {
     setPerformanceError(null);
 
     try {
-      const [authUser, profileData] = await Promise.all([getAuthenticatedUserOrThrow(), getProfile()]);
+      const [authUser, profileData] = await Promise.all([getSessionUserOrThrow(), getProfile()]);
 
       const resolvedAuthUserId = authUser.id;
       const resolvedUserId = profileData.id ?? resolvedAuthUserId;
@@ -457,21 +460,20 @@ export default function ProfileScreen() {
   }, [historySearchInput]);
 
   useEffect(() => {
-    if (skippedFirstHistoryFilterEffect.current) {
-      skippedFirstHistoryFilterEffect.current = false;
-      return;
-    }
-
     if (!targetUserId) {
       return;
     }
-
+    const key = JSON.stringify([targetUserId, historyPeriodKey, historySearch]);
+    if (lastHistoryFilterRef.current === key) return;
     void loadUserHistoryPage(targetUserId, 0, 'reset');
   }, [historyPeriodKey, historySearch, loadUserHistoryPage, targetUserId]);
 
+  const bootstrapRef = useRef(bootstrap);
+  bootstrapRef.current = bootstrap;
   useEffect(() => {
-    void bootstrap();
-  }, [bootstrap]);
+    void bootstrapRef.current();
+    return () => { historyRequestRef.current += 1; };
+  }, []);
 
   const handleDeleteWorkout = useCallback(
     async (workoutId: string) => {
@@ -500,6 +502,10 @@ export default function ProfileScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      if (!hasFocusedProfileRef.current) {
+        hasFocusedProfileRef.current = true;
+        return;
+      }
       void refreshProfileCard();
     }, [refreshProfileCard])
   );
@@ -564,28 +570,7 @@ export default function ProfileScreen() {
     }
   }, [currentCommentAuthor]);
 
-  const loadCommentsForWorkout = useCallback(async (workoutId: string) => {
-    setCommentsError(null);
-    setIsCommentsLoading(true);
 
-    try {
-      const comments = await getWorkoutComments(workoutId);
-
-      setCommentsByWorkoutId((currentState) => ({
-        ...currentState,
-        [workoutId]: comments,
-      }));
-
-      setCommentCountByWorkoutId((currentState) => ({
-        ...currentState,
-        [workoutId]: comments.length,
-      }));
-    } catch (error) {
-      setCommentsError(getErrorMessage(error));
-    } finally {
-      setIsCommentsLoading(false);
-    }
-  }, []);
 
   const handleOpenStats = useCallback(() => {
     router.push('/(tabs)/stats' as any);
@@ -615,14 +600,14 @@ export default function ProfileScreen() {
       void ensureCurrentCommentAuthor();
       void loadCommentsForWorkout(workout.id);
     },
-    [ensureCurrentCommentAuthor, loadCommentsForWorkout]
+    [ensureCurrentCommentAuthor, loadCommentsForWorkout, setCommentsError]
   );
 
   const closeCommentsModal = useCallback(() => {
     setSelectedWorkoutForComments(null);
     setCommentInputValue('');
     setCommentsError(null);
-  }, []);
+  }, [setCommentsError]);
 
   const sendComment = useCallback(async () => {
     if (!selectedWorkoutForComments || isSendingComment) {
@@ -693,7 +678,6 @@ export default function ProfileScreen() {
         };
       });
 
-      void loadCommentsForWorkout(workoutId);
       void ensureCurrentCommentAuthor();
     } catch (error) {
       setCommentsByWorkoutId((currentState) => {
@@ -724,10 +708,11 @@ export default function ProfileScreen() {
     currentCommentAuthor,
     ensureCurrentCommentAuthor,
     isSendingComment,
-    loadCommentsForWorkout,
     selectedWorkoutForComments,
     showToast,
     t,
+    setCommentsByWorkoutId,
+    setCommentCountByWorkoutId,
   ]);
 
   const handleToggleLike = useCallback(async (workout: WorkoutFeedItem) => {
@@ -1317,6 +1302,9 @@ export default function ProfileScreen() {
       </Modal>
 
       <FeedCommentsModal
+        hasMore={Boolean(selectedWorkoutForComments && hasMoreCommentsByWorkoutId[selectedWorkoutForComments.id])}
+        isLoadingMore={isLoadingMoreComments}
+        onLoadMore={() => { if (selectedWorkoutForComments) void loadCommentsForWorkout(selectedWorkoutForComments.id, true); }}
         visible={selectedWorkoutForComments !== null}
         workoutName={selectedWorkoutForComments?.name ?? t('profile.workoutFallback')}
         comments={selectedWorkoutComments}

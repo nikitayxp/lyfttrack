@@ -8,7 +8,7 @@ import { Colors } from '@/constants/Colors';
 import { Radius } from '@/constants/Styles';
 import { getTabBarHeight, MINIMIZED_WORKOUT_BAR_GAP, MINIMIZED_WORKOUT_BAR_HEIGHT } from '@/constants/tabBar';
 import { usePreferences } from '@/context/PreferencesContext';
-import { useWorkoutContext } from '@/context/WorkoutContext';
+import { useWorkoutContext, useWorkoutElapsedSeconds } from '@/context/WorkoutContext';
 import { getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 
 const palette = Colors.dark;
@@ -36,9 +36,9 @@ export function MinimizedWorkoutBar({ visible }: MinimizedWorkoutBarProps) {
   const insets = useSafeAreaInsets();
   const {
     hasActiveWorkout,
-    elapsedSeconds,
     activeExercises,
   } = useWorkoutContext();
+  const elapsedSeconds = useWorkoutElapsedSeconds();
 
   const isWeb = Platform.OS === 'web';
   const tabBarHeight = getTabBarHeight(isWeb, insets.bottom);

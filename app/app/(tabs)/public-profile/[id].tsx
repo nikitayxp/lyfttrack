@@ -1,3 +1,4 @@
+import { useWorkoutComments } from '@/hooks/useWorkoutComments';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -28,7 +29,6 @@ import { WorkoutFeedCard } from '@/components/feed/WorkoutFeedCard';
 import {
   addComment,
   getCurrentCommentAuthorProfile,
-  getWorkoutComments,
   toggleLike,
   type CommentAuthorProfile,
   type WorkoutCommentWithProfile,
@@ -132,14 +132,9 @@ export default function PublicProfileScreen() {
   const [optimisticLikeState, setOptimisticLikeState] = useState<Record<string, FeedLikeInteractionState>>(
     {},
   );
-  const [commentsByWorkoutId, setCommentsByWorkoutId] = useState<Record<string, WorkoutCommentWithProfile[]>>(
-    {},
-  );
-  const [commentCountByWorkoutId, setCommentCountByWorkoutId] = useState<Record<string, number>>({});
+  const { commentsByWorkoutId, setCommentsByWorkoutId, commentCountByWorkoutId, setCommentCountByWorkoutId, hasMoreCommentsByWorkoutId, isCommentsLoading, isLoadingMoreComments, commentsError, setCommentsError, loadCommentsForWorkout } = useWorkoutComments();
   const [selectedWorkoutForComments, setSelectedWorkoutForComments] = useState<WorkoutFeedItem | null>(null);
-  const [isCommentsLoading, setIsCommentsLoading] = useState(false);
   const [isSendingComment, setIsSendingComment] = useState(false);
-  const [commentsError, setCommentsError] = useState<string | null>(null);
   const [commentInputValue, setCommentInputValue] = useState('');
   const [currentCommentAuthor, setCurrentCommentAuthor] = useState<CommentAuthorProfile | null>(null);
   const [relation, setRelation] = useState<UserRelation | null>(null);
@@ -181,7 +176,7 @@ export default function PublicProfileScreen() {
     setOptimisticLikeState({});
     setCommentsByWorkoutId({});
     setCommentCountByWorkoutId({});
-  }, [profileId]);
+  }, [profileId, setCommentsByWorkoutId, setCommentCountByWorkoutId]);
 
   const runRelationAction = useCallback(
     async (action: () => Promise<void>, errorTitleKey: string) => {
@@ -273,28 +268,7 @@ export default function PublicProfileScreen() {
     }
   }, [currentCommentAuthor]);
 
-  const loadCommentsForWorkout = useCallback(async (workoutId: string) => {
-    setCommentsError(null);
-    setIsCommentsLoading(true);
 
-    try {
-      const comments = await getWorkoutComments(workoutId);
-
-      setCommentsByWorkoutId((currentState) => ({
-        ...currentState,
-        [workoutId]: comments,
-      }));
-
-      setCommentCountByWorkoutId((currentState) => ({
-        ...currentState,
-        [workoutId]: comments.length,
-      }));
-    } catch (loadError) {
-      setCommentsError(getErrorMessage(loadError));
-    } finally {
-      setIsCommentsLoading(false);
-    }
-  }, []);
 
   const openCommentsModal = useCallback(
     (workout: WorkoutFeedItem) => {
@@ -304,14 +278,14 @@ export default function PublicProfileScreen() {
       void ensureCurrentCommentAuthor();
       void loadCommentsForWorkout(workout.id);
     },
-    [ensureCurrentCommentAuthor, loadCommentsForWorkout],
+    [ensureCurrentCommentAuthor, loadCommentsForWorkout, setCommentsError],
   );
 
   const closeCommentsModal = useCallback(() => {
     setSelectedWorkoutForComments(null);
     setCommentInputValue('');
     setCommentsError(null);
-  }, []);
+  }, [setCommentsError]);
 
   const sendComment = useCallback(async () => {
     if (!selectedWorkoutForComments || isSendingComment) {
@@ -382,7 +356,6 @@ export default function PublicProfileScreen() {
         };
       });
 
-      void loadCommentsForWorkout(workoutId);
       void ensureCurrentCommentAuthor();
     } catch (sendError) {
       setCommentsByWorkoutId((currentState) => {
@@ -413,10 +386,11 @@ export default function PublicProfileScreen() {
     currentCommentAuthor,
     ensureCurrentCommentAuthor,
     isSendingComment,
-    loadCommentsForWorkout,
     selectedWorkoutForComments,
     showToast,
     t,
+    setCommentsByWorkoutId,
+    setCommentCountByWorkoutId,
   ]);
 
   const handleToggleLike = useCallback(
@@ -731,6 +705,9 @@ export default function PublicProfileScreen() {
       />
 
       <FeedCommentsModal
+        hasMore={Boolean(selectedWorkoutForComments && hasMoreCommentsByWorkoutId[selectedWorkoutForComments.id])}
+        isLoadingMore={isLoadingMoreComments}
+        onLoadMore={() => { if (selectedWorkoutForComments) void loadCommentsForWorkout(selectedWorkoutForComments.id, true); }}
         visible={selectedWorkoutForComments !== null}
         workoutName={selectedWorkoutForComments?.name ?? t('publicProfile.workoutFallback')}
         comments={selectedWorkoutComments}

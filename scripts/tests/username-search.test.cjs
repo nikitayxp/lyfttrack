@@ -35,6 +35,7 @@ async function setup(t) {
   const service=createSourceLoader({
     '@/services/supabase':{supabase:client},
     '@/services/workoutService':{getAuthenticatedUserOrThrow:async()=>({id:'viewer'})},
+    '@/services/authUserService':{getAuthenticatedUserOrThrow:async()=>({id:'viewer'}),getSessionUserOrThrow:async()=>({id:'viewer'})},
   })('app/src/services/socialService.ts');
   return {service,requests};
 }

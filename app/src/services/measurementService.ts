@@ -176,6 +176,17 @@ async function tryUpdateExistingMeasurementOrNull(
   recordedAt: string,
   traceId?: string
 ): Promise<BodyMeasurementEntry | null> {
+  let candidate = await supabase.from('body_measurements').select('id')
+    .eq('user_id', userId).order('measured_at', { ascending: false })
+    .order('created_at', { ascending: false }).order('id', { ascending: false }).limit(1).maybeSingle();
+  if (candidate.error && isMissingMeasuredAtColumn(candidate.error)) {
+    candidate = await supabase.from('body_measurements').select('id')
+      .eq('user_id', userId).order('created_at', { ascending: false })
+      .order('id', { ascending: false }).limit(1).maybeSingle();
+  }
+  if (candidate.error) throw new Error(toWeightWriteErrorMessage(candidate.error, traceId));
+  if (!candidate.data) return null;
+  const measurementId = candidate.data.id;
   const updateWithMeasured = await supabase
     .from('body_measurements')
     .update(
@@ -187,7 +198,7 @@ async function tryUpdateExistingMeasurementOrNull(
         count: 'exact',
       }
     )
-    .eq('user_id', userId);
+    .eq('user_id', userId).eq('id', measurementId);
 
   if (!updateWithMeasured.error) {
     if ((updateWithMeasured.count ?? 0) > 0) {
@@ -223,7 +234,7 @@ async function tryUpdateExistingMeasurementOrNull(
         count: 'exact',
       }
     )
-    .eq('user_id', userId);
+    .eq('user_id', userId).eq('id', measurementId);
 
   if (updateWithoutMeasured.error) {
     logMeasurementError('update_existing_without_measured_at', updateWithoutMeasured.error, {
@@ -465,7 +476,7 @@ async function loadWeightHistoryPages(userId: string, orderColumn: 'measured_at'
 
     const page = data ?? [];
     history.push(...page);
-    if (page.length < HISTORY_PAGE_SIZE) {
+    if (page.length === 0) {
       return { data: history, error: null };
     }
 

@@ -6,7 +6,7 @@ test('RLS optimization preserves all public policies and visibility permissions'
  await db.exec(`create role authenticated;create role anon;create schema auth;create table auth.users(id uuid primary key);
  create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('test.user_id',true),'')::uuid $$;
  grant usage on schema auth to authenticated;grant execute on function auth.uid() to authenticated;
- create table profiles(id uuid primary key,visibility text default 'friends',username text);
+ create table profiles(id uuid primary key,visibility text default 'friends',username text,avatar_url text,updated_at timestamptz,full_name text,bio text,height_cm numeric);
  create table friends(id uuid primary key,user_low_id uuid,user_high_id uuid);
  create table workouts(id uuid primary key,user_id uuid,name text,start_time timestamptz default now(),end_time timestamptz default now());
  create table sets(id uuid primary key,workout_id uuid,workout_exercise_id uuid,exercise_id uuid,weight numeric,reps integer,set_number integer,rir integer,set_type text);
@@ -21,6 +21,7 @@ test('RLS optimization preserves all public policies and visibility permissions'
  create table workout_likes(id uuid primary key,workout_id uuid,user_id uuid);
  create table workout_comments(id uuid primary key,workout_id uuid,user_id uuid,content text,created_at timestamptz default now());
  insert into profiles(id,visibility) values ('${ids[0]}','private'),('${ids[1]}','friends'),('${ids[2]}','public'),('${ids[3]}','private');
+ update profiles set username='Private athlete',full_name='Private name' where id='${ids[3]}';
  insert into friends values ('${ids[4]}','${ids[0]}','${ids[1]}');
  insert into workouts(id,user_id,name) select id,id,'Training' from profiles;
  insert into body_measurements select id,id,70 from profiles;
@@ -32,6 +33,7 @@ test('RLS optimization preserves all public policies and visibility permissions'
  insert into routine_exercises select id,id from profiles;
  insert into workout_likes select id,id,id from profiles;
  insert into workout_comments(id,workout_id,user_id) select id,id,id from profiles;
+ update workout_comments set user_id='${ids[3]}',content='Public workout comment' where id='${ids[2]}';
  grant select,insert,update,delete on all tables in schema public to authenticated;
  `);
  const migration=fs.readFileSync('supabase/migrations/20260727090000_public_profile_visibility.sql','utf8');
@@ -49,7 +51,7 @@ test('RLS optimization preserves all public policies and visibility permissions'
  create function respond_to_friend_request(uuid,text) returns void language sql as $$ select $$;
  create function check_username_available(text) returns boolean language sql as $$ select false $$;`);
  // Production already has these protections before the older optimization runs.
- for(const file of ['20261027090000_own_exercise_references.sql','20261027090100_repair_copied_exercise_references.sql','20261027094000_tighten_role_privileges.sql']){
+ for(const file of ['20261027090000_own_exercise_references.sql','20261027090100_repair_copied_exercise_references.sql','20261027092100_private_profile_cards.sql','20261027094000_tighten_role_privileges.sql']){
    await db.exec(fs.readFileSync('supabase/migrations/'+file,'utf8'));
  }
  const tables=[...new Set(policies.map(p=>p.tablename))];
@@ -75,6 +77,8 @@ test('RLS optimization preserves all public policies and visibility permissions'
  await db.exec(`set role authenticated;set test.user_id='${ids[0]}'`);
  const previews=(await db.query('select public.latest_workout_comments($1::uuid[]) value',[ids.slice(0,4)])).rows[0].value;
  assert.deepEqual(previews.map(r=>r.workout_id).sort(),ids.slice(0,3));
+ assert.deepEqual(previews.find(r=>r.workout_id===ids[2]),{workout_id:ids[2],content:'Public workout comment',author:'Private athlete'});
+ await assert.rejects(db.query('select full_name from public.profiles'),/permission denied/);
  const summaries=(await db.query('select public.workout_record_summaries($1::uuid[]) value',[ids.slice(0,4)])).rows[0].value;
  assert.equal(summaries.some(r=>r.workout_id===ids[3]),false);
  await db.query('insert into body_measurements values ($1,$2,80)',[ids[4],ids[0]]);

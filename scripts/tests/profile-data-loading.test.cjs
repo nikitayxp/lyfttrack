@@ -6,9 +6,10 @@ const loadSource = require('./load-source.cjs');
 
 global.IS_REACT_ACT_ENVIRONMENT = true;
 
-async function setup(t, resolveHistory = async () => [], resolveComments = async () => []) {
+async function setup(t, resolveHistory = async () => [], resolveComments = async () => [], resolveRecords = async () => new Map()) {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   let profileCalls = 0;
+  let account = 'owner';
   const histories = [];
   const translate = key => key;
   const showToast = () => {};
@@ -20,7 +21,7 @@ async function setup(t, resolveHistory = async () => [], resolveComments = async
       TouchableOpacity: 'Button', View: 'View', StyleSheet: { create: x => x },
       Animated: { Value: class {}, View: 'View', loop: value, sequence: value, timing: value },
       DeviceEventEmitter: { addListener: () => ({ remove() {} }) },
-      FlatList: ({ data, renderItem, ListHeaderComponent, ListEmptyComponent, ListFooterComponent }) => React.createElement(React.Fragment, null,
+      FlatList: ({ data, renderItem, ListHeaderComponent, ListEmptyComponent, ListFooterComponent, onEndReached }) => React.createElement('HistoryList', { onEndReached },
         ListHeaderComponent, data.map(item => React.createElement(React.Fragment, { key: item.id }, renderItem({ item }))), !data.length ? ListEmptyComponent : null, ListFooterComponent),
     },
     'expo-router': { router: {}, useFocusEffect: callback => React.useEffect(() => callback(), [callback]) },
@@ -31,12 +32,13 @@ async function setup(t, resolveHistory = async () => [], resolveComments = async
     '@/context/ToastContext': { useAppToast: () => ({ showToast }) },
     '@/context/WorkoutContext': { useWorkoutContext: () => ({ activeExercises: [] }) },
     '@/hooks/useWorkoutDelete': { useWorkoutDelete: () => ({ confirmAndDelete: async () => false }) },
-    '@/services/authUserService': { getAuthenticatedUserOrThrow: async () => ({ id: 'owner', email: 'test@example.test' }), getSessionUserOrThrow: async () => ({ id: 'owner', email: 'test@example.test' }) },
-    '@/services/profileService': { getProfile: async () => { profileCalls++; return { id: 'owner', username: 'Owner' }; } },
+    '@/services/authUserService': { getAuthenticatedUserOrThrow: async () => ({ id: account, email: 'test@example.test' }), getSessionUserOrThrow: async () => ({ id: account, email: 'test@example.test' }) },
+    '@/services/profileService': { getProfile: async () => { profileCalls++; return { id: account, username: 'Owner' }; } },
     '@/services/measurementService': { getWeightHistory: async () => [] },
     '@/services/statsService': { getAllTimePRs: async () => [] },
     '@/services/workoutService': {
-      getUserWorkouts: async (id, page, limit, filter) => { histories.push({ ...filter }); return resolveHistory(filter); },
+      getUserWorkouts: async (id, page, limit, filter) => { histories.push({ ...filter }); return resolveHistory(filter, page, id); },
+      getUserWorkoutRecordCounts: resolveRecords,
       getUserWorkoutMonthBuckets: async () => [], getErrorMessage: e => e.message,
     },
     '@/services/interactionService': {
@@ -56,7 +58,14 @@ async function setup(t, resolveHistory = async () => [], resolveComments = async
   let tree;
   await act(async () => { tree = create(React.createElement(Screen)); });
   t.after(async () => { await act(async () => tree.unmount()); });
-  return { tree, histories, get profileCalls() { return profileCalls; }, async search(text) {
+  return { tree, histories,
+    async nextPage() { await act(async () => tree.root.findByType('HistoryList').props.onEndReached()); },
+    async switchAccount(id) {
+      await act(async () => tree.update(null));
+      account = id;
+      await act(async () => tree.update(React.createElement(Screen)));
+    },
+    get profileCalls() { return profileCalls; }, async search(text) {
     await act(async () => tree.root.findByType('HistoryFilter').props.onChangeQuery(text));
     await act(async () => t.mock.timers.tick(300));
   } };
@@ -66,6 +75,33 @@ test('the initial profile focus shares the bootstrap profile and history request
   const app = await setup(t);
   assert.equal(app.profileCalls, 1);
   assert.equal(app.histories.length, 1);
+});
+
+test('profile shows cards while records are pending and enriches them later', async t => {
+  let finish;
+  const app = await setup(t, async () => [{id:'workout', user_id:'owner', prCount:null}], undefined,
+    () => new Promise(resolve => { finish = resolve; }));
+  assert.equal(app.tree.root.findByType('WorkoutCard').props.workout.prCount, null);
+  assert.equal(typeof finish, 'function');
+  await act(async () => finish(new Map([['workout', 2]])));
+  assert.equal(app.tree.root.findByType('WorkoutCard').props.workout.prCount, 2);
+});
+
+test('failed record enrichment preserves cards and unknown counts', async t => {
+  const app = await setup(t, async () => [{id:'workout', user_id:'owner', prCount:null}], undefined,
+    async () => { throw new Error('offline'); });
+  assert.equal(app.tree.root.findByType('WorkoutCard').props.workout.prCount, null);
+});
+
+test('old record responses cannot change a newer filtered page with the same workout id', async t => {
+  const pending = [];
+  const app = await setup(t, async () => [{id:'workout', user_id:'owner', prCount:null}], undefined,
+    () => new Promise(resolve => pending.push(resolve)));
+  await app.search('newer');
+  assert.equal(pending.length, 2);
+  await act(async () => pending[1](new Map([['workout', 3]])));
+  await act(async () => pending[0](new Map([['workout', 1]])));
+  assert.equal(app.tree.root.findByType('WorkoutCard').props.workout.prCount, 3);
 });
 
 test('a slower old profile search cannot replace the newer history', async t => {
@@ -153,4 +189,32 @@ test('an in-flight initial comments page preserves a comment published after it 
   await act(async () => finishPage(Array.from({ length: 50 }, (_, i) => ({ id: `c${i}`, content: 'Existing' }))));
   assert.equal(app.tree.root.findByType('Comments').props.comments.length, 51);
   assert.equal(app.tree.root.findByType('Comments').props.comments.at(-1).id, 'saved-comment');
+});
+
+
+test('both history pages receive records even when the second page completes first', async t => {
+  const pending = [];
+  const app = await setup(t, async (_filter, page) => page === 0
+    ? Array.from({length:20}, (_,i) => ({id:`w${i}`,user_id:'owner',prCount:null}))
+    : [{id:'next',user_id:'owner',prCount:null}], undefined,
+    () => new Promise(resolve => pending.push(resolve)));
+  await app.nextPage();
+  assert.equal(app.tree.root.findAllByType('WorkoutCard').length, 21);
+  await act(async () => pending[1](new Map([['next', 2]])));
+  await act(async () => pending[0](new Map(Array.from({length:20},(_,i)=>[`w${i}`,1]))));
+  const cards=app.tree.root.findAllByType('WorkoutCard');
+  assert.equal(cards[0].props.workout.prCount, 1);
+  assert.equal(cards[20].props.workout.prCount, 2);
+});
+
+test('records from an unmounted account cannot update the next account with the same workout id', async t => {
+  const pending = [];
+  const app = await setup(t, async (_filter, _page, id) => [{id:'same-id',user_id:id,prCount:null}], undefined,
+    () => new Promise(resolve => pending.push(resolve)));
+  await app.switchAccount('other');
+  await act(async () => pending[1](new Map([['same-id', 2]])));
+  await act(async () => pending[0](new Map([['same-id', 99]])));
+  const card=app.tree.root.findByType('WorkoutCard').props.workout;
+  assert.equal(card.user_id,'other');
+  assert.equal(card.prCount,2);
 });

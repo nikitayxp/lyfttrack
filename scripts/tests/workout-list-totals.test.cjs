@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const createSourceLoader = require('./load-source.cjs');
 
-function setup(cap=1000) {
+function setup(cap=1000, rpc = async () => ({data: [], error: null})) {
   const workouts = Array.from({ length: 20 }, (_, i) => ({
     id: `w${i}`, user_id: 'owner', name: `Workout ${i}`,
     start_time: '2026-10-17T09:00:00Z', end_time: '2026-10-17T10:00:00Z',
@@ -14,7 +14,7 @@ function setup(cap=1000) {
     exercises: { id: 'exercise', name: 'Exercise' },
   }));
   const supabase = {
-    rpc: async () => ({data: [], error: null}),
+    rpc,
     auth: {
       getSession: async () => ({ data: { session: { access_token: 'owner-token', user: { id: 'owner' } } }, error: null }),
       getUser: async () => ({ data: { user: { id: 'owner' } }, error: null }),
@@ -58,4 +58,21 @@ test('details keep all sets beyond the project cap',async()=>{
  const service=setup(17);
  const details=await service.getWorkoutDetails('w0');
  assert.equal(details.totalSets,60);
+});
+
+test('deferred history returns complete cards before requesting records', async () => {
+  let calls = 0;
+  let finish;
+  const service = setup(1000, () => { calls++; return new Promise(resolve => { finish = resolve; }); });
+  const history = service.getUserWorkouts('owner', 0, 20, undefined, { deferRecords: true });
+  const result = await Promise.race([history, new Promise(resolve => setTimeout(() => resolve(null), 100))]);
+  assert.ok(result, 'history must not wait for the records RPC');
+  assert.equal(calls, 0);
+  assert.equal(result[0].prCount, null);
+  assert.equal(result[0].totalSets, 60);
+  const records = service.getUserWorkoutRecordCounts(result);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(calls, 1);
+  finish({ data: result.map(w => ({workout_id:w.id, exercise_id:'exercise', has_history:true, best_weight:1, best_e1rm:1})), error: null });
+  assert.equal((await records).get(result[0].id), 1);
 });

@@ -522,7 +522,7 @@ function aggregateWorkoutFeedSets(rows: RawWorkoutFeedSetRow[]): Map<string, Wor
   return aggregateByWorkout;
 }
 
-function samplesFromFeedAggregate(aggregate: WorkoutFeedAggregate | undefined): PersonalRecordSetSample[] {
+function samplesFromFeedAggregate(aggregate: Pick<WorkoutFeedAggregate, 'exerciseGroups'> | undefined): PersonalRecordSetSample[] {
   if (!aggregate) {
     return [];
   }
@@ -1975,11 +1975,19 @@ export async function deleteWorkout(workoutId: string): Promise<void> {
   invalidateWorkoutDataCache(user.id);
 }
 
+export async function getUserWorkoutRecordCounts(workouts: WorkoutFeedItem[]): Promise<Map<string, number>> {
+  if (!workouts.length) return new Map();
+  await getSessionUserOrThrow();
+  const samples = new Map(workouts.map(workout => [workout.id, samplesFromFeedAggregate(workout)]));
+  return resolvePrCountsByWorkoutId(workouts, samples);
+}
+
 export async function getUserWorkouts(
   userId: string,
   page = 0,
   limit = 20,
-  filter?: WorkoutListFilter
+  filter?: WorkoutListFilter,
+  options?: { deferRecords?: boolean }
 ): Promise<WorkoutFeedItem[]> {
   const safePage = Number.isFinite(page) ? Math.max(0, Math.trunc(page)) : 0;
   const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.trunc(limit)) : 20;
@@ -2031,7 +2039,7 @@ export async function getUserWorkouts(
     .in('workout_id', workoutIds),
     'Unable to load workout history sets'
   ),
-    getWorkoutRecordSummaries(workoutIds).catch(error => {
+    (options?.deferRecords ? Promise.resolve(null) : getWorkoutRecordSummaries(workoutIds)).catch(error => {
       console.warn('[workout-records] Unable to load record counts', {message: toErrorMessage(error)});
       return null;
     }),

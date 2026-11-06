@@ -40,6 +40,7 @@ import {
   getErrorMessage,
   getUserWorkoutMonthBuckets,
   getUserWorkouts,
+  getUserWorkoutRecordCounts,
   type WorkoutFeedItem,
   type WorkoutListFilter,
   type WorkoutMonthBucket,
@@ -247,6 +248,7 @@ export default function ProfileScreen() {
   const [historyMonths, setHistoryMonths] = useState<WorkoutMonthBucket[]>([]);
   const historyFilterRef = useRef<WorkoutListFilter>({});
   const historyRequestRef = useRef(0);
+  const historyRecordsEpochRef = useRef(0);
   const lastHistoryFilterRef = useRef<string | null>(null);
   const hasFocusedProfileRef = useRef(false);
   const [optimisticLikeState, setOptimisticLikeState] = useState<Record<string, FeedLikeInteractionState>>({});
@@ -308,6 +310,8 @@ export default function ProfileScreen() {
   }, [t, weightTrend.deltaKg, weightTrend.trend]);
 
   const loadUserHistoryPage = useCallback(async (userId: string, pageToLoad: number, mode: 'reset' | 'append') => {
+    if (mode === 'reset') historyRecordsEpochRef.current += 1;
+    const epoch = historyRecordsEpochRef.current;
     const request = ++historyRequestRef.current;
     const filter = { ...historyFilterRef.current };
     lastHistoryFilterRef.current = JSON.stringify([userId, filter.periodKey ?? null, filter.search ?? '']);
@@ -316,8 +320,23 @@ export default function ProfileScreen() {
     }
 
     try {
-      const data = await getUserWorkouts(userId, pageToLoad, HISTORY_PAGE_SIZE, filter);
+      const data = await getUserWorkouts(userId, pageToLoad, HISTORY_PAGE_SIZE, filter, { deferRecords: true });
       if (request !== historyRequestRef.current) return;
+
+      if (data.length) {
+        const originals = new Map(data.map(item => [item.id, item]));
+        void getUserWorkoutRecordCounts(data).then(counts => {
+          if (epoch !== historyRecordsEpochRef.current) return;
+          setWorkouts(current => current.map(item => originals.get(item.id) === item
+            ? { ...item, prCount: counts.get(item.id) ?? 0 }
+            : item));
+        }).catch(error => {
+          if (epoch === historyRecordsEpochRef.current) {
+            console.warn('[workout-records] Unable to enrich history', { message: getErrorMessage(error) });
+          }
+        });
+      }
+
 
       if (mode === 'reset') {
         setWorkouts(data);
@@ -472,7 +491,7 @@ export default function ProfileScreen() {
   bootstrapRef.current = bootstrap;
   useEffect(() => {
     void bootstrapRef.current();
-    return () => { historyRequestRef.current += 1; };
+    return () => { historyRequestRef.current += 1; historyRecordsEpochRef.current += 1; };
   }, []);
 
   const handleDeleteWorkout = useCallback(

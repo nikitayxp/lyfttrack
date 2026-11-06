@@ -21,7 +21,6 @@ import {
   type ExerciseRow,
   type RecoveredDraftState,
 } from '@/hooks/useActiveWorkoutState';
-import { subscribeAuthSession } from '@/services/authSessionStore';
 import { getPreviousExercisePerformance } from '@/services/workoutService';
 
 type ExerciseStopwatchEntry = {
@@ -78,29 +77,17 @@ type WorkoutContextValue = {
 
 const WorkoutContext = createContext<WorkoutContextValue | null>(null);
 
-export function WorkoutProvider({ children }: PropsWithChildren) {
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [isAuthResolved, setIsAuthResolved] = useState(false);
+type WorkoutProviderProps = PropsWithChildren<{ currentUserId: string | null }>;
 
-  useEffect(() => {
-    return subscribeAuthSession(({ session, isPending }) => {
-      if (isPending) return;
-      setCurrentUserId(session?.user.id ?? null);
-      setIsAuthResolved(true);
-    });
-  }, []);
-
+export function WorkoutProvider({ children, currentUserId }: WorkoutProviderProps) {
   return (
-    <WorkoutSessionProvider key={currentUserId ?? 'signed-out'} currentUserId={currentUserId} isAuthResolved={isAuthResolved}>
+    <WorkoutSessionProvider key={currentUserId ?? 'signed-out'} currentUserId={currentUserId}>
       {children}
     </WorkoutSessionProvider>
   );
 }
 
-function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: PropsWithChildren<{
-  currentUserId: string | null;
-  isAuthResolved: boolean;
-}>) {
+function WorkoutSessionProvider({ children, currentUserId }: WorkoutProviderProps) {
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
   const [workoutName, setWorkoutName] = useState<string | null>(null);
   const [didRestoreDraft, setDidRestoreDraft] = useState(false);
@@ -152,9 +139,7 @@ function WorkoutSessionProvider({ children, currentUserId, isAuthResolved }: Pro
     workoutName: workoutName ?? undefined,
   });
 
-  // Recovery is only settled once we know who the user is *and* the stored
-  // draft has been read. Consumers must not seed exercises before that.
-  const isDraftRecoveryPending = !isAuthResolved || (currentUserId !== null && isDraftReadPending);
+  const isDraftRecoveryPending = currentUserId !== null && isDraftReadPending;
 
   const hasActiveWorkout = activeExercises.length > 0;
 

@@ -402,7 +402,7 @@ export default function RootLayout() {
     <PreferencesProvider>
       <ToastProvider>
         <ConfirmProvider>
-          <WorkoutProvider>
+          <WorkoutProvider currentUserId={session?.user.id ?? null}>
             <SafeAreaProvider style={safeAreaStyle} initialMetrics={isWeb ? undefined : initialWindowMetrics}>
               <ThemeProvider value={navigationTheme}>
               <Stack

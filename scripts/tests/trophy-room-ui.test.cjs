@@ -20,7 +20,7 @@ async function setup(t, platform = 'web', available = true, deferredAvailability
     React.useImperativeHandle(ref, () => ({ capture: async () => { state.captured++; return 'file:///test-record.png'; } }));
     return React.createElement('ViewShot', null, props.children);
   });
-  const load = createSourceLoader({
+  const replacements = {
     'react-native': {
       Platform: { OS: platform }, StyleSheet: { create: value => value },
       Alert: { alert: (title, message) => state.toasts.push({ title, message }) },
@@ -38,7 +38,11 @@ async function setup(t, platform = 'web', available = true, deferredAvailability
     '@/context/ToastContext': { useAppToast: () => ({ showToast: payload => state.toasts.push(payload) }) },
     '@/services/workoutService': { getErrorMessage: error => error.message },
     '@/constants/theme': plain('app/src/constants/Colors.ts'),
-  });
+  };
+  const load = createSourceLoader(replacements);
+  if (platform === 'web') {
+    replacements['@/components/profile/TrophyImageCapture'] = load('app/src/components/profile/TrophyImageCapture.web.tsx');
+  }
   const components = load('app/src/components/profile/TrophyRoom.tsx');
   function TrophyRoom(props) {
     const [selection, setSelection] = React.useState(null);
@@ -65,8 +69,8 @@ async function setup(t, platform = 'web', available = true, deferredAvailability
   };
 }
 
-test('profile mounts three previews and creates only one capture after opening a detail', async t => {
-  const ui = await setup(t);
+test('native profile mounts three previews and creates only one capture after opening a detail', async t => {
+  const ui = await setup(t, 'ios');
   assert.equal(ui.tree.root.findAllByType('Pressable').filter(node => node.props.accessibilityLabel?.startsWith('Abrir recorde:')).length, 3);
   assert.equal(ui.tree.root.findAllByType('ViewShot').length, 0);
   await ui.openFeatured();
@@ -91,6 +95,7 @@ test('collection applies muscle and search filters and preserves highest-weight 
 test('web copies the record without creating a capture or opening native sharing', async t => {
   const ui = await setup(t);
   await ui.openFeatured();
+  assert.equal(ui.tree.root.findAllByType('ViewShot').length, 0);
   await ui.pressText('Copiar recorde');
   assert.ok(ui.state.copied[0].includes('Exercício 29'));
   assert.equal(ui.state.captured, 0);

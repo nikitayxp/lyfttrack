@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import * as Sharing from 'expo-sharing';
-import ViewShot from 'react-native-view-shot';
+import type ViewShot from 'react-native-view-shot';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/theme';
 import { EXERCISE_MUSCLE_LABELS, type ExerciseMuscleKey } from '@/constants/exerciseCatalog';
@@ -15,6 +15,7 @@ import { getLocalizedExerciseName } from '@/utils/exerciseLocalization';
 import { formatTrophyDate, selectTrophies, trophyShareText, type TrophySort } from '@/utils/trophyRoom';
 import { useAppToast } from '@/context/ToastContext';
 import { showAlert } from '@/utils/showAlert';
+import TrophyImageCapture from '@/components/profile/TrophyImageCapture';
 
 const palette = Colors.dark;
 type Props = { records: AllTimePR[]; language: string; loading: boolean; error: string | null; onRetry: () => void };
@@ -143,7 +144,7 @@ export function TrophyRoom({ records, language, initialSelectedId, onClose }: { 
               <Pressable style={styles.iconButton} accessibilityRole="button" accessibilityLabel={t('profile.trophyClose')} onPress={close}><Ionicons name="close" size={24} color={palette.textPrimary} /></Pressable>
             </View>
             {selected ? <ScrollView contentContainerStyle={styles.detailContent}>
-              <ViewShot ref={captureRef} options={{ format: 'png', quality: 1, result: 'tmpfile' }}>
+              <TrophyImageCapture ref={captureRef} options={{ format: 'png', quality: 1, result: 'tmpfile' }}>
                 <View style={styles.shareCard}>
                   <View style={styles.shareBrand}><Text style={styles.eyebrow}>LYFTTRACK</Text><Ionicons name="trophy" size={28} color={palette.accentLight} /></View>
                   <Text style={styles.detailLabel}>{t('profile.trophyBestWeight')}</Text>
@@ -152,7 +153,7 @@ export function TrophyRoom({ records, language, initialSelectedId, onClose }: { 
                   {selected.muscleKey ? <Text style={styles.muscleName}>{EXERCISE_MUSCLE_LABELS[selected.muscleKey][isPortuguese ? 'pt' : 'en']}</Text> : null}
                   <View style={styles.detailDate}><Text style={styles.date}>{t('profile.trophyAchievedOn')}</Text><Text style={styles.recordName}>{formatTrophyDate(selected.achievedAt, language)}</Text></View>
                 </View>
-              </ViewShot>
+              </TrophyImageCapture>
               <Pressable style={styles.browseButton} accessibilityRole="button" disabled={sharing} onPress={() => void share()}>
                 {sharing ? <ActivityIndicator color={palette.textPrimary} /> : <Ionicons name={Platform.OS === 'web' ? 'copy-outline' : 'share-social-outline'} size={20} color={palette.textPrimary} />}
                 <Text style={styles.buttonText}>{t(Platform.OS === 'web' ? 'profile.trophyCopy' : 'profile.trophyShare')}</Text>

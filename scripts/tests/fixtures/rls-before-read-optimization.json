@@ -1,0 +1,541 @@
+[
+  {
+    "cmd": "INSERT",
+    "policyname": "body_measurements_insert_own",
+    "qual": null,
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "body_measurements",
+    "with_check": "(auth.uid() = user_id)"
+  },
+  {
+    "cmd": "SELECT",
+    "policyname": "body_measurements_select_own",
+    "qual": "(auth.uid() = user_id)",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "body_measurements",
+    "with_check": null
+  },
+  {
+    "cmd": "UPDATE",
+    "policyname": "body_measurements_update_own",
+    "qual": "(auth.uid() = user_id)",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "body_measurements",
+    "with_check": "(auth.uid() = user_id)"
+  },
+  {
+    "cmd": "INSERT",
+    "policyname": "exercises_insert_own_custom",
+    "qual": null,
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "exercises",
+    "with_check": "((auth.uid() = created_by) AND (is_custom = true))"
+  },
+  {
+    "cmd": "SELECT",
+    "policyname": "exercises_select_authenticated",
+    "qual": "true",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "exercises",
+    "with_check": null
+  },
+  {
+    "cmd": "UPDATE",
+    "policyname": "exercises_update_own_custom",
+    "qual": "(auth.uid() = created_by)",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "exercises",
+    "with_check": "(auth.uid() = created_by)"
+  },
+  {
+    "cmd": "INSERT",
+    "policyname": "friend_requests_insert_own",
+    "qual": null,
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "friend_requests",
+    "with_check": "((auth.uid() = from_user_id) AND (to_user_id <> auth.uid()) AND (status = 'pending'::text))"
+  },
+  {
+    "cmd": "SELECT",
+    "policyname": "friend_requests_select_own",
+    "qual": "((auth.uid() = from_user_id) OR (auth.uid() = to_user_id))",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "friend_requests",
+    "with_check": null
+  },
+  {
+    "cmd": "UPDATE",
+    "policyname": "friend_requests_update_recipient",
+    "qual": "((auth.uid() = to_user_id) AND (status = 'pending'::text))",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "friend_requests",
+    "with_check": "((auth.uid() = to_user_id) AND (status = ANY (ARRAY['accepted'::text, 'rejected'::text])))"
+  },
+  {
+    "cmd": "DELETE",
+    "policyname": "friends_delete_own",
+    "qual": "((auth.uid() = user_low_id) OR (auth.uid() = user_high_id))",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "friends",
+    "with_check": null
+  },
+  {
+    "cmd": "SELECT",
+    "policyname": "friends_select_own_network",
+    "qual": "((auth.uid() = user_low_id) OR (auth.uid() = user_high_id))",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "friends",
+    "with_check": null
+  },
+  {
+    "cmd": "INSERT",
+    "policyname": "profiles_insert_own",
+    "qual": null,
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "profiles",
+    "with_check": "(auth.uid() = id)"
+  },
+  {
+    "cmd": "SELECT",
+    "policyname": "profiles_select_public",
+    "qual": "true",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "profiles",
+    "with_check": null
+  },
+  {
+    "cmd": "UPDATE",
+    "policyname": "profiles_update_own",
+    "qual": "(auth.uid() = id)",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "profiles",
+    "with_check": "(auth.uid() = id)"
+  },
+  {
+    "cmd": "DELETE",
+    "policyname": "routine_exercises_delete_owner_only",
+    "qual": "(EXISTS ( SELECT 1\n   FROM routines r\n  WHERE ((r.id = routine_exercises.routine_id) AND (r.user_id = auth.uid()))))",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "routine_exercises",
+    "with_check": null
+  },
+  {
+    "cmd": "INSERT",
+    "policyname": "routine_exercises_insert_owner_only",
+    "qual": null,
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "routine_exercises",
+    "with_check": "(EXISTS ( SELECT 1\n   FROM routines r\n  WHERE ((r.id = routine_exercises.routine_id) AND (r.user_id = auth.uid()))))"
+  },
+  {
+    "cmd": "SELECT",
+    "policyname": "routine_exercises_select_visible_routines",
+    "qual": "(EXISTS ( SELECT 1\n   FROM routines r\n  WHERE ((r.id = routine_exercises.routine_id) AND ((r.user_id = auth.uid()) OR (EXISTS ( SELECT 1\n           FROM friends f\n          WHERE ((f.user_low_id = LEAST(auth.uid(), r.user_id)) AND (f.user_high_id = GREATEST(auth.uid(), r.user_id)))))))))",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "routine_exercises",
+    "with_check": null
+  },
+  {
+    "cmd": "UPDATE",
+    "policyname": "routine_exercises_update_owner_only",
+    "qual": "(EXISTS ( SELECT 1\n   FROM routines r\n  WHERE ((r.id = routine_exercises.routine_id) AND (r.user_id = auth.uid()))))",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "routine_exercises",
+    "with_check": "(EXISTS ( SELECT 1\n   FROM routines r\n  WHERE ((r.id = routine_exercises.routine_id) AND (r.user_id = auth.uid()))))"
+  },
+  {
+    "cmd": "DELETE",
+    "policyname": "routines_delete_own",
+    "qual": "(user_id = auth.uid())",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "routines",
+    "with_check": null
+  },
+  {
+    "cmd": "INSERT",
+    "policyname": "routines_insert_own",
+    "qual": null,
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "routines",
+    "with_check": "(user_id = auth.uid())"
+  },
+  {
+    "cmd": "SELECT",
+    "policyname": "routines_select_self_or_friends",
+    "qual": "((user_id = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM friends f\n  WHERE ((f.user_low_id = LEAST(auth.uid(), routines.user_id)) AND (f.user_high_id = GREATEST(auth.uid(), routines.user_id))))))",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "routines",
+    "with_check": null
+  },
+  {
+    "cmd": "UPDATE",
+    "policyname": "routines_update_own",
+    "qual": "(user_id = auth.uid())",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "routines",
+    "with_check": "(user_id = auth.uid())"
+  },
+  {
+    "cmd": "DELETE",
+    "policyname": "sets_delete_owner_only",
+    "qual": "(EXISTS ( SELECT 1\n   FROM workouts w\n  WHERE ((w.id = sets.workout_id) AND (w.user_id = auth.uid()))))",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "sets",
+    "with_check": null
+  },
+  {
+    "cmd": "INSERT",
+    "policyname": "sets_insert_owner_only",
+    "qual": null,
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "sets",
+    "with_check": "(EXISTS ( SELECT 1\n   FROM workouts w\n  WHERE ((w.id = sets.workout_id) AND (w.user_id = auth.uid()))))"
+  },
+  {
+    "cmd": "SELECT",
+    "policyname": "sets_select_workout_visible",
+    "qual": "(EXISTS ( SELECT 1\n   FROM workouts w\n  WHERE ((w.id = sets.workout_id) AND can_view_user_content(w.user_id))))",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "sets",
+    "with_check": null
+  },
+  {
+    "cmd": "UPDATE",
+    "policyname": "sets_update_owner_only",
+    "qual": "(EXISTS ( SELECT 1\n   FROM workouts w\n  WHERE ((w.id = sets.workout_id) AND (w.user_id = auth.uid()))))",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "sets",
+    "with_check": "(EXISTS ( SELECT 1\n   FROM workouts w\n  WHERE ((w.id = sets.workout_id) AND (w.user_id = auth.uid()))))"
+  },
+  {
+    "cmd": "DELETE",
+    "policyname": "template_exercises_delete_owner_templates",
+    "qual": "(EXISTS ( SELECT 1\n   FROM workout_templates wt\n  WHERE ((wt.id = template_exercises.template_id) AND (wt.user_id = auth.uid()))))",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "template_exercises",
+    "with_check": null
+  },
+  {
+    "cmd": "INSERT",
+    "policyname": "template_exercises_insert_owner_templates",
+    "qual": null,
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "template_exercises",
+    "with_check": "(EXISTS ( SELECT 1\n   FROM workout_templates wt\n  WHERE ((wt.id = template_exercises.template_id) AND (wt.user_id = auth.uid()))))"
+  },
+  {
+    "cmd": "SELECT",
+    "policyname": "template_exercises_select_owner_templates",
+    "qual": "(EXISTS ( SELECT 1\n   FROM workout_templates wt\n  WHERE ((wt.id = template_exercises.template_id) AND (wt.user_id = auth.uid()))))",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "template_exercises",
+    "with_check": null
+  },
+  {
+    "cmd": "UPDATE",
+    "policyname": "template_exercises_update_owner_templates",
+    "qual": "(EXISTS ( SELECT 1\n   FROM workout_templates wt\n  WHERE ((wt.id = template_exercises.template_id) AND (wt.user_id = auth.uid()))))",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "template_exercises",
+    "with_check": "(EXISTS ( SELECT 1\n   FROM workout_templates wt\n  WHERE ((wt.id = template_exercises.template_id) AND (wt.user_id = auth.uid()))))"
+  },
+  {
+    "cmd": "DELETE",
+    "policyname": "workout_comments_delete_own",
+    "qual": "(auth.uid() = user_id)",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "workout_comments",
+    "with_check": null
+  },
+  {
+    "cmd": "INSERT",
+    "policyname": "workout_comments_insert_own_on_visible_workout",
+    "qual": null,
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "workout_comments",
+    "with_check": "((auth.uid() = user_id) AND (EXISTS ( SELECT 1\n   FROM workouts w\n  WHERE ((w.id = workout_comments.workout_id) AND can_view_user_content(w.user_id)))))"
+  },
+  {
+    "cmd": "SELECT",
+    "policyname": "workout_comments_select_workout_visible",
+    "qual": "(EXISTS ( SELECT 1\n   FROM workouts w\n  WHERE ((w.id = workout_comments.workout_id) AND can_view_user_content(w.user_id))))",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "workout_comments",
+    "with_check": null
+  },
+  {
+    "cmd": "UPDATE",
+    "policyname": "workout_comments_update_own",
+    "qual": "(auth.uid() = user_id)",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "workout_comments",
+    "with_check": "(auth.uid() = user_id)"
+  },
+  {
+    "cmd": "DELETE",
+    "policyname": "workout_exercises_delete_owner_only",
+    "qual": "(EXISTS ( SELECT 1\n   FROM workouts w\n  WHERE ((w.id = workout_exercises.workout_id) AND (w.user_id = auth.uid()))))",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "workout_exercises",
+    "with_check": null
+  },
+  {
+    "cmd": "INSERT",
+    "policyname": "workout_exercises_insert_owner_only",
+    "qual": null,
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "workout_exercises",
+    "with_check": "(EXISTS ( SELECT 1\n   FROM workouts w\n  WHERE ((w.id = workout_exercises.workout_id) AND (w.user_id = auth.uid()))))"
+  },
+  {
+    "cmd": "SELECT",
+    "policyname": "workout_exercises_select_workout_visible",
+    "qual": "(EXISTS ( SELECT 1\n   FROM workouts w\n  WHERE ((w.id = workout_exercises.workout_id) AND can_view_user_content(w.user_id))))",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "workout_exercises",
+    "with_check": null
+  },
+  {
+    "cmd": "UPDATE",
+    "policyname": "workout_exercises_update_owner_only",
+    "qual": "(EXISTS ( SELECT 1\n   FROM workouts w\n  WHERE ((w.id = workout_exercises.workout_id) AND (w.user_id = auth.uid()))))",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "workout_exercises",
+    "with_check": "(EXISTS ( SELECT 1\n   FROM workouts w\n  WHERE ((w.id = workout_exercises.workout_id) AND (w.user_id = auth.uid()))))"
+  },
+  {
+    "cmd": "DELETE",
+    "policyname": "workout_likes_delete_own",
+    "qual": "(auth.uid() = user_id)",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "workout_likes",
+    "with_check": null
+  },
+  {
+    "cmd": "INSERT",
+    "policyname": "workout_likes_insert_own_on_visible_workout",
+    "qual": null,
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "workout_likes",
+    "with_check": "((auth.uid() = user_id) AND (EXISTS ( SELECT 1\n   FROM workouts w\n  WHERE ((w.id = workout_likes.workout_id) AND can_view_user_content(w.user_id)))))"
+  },
+  {
+    "cmd": "SELECT",
+    "policyname": "workout_likes_select_workout_visible",
+    "qual": "(EXISTS ( SELECT 1\n   FROM workouts w\n  WHERE ((w.id = workout_likes.workout_id) AND can_view_user_content(w.user_id))))",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "workout_likes",
+    "with_check": null
+  },
+  {
+    "cmd": "DELETE",
+    "policyname": "workout_templates_delete_own",
+    "qual": "(user_id = auth.uid())",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "workout_templates",
+    "with_check": null
+  },
+  {
+    "cmd": "INSERT",
+    "policyname": "workout_templates_insert_own",
+    "qual": null,
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "workout_templates",
+    "with_check": "(user_id = auth.uid())"
+  },
+  {
+    "cmd": "SELECT",
+    "policyname": "workout_templates_select_own",
+    "qual": "(user_id = auth.uid())",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "workout_templates",
+    "with_check": null
+  },
+  {
+    "cmd": "UPDATE",
+    "policyname": "workout_templates_update_own",
+    "qual": "(user_id = auth.uid())",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "workout_templates",
+    "with_check": "(user_id = auth.uid())"
+  },
+  {
+    "cmd": "DELETE",
+    "policyname": "workouts_delete_own",
+    "qual": "(auth.uid() = user_id)",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "workouts",
+    "with_check": null
+  },
+  {
+    "cmd": "INSERT",
+    "policyname": "workouts_insert_own",
+    "qual": null,
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "workouts",
+    "with_check": "(auth.uid() = user_id)"
+  },
+  {
+    "cmd": "SELECT",
+    "policyname": "workouts_select_visible",
+    "qual": "can_view_user_content(user_id)",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "workouts",
+    "with_check": null
+  },
+  {
+    "cmd": "UPDATE",
+    "policyname": "workouts_update_own",
+    "qual": "(auth.uid() = user_id)",
+    "roles": [
+      "authenticated"
+    ],
+    "schemaname": "public",
+    "tablename": "workouts",
+    "with_check": "(auth.uid() = user_id)"
+  }
+]

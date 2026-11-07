@@ -41,7 +41,7 @@ function setup(count, options = {}) {
             assert.equal(timestamp, repeatedTimestamp);
             data = data.filter((row) => row[column] < timestamp || (row[column] === timestamp && row.id < id));
           }
-          data = data.slice(call.range[0], Math.min(call.range[1] + 1, call.range[0] + 1000));
+          data = data.slice(call.range[0], Math.min(call.range[1] + 1, call.range[0] + (options.serverCap ?? 1000)));
           const selected = data.map((row) => Object.fromEntries(call.columns.split(', ').map((key) => [key, row[key]])));
           options.afterPage?.(rows, calls.length);
           return Promise.resolve({ data: selected, error: null }).then(resolve, reject);
@@ -143,3 +143,26 @@ for (const legacy of [false, true]) {
     assert.equal(calls.length, legacy ? 3 : 2);
   });
 }
+
+test('weight history does not truncate when project max_rows is lower than 200', async()=>{
+ const {getWeightHistory}=setup(405,{serverCap:73});
+ assert.equal((await getWeightHistory()).length,405);
+});
+
+test('legacy insert recovery updates only the latest owned measurement',async()=>{
+ const rows=[{id:'old',user_id:'owner',weight:70,created_at:'2026-01-01Z',measured_at:'2026-01-01Z'},{id:'latest',user_id:'owner',weight:75,created_at:'2026-02-01Z',measured_at:'2026-02-01Z'},{id:'other',user_id:'other',weight:90,created_at:'2026-03-01Z',measured_at:'2026-03-01Z'}];
+ const updates=[];
+ const supabase={from(){
+   let operation='select',patch;const filters={};let limit=1000;
+   const q={select(){return q;},insert(){operation='insert';return q;},update(p){operation='update';patch=p;return q;},eq(k,v){filters[k]=v;return q;},order(){return q;},limit(n){limit=n;return q;},maybeSingle(){limit=1;return q;},then(resolve,reject){
+     if(operation==='insert')return Promise.resolve({error:{code:'23505',message:'duplicate user constraint'}}).then(resolve,reject);
+     const data=rows.filter(r=>Object.entries(filters).every(([k,v])=>r[k]===v)).sort((a,b)=>b.created_at.localeCompare(a.created_at)).slice(0,limit);
+     if(operation==='update'){updates.push({...filters});data.forEach(r=>Object.assign(r,patch));return Promise.resolve({error:null,count:data.length}).then(resolve,reject);}
+     return Promise.resolve({error:null,data:data[0]??null}).then(resolve,reject);
+   }};return q;
+ }};
+ const service=createSourceLoader({'@/services/supabase':{supabase},'@/services/workoutService':{getAuthenticatedUserOrThrow:async()=>({id:'owner'})}})('app/src/services/measurementService.ts');
+ await service.addWeight(80);
+ assert.equal(rows[0].weight,70);assert.equal(rows[1].weight,80);assert.equal(rows[2].weight,90);
+ assert.equal(updates[0].id,'latest');assert.equal(updates[0].user_id,'owner');
+});

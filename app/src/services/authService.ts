@@ -67,7 +67,19 @@ export async function applyPendingTermsAcceptance(): Promise<void> {
   }
 }
 
+let pendingGoogleOAuth: Promise<void> | null = null;
+
 export async function startGoogleOAuth(): Promise<void> {
+  if (pendingGoogleOAuth) return pendingGoogleOAuth;
+  pendingGoogleOAuth = performGoogleOAuth();
+  try {
+    await pendingGoogleOAuth;
+  } finally {
+    pendingGoogleOAuth = null;
+  }
+}
+
+async function performGoogleOAuth(): Promise<void> {
   if (Platform.OS === 'web' && (typeof window === 'undefined' || !window.isSecureContext || !globalThis.crypto?.subtle)) {
     throw new Error('oauth-insecure-context');
   }

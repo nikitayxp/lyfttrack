@@ -49,7 +49,7 @@ async function setup(t, initialWidth = 375) {
   const colors = createSourceLoader()('app/src/constants/Colors.ts');
   const load = createSourceLoader({
     '@react-navigation/native': { DarkTheme: { colors: {} }, ThemeProvider: passthrough },
-    'react-native': { View: 'View', ActivityIndicator: empty, Platform: { OS: 'web' },
+    'react-native': { View: 'View', ActivityIndicator: empty, Platform: { OS: 'web', select: values => values.web ?? values.default },
       useWindowDimensions: () => ({ width, height: 800 }),
       StyleSheet: { create: value => value, absoluteFillObject: {} } },
     'expo-router': { Stack, useSegments: () => ['(auth)', 'sign-in'], router: { replace() {} } },

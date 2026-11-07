@@ -6,7 +6,6 @@ const createSourceLoader = require('./load-source.cjs');
 
 global.IS_REACT_ACT_ENVIRONMENT = true;
 
-const session = id => id ? { user: { id } } : null;
 const exercise = id => ({
   id: `block-${id}`,
   exercise: { id, name: id },
@@ -17,13 +16,13 @@ const exercise = id => ({
 
 async function setup(t, options = {}) {
   const values = new Map();
-  let authListener;
   let appStateListener;
   let context;
+  let elapsedSeconds;
   const load = createSourceLoader({
     'react-native': {
       Platform: { OS: 'ios' },
-      AppState: { addEventListener: (_event, callback) => {
+      AppState: { currentState: 'active', addEventListener: (_event, callback) => {
         appStateListener = callback;
         return { remove() {} };
       } },
@@ -37,33 +36,56 @@ async function setup(t, options = {}) {
       setItem: async (key, value) => { values.set(key, value); },
       removeItem: async key => { values.delete(key); },
     },
-    '@/services/supabase': { supabase: { auth: {
-      getSession: options.getSession ?? (async () => ({ data: { session: session('A') } })),
-      onAuthStateChange: callback => {
-        authListener = callback;
-        return { data: { subscription: { unsubscribe() {} } } };
-      },
-    } } },
     '@/services/workoutService': { getPreviousExercisePerformance: options.getPerformance ?? (async () => []) },
   }, { Date: options.Date ?? Date });
-  const { WorkoutProvider, useWorkoutContext } = load('app/src/context/WorkoutContext.tsx');
+  const { WorkoutProvider, useWorkoutContext, useWorkoutElapsedSeconds } = load('app/src/context/WorkoutContext.tsx');
   const storage = load('app/src/services/offlineSyncService.ts');
   function Consumer() {
     context = useWorkoutContext();
+    React.useEffect(() => { options.onMount?.(context.currentUserId); }, []);
+    options.onRender?.();
     return null;
   }
+  function TimerConsumer() {
+    elapsedSeconds = useWorkoutElapsedSeconds();
+    return null;
+  }
+  const renderWorkout = currentUserId => React.createElement(WorkoutProvider, { currentUserId }, React.createElement(Consumer), React.createElement(TimerConsumer));
   let tree;
-  await act(async () => { tree = create(React.createElement(WorkoutProvider, null, React.createElement(Consumer))); });
+  await act(async () => { tree = create(renderWorkout('A')); });
   t.after(async () => { await act(async () => tree.unmount()); });
   return {
-    get current() { return context; },
+    get current() { return { ...context, elapsedSeconds }; },
     storage,
     values,
-    changeUser: id => act(async () => authListener('SIGNED_IN', session(id))),
+    changeUser: id => act(async () => tree.update(renderWorkout(id))),
     background: () => act(async () => appStateListener('background')),
     run: fn => act(async () => fn(context)),
   };
 }
+
+test('a resolved account mounts workout consumers only once on startup', async t => {
+  const mountedAccounts = [];
+  await setup(t, { onMount: id => mountedAccounts.push(id) });
+  assert.deepEqual(mountedAccounts, ['A']);
+});
+
+test('workout data consumers are not rendered by each clock tick', async t => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  let now = Date.UTC(2026, 9, 19, 12);
+  let renders = 0;
+  class Clock extends Date {
+    constructor(...args) { super(...(args.length ? args : [now])); }
+    static now() { return now; }
+  }
+  const app = await setup(t, { Date: Clock, onRender: () => { renders += 1; } });
+  await app.run(c => c.setActiveExercisesWithRef([exercise('A')]));
+  const before = renders;
+  now += 2000;
+  await act(async () => t.mock.timers.tick(2000));
+  assert.equal(app.current.elapsedSeconds, 2);
+  assert.equal(renders, before, 'the clock notified a data-only consumer');
+});
 
 test('discarding a paused workout resets pause and its saved elapsed value', async t => {
   const app = await setup(t);
@@ -122,14 +144,6 @@ test('save identity survives pause, resume and restoring the same account draft'
   assert.equal(saved.sessionStartTime, new Date(sessionStart).toISOString());
   await app.changeUser('A');
   assert.equal(app.current.workoutSessionStartedAtMs, sessionStart);
-});
-
-test('an old session bootstrap cannot overwrite a newer authentication event', async t => {
-  let resolveSession;
-  const app = await setup(t, { getSession: () => new Promise(resolve => { resolveSession = resolve; }) });
-  await app.changeUser('B');
-  await app.run(() => resolveSession({ data: { session: session('A') } }));
-  assert.equal(app.current.currentUserId, 'B');
 });
 
 test('an exercise request started by another account cannot add to the new workout', async t => {

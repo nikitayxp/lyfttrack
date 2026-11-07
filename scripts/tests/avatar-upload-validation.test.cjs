@@ -44,6 +44,8 @@ function loadService(pickerAsset, fetch, switchDuringUpload = false, switchDurin
   const load = createSourceLoader({
     '@/services/supabase': { supabase },
     '@/services/workoutService': { getAuthenticatedUserOrThrow: async () => activeUser },
+    '@/services/authUserService': { getAuthenticatedUserOrThrow: async () => activeUser, getSessionUserOrThrow: async () => activeUser },
+    '@/services/authSessionStore': { onAuthAccountChange() {} },
     'expo-image-picker': {
       MediaTypeOptions: { Images: 'images' },
       requestMediaLibraryPermissionsAsync: async () => ({ granted: true }),

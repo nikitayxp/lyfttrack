@@ -44,6 +44,11 @@ test('later errors and invalid cursors cannot return a partial history', async (
   await assert.rejects(setup(2001, { invalidBoundary: true }).run(), /invalid page boundary/);
 });
 
+test('server caps smaller than requested page size do not truncate history', async () => {
+ const {rows, run} = setup(2001, {serverCap: 137});
+ assert.deepEqual(Array.from(await run()), rows);
+});
+
 test('a server cap smaller than the requested page cannot truncate imports', async () => {
   const { rows, calls, run } = setup(23, { serverCap: 10 });
   assert.deepEqual(Array.from(await run()), rows);

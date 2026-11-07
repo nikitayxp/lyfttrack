@@ -43,6 +43,8 @@ module.exports = function createSourceLoader(replacements = {}, globals = {}) {
       window: globals.window,
       URL,
       URLSearchParams,
+      __DEV__: globals.__DEV__ ?? false,
+      process: globals.process ?? process,
       Date: globals.Date ?? Date,
       setTimeout,
       clearTimeout,

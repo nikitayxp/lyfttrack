@@ -644,6 +644,13 @@ export type Database = {
       }
     }
     Functions: {
+      exercise_stats_summary: { Args: { p_exercise_id: string }; Returns: Json }
+      exercise_history_page: { Args: { p_exercise_id: string; p_limit?: number; p_offset?: number }; Returns: Json }
+      exercise_training_references: { Args: { p_exercise_ids: string[]; p_excluded_workout_id?: string }; Returns: Json }
+      workout_record_summaries: { Args: { p_workout_ids: string[] }; Returns: Json }
+      latest_workout_comments: { Args: { p_workout_ids: string[] }; Returns: Json }
+      workout_month_buckets: { Args: { p_user_id: string; p_timezone?: string }; Returns: Json }
+      recent_candidate_activity: { Args: { p_user_ids: string[] }; Returns: Json }
       save_template_atomic: {
         Args: { p_expected_user_id: string; p_mutation_id: string; p_template_id: string; p_name: string; p_exercises: Json; p_expected_snapshot?: Json }
         Returns: string

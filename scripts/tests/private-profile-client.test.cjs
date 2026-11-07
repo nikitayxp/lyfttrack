@@ -6,7 +6,7 @@ const createSourceLoader = require('./load-source.cjs');
 const ownId = '00000000-0000-0000-0000-000000000001';
 const hiddenId = '00000000-0000-0000-0000-000000000002';
 
-function setup({ bootstrap = false, failCards = false, bootstrapRace = false, usernameCollision = false } = {}) {
+function setup({ bootstrap = false, failCards = false, bootstrapRace = false, usernameCollision = false, beforeReply } = {}) {
   const requests = [];
   let ownExists = !bootstrap;
   let insertAttempts = 0;
@@ -18,6 +18,7 @@ function setup({ bootstrap = false, failCards = false, bootstrapRace = false, us
     const table = url.pathname.split('/').pop();
     const columns = url.searchParams.get('select') ?? '*';
     const method = options.method ?? 'GET';
+    await beforeReply?.(table, method);
     requests.push({ table, columns, method, url });
     const reply = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
     if (url.pathname.startsWith('/storage/v1/object/avatars/')) {
@@ -57,7 +58,8 @@ function setup({ bootstrap = false, failCards = false, bootstrapRace = false, us
   const load = createSourceLoader({
     '@/services/supabase': { supabase },
     '@/services/workoutService': { getAuthenticatedUserOrThrow: async () => user },
-    '@/services/authUserService': { getAuthenticatedUserOrThrow: async () => user },
+    '@/services/authUserService': { getAuthenticatedUserOrThrow: async () => user, getSessionUserOrThrow: async () => user },
+    '@/services/authSessionStore': { onAuthAccountChange() {} },
     'expo-image-picker': {},
   });
   return { load, requests, own, hidden };
@@ -75,8 +77,32 @@ test('own profile load and edits request only public columns from the table', as
   assert.equal(saved.height_cm, 182);
 });
 
+test('an older profile save cannot repopulate the cache with a replaced avatar', async () => {
+  let releaseDetails, detailsStarted;
+  const pendingDetails = new Promise(resolve => { releaseDetails = resolve; });
+  const observedDetails = new Promise(resolve => { detailsStarted = resolve; });
+  let delayDetails = false;
+  const { load } = setup({ beforeReply: async table => {
+    if (table === 'profile_private_details' && delayDetails) {
+      detailsStarted();
+      await pendingDetails;
+    }
+  } });
+  const service = load('app/src/services/profileService.ts');
+  await service.getProfile();
+  delayDetails = true;
+  const saving = service.updateProfile({ bio: 'Updated bio' });
+  await observedDetails;
+  delayDetails = false;
+  const uploaded = await service.uploadAvatar({fileUri:'file:///avatar.jpg',base64Data:Buffer.from([255,216,255,1,1,1,1,1]).toString('base64')});
+  releaseDetails();
+  await saving;
+  assert.equal((await service.getProfile()).avatar_url,uploaded.avatar_url,'the older save replaced the fresh avatar cache');
+});
+
 test('avatar upload returns own details without selecting revoked table columns', async () => {
   const { load, requests } = setup();
+  await load('app/src/services/profileService.ts').getProfile();
   const profile = await load('app/src/services/profileService.ts').uploadAvatar({
     fileUri: 'file:///avatar.jpg',
     base64Data: Buffer.from([255, 216, 255, 1, 1, 1, 1, 1]).toString('base64'),
@@ -85,6 +111,7 @@ test('avatar upload returns own details without selecting revoked table columns'
   assert.equal(profile.full_name, 'Own name');
   assert.equal(profile.bio, 'Own bio');
   assert.equal(profile.height_cm, 180);
+  assert.equal((await load('app/src/services/profileService.ts').getProfile()).avatar_url, profile.avatar_url, 'avatar upload left the account cache stale');
   assert.match(profile.avatar_url, /\/avatars\/00000000-0000-0000-0000-000000000001\//);
   const writes = requests.filter(request => request.table === 'profiles' && request.method === 'PATCH');
   assert.equal(writes.length, 1);
@@ -160,4 +187,29 @@ test('workout feed profiles use the card view after sensitive table reads are re
   assert.equal(rows[0].profile.username, 'owner');
   assert.equal(rows[0].profile.full_name, 'Own name');
   assert.ok(requests.some(request => request.table === 'profile_cards'));
+});
+
+test('athlete discovery starts all independent reads before any of them finishes', async () => {
+  const started = new Set();
+  let release;
+  let allStarted;
+  const gate = new Promise(resolve => { release = resolve; });
+  const concurrent = new Promise(resolve => { allStarted = resolve; });
+  const reads = ['friends', 'friend_requests', 'recent_candidate_activity'];
+  const { load } = setup({ beforeReply: async table => {
+    if (!reads.includes(table)) return;
+    started.add(table);
+    if (started.size === reads.length) allStarted(true);
+    await gate;
+  } });
+  const result = load('app/src/services/socialService.ts').getAllAthletes();
+  const timeout = setTimeout(() => allStarted(false), 500);
+  const overlapped = await concurrent;
+  clearTimeout(timeout);
+  release();
+  const rows = await result;
+  assert.equal(overlapped, true);
+  assert.deepEqual(rows.map(({ username, relation }) => ({ username, relation })), [
+    { username: 'hidden', relation: 'request_received' },
+  ]);
 });

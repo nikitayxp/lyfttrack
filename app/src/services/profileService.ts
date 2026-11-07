@@ -2,7 +2,8 @@ import type { User } from '@supabase/supabase-js';
 import * as ImagePicker from 'expo-image-picker';
 import { decode as decodeBase64 } from 'base64-arraybuffer';
 import { supabase } from '@/services/supabase';
-import { getAuthenticatedUserOrThrow } from '@/services/workoutService';
+import { getAuthenticatedUserOrThrow, getSessionUserOrThrow } from '@/services/authUserService';
+import { onAuthAccountChange } from '@/services/authSessionStore';
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/database';
 import { resolveAuthAvatarUrl } from '@/utils/authAvatarUrl';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
@@ -14,6 +15,17 @@ export type PublicProfileView = Pick<
 >;
 
 const PROFILE_CARD_COLUMNS = 'id, username, avatar_url, visibility, updated_at';
+let profileEpoch = 0;
+let profileCache: { accountId: string; value: ProfileRow; expiresAt: number } | null = null;
+const pendingProfiles = new Map<string, Promise<ProfileRow>>();
+
+export function invalidateProfileCache(): void {
+  profileEpoch++;
+  profileCache = null;
+  pendingProfiles.clear();
+}
+
+onAuthAccountChange(invalidateProfileCache);
 
 type ProfileCard = Omit<ProfileRow, 'bio' | 'height_cm' | 'full_name'>;
 
@@ -302,9 +314,7 @@ async function createProfileForExistingUser(user: User): Promise<ProfileRow> {
   throw new Error('Unable to initialize profile: could not generate a unique username.');
 }
 
-export async function getProfile(): Promise<ProfileRow> {
-  const user = await getAuthenticatedUserOrThrow();
-
+async function loadProfile(user: User): Promise<ProfileRow> {
   const { data: card, error } = await supabase
     .from('profiles')
     .select(PROFILE_CARD_COLUMNS)
@@ -316,18 +326,32 @@ export async function getProfile(): Promise<ProfileRow> {
   }
 
   if (card) {
-    const data = await withProfileDetails(card);
-
-    try {
-      await syncAuthMetadataFromProfile(user, data);
-    } catch (syncError) {
-      console.warn('[profileService] Metadata sync skipped during profile load', syncError);
-    }
-
-    return data;
+    return withProfileDetails(card);
   }
 
   return createProfileForExistingUser(user);
+}
+
+export async function getProfile(): Promise<ProfileRow> {
+  const user = await getSessionUserOrThrow();
+  if (profileCache && profileCache.accountId !== user.id) invalidateProfileCache();
+  if (profileCache && profileCache.expiresAt > Date.now()) return profileCache.value;
+  let pending = pendingProfiles.get(user.id);
+  if (!pending) {
+    const epoch = profileEpoch;
+    pending = loadProfile(user).then(async value => {
+      const current = await getSessionUserOrThrow();
+      if (current.id !== user.id) throw new Error('Session changed while loading profile. Please try again.');
+      if (epoch === profileEpoch) profileCache = { accountId: user.id, value, expiresAt: Date.now() + 30_000 };
+      return value;
+    });
+    pendingProfiles.set(user.id, pending);
+  }
+  try {
+    return await pending;
+  } finally {
+    if (pendingProfiles.get(user.id) === pending) pendingProfiles.delete(user.id);
+  }
 }
 
 export async function getPublicProfileById(profileId: string): Promise<PublicProfileView | null> {
@@ -488,6 +512,12 @@ export async function updateProfile(input: UpdateProfileInput): Promise<ProfileR
 
   const data = await withProfileDetails(card);
 
+  invalidateProfileCache();
+  const current = await getSessionUserOrThrow();
+  if (current.id !== user.id) throw new Error('Session changed while updating profile. Please try again.');
+  // A later avatar/profile mutation may have completed while details loaded.
+  // Let the next read fetch current state instead of caching this older card.
+
   try {
     await syncAuthMetadataFromProfile(user, data);
   } catch (syncError) {
@@ -565,5 +595,6 @@ export async function uploadAvatar(input: UploadAvatarInput): Promise<ProfileRow
     throw new Error(`Unable to update profile: ${updateError?.message ?? 'Unknown error'}`);
   }
 
+  invalidateProfileCache();
   return withProfileDetails(updatedProfile);
 }

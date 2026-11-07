@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const loadSource = require('./load-source.cjs');
-function setup({ count = 1005, oneWorkoutPerSet = false, failLater = false, fractionalRecords = false, distinctExercises = false, unfinished = false, equalWeightRecords = false, nestedSetCap, summaryFixture } = {}) {
+function setup({ count = 1005, oneWorkoutPerSet = false, failLater = false, fractionalRecords = false, distinctExercises = false, unfinished = false, equalWeightRecords = false, nestedSetCap, summaryFixture, trophyError, trophyFixture } = {}) {
     const user = 'owner';
     const now = Date.now();
     const workouts = Array.from({ length: oneWorkoutPerSet ? count : Math.ceil(count / 100) }, (_, i) => ({ id: `w${String(i).padStart(6, '0')}`, user_id: user, start_time: new Date(now - 86400000).toISOString(), end_time: new Date(now - 82800000).toISOString() }));
@@ -29,7 +29,18 @@ function setup({ count = 1005, oneWorkoutPerSet = false, failLater = false, frac
     const exercises = [...new Map(sets.map(row => [row.exercise_id, row.exercises])).values()];
     const calls = [];
     function value(row, key) { return key.split('.').reduce((v, k) => v?.[k], row); }
-    const supabase = { rpc: async (name, args) => { calls.push({rpc:name}); return {error:null,data:name === 'exercise_stats_summary' ? summaryFixture : relations.slice(args.p_offset,args.p_offset+args.p_limit)}; }, from(table) {
+    const supabase = { rpc: async (name, args) => {
+      calls.push({rpc:name});
+      if (name === 'all_time_personal_records') {
+        if (trophyError) return { error: { message: trophyError }, data: null };
+        if (trophyFixture !== undefined) return { error: null, data: trophyFixture };
+        return { error: null, data: exercises.map(exercise => ({ ...exercise, sets: sets
+          .filter(row => row.exercise_id === exercise.id && row.workouts.user_id === user && row.workouts.end_time !== null && row.weight > 0)
+          .sort((a,b) => b.weight-a.weight || new Date(b.workouts.end_time)-new Date(a.workouts.end_time)).slice(0,1)
+        })).filter(row => row.sets.length) };
+      }
+      return {error:null,data:name === 'exercise_stats_summary' ? summaryFixture : relations.slice(args.p_offset,args.p_offset+args.p_limit)};
+    }, from(table) {
             const call = { table, filters: [], orders: [], nestedFilters: [], nestedOrders: [], range: [0, 999] };
             function filter(key, predicate) {
                 if (key.startsWith('sets.')) call.nestedFilters.push(row => predicate(value(row, key.slice(5))));
@@ -118,10 +129,21 @@ test('tracked exercises do not download a page for each 1000 historical sets', a
     assert.equal(calls.length, 2);
 });
 
-test('trophy reads return the same records without downloading every historical set', async () => {
+test('trophy reads use one account-scoped RPC without catalog scans or an empty trailing page', async () => {
     const { stats, calls } = setup({ count: 3001 });
     assert.equal((await stats.getAllTimePRs()).length, 2);
-    assert.equal(calls.length, 2);
+    assert.deepEqual(calls, [{ rpc: 'all_time_personal_records' }]);
+});
+
+test('a failed trophy summary rejects instead of reporting an empty trophy room', async () => {
+    const { stats, calls } = setup({ trophyError: 'summary unavailable' });
+    await assert.rejects(stats.getAllTimePRs(), /Unable to load all-time PRs: summary unavailable/);
+    assert.deepEqual(calls, [{ rpc: 'all_time_personal_records' }]);
+});
+
+test('an invalid trophy summary rejects instead of reporting an empty trophy room', async () => {
+    const { stats } = setup({ trophyFixture: null });
+    await assert.rejects(stats.getAllTimePRs(), /invalid record summary/);
 });
 
 test('the exercise catalog itself remains complete beyond 1000 tracked exercises', async () => {

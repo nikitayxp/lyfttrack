@@ -58,6 +58,9 @@ export type WeeklyVolumeByMuscle = {
 
 type WorkoutRef = Pick<Tables<'workouts'>, 'id' | 'start_time' | 'end_time' | 'user_id'>;
 type ExerciseRef = Pick<Tables<'exercises'>, 'id' | 'name' | 'name_en' | 'name_pt'>;
+type PersonalRecordExerciseRow = Pick<Tables<'exercises'>, 'id' | 'name' | 'name_en' | 'name_pt' | 'muscle_group' | 'muscle_en' | 'muscle_pt'> & {
+  sets: { weight: number | null; workouts: Pick<WorkoutRef, 'start_time' | 'end_time'> | null }[];
+};
 type WeeklyExerciseRef = Pick<
   Tables<'exercises'>,
   'name' | 'name_en' | 'name_pt' | 'muscle_group' | 'muscle_en' | 'muscle_pt'
@@ -445,21 +448,11 @@ function buildExercisePersonalRecords(rows: RawSetWithWorkout[]): ExercisePerson
 }
 
 export async function getAllTimePRs(language: 'en' | 'pt' = 'en'): Promise<AllTimePR[]> {
-  const user = await getSessionUserOrThrow();
-
-  const data = await loadAllRows(() => supabase
-    .from('exercises')
-    .select('id, name, name_en, name_pt, muscle_group, muscle_en, muscle_pt, sets!inner(weight, workouts!inner(start_time, end_time))')
-    .eq('sets.workouts.user_id', user.id)
-    .not('sets.workouts.end_time', 'is', null)
-    .gt('sets.weight', 0)
-    .order('weight', { referencedTable: 'sets', ascending: false })
-    .order('workouts(end_time)', { referencedTable: 'sets', ascending: false })
-    .limit(1, { referencedTable: 'sets' }),
-    'Unable to load all-time PRs'
-  );
-
-  const rows = data;
+  await getSessionUserOrThrow();
+  const { data, error } = await supabase.rpc('all_time_personal_records');
+  if (error) throw new Error(`Unable to load all-time PRs: ${error.message}`);
+  if (!Array.isArray(data)) throw new Error('Unable to load all-time PRs: invalid record summary');
+  const rows = data as unknown as PersonalRecordExerciseRow[];
   const bestByExerciseId = new Map<string, AllTimePR>();
 
   for (const exercise of rows) {

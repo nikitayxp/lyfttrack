@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const { PGlite } = require('@electric-sql/pglite');
 
 const original = fs.readFileSync('supabase/migrations/20261026221000_batched_read_models.sql', 'utf8').split('$$;')[0] + '$$;';
-const migration = 'supabase/migrations/20261107090000_record_summary_history_aggregation.sql';
+const migration = 'supabase/migrations/20261107132414_record_summary_history_aggregation.sql';
 const candidate = fs.existsSync(migration) ? fs.readFileSync(migration, 'utf8') : original;
 const owner = '00000000-0000-0000-0000-000000000001';
 const other = '00000000-0000-0000-0000-000000000002';

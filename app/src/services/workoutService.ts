@@ -2033,12 +2033,14 @@ export async function getUserWorkouts(
     .select('workout_id')
     .eq('user_id', viewer.id)
     .in('workout_id', workoutIds),
-    loadAllRows(() => supabase
-    .from('sets')
-    .select('id, workout_id, exercise_id, set_number, weight, reps, rir, set_type, exercises(id, name, name_en, name_pt)')
-    .in('workout_id', workoutIds),
-    'Unable to load workout history sets'
-  ),
+    loadAllRows(count => supabase
+      .from('sets')
+      .select(
+        'id, workout_id, exercise_id, set_number, weight, reps, rir, set_type, exercises(id, name, name_en, name_pt)',
+        { count },
+      )
+      .in('workout_id', workoutIds),
+    'Unable to load workout history sets', { countFirstPage: true }),
     (options?.deferRecords ? Promise.resolve(null) : getWorkoutRecordSummaries(workoutIds)).catch(error => {
       console.warn('[workout-records] Unable to load record counts', {message: toErrorMessage(error)});
       return null;

@@ -191,6 +191,46 @@ test('an in-flight initial comments page preserves a comment published after it 
   assert.equal(app.tree.root.findByType('Comments').props.comments.at(-1).id, 'saved-comment');
 });
 
+test('an empty initial page cannot reset the count of a comment published while it loaded', async t => {
+  let finishPage;
+  const offsets = [];
+  const app = await setup(t, async () => [{ id: 'workout', user_id: 'owner', comments_count: 0 }],
+    (_id, { offset }) => { offsets.push(offset); return new Promise(resolve => { finishPage = resolve; }); });
+  await act(async () => app.tree.root.findByType('WorkoutCard').props.onOpenComments());
+  await act(async () => app.tree.root.findByType('Comments').props.onChangeInput('First comment'));
+  await act(async () => app.tree.root.findByType('Comments').props.onSend());
+  await act(async () => finishPage([]));
+  assert.equal(app.tree.root.findByType('Comments').props.comments.length, 1);
+  assert.equal(app.tree.root.findByType('WorkoutCard').props.commentsCount, 1);
+  assert.equal(app.tree.root.findByType('Comments').props.hasMore, false);
+  assert.deepEqual(offsets, [0]);
+});
+
+test('an empty continuation page counts a comment published while it loaded', async t => {
+  let finishPage;
+  const app = await setup(t, async () => [{ id: 'workout', user_id: 'owner', comments_count: 1 }],
+    async (_id, { offset }) => offset === 0 ? [{ id: 'existing', content: 'Existing' }]
+      : new Promise(resolve => { finishPage = resolve; }));
+  await act(async () => app.tree.root.findByType('WorkoutCard').props.onOpenComments());
+  await act(async () => { void app.tree.root.findByType('Comments').props.onLoadMore(); });
+  await act(async () => app.tree.root.findByType('Comments').props.onChangeInput('New comment'));
+  await act(async () => app.tree.root.findByType('Comments').props.onSend());
+  await act(async () => finishPage([]));
+  assert.equal(app.tree.root.findByType('Comments').props.comments.length, 2);
+  assert.equal(app.tree.root.findByType('WorkoutCard').props.commentsCount, 2);
+  assert.equal(app.tree.root.findByType('Comments').props.hasMore, false);
+});
+
+test('an empty first-page refresh removes stale comments and resets their count', async t => {
+  let requests = 0;
+  const app = await setup(t, async () => [{ id: 'workout', user_id: 'owner', comments_count: 1 }],
+    async () => requests++ === 0 ? [{ id: 'deleted', content: 'Old comment' }] : []);
+  await act(async () => app.tree.root.findByType('WorkoutCard').props.onOpenComments());
+  await act(async () => app.tree.root.findByType('WorkoutCard').props.onOpenComments());
+  assert.equal(app.tree.root.findByType('Comments').props.comments.length, 0);
+  assert.equal(app.tree.root.findByType('WorkoutCard').props.commentsCount, 0);
+});
+
 
 test('both history pages receive records even when the second page completes first', async t => {
   const pending = [];

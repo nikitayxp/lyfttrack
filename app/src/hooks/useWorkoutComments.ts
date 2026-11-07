@@ -35,17 +35,20 @@ export function useWorkoutComments() {
       const page = await getWorkoutComments(workoutId, { limit: PAGE_SIZE, offset });
       if (requests.current.get(workoutId) !== request) return;
       offsets.current.set(workoutId, offset + page.length);
+      const mergePage = (rows: WorkoutCommentWithProfile[] = []) => [...new Map(
+        (append ? [...rows, ...page] : [...page, ...rows.filter(row => !existingIds.has(row.id))])
+          .map(row => [row.id, row]),
+      ).values()];
       setCommentsByWorkoutId(previous => ({
         ...previous,
-        [workoutId]: append
-          ? [...new Map([...(previous[workoutId] ?? []), ...page].map(row => [row.id, row])).values()]
-          // Keep comments published while the first page was in flight. A page
-          // snapshot can predate the successful insert and must not erase it.
-          : [...new Map([...page, ...(previous[workoutId] ?? []).filter(row => !existingIds.has(row.id))].map(row => [row.id, row])).values()],
+        [workoutId]: mergePage(previous[workoutId]),
       }));
       setHasMoreCommentsByWorkoutId(previous => ({ ...previous, [workoutId]: page.length > 0 }));
       if (page.length === 0) {
-        setCommentCountByWorkoutId(previous => ({ ...previous, [workoutId]: offset + page.length }));
+        setCommentCountByWorkoutId(previous => ({
+          ...previous,
+          [workoutId]: Math.max(offset, mergePage(currentComments.current[workoutId]).length),
+        }));
       }
     } catch (error) {
       if (current === latest.current) setCommentsError(getErrorMessage(error));

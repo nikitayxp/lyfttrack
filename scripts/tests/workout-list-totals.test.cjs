@@ -2,15 +2,15 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const createSourceLoader = require('./load-source.cjs');
 
-function setup(cap=1000, rpc = async () => ({data: [], error: null})) {
+function setup(cap=1000, rpc = async () => ({data: [], error: null}), { setRequests = [], setsPerWorkout = 60, exposesCount = true } = {}) {
   const workouts = Array.from({ length: 20 }, (_, i) => ({
     id: `w${i}`, user_id: 'owner', name: `Workout ${i}`,
     start_time: '2026-10-17T09:00:00Z', end_time: '2026-10-17T10:00:00Z',
   }));
-  const sets = Array.from({ length: 1200 }, (_, i) => ({
-    id: `s${String(i).padStart(5, '0')}`, workout_id: workouts[Math.floor(i / 60)].id,
-    exercise_id: 'exercise', set_number: i % 60 + 1, weight: 10, reps: 2,
-    set_type: i % 60 === 0 ? 'warmup' : 'normal',
+  const sets = Array.from({ length: workouts.length * setsPerWorkout }, (_, i) => ({
+    id: `s${String(i).padStart(5, '0')}`, workout_id: workouts[Math.floor(i / setsPerWorkout)].id,
+    exercise_id: 'exercise', set_number: i % setsPerWorkout + 1, weight: 10, reps: 2,
+    set_type: i % setsPerWorkout === 0 ? 'warmup' : 'normal',
     exercises: { id: 'exercise', name: 'Exercise' },
   }));
   const supabase = {
@@ -22,8 +22,9 @@ function setup(cap=1000, rpc = async () => ({data: [], error: null})) {
     from(table) {
       let rows = table === 'workouts' ? [...workouts] : table === 'sets' ? [...sets] : [];
       let from = 0, to = 999;
+      let countMode;
       const query = {
-        select() { return query; },
+        select(_projection, options) { countMode = options?.count; return query; },
         maybeSingle() { return Promise.resolve({data:rows[0] ?? null,error:null}); },
         eq(key, value) { rows = rows.filter(r => r[key] === value); return query; },
         in(key, values) { rows = rows.filter(r => values.includes(r[key])); return query; },
@@ -32,7 +33,12 @@ function setup(cap=1000, rpc = async () => ({data: [], error: null})) {
         order(key, { ascending }) { rows.sort((a, b) => String(a[key]).localeCompare(String(b[key])) * (ascending ? 1 : -1)); return query; },
         range(a, b) { from = a; to = b; return query; },
         limit(n) { to = n - 1; return query; },
-        then(resolve, reject) { return Promise.resolve({ data: rows.slice(from, Math.min(to + 1,from+cap)), error: null }).then(resolve, reject); },
+        then(resolve, reject) {
+          const data = rows.slice(from, Math.min(to + 1, from + cap));
+          const count = exposesCount && countMode === 'exact' ? rows.length : null;
+          if (table === 'sets') setRequests.push([data.length, countMode]);
+          return Promise.resolve({ data, count, error: null }).then(resolve, reject);
+        },
       };
       return query;
     },
@@ -53,6 +59,33 @@ for (const method of ['getFeedWorkouts', 'getUserWorkouts']) {
     }
   });
 }
+
+test('history skips the empty follow-up when the exact count fits in one response', async () => {
+  const setRequests = [];
+  const service = setup(1000, undefined, { setRequests, setsPerWorkout: 12 });
+  const history = await service.getUserWorkouts('owner', 0, 20, undefined, { deferRecords: true });
+  assert.equal(history.length, 20);
+  assert.ok(history.every(workout => workout.totalSets === 12 && workout.totalVolume === 240));
+  assert.deepEqual(setRequests, [[240, 'exact']]);
+});
+
+test('history continues when the response cap is below the exact count', async () => {
+  const setRequests = [];
+  const service = setup(137, undefined, { setRequests, setsPerWorkout: 12 });
+  const history = await service.getUserWorkouts('owner');
+  assert.equal(history.length, 20);
+  assert.ok(history.every(workout => workout.totalSets === 12 && workout.exerciseGroups[0].sets.length === 12));
+  assert.deepEqual(setRequests, [[137, 'exact'], [103, undefined], [0, undefined]]);
+});
+
+test('history keeps paginating when the server omits the exact count', async () => {
+  const setRequests = [];
+  const service = setup(1000, undefined, { setRequests, setsPerWorkout: 12, exposesCount: false });
+  const history = await service.getUserWorkouts('owner');
+  assert.equal(history.length, 20);
+  assert.ok(history.every(workout => workout.totalSets === 12));
+  assert.deepEqual(setRequests, [[240, 'exact'], [0, undefined]]);
+});
 
 test('details keep all sets beyond the project cap',async()=>{
  const service=setup(17);

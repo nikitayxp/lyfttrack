@@ -1,6 +1,6 @@
 import { getSessionUserOrThrow } from '@/services/authUserService';
 import { useWorkoutComments } from '@/hooks/useWorkoutComments';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import {
@@ -25,7 +25,7 @@ import {
 } from '@/services/interactionService';
 import {
   getErrorMessage,
-  getFeedWorkouts,
+  getFeedWorkoutPage,
   type WorkoutFeedItem,
 } from '@/services/workoutService';
 import { WORKOUTS_IMPORTED_EVENT } from '@/services/import/importEvents';
@@ -61,6 +61,8 @@ export default function FeedScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [feedError, setFeedError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const feedEpochRef = useRef(0);
+  const isMountedRef = useRef(true);
   const [optimisticLikeState, setOptimisticLikeState] = useState<Record<string, FeedLikeInteractionState>>({});
   const { commentsByWorkoutId, setCommentsByWorkoutId, commentCountByWorkoutId, setCommentCountByWorkoutId, hasMoreCommentsByWorkoutId, isCommentsLoading, isLoadingMoreComments, commentsError, setCommentsError, loadCommentsForWorkout } = useWorkoutComments();
   const [selectedWorkoutForComments, setSelectedWorkoutForComments] = useState<WorkoutFeedItem | null>(null);
@@ -91,11 +93,26 @@ export default function FeedScreen() {
 
   const loadFeedPage = useCallback(async (pageToLoad: number, mode: 'reset' | 'append') => {
     if (mode === 'reset') {
+      feedEpochRef.current += 1;
       setFeedError(null);
     }
+    const epoch = feedEpochRef.current;
 
     try {
-      const data = await getFeedWorkouts(pageToLoad, FEED_PAGE_SIZE);
+      const { workouts: data, recordCounts } = await getFeedWorkoutPage(pageToLoad, FEED_PAGE_SIZE);
+      const isCurrentPage = epoch === feedEpochRef.current;
+      const originals = new Map(data.map(item => [item.id, item]));
+      void recordCounts.then(counts => {
+        if (!counts || !isCurrentPage || !isMountedRef.current) return;
+        setWorkouts(current => current.map(item => originals.get(item.id) === item
+          ? { ...item, prCount: counts.get(item.id) ?? 0 }
+          : item));
+      }).catch(error => {
+        if (epoch === feedEpochRef.current) {
+          console.warn('[workout-records] Unable to enrich feed', { message: getErrorMessage(error) });
+        }
+      });
+      if (!isCurrentPage) return;
 
       if (mode === 'reset') {
         setWorkouts(data);
@@ -166,7 +183,7 @@ export default function FeedScreen() {
       setCurrentPage(pageToLoad);
       setHasMore(data.length === FEED_PAGE_SIZE);
     } catch (error) {
-      setFeedError(getErrorMessage(error));
+      if (epoch === feedEpochRef.current) setFeedError(getErrorMessage(error));
     }
   }, [setCommentsByWorkoutId, setCommentCountByWorkoutId]);
 
@@ -203,6 +220,7 @@ export default function FeedScreen() {
 
 
   useEffect(() => {
+    isMountedRef.current = true;
     const run = async () => {
       setIsLoading(true);
       await loadFeedPage(0, 'reset');
@@ -210,6 +228,10 @@ export default function FeedScreen() {
     };
 
     void run();
+    return () => {
+      isMountedRef.current = false;
+      feedEpochRef.current += 1;
+    };
   }, [loadFeedPage]);
 
   useEffect(() => {

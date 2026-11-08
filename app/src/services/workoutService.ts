@@ -1391,7 +1391,10 @@ async function resolveExerciseWorkoutIds(
   return workoutIdsMatchingExerciseSearch(search, userIds);
 }
 
-export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeedItem[]> {
+export async function getFeedWorkoutPage(page = 0, limit = 20): Promise<{
+  workouts: WorkoutFeedItem[];
+  recordCounts: Promise<Map<string, number> | null>;
+}> {
   const safePage = Number.isFinite(page) ? Math.max(0, Math.trunc(page)) : 0;
   const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.trunc(limit)) : 20;
   const from = safePage * safeLimit;
@@ -1412,7 +1415,7 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
   }
 
   if (!workouts || workouts.length === 0) {
-    return [];
+    return { workouts: [], recordCounts: Promise.resolve(null) };
   }
 
   const rawWorkouts = workouts as RawWorkoutFeedRow[];
@@ -1420,7 +1423,11 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
   const workoutIds = rawWorkouts.map((w) => w.id);
   const latestCommentsPromise = Promise.resolve(supabase.rpc('latest_workout_comments', { p_workout_ids: workoutIds }))
     .catch(error => ({data: null, error: {message: toErrorMessage(error)}}));
-  const [profileByUserId, {data: ownLikes, error: ownLikesError}, allSets, recordSummaries] = await Promise.all([
+  const recordSummaries = getWorkoutRecordSummaries(workoutIds).catch(error => {
+    console.warn('[workout-records] Unable to load record counts', {message: toErrorMessage(error)});
+    return null;
+  });
+  const [profileByUserId, {data: ownLikes, error: ownLikesError}, allSets] = await Promise.all([
     getPublicProfilesByIds(rawWorkouts.map(workout => workout.user_id)),
     supabase
     .from('workout_likes')
@@ -1433,10 +1440,6 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
     .in('workout_id', workoutIds),
     'Unable to load workout feed sets'
   ),
-    getWorkoutRecordSummaries(workoutIds).catch(error => {
-      console.warn('[workout-records] Unable to load record counts', {message: toErrorMessage(error)});
-      return null;
-    }),
   ]);
   if (ownLikesError) throw new Error(`Unable to load like status: ${ownLikesError.message}`);
   const likedWorkoutIds = new Set((ownLikes ?? []).map(row => row.workout_id));
@@ -1445,20 +1448,6 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
 
   const aggregateByWorkout = aggregateWorkoutFeedSets((allSets as RawWorkoutFeedSetRow[] | null) ?? []);
 
-  const currentSetsByWorkoutId = new Map<string, PersonalRecordSetSample[]>();
-  for (const workout of rawWorkouts) {
-    currentSetsByWorkoutId.set(workout.id, samplesFromFeedAggregate(aggregateByWorkout.get(workout.id)));
-  }
-
-  const prCountByWorkoutId = recordSummaries === null ? null : await resolvePrCountsByWorkoutId(
-      rawWorkouts.map((workout) => ({
-        id: workout.id,
-        user_id: workout.user_id,
-        start_time: workout.start_time,
-      })),
-      currentSetsByWorkoutId, recordSummaries
-    );
-
   const { data: latestCommentsData, error: latestCommentsError } = await latestCommentsPromise;
   if (latestCommentsError) console.warn('[workout-comments] Unable to load previews', {message: latestCommentsError.message});
   const latestCommentByWorkout = new Map<string, { content: string; author: string }>();
@@ -1466,7 +1455,7 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
     latestCommentByWorkout.set(comment.workout_id, { content: comment.content, author: comment.author ?? 'Atleta' });
   }
 
-  return rawWorkouts.map((workout) => {
+  const cards = rawWorkouts.map((workout): WorkoutFeedItem => {
     const aggregate = aggregateByWorkout.get(workout.id);
 
     return {
@@ -1480,7 +1469,7 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
       totalVolume: Math.round(aggregate?.totalVolume ?? 0),
       totalSets: aggregate?.totalSets ?? 0,
       workingSets: aggregate?.workingSets ?? 0,
-      prCount: prCountByWorkoutId === null ? null : prCountByWorkoutId.get(workout.id) ?? 0,
+      prCount: null,
       exerciseNames: aggregate?.exerciseNames ?? [],
       exerciseGroups: aggregate?.exerciseGroups ?? [],
       likes_count: extractRelationCount(workout.workout_likes),
@@ -1489,6 +1478,18 @@ export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeed
       latest_comment: latestCommentByWorkout.get(workout.id) ?? null,
     };
   });
+  const recordCounts = recordSummaries.then(summaries => summaries === null ? null : resolvePrCountsByWorkoutId(
+    rawWorkouts,
+    new Map(cards.map(card => [card.id, samplesFromFeedAggregate(card)])),
+    summaries
+  ));
+  return { workouts: cards, recordCounts };
+}
+
+export async function getFeedWorkouts(page = 0, limit = 20): Promise<WorkoutFeedItem[]> {
+  const { workouts, recordCounts } = await getFeedWorkoutPage(page, limit);
+  const counts = await recordCounts;
+  return counts ? workouts.map(workout => ({ ...workout, prCount: counts.get(workout.id) ?? 0 })) : workouts;
 }
 
 /**

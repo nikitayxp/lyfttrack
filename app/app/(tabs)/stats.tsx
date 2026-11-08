@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { BarChart } from 'react-native-gifted-charts';
+import { BarChart } from '@/components/common/WorkoutCharts';
 import { useTranslation } from 'react-i18next';
 import {
   getWeeklyDashboardMetrics,

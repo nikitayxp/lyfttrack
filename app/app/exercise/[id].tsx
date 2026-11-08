@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { LineChart } from 'react-native-gifted-charts';
+import { LineChart } from '@/components/common/WorkoutCharts';
 import {
   ActivityIndicator,
   Image,
@@ -416,6 +416,9 @@ export default function ExerciseDetailScreen() {
 
   const moveChart = useCallback(
     (direction: -1 | 1) => {
+      const viewport = chartScrollRef.current;
+      if (!viewport) return;
+
       const next = nextChartScrollX(
         lastScrollXRef.current,
         chartScrollMaxRef.current,
@@ -424,7 +427,7 @@ export default function ExerciseDetailScreen() {
       );
 
       lastScrollXRef.current = next;
-      chartScrollRef.current?.scrollTo({ x: next, animated: true });
+      viewport.scrollTo({ x: next, animated: true });
       setChartScrollPosition((current) => ({ ...current, x: next, max: chartScrollMaxRef.current }));
     },
     [plotWidth]
@@ -440,6 +443,7 @@ export default function ExerciseDetailScreen() {
   const startChartHold = useCallback(
     (direction: -1 | 1) => {
       stopChartHold();
+      if (!chartScrollRef.current) return;
       chartPressStartXRef.current = lastScrollXRef.current;
 
       const step = () => {
@@ -470,7 +474,7 @@ export default function ExerciseDetailScreen() {
     }
 
     const button = event.button ?? event.nativeEvent?.button ?? 0;
-    if (button !== 0 || !needsHorizontalScrollRef.current) {
+    if (button !== 0 || !needsHorizontalScrollRef.current || !chartScrollRef.current) {
       return;
     }
 
@@ -486,7 +490,8 @@ export default function ExerciseDetailScreen() {
 
     const onMove = (event: MouseEvent) => {
       const drag = chartDragRef.current;
-      if (!drag) {
+      const viewport = chartScrollRef.current;
+      if (!drag || !viewport) {
         return;
       }
 
@@ -498,7 +503,7 @@ export default function ExerciseDetailScreen() {
         chartScrollMaxRef.current
       );
       lastScrollXRef.current = next;
-      chartScrollRef.current?.scrollTo({ x: next, animated: false });
+      viewport.scrollTo({ x: next, animated: false });
       setChartScrollPosition({ x: next, max: chartScrollMaxRef.current });
     };
 
@@ -522,7 +527,7 @@ export default function ExerciseDetailScreen() {
     const spacing = lineSpacingRef.current;
 
     // No overflow (or already on Recentes): stay pinned to the newest end.
-    if (!needsHorizontalScrollRef.current || max <= 1 || x >= max - 2) {
+    if (!chartScrollRef.current || !needsHorizontalScrollRef.current || max <= 1 || x >= max - 2) {
       pendingAnchorRef.current = { kind: 'end' };
       setPinChartToEnd(true);
       return;

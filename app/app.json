@@ -24,7 +24,7 @@
       "favicon": "./assets/images/logo.jpg"
     },
     "plugins": [
-      "expo-router",
+      ["expo-router", { "asyncRoutes": { "web": "production", "default": false } }],
       [
         "expo-image-picker",
         {

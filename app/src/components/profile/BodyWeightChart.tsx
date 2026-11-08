@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { LineChart } from 'react-native-gifted-charts';
+import { LineChart } from '@/components/common/WorkoutCharts';
 import { Colors } from '@/constants/theme';
 import { formatExerciseAxisDate, formatExerciseHistoryDate } from '@/services/statsService';
 import {

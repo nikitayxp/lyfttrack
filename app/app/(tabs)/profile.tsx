@@ -233,7 +233,7 @@ export default function ProfileScreen() {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [performanceError, setPerformanceError] = useState<string | null>(null);
 
-  const [isBootstrapping, setIsBootstrapping] = useState(true);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [isLoadingPerformance, setIsLoadingPerformance] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -241,11 +241,12 @@ export default function ProfileScreen() {
   const [weightInput, setWeightInput] = useState('');
   const [isSavingWeight, setIsSavingWeight] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
+  const [hasMore, setHasMore] = useState(false);
   const [historySearchInput, setHistorySearchInput] = useState('');
   const [historySearch, setHistorySearch] = useState('');
   const [historyPeriodKey, setHistoryPeriodKey] = useState<string | null>(null);
   const [historyMonths, setHistoryMonths] = useState<WorkoutMonthBucket[]>([]);
+  const bootstrapRequestRef = useRef(0);
   const historyFilterRef = useRef<WorkoutListFilter>({});
   const historyRequestRef = useRef(0);
   const historyRecordsEpochRef = useRef(0);
@@ -257,10 +258,6 @@ export default function ProfileScreen() {
   const [isSendingComment, setIsSendingComment] = useState(false);
   const [commentInputValue, setCommentInputValue] = useState('');
   const [currentCommentAuthor, setCurrentCommentAuthor] = useState<CommentAuthorProfile | null>(null);
-
-  const targetUserId = useMemo(() => {
-    return profile?.id ?? authUserId;
-  }, [authUserId, profile?.id]);
 
   historyFilterRef.current = {
     periodKey: historyPeriodKey,
@@ -316,6 +313,7 @@ export default function ProfileScreen() {
     const filter = { ...historyFilterRef.current };
     lastHistoryFilterRef.current = JSON.stringify([userId, filter.periodKey ?? null, filter.search ?? '']);
     if (mode === 'reset') {
+      setIsLoadingHistory(true);
       setHistoryError(null);
     }
 
@@ -407,7 +405,12 @@ export default function ProfileScreen() {
       setCurrentPage(pageToLoad);
       setHasMore(data.length === HISTORY_PAGE_SIZE);
     } catch (error) {
-      if (request === historyRequestRef.current) setHistoryError(getErrorMessage(error));
+      if (request === historyRequestRef.current) {
+        setHistoryError(getErrorMessage(error));
+        if (mode === 'reset') setHasMore(false);
+      }
+    } finally {
+      if (mode === 'reset' && request === historyRequestRef.current) setIsLoadingHistory(false);
     }
   }, [setCommentsByWorkoutId, setCommentCountByWorkoutId]);
 
@@ -438,37 +441,46 @@ export default function ProfileScreen() {
   }, [uiLanguage]);
 
   const bootstrap = useCallback(async () => {
-    setIsBootstrapping(true);
+    const request = ++bootstrapRequestRef.current;
     setIsLoadingPerformance(true);
     setProfileError(null);
-    setHistoryError(null);
     setPerformanceError(null);
 
-    try {
-      const [authUser, profileData] = await Promise.all([getSessionUserOrThrow(), getProfile()]);
+    const authUserRequest = getSessionUserOrThrow();
+    const profileRequest = getProfile().then(
+      data => ({ data, error: null }),
+      error => ({ data: null, error: getErrorMessage(error) }),
+    );
 
-      const resolvedAuthUserId = authUser.id;
-      const resolvedUserId = profileData.id ?? resolvedAuthUserId;
-
-      setAuthUserId(resolvedAuthUserId);
-      setEmail(authUser.email ?? '');
-      setProfile(profileData);
-
-      if (!resolvedUserId) {
-        throw new Error(t('profile.unknownUserId'));
+    const authUser = await authUserRequest.catch(error => {
+      if (request === bootstrapRequestRef.current) {
+        setProfileError(getErrorMessage(error));
+        setIsLoadingHistory(false);
       }
+      return null;
+    });
+    if (!authUser || request !== bootstrapRequestRef.current) return;
 
+    const initialHistoryRequest = loadUserHistoryPage(authUser.id, 0, 'reset');
+    setAuthUserId(authUser.id);
+    setEmail(authUser.email ?? '');
+    try {
       await Promise.all([
-        loadUserHistoryPage(resolvedUserId, 0, 'reset'),
+        initialHistoryRequest,
+        profileRequest.then(({ data, error }) => {
+          if (request !== bootstrapRequestRef.current) return;
+          if (data) setProfile(data);
+          if (error) setProfileError(error);
+        }),
         loadPerformanceData(),
-        getUserWorkoutMonthBuckets(resolvedUserId).then(setHistoryMonths),
+        getUserWorkoutMonthBuckets(authUser.id).then(months => {
+          if (request === bootstrapRequestRef.current) setHistoryMonths(months);
+        }),
       ]);
     } catch (error) {
-      setProfileError(getErrorMessage(error));
-    } finally {
-      setIsBootstrapping(false);
+      if (request === bootstrapRequestRef.current) setProfileError(getErrorMessage(error));
     }
-  }, [loadPerformanceData, loadUserHistoryPage, t]);
+  }, [loadPerformanceData, loadUserHistoryPage]);
 
   useEffect(() => {
     const handle = setTimeout(() => {
@@ -479,19 +491,23 @@ export default function ProfileScreen() {
   }, [historySearchInput]);
 
   useEffect(() => {
-    if (!targetUserId) {
+    if (!authUserId) {
       return;
     }
-    const key = JSON.stringify([targetUserId, historyPeriodKey, historySearch]);
+    const key = JSON.stringify([authUserId, historyPeriodKey, historySearch]);
     if (lastHistoryFilterRef.current === key) return;
-    void loadUserHistoryPage(targetUserId, 0, 'reset');
-  }, [historyPeriodKey, historySearch, loadUserHistoryPage, targetUserId]);
+    void loadUserHistoryPage(authUserId, 0, 'reset');
+  }, [historyPeriodKey, historySearch, loadUserHistoryPage, authUserId]);
 
   const bootstrapRef = useRef(bootstrap);
   bootstrapRef.current = bootstrap;
   useEffect(() => {
     void bootstrapRef.current();
-    return () => { historyRequestRef.current += 1; historyRecordsEpochRef.current += 1; };
+    return () => {
+      bootstrapRequestRef.current += 1;
+      historyRequestRef.current += 1;
+      historyRecordsEpochRef.current += 1;
+    };
   }, []);
 
   const handleDeleteWorkout = useCallback(
@@ -548,32 +564,37 @@ export default function ProfileScreen() {
   }, [bootstrap]);
 
   const onRefresh = useCallback(async () => {
-    if (!targetUserId) {
+    if (!authUserId || isLoadingHistory || isRefreshing) {
       return;
     }
 
     setIsRefreshing(true);
-    await Promise.all([
-      loadUserHistoryPage(targetUserId, 0, 'reset'),
-      loadPerformanceData(),
-      getUserWorkoutMonthBuckets(targetUserId).then(setHistoryMonths),
-    ]);
-    setIsRefreshing(false);
-  }, [loadPerformanceData, loadUserHistoryPage, targetUserId]);
+    try {
+      await Promise.all([
+        loadUserHistoryPage(authUserId, 0, 'reset'),
+        loadPerformanceData(),
+        getUserWorkoutMonthBuckets(authUserId).then(setHistoryMonths),
+      ]);
+    } catch (error) {
+      setProfileError(getErrorMessage(error));
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [authUserId, isLoadingHistory, isRefreshing, loadPerformanceData, loadUserHistoryPage]);
 
   const onEndReached = useCallback(async () => {
-    if (!targetUserId || isBootstrapping || isRefreshing || isLoadingMore || !hasMore) {
+    if (!authUserId || isLoadingHistory || isRefreshing || isLoadingMore || !hasMore) {
       return;
     }
 
     setIsLoadingMore(true);
 
     try {
-      await loadUserHistoryPage(targetUserId, currentPage + 1, 'append');
+      await loadUserHistoryPage(authUserId, currentPage + 1, 'append');
     } finally {
       setIsLoadingMore(false);
     }
-  }, [currentPage, hasMore, isBootstrapping, isLoadingMore, isRefreshing, loadUserHistoryPage, targetUserId]);
+  }, [authUserId, currentPage, hasMore, isLoadingHistory, isLoadingMore, isRefreshing, loadUserHistoryPage]);
 
   const ensureCurrentCommentAuthor = useCallback(async (): Promise<CommentAuthorProfile | null> => {
     if (currentCommentAuthor) {
@@ -1147,7 +1168,7 @@ export default function ProfileScreen() {
   ]);
 
   const emptyComponent = useMemo(() => {
-    if (isBootstrapping) {
+    if (isLoadingHistory) {
       return <SkeletonCard lines={3} />;
     }
 
@@ -1186,7 +1207,7 @@ export default function ProfileScreen() {
         descriptionStyle={styles.statusText}
       />
     );
-  }, [handleStartFreeWorkout, historyError, historyPeriodKey, historySearch, isBootstrapping, t]);
+  }, [handleStartFreeWorkout, historyError, historyPeriodKey, historySearch, isLoadingHistory, t]);
 
   const selectedWorkoutComments = selectedWorkoutForComments
     ? commentsByWorkoutId[selectedWorkoutForComments.id] ?? []

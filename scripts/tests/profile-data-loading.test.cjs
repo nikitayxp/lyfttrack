@@ -6,7 +6,9 @@ const loadSource = require('./load-source.cjs');
 
 global.IS_REACT_ACT_ENVIRONMENT = true;
 
-async function setup(t, resolveHistory = async () => [], resolveComments = async () => [], resolveRecords = async () => new Map()) {
+async function setup(t, resolveHistory = async () => [], resolveComments = async () => [], resolveRecords = async () => new Map(),
+  resolveProfile = async id => ({ id, username: 'Owner' }),
+  resolveSession = async id => ({ id, email: 'test@example.test' })) {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   let profileCalls = 0;
   let account = 'owner';
@@ -21,8 +23,8 @@ async function setup(t, resolveHistory = async () => [], resolveComments = async
       TouchableOpacity: 'Button', View: 'View', StyleSheet: { create: x => x },
       Animated: { Value: class {}, View: 'View', loop: value, sequence: value, timing: value },
       DeviceEventEmitter: { addListener: () => ({ remove() {} }) },
-      FlatList: ({ data, renderItem, ListHeaderComponent, ListEmptyComponent, ListFooterComponent, onEndReached }) => React.createElement('HistoryList', { onEndReached },
-        ListHeaderComponent, data.map(item => React.createElement(React.Fragment, { key: item.id }, renderItem({ item }))), !data.length ? ListEmptyComponent : null, ListFooterComponent),
+      FlatList: ({ data, renderItem, ListHeaderComponent, ListEmptyComponent, ListFooterComponent, onEndReached, refreshControl }) => React.createElement('HistoryList', { onEndReached },
+        ListHeaderComponent, data.map(item => React.createElement(React.Fragment, { key: item.id }, renderItem({ item }))), !data.length ? ListEmptyComponent : null, ListFooterComponent, refreshControl),
     },
     'expo-router': { router: {}, useFocusEffect: callback => React.useEffect(() => callback(), [callback]) },
     '@expo/vector-icons': { Ionicons: 'Icon' },
@@ -32,8 +34,11 @@ async function setup(t, resolveHistory = async () => [], resolveComments = async
     '@/context/ToastContext': { useAppToast: () => ({ showToast }) },
     '@/context/WorkoutContext': { useWorkoutContext: () => ({ activeExercises: [] }) },
     '@/hooks/useWorkoutDelete': { useWorkoutDelete: () => ({ confirmAndDelete: async () => false }) },
-    '@/services/authUserService': { getAuthenticatedUserOrThrow: async () => ({ id: account, email: 'test@example.test' }), getSessionUserOrThrow: async () => ({ id: account, email: 'test@example.test' }) },
-    '@/services/profileService': { getProfile: async () => { profileCalls++; return { id: account, username: 'Owner' }; } },
+    '@/services/authUserService': {
+      getAuthenticatedUserOrThrow: async () => ({ id: account, email: 'test@example.test' }),
+      getSessionUserOrThrow: () => resolveSession(account),
+    },
+    '@/services/profileService': { getProfile: async () => { profileCalls++; return resolveProfile(account); } },
     '@/services/measurementService': { getWeightHistory: async () => [] },
     '@/services/statsService': { getAllTimePRs: async () => [] },
     '@/services/workoutService': {
@@ -48,7 +53,7 @@ async function setup(t, resolveHistory = async () => [], resolveComments = async
     },
     '@/components/feed/FeedCommentsModal': { FeedCommentsModal: props => React.createElement('Comments', props) },
     '@/components/feed/WorkoutFeedCard': { WorkoutFeedCard: props => React.createElement('WorkoutCard', props) },
-    '@/components/common/EmptyState': { EmptyState: () => null },
+    '@/components/common/EmptyState': { EmptyState: props => React.createElement('EmptyState', props) },
     '@/components/profile/TrophyRoom': { TrophyRoom: () => null, TrophyRoomPreview: () => null },
     '@/components/profile/BodyWeightChart': { BodyWeightChart: () => null },
     '@/components/history/HistoryJumpBar': { HistoryJumpBar: props => React.createElement('HistoryFilter', props) },
@@ -60,6 +65,7 @@ async function setup(t, resolveHistory = async () => [], resolveComments = async
   t.after(async () => { await act(async () => tree.unmount()); });
   return { tree, histories,
     async nextPage() { await act(async () => tree.root.findByType('HistoryList').props.onEndReached()); },
+    async refresh() { await act(async () => tree.root.findByType('Refresh').props.onRefresh()); },
     async switchAccount(id) {
       await act(async () => tree.update(null));
       account = id;
@@ -75,6 +81,98 @@ test('the initial profile focus shares the bootstrap profile and history request
   const app = await setup(t);
   assert.equal(app.profileCalls, 1);
   assert.equal(app.histories.length, 1);
+});
+
+test('workout history starts and shows cards while the profile card is still pending', async t => {
+  let finishProfile;
+  const app = await setup(t, async (_filter, _page, owner) => [{ id: 'early-workout', user_id: owner }],
+    undefined, undefined, id => new Promise(resolve => {
+      finishProfile = () => resolve({ id, username: 'Owner' });
+    }));
+  assert.equal(app.profileCalls, 1);
+  assert.equal(app.histories.length, 1);
+  assert.equal(app.tree.root.findByType('WorkoutCard').props.workout.id, 'early-workout');
+  await act(async () => finishProfile());
+  assert.equal(app.histories.length, 1, 'loading the profile card must not repeat the history');
+});
+
+test('an old bootstrap cannot replace another account after both reads finish late', async t => {
+  let finishProfile;
+  let finishHistory;
+  const app = await setup(t, (_filter, _page, id) => id === 'owner'
+    ? new Promise(resolve => { finishHistory = () => resolve([{ id: 'old-workout', user_id: id }]); })
+    : Promise.resolve([{ id: 'new-workout', user_id: id }]),
+  undefined, undefined, id => id === 'owner'
+    ? new Promise(resolve => { finishProfile = () => resolve({ id, username: 'Old Account' }); })
+    : Promise.resolve({ id, username: 'New Account' }));
+  assert.equal(typeof finishHistory, 'function');
+  await app.switchAccount('other');
+  assert.equal(app.tree.root.findByType('WorkoutCard').props.workout.id, 'new-workout');
+  await act(async () => { finishProfile(); finishHistory(); });
+  assert.equal(app.tree.root.findByType('WorkoutCard').props.workout.id, 'new-workout');
+  assert.match(JSON.stringify(app.tree.toJSON()), /New Account/);
+  assert.doesNotMatch(JSON.stringify(app.tree.toJSON()), /Old Account/);
+});
+
+test('a failed profile card still allows the signed-in account to view its history', async t => {
+  const app = await setup(t, async (_filter, _page, id) => [{ id: 'available-workout', user_id: id }],
+    undefined, undefined, async () => { throw new Error('Profile unavailable'); });
+  assert.equal(app.tree.root.findByType('WorkoutCard').props.workout.id, 'available-workout');
+  assert.match(JSON.stringify(app.tree.toJSON()), /Profile unavailable/);
+});
+
+test('history shows its empty state while the profile details are pending', async t => {
+  const app = await setup(t, undefined, undefined, undefined, () => new Promise(() => {}));
+  assert.equal(app.tree.root.findByType('EmptyState').props.title, 'profile.noWorkoutsTitle');
+});
+
+test('history can load its second page while the profile details are pending', async t => {
+  const app = await setup(t, async (_filter, page, id) => page === 0
+    ? Array.from({ length: 20 }, (_, index) => ({ id: `first-${index}`, user_id: id }))
+    : [{ id: 'next-page', user_id: id }],
+  undefined, undefined, () => new Promise(() => {}));
+  await app.nextPage();
+  assert.equal(app.histories.length, 2);
+  assert.ok(app.tree.root.findAllByType('WorkoutCard').some(card => card.props.workout.id === 'next-page'));
+});
+
+test('a session resolved after an account switch cannot start the old history request', async t => {
+  let finishOldSession;
+  const requestedAccounts = [];
+  const app = await setup(t, async (_filter, _page, id) => {
+    requestedAccounts.push(id);
+    return [];
+  }, undefined, undefined, undefined, id => id === 'owner'
+    ? new Promise(resolve => { finishOldSession = () => resolve({ id }); })
+    : Promise.resolve({ id }));
+
+  await app.switchAccount('other');
+  await act(async () => finishOldSession());
+  assert.deepEqual(requestedAccounts, ['other']);
+});
+
+test('refresh waits for the in-flight history reset but can run while profile details load', async t => {
+  let finishHistory;
+  let historyRequests = 0;
+  const app = await setup(t, () => ++historyRequests === 1
+    ? new Promise(resolve => { finishHistory = () => resolve([]); })
+    : Promise.resolve([]),
+  undefined, undefined, () => new Promise(() => {}));
+  await app.refresh();
+  assert.equal(historyRequests, 1);
+  await act(async () => finishHistory());
+  await app.refresh();
+  assert.equal(historyRequests, 2);
+});
+
+test('a failed history reset cannot skip to the second page', async t => {
+  const app = await setup(t, async (_filter, page, id) => {
+    if (page === 0) throw new Error('First page unavailable');
+    return [{ id: 'older-workout', user_id: id }];
+  }, undefined, undefined, () => new Promise(() => {}));
+  await app.nextPage();
+  assert.equal(app.histories.length, 1);
+  assert.equal(app.tree.root.findByType('EmptyState').props.title, 'profile.historyUnavailableTitle');
 });
 
 test('profile shows cards while records are pending and enriches them later', async t => {

@@ -7,6 +7,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  SectionList,
   StyleSheet,
   Text,
   TextInput,
@@ -848,11 +849,11 @@ export default function ActiveWorkout() {
   // Recentes primeiro, resto do catalogo a seguir. So na vista por omissao:
   // ao pesquisar, o utilizador ja disse o que procura e mandar os recentes
   // para cima da lista so atrapalha a leitura dos resultados.
-  const pickerSections = useMemo(() => {
+  const pickerSections = useMemo<{ key: string; titleKey: string | null; data: ExerciseRow[] }[]>(() => {
     const hasQuery = exercisePickerQuery.trim().length > 0;
 
     if (hasQuery || selectedMuscleFilter === 'recent') {
-      return [{ key: 'results', titleKey: null, items: filteredCatalogExercises }];
+      return [{ key: 'results', titleKey: null, data: filteredCatalogExercises }];
     }
 
     const visibleById = new Map(filteredCatalogExercises.map((exercise) => [exercise.id, exercise]));
@@ -864,15 +865,15 @@ export default function ActiveWorkout() {
       });
 
     if (recentItems.length === 0) {
-      return [{ key: 'all', titleKey: null, items: filteredCatalogExercises }];
+      return [{ key: 'all', titleKey: null, data: filteredCatalogExercises }];
     }
 
     const recentIdSet = new Set(recentItems.map((exercise) => exercise.id));
     const rest = filteredCatalogExercises.filter((exercise) => !recentIdSet.has(exercise.id));
 
     return [
-      { key: 'recent', titleKey: 'workout.pickerRecentSection', items: recentItems },
-      { key: 'all', titleKey: 'workout.pickerAllSection', items: rest },
+      { key: 'recent', titleKey: 'workout.pickerRecentSection', data: recentItems },
+      { key: 'all', titleKey: 'workout.pickerAllSection', data: rest },
     ];
   }, [exercisePickerQuery, filteredCatalogExercises, recentExerciseIds, selectedMuscleFilter]);
 
@@ -1513,14 +1514,63 @@ export default function ActiveWorkout() {
                 })}
               </ScrollView>
 
-              <ScrollView
+              <SectionList
+                sections={isLoadingExercises || exerciseLoadError || filteredCatalogExercises.length === 0 ? [] : pickerSections}
+                keyExtractor={(exercise) => exercise.id}
                 style={styles.modalList}
                 contentContainerStyle={styles.modalListContent}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
                 nestedScrollEnabled
-              >
-                {isLoadingExercises ? (
+                stickySectionHeadersEnabled={false}
+                initialNumToRender={10}
+                maxToRenderPerBatch={10}
+                windowSize={5}
+                renderSectionHeader={({ section }) => section.titleKey ? (
+                  <Text style={styles.modalSectionLabel}>{t(section.titleKey)}</Text>
+                ) : null}
+                renderItem={({ item: exercise }) => {
+                  const exerciseLabel = getLocalizedExerciseName(exercise, language);
+                  return (
+                    <View style={styles.modalExerciseRow}>
+                      <TouchableOpacity
+                        style={styles.modalExerciseMain}
+                        activeOpacity={ACTIVE_OPACITY}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('accessibility.openExerciseDetails', {
+                          name: exerciseLabel,
+                          defaultValue: `Open ${exerciseLabel} details`,
+                        })}
+                        onPress={() => openExerciseDetailsFromPicker(exercise)}
+                      >
+                        <ExerciseThumbnail exercise={exercise} size={34} />
+                        <View style={styles.modalExerciseTextWrap}>
+                          <Text style={styles.modalExerciseName}>{exerciseLabel}</Text>
+                          <Text style={styles.modalExerciseMeta}>
+                            {getExerciseMuscleLabel(exercise)} - {getExerciseEquipmentLabel(exercise)}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.modalExerciseAddButton}
+                        activeOpacity={ACTIVE_OPACITY}
+                        hitSlop={HIT_SLOP}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('accessibility.addSpecificExercise', {
+                          name: exerciseLabel,
+                          defaultValue: 'Add exercise',
+                        })}
+                        onPress={() => {
+                          addExercise(exercise);
+                          closeExercisePicker();
+                        }}
+                      >
+                        <Ionicons name="add-circle-outline" size={26} color={palette.accent} />
+                      </TouchableOpacity>
+                    </View>
+                  );
+                }}
+                ListEmptyComponent={isLoadingExercises ? (
                   <View style={styles.modalStatusContainer}>
                     <ActivityIndicator size="small" color={palette.accent} />
                     <Text style={styles.modalStatusText}>{t('workout.loadingExerciseCatalog')}</Text>
@@ -1567,63 +1617,13 @@ export default function ActiveWorkout() {
                         : t('workout.createExercisesHint')}
                     </Text>
                   </View>
-                ) : filteredCatalogExercises.length === 0 ? (
+                ) : (
                   <View style={styles.modalStatusContainer}>
                     <Text style={styles.modalStatusTitle}>{t('exercise.emptySearchTitle')}</Text>
                     <Text style={styles.modalStatusText}>{t('exercise.emptySearchSubtitle')}</Text>
                   </View>
-                ) : (
-                  pickerSections.map((section) => (
-                    <View key={section.key}>
-                      {section.titleKey ? (
-                        <Text style={styles.modalSectionLabel}>{t(section.titleKey)}</Text>
-                      ) : null}
-
-                      {section.items.map((exercise) => {
-                    const exerciseLabel = getLocalizedExerciseName(exercise, language);
-                    return (
-                      <View key={exercise.id} style={styles.modalExerciseRow}>
-                        <TouchableOpacity
-                          style={styles.modalExerciseMain}
-                          activeOpacity={ACTIVE_OPACITY}
-                          accessibilityRole="button"
-                          accessibilityLabel={t('accessibility.openExerciseDetails', {
-                            name: exerciseLabel,
-                            defaultValue: `Open ${exerciseLabel} details`,
-                          })}
-                          onPress={() => openExerciseDetailsFromPicker(exercise)}
-                        >
-                          <ExerciseThumbnail exercise={exercise} size={34} />
-                          <View style={styles.modalExerciseTextWrap}>
-                            <Text style={styles.modalExerciseName}>{exerciseLabel}</Text>
-                            <Text style={styles.modalExerciseMeta}>
-                              {getExerciseMuscleLabel(exercise)} - {getExerciseEquipmentLabel(exercise)}
-                            </Text>
-                          </View>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.modalExerciseAddButton}
-                          activeOpacity={ACTIVE_OPACITY}
-                          hitSlop={HIT_SLOP}
-                          accessibilityRole="button"
-                          accessibilityLabel={t('accessibility.addSpecificExercise', {
-                            name: exerciseLabel,
-                            defaultValue: 'Add exercise',
-                          })}
-                          onPress={() => {
-                            addExercise(exercise);
-                            closeExercisePicker();
-                          }}
-                        >
-                          <Ionicons name="add-circle-outline" size={26} color={palette.accent} />
-                        </TouchableOpacity>
-                      </View>
-                    );
-                      })}
-                    </View>
-                  ))
                 )}
-              </ScrollView>
+              />
         </SafeAreaView>
       </DismissibleBottomSheet>
 

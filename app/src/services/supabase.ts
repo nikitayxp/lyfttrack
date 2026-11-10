@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import { Database } from '@/types/database';
 import { isIpHostname, isLoopbackHostname } from '@/utils/hostname';
 import '@/utils/authCrypto';
+import { createSupabaseReadFetch } from '@/services/supabaseReadFetch';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -149,6 +150,7 @@ function createAuthStorage(): SupabaseStorage | undefined {
 const authStorage = createAuthStorage();
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  global: { fetch: createSupabaseReadFetch(supabaseUrl) },
   auth: {
     ...(authStorage ? { storage: authStorage } : {}),
     flowType: 'pkce',

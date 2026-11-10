@@ -35,6 +35,7 @@ function setup() {
           ids = values;
           return query;
         },
+        or() { return query; },
         order() { return query; },
         range() { return query; },
         gt(_column, value) { cursor = value; return query; },

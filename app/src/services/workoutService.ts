@@ -972,9 +972,17 @@ export async function getExercisesCatalog(filters: ExerciseCatalogFilters = {}):
   const equipmentFilter = filters.equipment ?? 'all';
 
   const user = await getSessionUserOrThrow();
-  const rows = await exerciseCatalogCache.get(user.id, 'catalog', () => loadAllRows(() =>
-    supabase.from('exercises').select('id,name,name_en,name_pt,aliases,listed,muscle_group,muscle_en,muscle_pt,equipment,is_custom,image_url,description,created_by'),
-    'Unable to load exercises'
+  const catalogKey = filters.includeUnlisted ? 'catalog:all' : 'catalog:visible';
+  const builtInFilter = filters.includeUnlisted
+    ? 'is_custom.eq.false'
+    : 'and(is_custom.eq.false,listed.eq.true)';
+  const ownedCustomFilter = `and(is_custom.eq.true,created_by.eq.${user.id})`;
+  const rows = await exerciseCatalogCache.get(user.id, catalogKey, () => loadAllRows(count =>
+    supabase.from('exercises')
+      .select('id,name,name_en,name_pt,aliases,listed,muscle_group,muscle_en,muscle_pt,equipment,is_custom,image_url,description,created_by', { count })
+      .or(`${builtInFilter},${ownedCustomFilter}`),
+    'Unable to load exercises',
+    { countFirstPage: !filters.includeUnlisted }
   ));
 
   const filteredRows = rows.filter(

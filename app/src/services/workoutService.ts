@@ -973,7 +973,7 @@ export async function getExercisesCatalog(filters: ExerciseCatalogFilters = {}):
 
   const user = await getSessionUserOrThrow();
   const rows = await exerciseCatalogCache.get(user.id, 'catalog', () => loadAllRows(() =>
-    supabase.from('exercises').select('id,name,name_en,name_pt,aliases,listed,muscle_group,muscle_en,muscle_pt,equipment,is_custom,image_url,description,created_at,created_by'),
+    supabase.from('exercises').select('id,name,name_en,name_pt,aliases,listed,muscle_group,muscle_en,muscle_pt,equipment,is_custom,image_url,description,created_by'),
     'Unable to load exercises'
   ));
 
@@ -1003,7 +1003,7 @@ export async function getExercisesByIds(exerciseIds: string[]): Promise<Exercise
   }
 
   return loadAllRows(() => supabase.from('exercises')
-    .select('id,name,name_en,name_pt,aliases,listed,muscle_group,muscle_en,muscle_pt,equipment,is_custom,image_url,description,created_at,created_by')
+    .select('id,name,name_en,name_pt,aliases,listed,muscle_group,muscle_en,muscle_pt,equipment,is_custom,image_url,description,created_by')
     .in('id', normalizedIds), 'Unable to load exercises');
 }
 

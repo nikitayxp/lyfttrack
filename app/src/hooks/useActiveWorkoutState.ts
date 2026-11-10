@@ -253,12 +253,14 @@ function draftToActiveExercise(draft: DraftExercise): ActiveExercise {
     muscle_en: null,
     muscle_pt: null,
     equipment: draft.equipment,
-    // required DB fields that aren't stored in the draft
+    // Catalog metadata is not stored in the draft.
     created_by: null,
-    created_at: new Date().toISOString(),
     is_custom: false,
     description: null,
-  } as ExerciseRow;
+    image_url: null,
+    aliases: [],
+    listed: true,
+  };
 
   return {
     id: draft.id,

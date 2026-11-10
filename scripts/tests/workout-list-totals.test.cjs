@@ -60,32 +60,40 @@ for (const method of ['getFeedWorkouts', 'getUserWorkouts']) {
   });
 }
 
-test('history skips the empty follow-up when the exact count fits in one response', async () => {
-  const setRequests = [];
-  const service = setup(1000, undefined, { setRequests, setsPerWorkout: 12 });
-  const history = await service.getUserWorkouts('owner', 0, 20, undefined, { deferRecords: true });
-  assert.equal(history.length, 20);
-  assert.ok(history.every(workout => workout.totalSets === 12 && workout.totalVolume === 240));
-  assert.deepEqual(setRequests, [[240, 'exact']]);
-});
+for (const method of ['getFeedWorkoutPage', 'getUserWorkouts']) {
+  test(`${method} skips the empty follow-up when the exact count fits in one response`, async () => {
+    const setRequests = [];
+    const service = setup(1000, undefined, { setRequests, setsPerWorkout: 12 });
+    const history = method === 'getFeedWorkoutPage'
+      ? (await service.getFeedWorkoutPage()).workouts
+      : await service.getUserWorkouts('owner', 0, 20, undefined, { deferRecords: true });
+    assert.equal(history.length, 20);
+    assert.ok(history.every(workout => workout.totalSets === 12 && workout.totalVolume === 240));
+    assert.deepEqual(setRequests, [[240, 'exact']]);
+  });
 
-test('history continues when the response cap is below the exact count', async () => {
-  const setRequests = [];
-  const service = setup(137, undefined, { setRequests, setsPerWorkout: 12 });
-  const history = await service.getUserWorkouts('owner');
-  assert.equal(history.length, 20);
-  assert.ok(history.every(workout => workout.totalSets === 12 && workout.exerciseGroups[0].sets.length === 12));
-  assert.deepEqual(setRequests, [[137, 'exact'], [103, undefined], [0, undefined]]);
-});
+  test(`${method} continues when the response cap is below the exact count`, async () => {
+    const setRequests = [];
+    const service = setup(137, undefined, { setRequests, setsPerWorkout: 12 });
+    const history = method === 'getFeedWorkoutPage'
+      ? (await service.getFeedWorkoutPage()).workouts
+      : await service.getUserWorkouts('owner');
+    assert.equal(history.length, 20);
+    assert.ok(history.every(workout => workout.totalSets === 12 && workout.exerciseGroups[0].sets.length === 12));
+    assert.deepEqual(setRequests, [[137, 'exact'], [103, undefined], [0, undefined]]);
+  });
 
-test('history keeps paginating when the server omits the exact count', async () => {
-  const setRequests = [];
-  const service = setup(1000, undefined, { setRequests, setsPerWorkout: 12, exposesCount: false });
-  const history = await service.getUserWorkouts('owner');
-  assert.equal(history.length, 20);
-  assert.ok(history.every(workout => workout.totalSets === 12));
-  assert.deepEqual(setRequests, [[240, 'exact'], [0, undefined]]);
-});
+  test(`${method} keeps paginating when the server omits the exact count`, async () => {
+    const setRequests = [];
+    const service = setup(1000, undefined, { setRequests, setsPerWorkout: 12, exposesCount: false });
+    const history = method === 'getFeedWorkoutPage'
+      ? (await service.getFeedWorkoutPage()).workouts
+      : await service.getUserWorkouts('owner');
+    assert.equal(history.length, 20);
+    assert.ok(history.every(workout => workout.totalSets === 12));
+    assert.deepEqual(setRequests, [[240, 'exact'], [0, undefined]]);
+  });
+}
 
 test('details keep all sets beyond the project cap',async()=>{
  const service=setup(17);

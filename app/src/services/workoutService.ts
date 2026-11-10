@@ -1434,11 +1434,11 @@ export async function getFeedWorkoutPage(page = 0, limit = 20): Promise<{
     .select('workout_id')
     .eq('user_id', user.id)
     .in('workout_id', workoutIds),
-    loadAllRows(() => supabase
+    loadAllRows(count => supabase
     .from('sets')
-    .select('id, workout_id, exercise_id, set_number, weight, reps, rir, set_type, exercises(id, name, name_en, name_pt)')
+    .select('id, workout_id, exercise_id, set_number, weight, reps, rir, set_type, exercises(id, name, name_en, name_pt)', { count })
     .in('workout_id', workoutIds),
-    'Unable to load workout feed sets'
+    'Unable to load workout feed sets', { countFirstPage: true }
   ),
   ]);
   if (ownLikesError) throw new Error(`Unable to load like status: ${ownLikesError.message}`);

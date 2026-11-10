@@ -49,3 +49,29 @@ test('the workout catalogue leaves exercise rows to the virtualized viewport', a
   assert.equal(list.props.sections.flatMap(s => s.data).length, 300);
   assert.equal(tree.root.findAllByType('Thumbnail').length, 3);
 });
+test('the active workout picker delegates row rendering to a bounded SectionList', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const ts = require('typescript');
+  const filename = path.resolve(__dirname, '../../app/app/workout/active.tsx');
+  const source = ts.createSourceFile(filename, fs.readFileSync(filename, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let picker;
+  function visit(node) {
+    if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node))
+      && node.tagName.getText(source) === 'SectionList') {
+      const attributes = node.attributes.properties.filter(ts.isJsxAttribute);
+      if (attributes.some(attr => attr.name.getText(source) === 'sections' && attr.initializer?.getText(source).includes('pickerSections'))) {
+        picker = new Map(attributes.map(attr => [attr.name.getText(source), attr.initializer?.getText(source)]));
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(source);
+  assert.ok(picker, 'active workout picker must use SectionList for its exercise rows');
+  for (const key of ['initialNumToRender', 'maxToRenderPerBatch', 'windowSize']) {
+    assert.match(picker.get(key), /^\{(?:[1-9]|1[0-2])\}$/, key + ' should keep the mounted window bounded');
+  }
+  assert.ok(picker.has('renderItem'));
+  assert.ok(picker.has('renderSectionHeader'));
+  assert.ok(picker.has('ListEmptyComponent'));
+});

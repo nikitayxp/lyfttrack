@@ -226,7 +226,18 @@ export default function AthletesScreen() {
             </Text>
           </View>
         ) : errorMessage ? (
-          <Text style={styles.errorText}>{errorMessage}</Text>
+          <View>
+            <Text style={styles.errorText}>{errorMessage}</Text>
+            <TouchableOpacity
+              style={[styles.userActionButton, styles.retryButton]}
+              activeOpacity={ACTIVE_OPACITY}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.retry')}
+              onPress={() => void loadAthletes(query)}
+            >
+              <Text style={styles.userActionText}>{t('common.retry')}</Text>
+            </TouchableOpacity>
+          </View>
         ) : athletes.length === 0 ? (
           <Text style={styles.helperText}>
             {hasSearchQuery ? t('social.search.empty') : t('social.search.emptyAll')}
@@ -366,6 +377,11 @@ const styles = StyleSheet.create({
     color: palette.error,
     fontSize: 13,
     lineHeight: 19,
+  },
+  retryButton: {
+    alignSelf: 'flex-start',
+    minHeight: 44,
+    marginTop: 8,
   },
   athleteItem: {
     flexDirection: 'row',

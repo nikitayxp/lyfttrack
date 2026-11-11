@@ -1,6 +1,7 @@
 import type { Tables } from '@/types/database';
 
 import imageMap from './exerciseImageMap.json';
+import thumbnailManifest from './exerciseThumbnails.json';
 
 const FREE_EXERCISE_DB_BASE =
   'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises';
@@ -113,4 +114,12 @@ export function getExerciseImageUrl(exercise: ExerciseImageSource): string | nul
 
   urlCache.set(cacheKey, null);
   return null;
+}
+
+export function getExerciseThumbnailUrl(imageUrl: string): string | null {
+  const prefix = FREE_EXERCISE_DB_BASE + '/';
+  if (!imageUrl.startsWith(prefix)) return null;
+  const filenames: Record<string, string | undefined> = thumbnailManifest.thumbnails;
+  const filename = filenames[imageUrl.slice(prefix.length)];
+  return typeof filename === 'string' ? '/exercise-thumbnails/' + filename : null;
 }

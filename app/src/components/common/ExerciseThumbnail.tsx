@@ -1,8 +1,8 @@
 import { memo, useMemo, useState } from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { Image, Platform, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
-import { getExerciseImageUrl } from '@/utils/exerciseImage';
+import { getExerciseImageUrl, getExerciseThumbnailUrl } from '@/utils/exerciseImage';
 import type { Tables } from '@/types/database';
 
 const palette = Colors.dark;
@@ -15,17 +15,19 @@ type ExerciseThumbnailProps = {
 };
 
 function ExerciseThumbnailComponent({ exercise, size = 40 }: ExerciseThumbnailProps) {
-  const imageUrl = useMemo(() => getExerciseImageUrl(exercise), [
-    exercise.image_url,
-    exercise.name,
-    exercise.name_en,
-    exercise.name_pt,
-  ]);
-  const [failed, setFailed] = useState(false);
-  const showImage = Boolean(imageUrl) && !failed;
+  const { image_url, name, name_en, name_pt } = exercise;
+  const imageUrl = useMemo(
+    () => getExerciseImageUrl({ image_url, name, name_en, name_pt }),
+    [image_url, name, name_en, name_pt],
+  );
+  const thumbnailUrl = Platform.OS === 'web' && imageUrl ? getExerciseThumbnailUrl(imageUrl) : null;
+  const [failed, setFailed] = useState<{ imageUrl: string | null; source: string } | null>(null);
+  const source = failed && failed.imageUrl === imageUrl
+    ? (failed.source === imageUrl ? null : imageUrl)
+    : thumbnailUrl ?? imageUrl;
   const radius = Math.max(6, size / 5);
 
-  if (!showImage) {
+  if (!source) {
     return (
       <View style={[styles.placeholder, { width: size, height: size, borderRadius: radius }]}>
         <Ionicons name="barbell-outline" size={Math.max(14, Math.round(size * 0.42))} color="#475569" />
@@ -35,12 +37,13 @@ function ExerciseThumbnailComponent({ exercise, size = 40 }: ExerciseThumbnailPr
 
   return (
     <Image
-      source={{ uri: imageUrl! }}
+      key={source}
+      source={{ uri: source }}
       style={[styles.image, { width: size, height: size, borderRadius: radius }]}
       resizeMode="cover"
       // Avoid decoding every off-screen catalog image at once when switching to "All".
       fadeDuration={0}
-      onError={() => setFailed(true)}
+      onError={() => setFailed({ imageUrl, source })}
     />
   );
 }

@@ -57,17 +57,8 @@ web-build/
 app-example/
 /ios
 /android
-skills/
 
-# local
-.planning/
-.claude/
-.cursor/
-.clinerules/
-.agents/
-.codex/
-CLAUDE.md
-AGENTS.md
+# Local exports and scratch files
 tmp/
 supabase/.temp/
 supabase_schema.sql

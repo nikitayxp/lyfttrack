@@ -13,7 +13,7 @@ Monorepo com duas apps:
 
 - Autenticação (email, Google) e onboarding
 - Treinos ativos com séries, descanso e resumo
-- Templates / rotinas
+- Modelos de treino
 - Estatísticas e medições (peso corporal)
 - Feed social (likes, comentários, perfis públicos)
 - Perfil, foto e definições (idioma PT/EN, preferências)
@@ -36,9 +36,9 @@ Instala as dependências na raiz do projeto, antes de entrar em `app/` ou `site/
 
 Mantém apenas um servidor de cada app em execução. Se o terminal indicar que a porta já está ocupada pelo mesmo projeto, usa o endereço do servidor existente ou termina-o com `Ctrl+C` no terminal onde arrancou antes de iniciar outro. Para reinstalar dependências, para primeiro os servidores.
 
-Para a app no telemóvel: `cd app` e `npx expo start --lan`; abre o QR no Expo Go ou `http://desktop-b00buva:8081/` no navegador. Para o site: `http://localhost:3000/` no computador ou `http://desktop-b00buva:3000/` na mesma rede. O hostname de desenvolvimento do site está autorizado em `site/next.config.ts`; se o nome do computador mudar, atualiza essa entrada.
+Para testar a app no telemóvel, executa `npx expo start --lan` dentro de `app/` e usa o QR no Expo Go ou o endereço da rede apresentado no terminal. Abre a landing em [http://localhost:3000](http://localhost:3000). As instruções para aceder ao site na rede local estão no [README do site](site/README.md).
 
-Cria um ficheiro `app/.env` com as chaves do Supabase:
+Cria um ficheiro `app/.env` com o URL do Supabase e a chave pública de cliente:
 
 ```env
 EXPO_PUBLIC_SUPABASE_URL=...
@@ -66,4 +66,8 @@ Projeto pessoal de portfolio. Foco em prática de full-stack: mobile, web e back
 
 ## Base de dados
 
-As migrations SQL estão em `supabase/migrations/`.
+As migrações SQL e o processo de aplicação estão em [supabase/migrations](supabase/migrations/README.md).
+
+## Verificações
+
+Executa `npm run check` na raiz para correr lint, TypeScript e testes. O GitHub Actions também verifica os builds web da app e do site. As migrações de produção têm um workflow manual com aprovação da revisão a aplicar.

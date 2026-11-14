@@ -1,8 +1,8 @@
 # LyftTrack App
 
-App Expo (React Native) do LyftTrack — treinos, rotinas, stats e social.
+App Expo (React Native) do LyftTrack — treinos, modelos, estatísticas e funcionalidades sociais.
 
-Instala as dependências na raiz do monorepo (`C:\LyftTrack`):
+Instala as dependências na raiz do monorepo:
 
 ```bash
 npm ci --workspaces --include-workspace-root
@@ -16,7 +16,7 @@ cd app
 npx expo start --lan
 ```
 
-Abre o QR no Expo Go ou [http://desktop-b00buva:8081/](http://desktop-b00buva:8081/) no navegador. O hostname depende do nome do computador.
+Usa o QR no Expo Go ou o endereço da rede apresentado no terminal, a partir de um dispositivo na mesma rede.
 
 Mantém apenas um servidor da app em execução. Se a porta já estiver ocupada pelo mesmo projeto, usa o servidor existente ou termina-o com `Ctrl+C` no terminal onde arrancou. Para reinstalar dependências, para primeiro os servidores.
 

@@ -19,8 +19,9 @@ const securityHeaders = [
   },
 ];
 
+const devOrigin = process.env.SITE_ALLOWED_DEV_ORIGIN?.trim();
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ["desktop-b00buva"],
+  allowedDevOrigins: devOrigin ? [devOrigin] : [],
   async headers() {
     return [
       {

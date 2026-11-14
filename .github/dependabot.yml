@@ -39,6 +39,7 @@ updates:
       # not touch these at all — the Expo SDK owns their exact versions.
       - dependency-name: "react"
       - dependency-name: "react-dom"
+      - dependency-name: "react-test-renderer"
       - dependency-name: "react-native"
       - dependency-name: "react-native-*"
       - dependency-name: "@react-native-async-storage/async-storage"

@@ -1065,7 +1065,7 @@ export default function WorkoutScreen() {
                   <Text style={styles.emptyTitle}>{t('exercise.emptySearchTitle')}</Text>
                   <Text style={styles.emptySubtitle}>{t('exercise.emptySearchSubtitle')}</Text>
                 </View>
-              ) : null}
+              ) : undefined}
               renderSectionHeader={({ section }) => <Text style={styles.groupTitle}>{section.title}</Text>}
               renderItem={({ item: exercise }) => {
                 const exerciseLabel = getDisplayExerciseName(exercise);

@@ -68,7 +68,7 @@ export function WorkoutSummary({
       presentationStyle="fullScreen"
       onRequestClose={onShareAndFinish}
     >
-      <SafeAreaView style={[styles.screen, isWeb && styles.screenWeb]} edges={['top', 'left', 'right', 'bottom']}>
+      <SafeAreaView testID="app-modal-safe-area" style={[styles.screen, isWeb && styles.screenWeb]} edges={['top', 'left', 'right', 'bottom']}>
         <View style={[styles.screenFrame, isWeb && styles.screenFrameWeb]}>
           <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
             <View style={styles.heroWrap}>

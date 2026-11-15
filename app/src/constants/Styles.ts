@@ -1,6 +1,14 @@
 import type { TextStyle, ViewStyle } from 'react-native';
 import { Platform } from 'react-native';
 
+export const AbsoluteFill: ViewStyle = {
+  position: 'absolute',
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+};
+
 export const Spacing = {
   xs: 4,
   sm: 8,

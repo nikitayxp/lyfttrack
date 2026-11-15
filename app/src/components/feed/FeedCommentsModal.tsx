@@ -120,7 +120,7 @@ export function FeedCommentsModal({
         keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
       >
         <View style={styles.screenFrame}>
-          <View style={[styles.header, { paddingTop: insets.top + 10 }]}> 
+          <View testID="comments-header" style={[styles.header, { paddingTop: insets.top + 10 }]}>
             <TouchableOpacity 
               style={styles.closeButton} 
               activeOpacity={ACTIVE_OPACITY} 
@@ -170,13 +170,13 @@ export function FeedCommentsModal({
                     {isLoadingMore ? <ActivityIndicator color={palette.accent} /> : <Text style={styles.retryButtonText}>{t('feed.comments.loadMore')}</Text>}
                   </TouchableOpacity>
                 </View>
-              ) : null}
+              ) : undefined}
               contentContainerStyle={styles.listContent}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             />
 
-            <View style={[styles.inputRow, { paddingBottom: Math.max(insets.bottom, 10) }]}> 
+            <View testID="comments-composer" style={[styles.inputRow, { paddingBottom: Math.max(insets.bottom, 10) }]}>
               <TextInput
                 accessibilityLabel={t('feed.comments.inputPlaceholder')}
                 value={inputValue}

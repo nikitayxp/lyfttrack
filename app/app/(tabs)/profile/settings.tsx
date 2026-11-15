@@ -131,7 +131,7 @@ export default function ProfileSettingsScreen() {
     try {
       await deleteOwnAccount();
       setIsDeleteModalVisible(false);
-      router.replace('/(auth)' as any);
+      router.replace('/(auth)/sign-in');
     } catch (error) {
       setDeleteError(toErrorMessage(error, t('common.unknownError')));
     } finally {
@@ -185,7 +185,7 @@ export default function ProfileSettingsScreen() {
         throw error;
       }
 
-      router.replace('/(auth)' as any);
+      router.replace('/(auth)/sign-in');
     } catch (error) {
       showAlert(showToast, t('settings.signOutError'), toErrorMessage(error, t('common.unknownError')), 'error');
     } finally {

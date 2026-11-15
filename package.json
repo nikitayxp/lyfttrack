@@ -15,8 +15,17 @@
     "test": "node --test scripts/check-*.ts scripts/tests/*.test.cjs",
     "check": "npm run lint && npm run typecheck && npm test"
   },
+  "overrides": {
+    "@expo/fingerprint@0.21.10": {
+      "minimatch": "11.0.8"
+    },
+    "@typescript-eslint/typescript-estree@8.69.0": {
+      "minimatch": "11.0.8"
+    }
+  },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.10",
-    "react-test-renderer": "19.1.0"
+    "react-test-renderer": "19.3.0",
+    "react": "19.3.0"
   }
 }

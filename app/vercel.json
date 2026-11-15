@@ -2,7 +2,7 @@
   "cleanUrls": true,
   "headers": [
     {
-      "source": "/_expo/static/js/web/:asset([A-Za-z0-9_-]+-[a-f0-9]{32}\\.js)",
+      "source": "/_expo/static/js/web/:asset([A-Za-z0-9_\\[\\]-]+-[a-f0-9]{32}\\.js)",
       "headers": [
         {
           "key": "Cache-Control",

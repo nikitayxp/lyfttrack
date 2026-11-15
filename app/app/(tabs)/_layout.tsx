@@ -13,6 +13,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
 const palette = Colors.dark;
+const auxiliaryTabOptions = {
+  tabBarButton: () => null,
+  tabBarItemStyle: { display: 'none' as const },
+};
 
 export default function TabLayout() {
   const { t } = useTranslation();
@@ -35,7 +39,6 @@ export default function TabLayout() {
 
   return (
     <Tabs
-      initialRouteName="index"
       backBehavior="history"
       screenOptions={{
         header: () => <View style={[styles.headerSafeArea, { height: insets.top }]} />,
@@ -51,74 +54,58 @@ export default function TabLayout() {
         name="index"
         options={{
           title: t('tabs.feed'),
-          tabBarIcon: ({ color }) => <Ionicons name="newspaper-outline" size={TAB_ICON_SIZE} color={color} />,
+          tabBarIcon: ({ focused }) => <Ionicons name="newspaper-outline" size={TAB_ICON_SIZE} color={focused ? palette.accent : palette.tabIconDefault} />,
         }}
       />
       <Tabs.Screen
         name="workout"
         options={{
           title: t('tabs.workout'),
-          tabBarIcon: ({ color }) => <Ionicons name="barbell-outline" size={TAB_ICON_SIZE} color={color} />,
+          tabBarIcon: ({ focused }) => <Ionicons name="barbell-outline" size={TAB_ICON_SIZE} color={focused ? palette.accent : palette.tabIconDefault} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: t('tabs.profile'),
-          tabBarIcon: ({ color }) => <Ionicons name="person-outline" size={TAB_ICON_SIZE} color={color} />,
+          tabBarIcon: ({ focused }) => <Ionicons name="person-outline" size={TAB_ICON_SIZE} color={focused ? palette.accent : palette.tabIconDefault} />,
         }}
       />
       <Tabs.Screen
         name="athletes"
-        options={{ href: null }}
+        options={auxiliaryTabOptions}
       />
       <Tabs.Screen
         name="exercises"
-        options={{
-          href: null,
-        }}
+        options={auxiliaryTabOptions}
       />
       <Tabs.Screen
         name="social"
-        options={{
-          href: null,
-        }}
+        options={auxiliaryTabOptions}
       />
       <Tabs.Screen
         name="stats"
-        options={{
-          href: null,
-        }}
+        options={auxiliaryTabOptions}
       />
       <Tabs.Screen
         name="profile/edit"
-        options={{
-          href: null,
-        }}
+        options={auxiliaryTabOptions}
       />
       <Tabs.Screen
         name="profile/settings"
-        options={{
-          href: null,
-        }}
+        options={auxiliaryTabOptions}
       />
       <Tabs.Screen
         name="profile/import"
-        options={{
-          href: null,
-        }}
+        options={auxiliaryTabOptions}
       />
       <Tabs.Screen
         name="public-profile/[id]"
-        options={{
-          href: null,
-        }}
+        options={auxiliaryTabOptions}
       />
       <Tabs.Screen
         name="profile/[id]"
-        options={{
-          href: null,
-        }}
+        options={auxiliaryTabOptions}
       />
     </Tabs>
   );

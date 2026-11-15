@@ -11,7 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/Colors';
-import { Radius, Spacing } from '@/constants/Styles';
+import { AbsoluteFill, Radius, Spacing } from '@/constants/Styles';
 import { getTabBarHeight } from '@/constants/tabBar';
 import { useAppToast, type AppToastTone } from '@/context/ToastContext';
 
@@ -40,22 +40,22 @@ export function AppToastHost({ aboveTabBar = false }: AppToastHostProps) {
   useEffect(() => {
     if (!toast) {
       cancelAnimation(progress);
-      progress.value = 1;
-      translateX.value = 0;
-      translateY.value = 0;
-      opacity.value = 1;
+      progress.set(1);
+      translateX.set(0);
+      translateY.set(0);
+      opacity.set(1);
       return;
     }
 
-    translateX.value = 0;
-    translateY.value = 0;
-    opacity.value = 1;
-    progress.value = 1;
-    progress.value = withTiming(0, { duration: AUTO_DISMISS_MS }, (finished) => {
+    translateX.set(0);
+    translateY.set(0);
+    opacity.set(1);
+    progress.set(1);
+    progress.set(withTiming(0, { duration: AUTO_DISMISS_MS }, (finished) => {
       if (finished) {
         runOnJS(dismissToast)();
       }
-    });
+    }));
   }, [dismissToast, opacity, progress, toast, translateX, translateY]);
 
   const finishDismiss = () => {
@@ -65,9 +65,9 @@ export function AppToastHost({ aboveTabBar = false }: AppToastHostProps) {
 
   const pan = Gesture.Pan()
     .onUpdate((event) => {
-      translateX.value = event.translationX;
+      translateX.set(event.translationX);
       // Down only — dragging up should not dismiss.
-      translateY.value = Math.max(0, event.translationY);
+      translateY.set(Math.max(0, event.translationY));
     })
     .onEnd((event) => {
       const sideways =
@@ -75,22 +75,22 @@ export function AppToastHost({ aboveTabBar = false }: AppToastHostProps) {
       const downward = event.translationY > SWIPE_DISTANCE || event.velocityY > SWIPE_VELOCITY;
 
       if (sideways || downward) {
-        opacity.value = withTiming(0, { duration: 120 });
+        opacity.set(withTiming(0, { duration: 120 }));
         runOnJS(finishDismiss)();
         return;
       }
 
-      translateX.value = withTiming(0, { duration: 160 });
-      translateY.value = withTiming(0, { duration: 160 });
+      translateX.set(withTiming(0, { duration: 160 }));
+      translateY.set(withTiming(0, { duration: 160 }));
     });
 
   const cardStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ translateX: translateX.value }, { translateY: translateY.value }],
+    opacity: opacity.get(),
+    transform: [{ translateX: translateX.get() }, { translateY: translateY.get() }],
   }));
 
   const timerStyle = useAnimatedStyle(() => ({
-    width: `${Math.max(progress.value, 0) * 100}%`,
+    width: `${Math.max(progress.get(), 0) * 100}%`,
   }));
 
   if (!toast) {
@@ -129,7 +129,7 @@ export function AppToastHost({ aboveTabBar = false }: AppToastHostProps) {
 
 const styles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...AbsoluteFill,
     zIndex: 40,
     elevation: 40,
   },

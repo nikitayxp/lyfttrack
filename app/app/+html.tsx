@@ -1,6 +1,8 @@
 import { type PropsWithChildren } from 'react';
-import { ScrollViewStyleReset } from 'expo-router/html';
+import { ScrollViewStyleReset, useServerDocumentContext } from 'expo-router/html';
 import { DEVICE_SCREEN, PHONE_OVERLAY_ATTRIBUTE } from '@/constants/deviceFrame';
+import { Spacing } from '@/constants/Styles';
+import { MINIMIZED_WORKOUT_BAR_GAP, TAB_BAR_ROW_HEIGHT } from '@/constants/tabBar';
 
 const MODAL_PORTAL = 'body.desktop-mockup-active > div:not(#root)';
 const PHONE_OVERLAYS = [
@@ -19,6 +21,20 @@ const MOBILE_PORTALS = [
 ].join(',\n  ');
 
 const BASE_WEB_BG_STYLE = `
+  body {
+    --app-safe-area-top: env(safe-area-inset-top, 0px);
+    --app-safe-area-right: env(safe-area-inset-right, 0px);
+    --app-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+    --app-safe-area-left: env(safe-area-inset-left, 0px);
+  }
+
+  body.desktop-mockup-active {
+    --app-safe-area-top: 0px;
+    --app-safe-area-right: 0px;
+    --app-safe-area-bottom: 0px;
+    --app-safe-area-left: 0px;
+  }
+
   html, body, #root {
     color-scheme: dark;
     background: #000000;
@@ -41,6 +57,39 @@ const BASE_WEB_BG_STYLE = `
   [data-testid="app-web-shell"],
   [data-testid="app-device-frame"] {
     overflow: clip !important;
+  }
+
+  [data-testid="app-safe-area"],
+  [data-testid="app-modal-safe-area"] {
+    box-sizing: border-box;
+    padding-top: var(--app-safe-area-top, 0px) !important;
+    padding-right: var(--app-safe-area-right, 0px) !important;
+    padding-bottom: var(--app-safe-area-bottom, 0px) !important;
+    padding-left: var(--app-safe-area-left, 0px) !important;
+  }
+
+  [data-testid="app-bottom-sheet"] {
+    margin-bottom: calc(${Spacing.lg}px + var(--app-safe-area-bottom, 0px)) !important;
+  }
+
+  [data-testid="app-toast"] {
+    bottom: calc(max(12px, var(--app-safe-area-bottom, 0px)) + 12px) !important;
+  }
+
+  [data-testid="app-toast-above-tabs"] {
+    bottom: calc(${TAB_BAR_ROW_HEIGHT + 12}px + var(--app-safe-area-bottom, 0px)) !important;
+  }
+
+  [data-testid="app-minimized-workout-bar"] {
+    bottom: calc(${TAB_BAR_ROW_HEIGHT + MINIMIZED_WORKOUT_BAR_GAP}px + var(--app-safe-area-bottom, 0px)) !important;
+  }
+
+  [data-testid="comments-header"] {
+    padding-top: calc(10px + var(--app-safe-area-top, 0px)) !important;
+  }
+
+  [data-testid="comments-composer"] {
+    padding-bottom: max(10px, var(--app-safe-area-bottom, 0px)) !important;
   }
 
   ${MOBILE_PORTALS} {
@@ -85,8 +134,9 @@ const BASE_WEB_BG_STYLE = `
 `;
 
 export default function Root({ children }: PropsWithChildren) {
+  const { headNodes, bodyNodes, htmlAttributes, bodyAttributes } = useServerDocumentContext();
   return (
-    <html lang="en">
+    <html lang="en" {...htmlAttributes}>
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
@@ -122,8 +172,9 @@ export default function Root({ children }: PropsWithChildren) {
         <link rel="apple-touch-icon" href="/logo.jpg" />
         <ScrollViewStyleReset />
         <style dangerouslySetInnerHTML={{ __html: BASE_WEB_BG_STYLE }} />
+        {headNodes}
       </head>
-      <body>{children}</body>
+      <body {...bodyAttributes}>{children}{bodyNodes}</body>
     </html>
   );
 }

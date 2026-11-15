@@ -50,7 +50,7 @@ function connect(): void {
   });
   let removeLifecycle: (() => void) | undefined;
   if (Platform.OS !== 'web') {
-    const updateRefresh = (state: string) => {
+    const updateRefresh = (state: string | null | undefined) => {
       if (state === 'active') supabase.auth.startAutoRefresh();
       else supabase.auth.stopAutoRefresh();
     };

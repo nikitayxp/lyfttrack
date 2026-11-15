@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/theme';
-import { ACTIVE_OPACITY, HIT_SLOP, Radius, Spacing } from '@/constants/Styles';
+import { AbsoluteFill, ACTIVE_OPACITY, HIT_SLOP, Radius, Spacing } from '@/constants/Styles';
 import {
   EXERCISE_EQUIPMENT_OPTIONS,
   EXERCISE_EQUIPMENT_TRANSLATION_KEY,
@@ -1952,7 +1952,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   exerciseCompletionGlow: {
-    ...StyleSheet.absoluteFillObject,
+    ...AbsoluteFill,
     backgroundColor: palette.glowCyan,
   },
   pointerEventsNone: {

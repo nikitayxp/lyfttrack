@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -10,9 +10,8 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/Colors';
-import { Radius, Spacing } from '@/constants/Styles';
+import { AbsoluteFill, Radius, Spacing } from '@/constants/Styles';
 import { getTabBarHeight } from '@/constants/tabBar';
 import { useAppToast, type AppToastTone } from '@/context/ToastContext';
 import { createWebOverlayNode } from '@/utils/webOverlayNode';
@@ -39,17 +38,13 @@ type AppToastHostProps = {
  */
 export function AppToastHost({ aboveTabBar = false }: AppToastHostProps) {
   const { toast, dismissToast } = useAppToast();
-  const insets = useSafeAreaInsets();
-  const tabBarHeight = getTabBarHeight(true, insets.bottom);
-  const bottomOffset = aboveTabBar ? tabBarHeight + 12 : Math.max(insets.bottom, 12) + 12;
+  const tabBarHeight = getTabBarHeight(true, 0);
+  const bottomOffset = aboveTabBar ? tabBarHeight + 12 : 24;
 
-  const portalNodeRef = useRef<HTMLDivElement | null>(null);
-  if (typeof document !== 'undefined' && !portalNodeRef.current) {
-    portalNodeRef.current = createWebOverlayNode(99999);
-  }
+  const [portalNode] = useState(() => typeof document === 'undefined' ? null : createWebOverlayNode(99999));
 
   useLayoutEffect(() => {
-    const node = portalNodeRef.current;
+    const node = portalNode;
     if (!node || typeof document === 'undefined' || !toast) {
       return;
     }
@@ -59,7 +54,7 @@ export function AppToastHost({ aboveTabBar = false }: AppToastHostProps) {
         node.parentNode.removeChild(node);
       }
     };
-  }, [toast]);
+  }, [portalNode, toast]);
 
   const progress = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -69,22 +64,22 @@ export function AppToastHost({ aboveTabBar = false }: AppToastHostProps) {
   useLayoutEffect(() => {
     if (!toast) {
       cancelAnimation(progress);
-      progress.value = 1;
-      translateX.value = 0;
-      translateY.value = 0;
-      opacity.value = 1;
+      progress.set(1);
+      translateX.set(0);
+      translateY.set(0);
+      opacity.set(1);
       return;
     }
 
-    translateX.value = 0;
-    translateY.value = 0;
-    opacity.value = 1;
-    progress.value = 1;
-    progress.value = withTiming(0, { duration: AUTO_DISMISS_MS }, (finished) => {
+    translateX.set(0);
+    translateY.set(0);
+    opacity.set(1);
+    progress.set(1);
+    progress.set(withTiming(0, { duration: AUTO_DISMISS_MS }, (finished) => {
       if (finished) {
         runOnJS(dismissToast)();
       }
-    });
+    }));
   }, [dismissToast, opacity, progress, toast, translateX, translateY]);
 
   const finishDismiss = () => {
@@ -94,9 +89,9 @@ export function AppToastHost({ aboveTabBar = false }: AppToastHostProps) {
 
   const pan = Gesture.Pan()
     .onUpdate((event) => {
-      translateX.value = event.translationX;
+      translateX.set(event.translationX);
       // Down only — dragging up should not dismiss.
-      translateY.value = Math.max(0, event.translationY);
+      translateY.set(Math.max(0, event.translationY));
     })
     .onEnd((event) => {
       const sideways =
@@ -104,25 +99,25 @@ export function AppToastHost({ aboveTabBar = false }: AppToastHostProps) {
       const downward = event.translationY > SWIPE_DISTANCE || event.velocityY > SWIPE_VELOCITY;
 
       if (sideways || downward) {
-        opacity.value = withTiming(0, { duration: 120 });
+        opacity.set(withTiming(0, { duration: 120 }));
         runOnJS(finishDismiss)();
         return;
       }
 
-      translateX.value = withTiming(0, { duration: 160 });
-      translateY.value = withTiming(0, { duration: 160 });
+      translateX.set(withTiming(0, { duration: 160 }));
+      translateY.set(withTiming(0, { duration: 160 }));
     });
 
   const cardStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ translateX: translateX.value }, { translateY: translateY.value }],
+    opacity: opacity.get(),
+    transform: [{ translateX: translateX.get() }, { translateY: translateY.get() }],
   }));
 
   const timerStyle = useAnimatedStyle(() => ({
-    width: `${Math.max(progress.value, 0) * 100}%`,
+    width: `${Math.max(progress.get(), 0) * 100}%`,
   }));
 
-  if (!toast || !portalNodeRef.current) {
+  if (!toast || !portalNode) {
     return null;
   }
 
@@ -131,7 +126,7 @@ export function AppToastHost({ aboveTabBar = false }: AppToastHostProps) {
   return createPortal(
     <View pointerEvents="box-none" style={styles.overlay}>
       <GestureDetector gesture={pan}>
-        <Animated.View style={[styles.toast, tone === 'error' && styles.toastError, { bottom: bottomOffset, pointerEvents: 'auto' }, cardStyle]}>
+        <Animated.View testID={aboveTabBar ? 'app-toast-above-tabs' : 'app-toast'} style={[styles.toast, tone === 'error' && styles.toastError, { bottom: bottomOffset, pointerEvents: 'auto' }, cardStyle]}>
           <Pressable
             onPress={finishDismiss}
             style={styles.pressRow}
@@ -153,13 +148,13 @@ export function AppToastHost({ aboveTabBar = false }: AppToastHostProps) {
         </Animated.View>
       </GestureDetector>
     </View>,
-    portalNodeRef.current
+    portalNode
   );
 }
 
 const styles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...AbsoluteFill,
     zIndex: 40,
     elevation: 40,
   },

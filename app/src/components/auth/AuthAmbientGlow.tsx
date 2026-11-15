@@ -14,7 +14,7 @@ type AuthAmbientGlowProps = {
 };
 
 import { Colors } from '@/constants/Colors';
-import { Radius } from '@/constants/Styles';
+import { AbsoluteFill, Radius } from '@/constants/Styles';
 
 const palette = Colors.dark;
 const ROOT_SCREEN_BG = palette.bgPrimary;
@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
     backgroundColor: ROOT_SCREEN_BG,
   },
   orbLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...AbsoluteFill,
     overflow: 'hidden',
   },
   orbBase: {

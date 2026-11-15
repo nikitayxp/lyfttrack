@@ -24,8 +24,8 @@ test('athlete exploration belongs to the tab shell without adding a fourth tab',
   const screens = tree.root.findAllByType('Screen');
   const athletes = screens.find(screen => screen.props.name === 'athletes');
   assert.ok(athletes, 'the explorer must remain inside the tab navigator');
-  assert.equal(athletes.props.options.href, null);
-  assert.deepEqual(screens.filter(screen => screen.props.options.href !== null).map(screen => screen.props.name), ['index', 'workout', 'profile']);
+  assert.notEqual(athletes.props.options.hidden, true);
+  assert.deepEqual(screens.filter(screen => !screen.props.options.tabBarButton || screen.props.options.tabBarButton({}) !== null).map(screen => screen.props.name), ['index', 'workout', 'profile']);
   assert.ok(fs.existsSync(path.resolve(__dirname, '../../app/app/(tabs)/athletes.tsx')));
   assert.equal(fs.existsSync(path.resolve(__dirname, '../../app/app/athletes.tsx')), false, 'avoid duplicate /athletes routes');
 });

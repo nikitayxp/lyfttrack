@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { getWorkoutComments, type WorkoutCommentWithProfile } from '@/services/interactionService';
 import { getErrorMessage } from '@/services/workoutService';
 
@@ -16,7 +16,9 @@ export function useWorkoutComments() {
   const pending = useRef(new Set<string>());
   const latest = useRef(0);
   const currentComments = useRef(commentsByWorkoutId);
-  currentComments.current = commentsByWorkoutId;
+  useLayoutEffect(() => {
+    currentComments.current = commentsByWorkoutId;
+  }, [commentsByWorkoutId]);
 
   useEffect(() => () => { latest.current += 1; requests.current.clear(); }, []);
 

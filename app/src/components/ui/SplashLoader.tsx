@@ -1,15 +1,15 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
 import { Colors } from '@/constants/Colors';
 
 const palette = Colors.dark;
 
 export function SplashLoader() {
-  const logoOpacity = useRef(new Animated.Value(0)).current;
-  const logoScale = useRef(new Animated.Value(0.85)).current;
-  const barWidth = useRef(new Animated.Value(0)).current;
-  const barOpacity = useRef(new Animated.Value(0)).current;
-  const pulseOpacity = useRef(new Animated.Value(0)).current;
+  const [logoOpacity] = useState(() => new Animated.Value(0));
+  const [logoScale] = useState(() => new Animated.Value(0.85));
+  const [barWidth] = useState(() => new Animated.Value(0));
+  const [barOpacity] = useState(() => new Animated.Value(0));
+  const [pulseOpacity] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     // Logo fade in + scale

@@ -7,19 +7,18 @@ import {
   View,
   type ViewStyle,
 } from 'react-native';
-import { router, Stack, useSegments } from 'expo-router';
-import { DarkTheme, ThemeProvider } from '@react-navigation/native';
+import { DarkTheme, router, Stack, ThemeProvider, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/theme';
+import { AbsoluteFill } from '@/constants/Styles';
 import { DEVICE_FRAME } from '@/constants/deviceFrame';
 import { applyPendingTermsAcceptance } from '@/services/authService';
 import { needsOptionalOnboarding, needsUsernameReview } from '@/services/authSetup';
 import { retryAuthSessionBootstrap, subscribeAuthSession } from '@/services/authSessionStore';
 import { getWebVisibleViewportHeight } from '@/utils/webVisibleViewport';
-import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import NeuralBackground from '@/components/ui/flow-field-background';
 import { SplashLoader } from '@/components/ui/SplashLoader';
 import { AppButton } from '@/components/ui/AppButton';
@@ -129,7 +128,7 @@ const styles = StyleSheet.create({
     backgroundColor: palette.bgPrimary,
   },
   webFlowLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...AbsoluteFill,
     zIndex: 0,
   },
   pointerEventsNone: {
@@ -403,7 +402,7 @@ export default function RootLayout() {
       <ToastProvider>
         <ConfirmProvider>
           <WorkoutProvider currentUserId={session?.user.id ?? null}>
-            <SafeAreaProvider style={safeAreaStyle} initialMetrics={isWeb ? undefined : initialWindowMetrics}>
+            <View style={safeAreaStyle} testID="app-safe-area">
               <ThemeProvider value={navigationTheme}>
               <Stack
                 screenOptions={{
@@ -469,7 +468,7 @@ export default function RootLayout() {
               <AppToastHost aboveTabBar={isTabsRoute} />
               <ConfirmHost />
               </ThemeProvider>
-            </SafeAreaProvider>
+            </View>
           </WorkoutProvider>
         </ConfirmProvider>
       </ToastProvider>

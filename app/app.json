@@ -7,7 +7,6 @@
     "scheme": "lyfttrack",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#020617",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
     },

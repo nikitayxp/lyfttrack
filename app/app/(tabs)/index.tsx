@@ -582,7 +582,7 @@ export default function FeedScreen() {
             <View style={styles.footerLoadingWrap}>
               <ActivityIndicator size="small" color={palette.accent} />
             </View>
-          ) : null
+          ) : undefined
         }
         style={styles.screen}
         contentContainerStyle={styles.content}

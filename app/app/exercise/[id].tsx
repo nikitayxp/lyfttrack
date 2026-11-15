@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ComponentRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { LineChart } from '@/components/common/WorkoutCharts';
@@ -294,14 +294,13 @@ export default function ExerciseDetailScreen() {
   /** First open pins to newest; filter changes keep how far back you had scrolled. */
   const [pinChartToEnd, setPinChartToEnd] = useState(true);
 
-  const chartScrollRef = useRef<ScrollView | null>(null);
+  const chartScrollRef = useRef<ComponentRef<typeof ScrollView> | null>(null);
   const chartPressStartXRef = useRef<number | null>(null);
   const lastScrollXRef = useRef(0);
   const chartScrollMaxRef = useRef(0);
   const chartHoldIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const chartDragRef = useRef<{ startX: number; startScrollX: number } | null>(null);
   const pendingAnchorRef = useRef<ChartScrollAnchor | null>(null);
-  const focusedDateRef = useRef<string | null>(null);
   const chartProgressRef = useRef<ExerciseProgressPoint[]>([]);
   const lineSpacingRef = useRef(MIN_POINT_SPACING);
   const needsHorizontalScrollRef = useRef(false);
@@ -381,9 +380,11 @@ export default function ExerciseDetailScreen() {
   );
   const atNewestEnd = isChartAtNewestEnd(chartScrollPosition.x, chartScrollPosition.max);
 
-  chartProgressRef.current = chartProgress;
-  lineSpacingRef.current = lineSpacing;
-  needsHorizontalScrollRef.current = needsHorizontalScroll;
+  useLayoutEffect(() => {
+    chartProgressRef.current = chartProgress;
+    lineSpacingRef.current = lineSpacing;
+    needsHorizontalScrollRef.current = needsHorizontalScroll;
+  }, [chartProgress, lineSpacing, needsHorizontalScroll]);
 
   // Fitted charts do not fire onScroll — clear stale x/max so a range change cannot drift left.
   useEffect(() => {
@@ -704,7 +705,7 @@ export default function ExerciseDetailScreen() {
   }, [chartContentWidth, plotWidth, chartProgress, lineSpacing, range]);
 
   const initialPointerIndex = useMemo(() => {
-    const focusedDate = focusedDateRef.current;
+    const focusedDate = selectedChartDate;
     if (focusedDate) {
       const focusedIndex = chartProgress.findIndex((point) => point.date === focusedDate);
       if (focusedIndex >= 0) {
@@ -713,7 +714,7 @@ export default function ExerciseDetailScreen() {
     }
 
     return resolveInitialPointerIndex(chartProgress);
-  }, [chartProgress]);
+  }, [chartProgress, selectedChartDate]);
 
   // Scaled to the data, not to zero. A progression chart anchored at zero turns
   // 100 kg to 110 kg into a step you cannot see; the interesting range is
@@ -978,7 +979,6 @@ export default function ExerciseDetailScreen() {
                 getPointerProps={({ pointerIndex }: { pointerIndex: number }) => {
                   const point = lineData[pointerIndex]?.point;
                   if (point) {
-                    focusedDateRef.current = point.date;
                     setSelectedChartDate(point.date);
                   }
                 }}

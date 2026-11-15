@@ -393,7 +393,7 @@ export default function EditProfileScreen() {
       }
 
       setIsLogoutModalVisible(false);
-      router.replace('/(auth)' as any);
+      router.replace('/(auth)/sign-in');
     } catch (error) {
       const message = toErrorMessage(error, t('common.unknownError'));
 

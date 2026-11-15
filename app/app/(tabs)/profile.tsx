@@ -1,5 +1,5 @@
 import { useWorkoutComments } from '@/hooks/useWorkoutComments';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import {
@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/theme';
-import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
+import { AbsoluteFill, ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import { WORKOUTS_IMPORTED_EVENT } from '@/services/import/importEvents';
 import { EmptyState } from '@/components/common/EmptyState';
 import { FeedCommentsModal } from '@/components/feed/FeedCommentsModal';
@@ -171,7 +171,7 @@ type SkeletonCardProps = {
 };
 
 function SkeletonCard({ compact = false, lines = 3 }: SkeletonCardProps) {
-  const opacity = useRef(new Animated.Value(0.35)).current;
+  const [opacity] = useState(() => new Animated.Value(0.35));
 
   useEffect(() => {
     const animation = Animated.loop(
@@ -259,10 +259,9 @@ export default function ProfileScreen() {
   const [commentInputValue, setCommentInputValue] = useState('');
   const [currentCommentAuthor, setCurrentCommentAuthor] = useState<CommentAuthorProfile | null>(null);
 
-  historyFilterRef.current = {
-    periodKey: historyPeriodKey,
-    search: historySearch,
-  };
+  useLayoutEffect(() => {
+    historyFilterRef.current = { periodKey: historyPeriodKey, search: historySearch };
+  }, [historyPeriodKey, historySearch]);
 
   const displayName = useMemo(() => {
     const profileName = profile?.full_name?.trim() || profile?.username?.trim() || '';
@@ -271,13 +270,15 @@ export default function ProfileScreen() {
     return profileName || emailName || t('profile.athleteFallback');
   }, [email, profile?.full_name, profile?.username, t]);
 
+  const profileUsername = profile?.username;
+  const profileAvatarUrl = profile?.avatar_url;
   const usernameHandle = useMemo(() => {
-    if (profile?.username?.trim()) {
-      return `@${profile.username}`;
+    if (profileUsername?.trim()) {
+      return `@${profileUsername}`;
     }
 
     return t('profile.athleteHandleFallback');
-  }, [profile?.username, t]);
+  }, [profileUsername, t]);
 
   const initials = useMemo(() => initialsFromName(displayName), [displayName]);
 
@@ -500,7 +501,9 @@ export default function ProfileScreen() {
   }, [historyPeriodKey, historySearch, loadUserHistoryPage, authUserId]);
 
   const bootstrapRef = useRef(bootstrap);
-  bootstrapRef.current = bootstrap;
+  useLayoutEffect(() => {
+    bootstrapRef.current = bootstrap;
+  }, [bootstrap]);
   useEffect(() => {
     void bootstrapRef.current();
     return () => {
@@ -997,8 +1000,8 @@ export default function ProfileScreen() {
           </View>
 
           <View style={styles.avatarFrame}>
-            {profile?.avatar_url ? (
-              <Image source={{ uri: profile.avatar_url }} style={styles.avatarImage} />
+            {profileAvatarUrl ? (
+              <Image source={{ uri: profileAvatarUrl }} style={styles.avatarImage} />
             ) : (
               <View style={styles.avatarFallback}>
                 <Text style={styles.avatarFallbackText}>{initials}</Text>
@@ -1157,7 +1160,7 @@ export default function ProfileScreen() {
     latestWeightEntry,
     openWeightModal,
     performanceError,
-    profile?.avatar_url,
+    profileAvatarUrl,
     profileError,
     t,
     uiLanguage,
@@ -1262,7 +1265,7 @@ export default function ProfileScreen() {
             <View style={styles.footerLoadingWrap}>
               <ActivityIndicator size="small" color={palette.accent} />
             </View>
-          ) : null
+          ) : undefined
         }
         onEndReachedThreshold={0.5}
         onEndReached={() => void onEndReached()}
@@ -1741,7 +1744,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   quickLogDismissArea: {
-    ...StyleSheet.absoluteFillObject,
+    ...AbsoluteFill,
   },
   quickLogCard: {
     borderRadius: Radius.md,

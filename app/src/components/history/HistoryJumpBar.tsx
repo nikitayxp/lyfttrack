@@ -105,7 +105,7 @@ export function HistoryJumpBar({
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <View style={styles.overlay}>
           <Pressable
-            style={StyleSheet.absoluteFillObject}
+            style={StyleSheet.absoluteFill}
             accessibilityRole="button"
             accessibilityLabel={t('common.cancel')}
             onPress={() => setOpen(false)}

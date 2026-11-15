@@ -23,14 +23,13 @@ async function setup(t, segments = ['(tabs)']) {
   const Stack = Object.assign(passthrough, { Screen: empty });
   const colors = createSourceLoader()('app/src/constants/Colors.ts');
   const load = createSourceLoader({
-    '@react-navigation/native': { DarkTheme: { dark: true, colors: {} }, ThemeProvider: 'NavigationTheme' },
     'react-native': {
       ActivityIndicator: 'ActivityIndicator', View: 'View', Text: 'Text',
-      Platform: { OS: 'ios' }, useWindowDimensions: () => ({ width: 390, height: 844 }),
+      Platform: { OS: 'ios', select: values => values.ios ?? values.default }, useWindowDimensions: () => ({ width: 390, height: 844 }),
       AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) },
       StyleSheet: { create: value => value, absoluteFillObject: {} },
     },
-    'expo-router': { Stack, useSegments: () => segments, router: { replace: route => routes.push(route) } },
+    'expo-router': { DarkTheme: { dark: true, colors: {} }, ThemeProvider: 'NavigationTheme', Stack, useSegments: () => segments, router: { replace: route => routes.push(route) } },
     'expo-status-bar': { StatusBar: empty },
     'expo-linear-gradient': { LinearGradient: passthrough },
     'expo-web-browser': { maybeCompleteAuthSession() {} },

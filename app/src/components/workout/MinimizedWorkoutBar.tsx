@@ -5,7 +5,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/Colors';
-import { Radius } from '@/constants/Styles';
+import { AbsoluteFill, Radius } from '@/constants/Styles';
 import { getTabBarHeight, MINIMIZED_WORKOUT_BAR_GAP, MINIMIZED_WORKOUT_BAR_HEIGHT } from '@/constants/tabBar';
 import { usePreferences } from '@/context/PreferencesContext';
 import { useWorkoutContext, useWorkoutElapsedSeconds } from '@/context/WorkoutContext';
@@ -72,6 +72,7 @@ export function MinimizedWorkoutBar({ visible }: MinimizedWorkoutBarProps) {
   return (
     <View pointerEvents="box-none" style={styles.overlay}>
       <Pressable
+        testID="app-minimized-workout-bar"
         accessibilityRole="button"
         accessibilityLabel={t('workout.minimizedResumeA11y')}
         style={[styles.bar, { bottom: bottomOffset }]}
@@ -97,7 +98,7 @@ export function MinimizedWorkoutBar({ visible }: MinimizedWorkoutBarProps) {
 
 const styles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...AbsoluteFill,
     zIndex: 120,
   },
   bar: {

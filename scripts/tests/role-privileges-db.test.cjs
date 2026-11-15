@@ -326,3 +326,45 @@ test('the unversioned project table is quarantined without deleting its row', as
     await asRole(db, role, () => assert.rejects(db.query('select * from public.projeto_ativo'), /permission denied/));
   }
 });
+
+test('legacy routines are retained for support and account deletion without client access', async t => {
+  const db = await createDb();
+  t.after(() => db.close());
+  await seedAccountData(db);
+  await db.query('insert into public.friend_requests(id,from_user_id,to_user_id) values ($1,$2,$3)', [requestId, other, owner]);
+  await db.query('insert into public.friends(user_low_id,user_high_id,created_by_request_id) values ($1,$2,$3)', [owner, other, requestId]);
+  await db.exec('create role service_role; grant select on public.routines, public.routine_exercises to service_role');
+  await apply(db);
+  const before = (await db.query('select id, user_id from public.routines order by id')).rows;
+  const exercisesBefore = (await db.query('select routine_id, exercise_id from public.routine_exercises order by routine_id')).rows;
+  const migration = '20261115214500_restrict_legacy_routines.sql';
+  await db.exec(readMigration(migration));
+  await db.exec(readMigration(migration));
+
+  const stranger = '00000000-0000-0000-0000-000000000003';
+  const roles = [['authenticated', owner], ['authenticated', other], ['authenticated', stranger], ['anon', '']];
+  for (const [role, userId] of roles) {
+    await asRole(db, role, async () => {
+      for (const table of ['routines', 'routine_exercises']) {
+        await assert.rejects(db.query('select * from public.' + table), /permission denied/);
+        const access = (await db.query(`select has_table_privilege(current_user, $1, 'SELECT, INSERT, UPDATE, DELETE')
+          or has_any_column_privilege(current_user, $1, 'SELECT, INSERT, UPDATE, REFERENCES') as granted`, ['public.' + table])).rows[0];
+        assert.equal(access.granted, false, `${role} ${userId} ${table}`);
+      }
+    }, userId);
+  }
+
+  await asRole(db, 'service_role', async () => {
+    assert.deepEqual((await db.query('select id, user_id from public.routines order by id')).rows, before);
+    assert.deepEqual((await db.query('select routine_id, exercise_id from public.routine_exercises order by routine_id')).rows, exercisesBefore);
+  });
+  await asRole(db, 'authenticated', async () => {
+    const template = await db.query("insert into public.workout_templates(user_id) values ($1) returning id", [owner]);
+    await db.query('insert into public.template_exercises(template_id,exercise_id) values ($1,$2)', [template.rows[0].id, owner]);
+    assert.equal((await db.query('select count(*)::int n from public.template_exercises where template_id = $1', [template.rows[0].id])).rows[0].n, 1);
+    await db.query('select public.delete_own_account()');
+  });
+  assert.deepEqual((await db.query('select id from public.routines')).rows, [{ id: other }]);
+  assert.deepEqual((await db.query('select routine_id from public.routine_exercises')).rows, [{ routine_id: other }]);
+  assert.deepEqual((await db.query('select id from public.workout_templates')).rows, [{ id: other }]);
+});

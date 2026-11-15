@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -15,7 +15,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Colors } from '@/constants/Colors';
-import { ACTIVE_OPACITY, Radius } from '@/constants/Styles';
+import { AbsoluteFill, ACTIVE_OPACITY, Radius } from '@/constants/Styles';
 import { createWebOverlayNode } from '@/utils/webOverlayNode';
 import type { ConfirmModalProps } from './ConfirmModal.types';
 
@@ -40,13 +40,13 @@ export function ConfirmModal({
   const [mounted, setMounted] = useState(false);
   const opacity = useSharedValue(0);
 
-  const portalRef = useRef<HTMLDivElement | null>(null);
-  if (!portalRef.current) {
+  const [portalNode] = useState(() => {
+    if (typeof document === 'undefined') return null;
     const el = createWebOverlayNode(10000);
     el.setAttribute('role', 'dialog');
     el.setAttribute('aria-modal', 'true');
-    portalRef.current = el;
-  }
+    return el;
+  });
 
   useEffect(() => {
     if (!visible || busy) return;
@@ -64,19 +64,19 @@ export function ConfirmModal({
   }, [visible]);
 
   useLayoutEffect(() => {
-    const node = portalRef.current;
+    const node = portalNode;
     if (!node || !mounted) return;
     document.body.appendChild(node);
     return () => {
       if (node.parentNode) node.parentNode.removeChild(node);
     };
-  }, [mounted]);
+  }, [mounted, portalNode]);
 
   useEffect(() => {
     if (visible && mounted) {
-      opacity.value = withTiming(1, { duration: FADE_IN_MS });
+      opacity.set(withTiming(1, { duration: FADE_IN_MS }));
     } else if (!visible && mounted) {
-      opacity.value = withTiming(0, { duration: FADE_OUT_MS }, () => {});
+      opacity.set(withTiming(0, { duration: FADE_OUT_MS }, () => {}));
       const timer = setTimeout(() => setMounted(false), FADE_OUT_MS);
       return () => clearTimeout(timer);
     }
@@ -112,10 +112,10 @@ export function ConfirmModal({
     icon ?? (tone === 'danger' ? 'warning-outline' : tone === 'warning' ? 'alert-circle-outline' : 'help-circle-outline');
 
   const animatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
+    opacity: opacity.get(),
   }));
 
-  if (!mounted || !portalRef.current) {
+  if (!mounted || !portalNode) {
     return null;
   }
 
@@ -167,13 +167,13 @@ export function ConfirmModal({
         </Pressable>
       </Pressable>
     </Animated.View>,
-    portalRef.current
+    portalNode
   );
 }
 
 const styles = StyleSheet.create({
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...AbsoluteFill,
     backgroundColor: 'rgba(4, 9, 20, 0.74)',
     justifyContent: 'center',
     alignItems: 'center',

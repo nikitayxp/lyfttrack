@@ -19,10 +19,15 @@ test('SPA navigation remains available without immutable document caching', () =
 });
 
 test('immutable caching is limited to hashed Expo JavaScript paths', () => {
-  const path = '/_expo/static/js/web/entry-053bd685ce572c60cb10e425a25f4dad.js';
-  const rule = config.headers.find(rule => matches(rule.source, path));
-  assert.equal(rule.headers.find(h => h.key === 'Cache-Control').value, 'public, max-age=31536000, immutable');
-  for (const other of ['/_expo/static/js/web/entry.js', '/_expo/static/js/web/entry-abcd.js', '/profile.html', '/assets/image.png']) {
+  for (const path of [
+    '/_expo/static/js/web/entry-053bd685ce572c60cb10e425a25f4dad.js',
+    '/_expo/static/js/web/[id]-c690ff91afdccf0e8546c21d148ae055.js',
+  ]) {
+    const rule = config.headers.find(rule => matches(rule.source, path));
+    assert.ok(rule, path);
+    assert.equal(rule.headers.find(h => h.key === 'Cache-Control').value, 'public, max-age=31536000, immutable');
+  }
+  for (const other of ['/_expo/static/js/web/entry.js', '/_expo/static/js/web/[id].js', '/_expo/static/js/web/entry-abcd.js', '/profile.html', '/assets/image.png']) {
     assert.equal(config.headers.some(rule => matches(rule.source, other)), false, other);
   }
 });

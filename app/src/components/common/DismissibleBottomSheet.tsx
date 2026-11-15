@@ -18,9 +18,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/Colors';
-import { Radius, Spacing } from '@/constants/Styles';
+import { AbsoluteFill, Radius, Spacing } from '@/constants/Styles';
 
 const palette = Colors.dark;
 const DISMISS_DISTANCE = 96;
@@ -56,9 +55,8 @@ export function DismissibleBottomSheet({
   scrollable = false,
 }: DismissibleBottomSheetProps) {
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === 'web';
-  const webSheetInset = isWeb ? { marginBottom: Spacing.lg + insets.bottom } : null;
+  const webSheetInset = isWeb ? { marginBottom: Spacing.lg } : null;
   const [mounted, setMounted] = useState(visible);
   /** Block taps on the sheet until the enter slide finishes (avoids accidental presses). */
   const [sheetInteractive, setSheetInteractive] = useState(false);
@@ -92,17 +90,17 @@ export function DismissibleBottomSheet({
     if (!visible) {
       return;
     }
-    translateY.value = ENTER_Y;
-    backdropOpacity.value = 0;
+    translateY.set(ENTER_Y);
+    backdropOpacity.set(0);
   }, [backdropOpacity, translateY, visible]);
 
   useEffect(() => {
     if (visible) {
       setMounted(true);
       setSheetInteractive(false);
-      translateY.value = ENTER_Y;
-      backdropOpacity.value = 0;
-      translateY.value = withTiming(
+      translateY.set(ENTER_Y);
+      backdropOpacity.set(0);
+      translateY.set(withTiming(
         0,
         {
           duration: ENTER_MS,
@@ -113,11 +111,11 @@ export function DismissibleBottomSheet({
             runOnJS(setSheetInteractive)(true);
           }
         }
-      );
-      backdropOpacity.value = withTiming(1, {
+      ));
+      backdropOpacity.set(withTiming(1, {
         duration: ENTER_MS,
         easing: Easing.out(Easing.quad),
-      });
+      }));
       return;
     }
 
@@ -127,8 +125,8 @@ export function DismissibleBottomSheet({
       return;
     }
 
-    backdropOpacity.value = withTiming(0, { duration: EXIT_MS, easing: Easing.in(Easing.quad) });
-    translateY.value = withTiming(
+    backdropOpacity.set(withTiming(0, { duration: EXIT_MS, easing: Easing.in(Easing.quad) }));
+    translateY.set(withTiming(
       EXIT_Y,
       { duration: EXIT_MS, easing: Easing.in(Easing.cubic) },
       (finished) => {
@@ -136,7 +134,7 @@ export function DismissibleBottomSheet({
           runOnJS(setMounted)(false);
         }
       }
-    );
+    ));
     // Intentionally not depending on `mounted`: including it restarts the enter
     // animation and can leave gestures dead until the next layout.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mounted gated inside
@@ -146,8 +144,8 @@ export function DismissibleBottomSheet({
     .activeOffsetY(8)
     .failOffsetX([-24, 24])
     .onUpdate((event) => {
-      translateY.value = Math.max(0, event.translationY);
-      backdropOpacity.value = Math.max(0.25, 1 - event.translationY / 280);
+      translateY.set(Math.max(0, event.translationY));
+      backdropOpacity.set(Math.max(0.25, 1 - event.translationY / 280));
     })
     .onEnd((event) => {
       const shouldDismiss =
@@ -158,8 +156,8 @@ export function DismissibleBottomSheet({
         return;
       }
 
-      translateY.value = withSpring(0, SNAP_SPRING);
-      backdropOpacity.value = withSpring(1, SNAP_SPRING);
+      translateY.set(withSpring(0, SNAP_SPRING));
+      backdropOpacity.set(withSpring(1, SNAP_SPRING));
     });
 
   // Same drag-to-dismiss on the dimmed area; Pressable tap is the reliable close
@@ -168,8 +166,8 @@ export function DismissibleBottomSheet({
     .activeOffsetY(8)
     .failOffsetX([-24, 24])
     .onUpdate((event) => {
-      translateY.value = Math.max(0, event.translationY);
-      backdropOpacity.value = Math.max(0.25, 1 - event.translationY / 280);
+      translateY.set(Math.max(0, event.translationY));
+      backdropOpacity.set(Math.max(0.25, 1 - event.translationY / 280));
     })
     .onEnd((event) => {
       const shouldDismiss =
@@ -180,16 +178,16 @@ export function DismissibleBottomSheet({
         return;
       }
 
-      translateY.value = withSpring(0, SNAP_SPRING);
-      backdropOpacity.value = withSpring(1, SNAP_SPRING);
+      translateY.set(withSpring(0, SNAP_SPRING));
+      backdropOpacity.set(withSpring(1, SNAP_SPRING));
     });
 
   const sheetAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
+    transform: [{ translateY: translateY.get() }],
   }));
 
   const backdropAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: backdropOpacity.value,
+    opacity: backdropOpacity.get(),
   }));
 
   if (!mounted) {
@@ -223,6 +221,7 @@ export function DismissibleBottomSheet({
 
           {scrollable ? (
             <Animated.View
+              testID="app-bottom-sheet"
               pointerEvents={sheetInteractive ? 'auto' : 'none'}
               style={[styles.sheet, isWeb && styles.sheetWeb, webSheetInset, sheetStyle, sheetAnimatedStyle]}
             >
@@ -232,6 +231,7 @@ export function DismissibleBottomSheet({
           ) : (
             <GestureDetector gesture={pan}>
               <Animated.View
+                testID="app-bottom-sheet"
                 pointerEvents={sheetInteractive ? 'auto' : 'none'}
                 style={[styles.sheet, isWeb && styles.sheetWeb, webSheetInset, sheetStyle, sheetAnimatedStyle]}
               >
@@ -255,7 +255,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   backdropFill: {
-    ...StyleSheet.absoluteFillObject,
+    ...AbsoluteFill,
     backgroundColor: palette.overlay,
   },
   sheet: {

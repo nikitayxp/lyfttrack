@@ -1,5 +1,5 @@
 import { useWorkoutComments } from '@/hooks/useWorkoutComments';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
@@ -96,7 +96,9 @@ export default function PublicProfileScreen() {
   const params = useLocalSearchParams<{ id?: string | string[]; from?: string | string[] }>();
   const profileId = useMemo(() => readRouteId(params.id), [params.id]);
   const activeProfile = useRef({ id: profileId });
-  if (activeProfile.current.id !== profileId) activeProfile.current = { id: profileId };
+  useLayoutEffect(() => {
+    activeProfile.current = { id: profileId };
+  }, [profileId]);
   const openedFrom = useMemo(() => readRouteId(params.from), [params.from]);
 
   const handleBack = useCallback(() => {
@@ -666,7 +668,7 @@ export default function PublicProfileScreen() {
               )}
               containerStyle={styles.statusCard}
             />
-          ) : null
+          ) : undefined
         }
         ListFooterComponent={
           profileReady && !isRestrictedProfile ? (
@@ -700,7 +702,7 @@ export default function PublicProfileScreen() {
                 <Text style={styles.statusText}>{t('historyJump.endOfHistory')}</Text>
               ) : null}
             </View>
-          ) : null
+          ) : undefined
         }
       />
 

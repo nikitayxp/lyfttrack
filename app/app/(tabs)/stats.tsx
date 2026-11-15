@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Animated, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { BarChart } from '@/components/common/WorkoutCharts';
 import { useTranslation } from 'react-i18next';
@@ -36,7 +36,7 @@ function formatCompactAxisNumber(value: number | string): string {
 type SkeletonPanelProps = { lines?: number; minHeight?: number };
 
 function SkeletonPanel({ lines = 3, minHeight = 190 }: SkeletonPanelProps) {
-  const opacity = useRef(new Animated.Value(0.35)).current;
+  const [opacity] = useState(() => new Animated.Value(0.35));
 
   useEffect(() => {
     const anim = Animated.loop(
@@ -83,6 +83,7 @@ export default function StatsScreen() {
   const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [volumeError, setVolumeError] = useState<string | null>(null);
   const [selectedDashboardIndex, setSelectedDashboardIndex] = useState<number | null>(null);
+  const [referenceTime, setReferenceTime] = useState(() => Date.now());
   const [selectedVolumeIndex, setSelectedVolumeIndex] = useState<number | null>(null);
 
   const [dashboardContainerWidth, setDashboardContainerWidth] = useState(0);
@@ -96,6 +97,7 @@ export default function StatsScreen() {
     try {
       const rows = await getWeeklyDashboardMetrics(localeTag, 12);
       setDashboardRows(rows);
+      setReferenceTime(Date.now());
     } catch (err) {
       setDashboardError(err instanceof Error ? err.message : t('common.unknownError'));
       setDashboardRows([]);
@@ -127,7 +129,10 @@ export default function StatsScreen() {
         value: Math.max(0, metricValueOf(item, dashboardMetric)),
         label: i % 4 === 0 ? item.weekLabel : '',
         frontColor: i === selectedDashboardIndex ? palette.accentLight : CHART_NEON,
-        onPress: () => setSelectedDashboardIndex(i),
+        onPress: () => {
+          setSelectedDashboardIndex(i);
+          setReferenceTime(Date.now());
+        },
       })),
     [dashboardRows, dashboardMetric, selectedDashboardIndex]
   );
@@ -201,10 +206,10 @@ export default function StatsScreen() {
     // Math.round made Fri–Sun of the current week show "1 weeks ago".
     const weeks = Math.max(
       0,
-      Math.floor((Date.now() - new Date(`${selectedDashboardPoint.weekKey}T12:00:00.000Z`).getTime()) / (7 * 24 * 60 * 60 * 1000))
+      Math.floor((referenceTime - new Date(`${selectedDashboardPoint.weekKey}T12:00:00.000Z`).getTime()) / (7 * 24 * 60 * 60 * 1000))
     );
     return t('stats.weeksAgo', { count: weeks });
-  }, [selectedDashboardPoint, t]);
+  }, [referenceTime, selectedDashboardPoint, t]);
 
   const metricTabs: { key: WeeklyDashboardMetric; label: string }[] = [
     { key: 'duration', label: t('stats.metricDuration') },

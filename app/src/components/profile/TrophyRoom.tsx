@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ComponentRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -86,7 +86,7 @@ export function TrophyRoom({ records, language, initialSelectedId, onClose }: { 
   const [muscle, setMuscle] = useState<ExerciseMuscleKey | 'all'>('all');
   const [sort, setSort] = useState<TrophySort>('recent');
   const [sharing, setSharing] = useState(false);
-  const captureRef = useRef<ViewShot | null>(null);
+  const captureRef = useRef<ComponentRef<typeof ViewShot> | null>(null);
   const shareRequestRef = useRef(0);
   const selectedRef = useRef<AllTimePR | undefined>(undefined);
   const isPortuguese = language.startsWith('pt');
@@ -95,7 +95,9 @@ export function TrophyRoom({ records, language, initialSelectedId, onClose }: { 
   const muscles = useMemo(() => [...new Set(records.map(record => record.muscleKey).filter((key): key is ExerciseMuscleKey => Boolean(key)))]
     .sort((a, b) => EXERCISE_MUSCLE_LABELS[a][isPortuguese ? 'pt' : 'en'].localeCompare(EXERCISE_MUSCLE_LABELS[b][isPortuguese ? 'pt' : 'en'])), [records, isPortuguese]);
   const selected = records.find(record => record.exerciseId === selectedId);
-  selectedRef.current = selected;
+  useLayoutEffect(() => {
+    selectedRef.current = selected;
+  }, [selected]);
   useEffect(() => () => { shareRequestRef.current++; }, []);
   const nameOf = useCallback((record: AllTimePR) => getLocalizedExerciseName(record.exercise, language.startsWith('pt') ? 'pt' : 'en'), [language]);
   const weightOf = (record: AllTimePR) => record.maxWeight.toLocaleString(locale, { maximumFractionDigits: 1 });
@@ -137,7 +139,7 @@ export function TrophyRoom({ records, language, initialSelectedId, onClose }: { 
   return (
       <Modal visible transparent animationType="fade" onRequestClose={close}>
         <View style={styles.overlay}>
-          <SafeAreaView style={styles.sheet} accessibilityViewIsModal>
+          <SafeAreaView testID="app-modal-safe-area" style={styles.sheet} accessibilityViewIsModal>
             <View style={styles.toolbar}>
               {selected ? <Pressable style={styles.iconButton} accessibilityRole="button" accessibilityLabel={t('profile.trophyBackToCollection')} onPress={() => setSelectedId(null)}><Ionicons name="arrow-back" size={22} color={palette.textPrimary} /></Pressable> : null}
               <Text style={styles.sheetTitle}>{t(selected ? 'profile.trophyDetails' : 'profile.trophiesTitle')}</Text>

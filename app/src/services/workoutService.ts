@@ -299,6 +299,17 @@ type RawWorkoutFeedSetRow = Pick<
     | null;
 };
 
+type RawWorkoutHistoryRow = RawWorkoutFeedRow & {
+  history_sets?: Omit<RawWorkoutFeedSetRow, 'workout_id'>[];
+  history_set_count?: RelationCountRow[];
+  viewer_likes?: { workout_id: string }[];
+};
+
+const HISTORY_WORKOUT_FIELDS = 'id,user_id,name,notes,start_time,end_time,workout_likes(count),workout_comments(count)';
+const HISTORY_SET_FIELDS = 'id,exercise_id,set_number,weight,reps,rir,set_type,exercises(id,name,name_en,name_pt)';
+const EMBEDDED_HISTORY_FIELDS = `${HISTORY_WORKOUT_FIELDS},history_sets:sets!sets_workout_id_fkey(${HISTORY_SET_FIELDS}),history_set_count:sets!sets_workout_id_fkey(count),viewer_likes:workout_likes(workout_id)` as const;
+const EMBEDDED_HISTORY_SET_LIMIT = 64;
+
 
 type SupabaseErrorMeta = {
   code: string | null;
@@ -2011,17 +2022,25 @@ export async function getUserWorkouts(
   }
 
   const exerciseWorkoutIds = await resolveExerciseWorkoutIds(filter, [normalizedUserId]);
+  const embedHistory = safePage === 0 && safeLimit <= 20 && viewer.id === normalizedUserId
+    && !filter?.periodKey && !filter?.search?.trim();
+  const profileRequest = embedHistory
+    ? Promise.allSettled([getPublicProfilesByIds([normalizedUserId])])
+    : null;
 
-  const filteredQuery = applyWorkoutListFilter(
-    supabase
-      .from('workouts')
-      .select('id,user_id,name,notes,start_time,end_time,workout_likes(count),workout_comments(count)')
-      .eq('user_id', normalizedUserId),
+  const workoutTable = supabase.from('workouts');
+  const selection = embedHistory
+    ? workoutTable.select(EMBEDDED_HISTORY_FIELDS)
+      .eq('viewer_likes.user_id', viewer.id)
+      .limit(EMBEDDED_HISTORY_SET_LIMIT, { referencedTable: 'history_sets' })
+    : workoutTable.select(HISTORY_WORKOUT_FIELDS);
+  const historyQuery = applyWorkoutListFilter(
+    selection.eq('user_id', normalizedUserId),
     filter,
     exerciseWorkoutIds
   );
 
-  const { data: workouts, error: workoutsError } = await filteredQuery
+  const { data: workouts, error: workoutsError } = await historyQuery
     .order('start_time', { ascending: false })
     .range(from, to);
 
@@ -2033,23 +2052,35 @@ export async function getUserWorkouts(
     return [];
   }
 
-  const rawWorkouts = workouts as RawWorkoutFeedRow[];
+  const rawWorkouts = workouts as RawWorkoutHistoryRow[];
   const workoutIds = rawWorkouts.map((workout) => workout.id);
-  const [profileByUserId, {data: ownLikes, error: ownLikesError}, allSets, recordSummaries] = await Promise.all([
-    getPublicProfilesByIds(rawWorkouts.map(workout => workout.user_id)),
-    supabase
-    .from('workout_likes')
-    .select('workout_id')
-    .eq('user_id', viewer.id)
-    .in('workout_id', workoutIds),
-    loadAllRows(count => supabase
-      .from('sets')
-      .select(
-        'id, workout_id, exercise_id, set_number, weight, reps, rir, set_type, exercises(id, name, name_en, name_pt)',
-        { count },
-      )
+  const embeddedSets: RawWorkoutFeedSetRow[] = [];
+  const incompleteWorkoutIds: string[] = [];
+  for (const workout of rawWorkouts) {
+    const sets = workout.history_sets;
+    // The API can cap child rows separately. Use the paginated read unless the count confirms completeness.
+    if (Array.isArray(sets) && sets.length === workout.history_set_count?.[0]?.count) {
+      embeddedSets.push(...sets.map(set => ({ ...set, workout_id: workout.id })));
+    } else {
+      incompleteWorkoutIds.push(workout.id);
+    }
+  }
+  const embeddedLikes = rawWorkouts.every(workout => Array.isArray(workout.viewer_likes));
+  const [profileByUserId, {data: ownLikes, error: ownLikesError}, remainingSets, recordSummaries] = await Promise.all([
+    profileRequest ? profileRequest.then(([result]) => {
+      if (result.status === 'rejected') throw result.reason;
+      return result.value;
+    }) : getPublicProfilesByIds(rawWorkouts.map(workout => workout.user_id)),
+    embeddedLikes ? { data: rawWorkouts.flatMap(workout => workout.viewer_likes ?? []), error: null } : supabase
+      .from('workout_likes')
+      .select('workout_id')
+      .eq('user_id', viewer.id)
       .in('workout_id', workoutIds),
-    'Unable to load workout history sets', { countFirstPage: true }),
+    incompleteWorkoutIds.length > 0 ? loadAllRows(count => supabase
+      .from('sets')
+      .select(`workout_id,${HISTORY_SET_FIELDS}`, { count })
+      .in('workout_id', incompleteWorkoutIds),
+    'Unable to load workout history sets', { countFirstPage: true }) : [],
     (options?.deferRecords ? Promise.resolve(null) : getWorkoutRecordSummaries(workoutIds)).catch(error => {
       console.warn('[workout-records] Unable to load record counts', {message: toErrorMessage(error)});
       return null;
@@ -2058,9 +2089,10 @@ export async function getUserWorkouts(
   if (ownLikesError) throw new Error(`Unable to load like status: ${ownLikesError.message}`);
   const likedWorkoutIds = new Set((ownLikes ?? []).map(row => row.workout_id));
 
+  const allSets = [...embeddedSets, ...remainingSets];
   allSets.sort((a, b) => (a.exercise_id ?? '').localeCompare(b.exercise_id ?? '') || sortWorkoutFeedExerciseSets(a, b));
 
-  const aggregateByWorkout = aggregateWorkoutFeedSets((allSets as RawWorkoutFeedSetRow[] | null) ?? []);
+  const aggregateByWorkout = aggregateWorkoutFeedSets(allSets);
 
   const currentSetsByWorkoutId = new Map<string, PersonalRecordSetSample[]>();
   for (const workout of rawWorkouts) {

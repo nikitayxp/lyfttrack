@@ -22,7 +22,7 @@ test('creation is transactional, owner-scoped and repeatable in PostgreSQL', asy
     grant usage on schema auth to authenticated, anon; grant execute on function auth.uid() to authenticated, anon;
     create table exercises (id uuid primary key, created_by uuid);
     create table workout_templates (id uuid primary key, user_id uuid);
-    create table workouts (id uuid primary key default gen_random_uuid(), user_id uuid not null, name text not null, notes text, template_id uuid references workout_templates(id), start_time timestamptz, end_time timestamptz);
+    create table workouts (id uuid primary key default gen_random_uuid(), user_id uuid not null, name text not null, notes text, template_id uuid references workout_templates(id) on delete set null, start_time timestamptz, end_time timestamptz);
     create table workout_exercises (id uuid primary key default gen_random_uuid(), workout_id uuid references workouts(id), exercise_id uuid references exercises(id), "order" integer, rest_time integer, notes text);
     create table sets (id uuid primary key default gen_random_uuid(), workout_id uuid references workouts(id), workout_exercise_id uuid references workout_exercises(id), exercise_id uuid references exercises(id), set_number integer, weight numeric, reps integer, rir integer, set_type text, side text);
     insert into exercises values ('${exercise}', null), ('${privateExercise}', '${other}');
@@ -40,6 +40,7 @@ test('creation is transactional, owner-scoped and repeatable in PostgreSQL', asy
     grant select, insert, update on workouts to authenticated; grant select, insert on workout_exercises, sets to authenticated;
   `);
   await db.exec(fs.readFileSync(path.resolve(__dirname, '../../supabase/migrations/20261018140000_atomic_workout_creation.sql'), 'utf8'));
+  await db.exec(fs.readFileSync(path.resolve(__dirname, '../../supabase/migrations/20261116111500_workout_template_ownership.sql'), 'utf8'));
   const save = async (workout = header, relations = exercises, sets = [set], expectedUser = owner) => (await db.query(
     'select public.create_workout_atomic($1::uuid, $2::jsonb, $3::jsonb, $4::jsonb) result',
     [expectedUser, JSON.stringify(workout), JSON.stringify(relations), JSON.stringify(sets)],
@@ -117,6 +118,23 @@ test('creation is transactional, owner-scoped and repeatable in PostgreSQL', asy
     const proc = (await db.query("select prosecdef, proconfig from pg_proc where oid = 'public.create_workout_atomic(uuid,jsonb,jsonb,jsonb)'::regprocedure")).rows[0];
     assert.equal(proc.prosecdef, false);
     assert.ok(proc.proconfig.some(value => value.startsWith('search_path=')));
+  });
+  await t.test('own-template save retries remain valid after the template is deleted', async () => {
+    await reset();
+    const ownTemplate='40000000-0000-0000-0000-000000000002';
+    await db.exec('reset role');
+    await db.query('insert into workout_templates(id,user_id) values($1,$2)',[ownTemplate,owner]);
+    await db.exec('set role authenticated');
+    const ownHeader={...header,template_id:ownTemplate};
+    const first=await save(ownHeader);
+    assert.equal((await save(ownHeader)).workout_id,first.workout_id);
+    await db.exec('reset role');
+    await db.query('delete from workout_templates where id=$1',[ownTemplate]);
+    await db.exec('set role authenticated');
+    assert.equal((await save(ownHeader)).workout_id,first.workout_id);
+    const row=(await db.query('select user_id,template_id from workouts where id=$1',[first.workout_id])).rows[0];
+    assert.deepEqual(row,{user_id:owner,template_id:null});
+    await counts({workouts:1,exercises:1,sets:1});
   });
   await t.test('authentication is required and anonymous role cannot execute', async () => {
     await reset(); await db.exec("set test.user_id = ''");

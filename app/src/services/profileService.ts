@@ -7,6 +7,7 @@ import { onAuthAccountChange } from '@/services/authSessionStore';
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/database';
 import { resolveAuthAvatarUrl } from '@/utils/authAvatarUrl';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
+import { USERNAME_MAX_LENGTH, isValidUsername, normalizeUsername, sanitizeUsernameInput } from '@/utils/username';
 
 export type ProfileRow = Tables<'profiles'>;
 export type PublicProfileView = Pick<
@@ -101,26 +102,16 @@ function normalizeOptionalId(value: string | null | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function sanitizeUsername(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '_')
-    .replace(/[^a-z0-9._]/g, '')
-    .replace(/_+/g, '_')
-    .replace(/^[_\.]+|[_\.]+$/g, '');
-}
-
 function buildBaseUsername(user: User): string {
-  const metadata = (user.user_metadata ?? {}) as { username?: string };
+  const metadata = user.user_metadata ?? {};
 
-  const fromMetadata = sanitizeUsername(metadata.username ?? '');
+  const fromMetadata = sanitizeUsernameInput(typeof metadata.username === 'string' ? metadata.username : '');
   if (fromMetadata.length >= 3) {
     return fromMetadata;
   }
 
   const emailPrefix = user.email?.split('@')[0] ?? '';
-  const fromEmail = sanitizeUsername(emailPrefix);
+  const fromEmail = sanitizeUsernameInput(emailPrefix);
   if (fromEmail.length >= 3) {
     return fromEmail;
   }
@@ -269,7 +260,7 @@ async function createProfileForExistingUser(user: User): Promise<ProfileRow> {
   const baseUsername = buildBaseUsername(user);
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    const username = attempt === 0 ? baseUsername : `${baseUsername}_${Math.floor(Math.random() * 9000) + 1000}`;
+    const username = attempt === 0 ? baseUsername : `${baseUsername.slice(0, USERNAME_MAX_LENGTH - 5)}_${Math.floor(Math.random() * 9000) + 1000}`;
     const insertRow = buildCreateProfileRow(user, username);
 
     const { data: card, error } = await supabase
@@ -441,9 +432,9 @@ export async function deleteOwnAccount(): Promise<void> {
 }
 
 export async function checkUsernameAvailability(username: string): Promise<boolean> {
-  const normalizedUsername = sanitizeUsername(username).slice(0, INPUT_LIMITS.nameMax);
+  const normalizedUsername = normalizeUsername(username);
 
-  if (normalizedUsername.length < 3) {
+  if (!isValidUsername(normalizedUsername)) {
     return false;
   }
 
@@ -466,10 +457,10 @@ export async function updateProfile(input: UpdateProfileInput): Promise<ProfileR
   const updateRow: TablesUpdate<'profiles'> = {};
 
   if (input.username !== undefined) {
-    const normalizedUsername = sanitizeUsername(input.username).slice(0, INPUT_LIMITS.nameMax);
+    const normalizedUsername = normalizeUsername(input.username);
 
-    if (normalizedUsername.length < 3) {
-      throw new Error('Username must have at least 3 valid characters.');
+    if (!isValidUsername(normalizedUsername)) {
+      throw new Error('Username must contain 3 to 24 letters, digits, periods or underscores.');
     }
 
     updateRow.username = normalizedUsername;

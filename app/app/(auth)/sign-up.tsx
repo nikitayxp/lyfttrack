@@ -25,23 +25,13 @@ import { checkUsernameAvailability } from '@/services/profileService';
 import { loadSignUpDraft, saveSignUpDraft } from '@/services/signUpDraft';
 import { supabase } from '@/services/supabase';
 import { PASSWORD_MIN_LENGTH, isPasswordStrong } from '@/utils/passwordRules';
+import { USERNAME_MAX_LENGTH, sanitizeUsernameInput as sanitizeUsername } from '@/utils/username';
 
 const palette = Colors.dark;
-const USERNAME_MAX_LENGTH = 24;
 const DISPLAY_NAME_MAX_LENGTH = 60;
 
 function normalizeDisplayName(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
-}
-
-function sanitizeUsername(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '_')
-    .replace(/[^a-z0-9._]/g, '')
-    .replace(/_+/g, '_')
-    .replace(/^[_\.]+|[_\.]+$/g, '');
 }
 
 export default function SignUpScreen() {

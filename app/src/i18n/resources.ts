@@ -262,6 +262,7 @@ export const resources = {
         templateNameRequired: 'Template name is required.',
         templateExerciseRequired: 'Select at least one exercise to create a template.',
         usernameRequired: 'Username is required.',
+        usernameInvalid: 'Use 3 to 24 lowercase letters, digits, periods or underscores.',
         emailRequired: 'Email is required.',
       },
       importData: {
@@ -1132,6 +1133,7 @@ export const resources = {
         templateNameRequired: 'O nome do template e obrigatorio.',
         templateExerciseRequired: 'Seleciona pelo menos um exercicio para criar o template.',
         usernameRequired: 'O nome de utilizador e obrigatorio.',
+        usernameInvalid: 'Usa entre 3 e 24 letras minusculas, numeros, pontos ou underscores.',
         emailRequired: 'O email e obrigatorio.',
       },
       importData: {

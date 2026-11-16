@@ -32,6 +32,7 @@ import { useWorkoutContext } from '@/context/WorkoutContext';
 import { getTabBarHeight, MINIMIZED_WORKOUT_BAR_GAP, MINIMIZED_WORKOUT_BAR_HEIGHT } from '@/constants/tabBar';
 import { getEmailChangeRedirectTo, getPasswordResetRedirectTo, supabase } from '@/services/supabase';
 import { INPUT_LIMITS, sanitizeText } from '@/utils/inputValidation';
+import { USERNAME_MAX_LENGTH, isValidUsername, normalizeUsername, sanitizeUsernameInput } from '@/utils/username';
 import { ConfirmModal } from '@/components/common/ConfirmModal';
 import { RESET_PASSWORD_EDIT_PROFILE_FROM } from '@/utils/resetPasswordOrigin';
 import { showAlert } from '@/utils/showAlert';
@@ -124,10 +125,7 @@ export default function EditProfileScreen() {
 
     setActionFeedback(null);
 
-    const normalizedUsername = sanitizeText(usernameInput, {
-      maxLength: INPUT_LIMITS.nameMax,
-      allowEmpty: false,
-    });
+    const normalizedUsername = normalizeUsername(usernameInput);
     const normalizedFullName = sanitizeText(fullNameInput, {
       maxLength: INPUT_LIMITS.nameMax,
       allowEmpty: true,
@@ -139,6 +137,11 @@ export default function EditProfileScreen() {
 
     if (!normalizedUsername) {
       showAlert(showToast, t('validation.title'), t('validation.usernameRequired'), 'error');
+      return;
+    }
+
+    if (!isValidUsername(normalizedUsername)) {
+      showAlert(showToast, t('validation.title'), t('validation.usernameInvalid'), 'error');
       return;
     }
 
@@ -527,13 +530,13 @@ export default function EditProfileScreen() {
               <TextInput
                 accessibilityLabel={t('profileEdit.usernameLabel')}
                 value={usernameInput}
-                onChangeText={(value) => setUsernameInput(value.substring(0, INPUT_LIMITS.nameMax))}
+                onChangeText={(value) => setUsernameInput(sanitizeUsernameInput(value))}
                 style={styles.input}
                 placeholder="username"
                 placeholderTextColor={palette.textMuted}
                 autoCapitalize="none"
                 autoCorrect={false}
-                maxLength={INPUT_LIMITS.nameMax}
+                maxLength={USERNAME_MAX_LENGTH}
               />
 
               <Text style={styles.inputLabel}>{t('profileEdit.fullNameLabel')}</Text>

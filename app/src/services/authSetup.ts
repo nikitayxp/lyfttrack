@@ -1,5 +1,6 @@
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/services/supabase';
+import { isValidUsername, sanitizeUsernameInput } from '@/utils/username';
 
 /** Accounts created before this ship window are not forced through the new setup screens. */
 export const AUTH_SETUP_LEGACY_BEFORE = '2026-07-27T00:00:00.000Z';
@@ -96,14 +97,8 @@ export function suggestUsernameFromGoogle(user: User): string {
     user.email?.split('@')[0] ||
     `user_${user.id.replace(/-/g, '').slice(0, 8)}`;
 
-  return raw
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '_')
-    .replace(/[^a-z0-9._]/g, '')
-    .replace(/_+/g, '_')
-    .replace(/^[_\.]+|[_\.]+$/g, '')
-    .slice(0, 24);
+  const suggestion = sanitizeUsernameInput(raw);
+  return isValidUsername(suggestion) ? suggestion : `user_${user.id.replace(/-/g, '').slice(0, 8)}`;
 }
 
 export function suggestDisplayNameFromGoogle(user: User): string {

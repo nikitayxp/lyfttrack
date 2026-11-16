@@ -6,21 +6,22 @@ const createSourceLoader = require('./load-source.cjs');
 const ownId = '00000000-0000-0000-0000-000000000001';
 const hiddenId = '00000000-0000-0000-0000-000000000002';
 
-function setup({ bootstrap = false, failCards = false, bootstrapRace = false, usernameCollision = false, beforeReply } = {}) {
+function setup({ bootstrap = false, failCards = false, bootstrapRace = false, usernameCollision = false, metaUsername = 'owner', beforeReply } = {}) {
   const requests = [];
   let ownExists = !bootstrap;
   let insertAttempts = 0;
   const own = { id: ownId, username: 'owner', full_name: 'Own name', bio: 'Own bio', height_cm: 180, avatar_url: null, visibility: 'private', updated_at: '2026-01-01' };
   const hidden = { id: hiddenId, username: 'hidden', full_name: null, avatar_url: 'https://example.test/avatar.jpg', visibility: 'private', updated_at: '2026-01-01' };
-  const user = { id: ownId, email: 'owner@example.test', user_metadata: { username: 'owner', full_name: 'Own name', display_name: 'Own name', bio: 'Own bio' } };
+  const user = { id: ownId, email: 'owner@example.test', user_metadata: { username: metaUsername, full_name: 'Own name', display_name: 'Own name', bio: 'Own bio' } };
   const fetch = async (input, options = {}) => {
     const url = new URL(String(input));
     const table = url.pathname.split('/').pop();
     const columns = url.searchParams.get('select') ?? '*';
     const method = options.method ?? 'GET';
     await beforeReply?.(table, method);
-    requests.push({ table, columns, method, url });
+    requests.push({ table, columns, method, url, body: ['profiles', 'check_username_available'].includes(table) && options.body ? JSON.parse(options.body) : undefined });
     const reply = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+    if (table === 'check_username_available') return reply(true);
     if (url.pathname.startsWith('/storage/v1/object/avatars/')) {
       return reply({ Key: url.pathname.split('/object/')[1] });
     }
@@ -212,4 +213,49 @@ test('athlete discovery starts all independent reads before any of them finishes
   assert.deepEqual(rows.map(({ username, relation }) => ({ username, relation })), [
     { username: 'hidden', relation: 'request_received' },
   ]);
+});
+
+
+test('username edits preserve every allowed period and underscore', async () => {
+  const { load } = setup();
+  const profile = await load('app/src/services/profileService.ts').updateProfile({ username: ' \t._Keep__01.\n ' });
+  assert.equal(profile.username, '._keep__01.');
+});
+
+test('availability rejects invalid input without issuing an RPC', async () => {
+  for (const username of ['ab', 'a'.repeat(25), 'bad name', 'josé', '\u00a0abc\u00a0']) {
+    const { load, requests } = setup();
+    assert.equal(await load('app/src/services/profileService.ts').checkUsernameAvailability(username), false, username);
+    assert.equal(requests.filter(request => request.table === 'check_username_available').length, 0);
+  }
+});
+
+test('availability sends the same canonical value accepted by persistence', async () => {
+  const { load, requests } = setup();
+  assert.equal(await load('app/src/services/profileService.ts').checkUsernameAvailability(' \tMiXeD.01_\n '), true);
+  assert.equal(requests.find(request => request.table === 'check_username_available').body.target_username, 'mixed.01_');
+});
+
+test('invalid username edits never write a truncated or silently changed identity', async () => {
+  for (const username of ['ab', 'a'.repeat(25), 'bad name', 'josé']) {
+    const { load, requests } = setup();
+    await assert.rejects(load('app/src/services/profileService.ts').updateProfile({ username }), /username/i);
+    assert.equal(requests.filter(request => request.table === 'profiles' && request.method === 'PATCH').length, 0);
+  }
+});
+
+test('bootstrap collision suffixes fit the same 24-character format', async () => {
+  const { load, requests } = setup({ bootstrap: true, usernameCollision: true, metaUsername: 'a'.repeat(24) });
+  const profile = await load('app/src/services/profileService.ts').getProfile();
+  assert.match(profile.username, /^a{19}_\d{4}$/);
+  const inserts = requests.filter(request => request.table === 'profiles' && request.method === 'POST');
+  assert.deepEqual(inserts.map(request => request.body.username.length), [24, 24]);
+});
+
+test('Google suggestions preserve valid handles and fall back when metadata has no valid name', () => {
+  const { load } = setup();
+  const { suggestUsernameFromGoogle } = load('app/src/services/authSetup.ts');
+  assert.equal(suggestUsernameFromGoogle({ id: ownId, user_metadata: { preferred_username: '._Keep__01.' } }), '._keep__01.');
+  assert.match(suggestUsernameFromGoogle({ id: ownId, user_metadata: { full_name: '💪' } }), /^user_[a-f0-9]{8}$/);
+  assert.equal(suggestUsernameFromGoogle({ id: ownId, user_metadata: { preferred_username: 'x'.repeat(40) } }).length, 24);
 });

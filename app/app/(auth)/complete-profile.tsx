@@ -24,20 +24,10 @@ import {
 import { checkUsernameAvailability, getProfile, updateProfile } from '@/services/profileService';
 import { supabase } from '@/services/supabase';
 import { getSessionUserOrThrow } from '@/services/authUserService';
+import { USERNAME_MAX_LENGTH, sanitizeUsernameInput as sanitizeUsername } from '@/utils/username';
 
 const palette = Colors.dark;
-const USERNAME_MAX_LENGTH = 24;
 const DISPLAY_NAME_MAX_LENGTH = 60;
-
-function sanitizeUsername(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '_')
-    .replace(/[^a-z0-9._]/g, '')
-    .replace(/_+/g, '_')
-    .replace(/^[_\.]+|[_\.]+$/g, '');
-}
 
 export default function CompleteProfileScreen() {
   const { t } = useTranslation();
@@ -201,7 +191,7 @@ export default function CompleteProfileScreen() {
                 <TextInput
                   accessibilityLabel={t('auth.signUp.usernameLabel')}
                   value={username}
-                  onChangeText={setUsername}
+                  onChangeText={value => setUsername(sanitizeUsername(value))}
                   placeholder={t('auth.signUp.usernamePlaceholder')}
                   placeholderTextColor={palette.textMuted}
                   autoCapitalize="none"

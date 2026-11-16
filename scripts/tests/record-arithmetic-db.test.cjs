@@ -39,7 +39,7 @@ test('SQL record baselines match JavaScript arithmetic for repeated and fraction
     from(table) {
       let cursor = '';
       const q = {
-        select(){return q;},eq(){return q;},in(){return q;},order(){return q;},range(){return q;},
+        select(){return q;},eq(){return q;},in(){return q;},order(){return q;},range(){return q;},limit(){return q;},
         gt(_key,value){cursor=value;return q;},
         then(resolve,reject){return Promise.resolve({data:(table==='workouts'?[workout]:table==='sets'?sets:[]).filter(row=>row.id>cursor),error:null}).then(resolve,reject);},
       };

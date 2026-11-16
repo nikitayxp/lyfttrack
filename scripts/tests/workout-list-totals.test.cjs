@@ -2,7 +2,10 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const createSourceLoader = require('./load-source.cjs');
 
-function setup(cap=1000, rpc = async () => ({data: [], error: null}), { setRequests = [], setsPerWorkout = 60, exposesCount = true } = {}) {
+function setup(cap=1000, rpc = async () => ({data: [], error: null}), {
+  setRequests = [], setsPerWorkout = 60, exposesCount = true,
+  embeddedHistory = false, embeddedCount = true, requests = [],
+} = {}) {
   const workouts = Array.from({ length: 20 }, (_, i) => ({
     id: `w${i}`, user_id: 'owner', name: `Workout ${i}`,
     start_time: '2026-10-17T09:00:00Z', end_time: '2026-10-17T10:00:00Z',
@@ -23,18 +26,42 @@ function setup(cap=1000, rpc = async () => ({data: [], error: null}), { setReque
       let rows = table === 'workouts' ? [...workouts] : table === 'sets' ? [...sets] : [];
       let from = 0, to = 999;
       let countMode;
+      let includesHistorySets = false;
+      let embeddedSetLimit = cap;
       const query = {
-        select(_projection, options) { countMode = options?.count; return query; },
+        select(projection, options) {
+          countMode = options?.count;
+          includesHistorySets = embeddedHistory && table === 'workouts' && projection.includes('history_sets:sets');
+          return query;
+        },
         maybeSingle() { return Promise.resolve({data:rows[0] ?? null,error:null}); },
-        eq(key, value) { rows = rows.filter(r => r[key] === value); return query; },
+        eq(key, value) {
+          if (key !== 'viewer_likes.user_id') rows = rows.filter(r => r[key] === value);
+          return query;
+        },
         in(key, values) { rows = rows.filter(r => values.includes(r[key])); return query; },
         gt(key, value) { rows = rows.filter(r => r[key] > value); return query; },
         not() { return query; }, or() { return query; },
         order(key, { ascending }) { rows.sort((a, b) => String(a[key]).localeCompare(String(b[key])) * (ascending ? 1 : -1)); return query; },
         range(a, b) { from = a; to = b; return query; },
-        limit(n) { to = n - 1; return query; },
+        limit(n, options) {
+          if (options?.referencedTable === 'history_sets') embeddedSetLimit = Math.min(n, cap);
+          else to = n - 1;
+          return query;
+        },
         then(resolve, reject) {
-          const data = rows.slice(from, Math.min(to + 1, from + cap));
+          const page = rows.slice(from, Math.min(to + 1, from + cap));
+          const data = includesHistorySets ? page.map(row => {
+            const children = sets.filter(set => set.workout_id === row.id);
+            return {
+              ...row,
+              history_sets: children.slice(0, embeddedSetLimit).map(({workout_id, ...set}) => set),
+              history_set_count: embeddedCount ? [{ count: children.length }] : undefined,
+              viewer_likes: row.id === 'w0' ? [{ workout_id: row.id }] : [],
+              workout_likes: [{ count: 7 }],
+            };
+          }) : page;
+          requests.push(table);
           const count = exposesCount && countMode === 'exact' ? rows.length : null;
           if (table === 'sets') setRequests.push([data.length, countMode]);
           return Promise.resolve({ data, count, error: null }).then(resolve, reject);
@@ -45,6 +72,29 @@ function setup(cap=1000, rpc = async () => ({data: [], error: null}), { setReque
   };
   return createSourceLoader({ '@/services/supabase': { supabase } })('app/src/services/workoutService.ts');
 }
+
+test('initial own history can use complete sets and the viewer like in the workouts response', async () => {
+  const requests = [];
+  const service = setup(1000, undefined, { embeddedHistory: true, requests });
+  const workouts = await service.getUserWorkouts('owner', 0, 20, {}, { deferRecords: true });
+  assert.equal(workouts.length, 20);
+  assert.ok(workouts.every(workout => workout.totalSets === 60 && workout.totalVolume === 1200));
+  assert.equal(workouts[0].has_liked, true);
+  assert.equal(workouts[0].likes_count, 7);
+  assert.equal(workouts[1].has_liked, false);
+  assert.deepEqual(requests.sort(), ['profile_cards', 'workouts']);
+});
+
+test('independent API caps and omitted counts fall back to complete paginated sets', async () => {
+  for (const fixture of [{ cap: 19, count: true }, { cap: 1000, count: false }]) {
+    const setRequests = [];
+    const service = setup(fixture.cap, undefined, { embeddedHistory: true, embeddedCount: fixture.count, setRequests });
+    const workouts = await service.getUserWorkouts('owner', 0, 10, {}, { deferRecords: true });
+    assert.equal(workouts.length, 10);
+    assert.ok(setRequests.length > 0);
+    assert.ok(workouts.every(workout => workout.totalSets === 60 && workout.workingSets === 59 && workout.exerciseGroups[0].sets.length === 60));
+  }
+});
 
 for (const method of ['getFeedWorkouts', 'getUserWorkouts']) {
   test(`${method} keeps every workout total when the page contains more than 1000 sets`, async () => {

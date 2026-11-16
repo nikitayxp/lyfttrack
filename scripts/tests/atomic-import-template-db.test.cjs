@@ -21,7 +21,7 @@ test('atomic imports, repairs and templates retain data and identity', async t =
     grant usage on schema auth to authenticated, anon; grant execute on function auth.uid() to authenticated, anon;
     create table exercises (id uuid primary key default gen_random_uuid(), created_by uuid, name text, name_en text, name_pt text, is_custom boolean, muscle_group text, equipment text);
     create table workout_templates (id uuid primary key default gen_random_uuid(), user_id uuid, name text, notes text, created_at timestamptz default now()); create table template_exercises (id uuid primary key default gen_random_uuid(), template_id uuid references workout_templates(id), exercise_id uuid references exercises(id), order_index integer, rest_seconds integer);
-    create table workouts (id uuid primary key default gen_random_uuid(), user_id uuid not null, name text not null, notes text, template_id uuid references workout_templates(id), start_time timestamptz, end_time timestamptz);
+    create table workouts (id uuid primary key default gen_random_uuid(), user_id uuid not null, name text not null, notes text, template_id uuid references workout_templates(id) on delete set null, start_time timestamptz, end_time timestamptz);
     create table workout_exercises (id uuid primary key default gen_random_uuid(), workout_id uuid references workouts(id), exercise_id uuid references exercises(id), "order" integer, rest_time integer, notes text);
     create table sets (id uuid primary key default gen_random_uuid(), workout_id uuid references workouts(id), workout_exercise_id uuid references workout_exercises(id), exercise_id uuid references exercises(id), set_number integer, weight numeric, reps integer, rir integer, set_type text, side text);
     insert into exercises (id, created_by) values ('${exercise}', null), ('${privateExercise}', '${other}');
@@ -45,6 +45,7 @@ test('atomic imports, repairs and templates retain data and identity', async t =
   assert.ok(fs.existsSync(migration), 'atomic import/template migration must exist');
   await db.exec(fs.readFileSync(migration, 'utf8'));
   await assert.doesNotReject(db.exec(fs.readFileSync(migration, 'utf8')), 'the migration must be safe to apply again');
+  await db.exec(fs.readFileSync(path.resolve(__dirname, '../../supabase/migrations/20261116111500_workout_template_ownership.sql'), 'utf8'));
   await db.exec(`
     alter table workout_templates enable row level security; alter table template_exercises enable row level security;
     create policy template_owner on workout_templates for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
@@ -174,6 +175,26 @@ test('atomic imports, repairs and templates retain data and identity', async t =
     ]);
     assert.equal(repairs.filter(result=>result.status==='fulfilled').length,1);
     assert.equal(repairs.filter(result=>result.status==='rejected').length,1);
+  });
+  await t.test('owned import and repair retries keep history after template deletion',async()=>{
+    const ownTemplate='40000000-0000-0000-0000-000000000004';
+    await rpc('save_template_atomic',[owner,'50000000-0000-0000-0000-000000000020',ownTemplate,'Ownership model',entries,null]);
+    const ownHeader={...header,template_id:ownTemplate,session_started_at:'2026-11-01T10:00:00Z',start_time:'2026-11-01T10:00:00Z',end_time:'2026-11-01T10:30:00Z'};
+    const ownBatch=[{workout:ownHeader,exercises,sets:[set]}];
+    const importArgs=[owner,'70000000-0000-0000-0000-000000000020',ownBatch];
+    const imported=await rpc('import_workouts_atomic',importArgs);
+    const ownWorkout=imported.workout_ids[0];
+    assert.deepEqual(await rpc('import_workouts_atomic',importArgs),imported);
+    assert.equal((await db.query('select template_id from workouts where id=$1',[ownWorkout])).rows[0].template_id,ownTemplate);
+    const snapshot=(await db.query('select public.import_workout_snapshot($1) s',[ownWorkout])).rows[0].s;
+    const repairArgs=[owner,'60000000-0000-0000-0000-000000000090',ownWorkout,ownHeader,exercises,[{...set,weight:31.25}],'rebuild',snapshot];
+    assert.equal(await rpc('repair_imported_workout_atomic',repairArgs),ownWorkout);
+    await db.query('delete from template_exercises where template_id=$1',[ownTemplate]);
+    await db.query('delete from workout_templates where id=$1',[ownTemplate]);
+    assert.deepEqual(await rpc('import_workouts_atomic',importArgs),imported);
+    assert.equal(await rpc('repair_imported_workout_atomic',repairArgs),ownWorkout);
+    assert.deepEqual((await db.query('select user_id,template_id from workouts where id=$1',[ownWorkout])).rows[0],{user_id:owner,template_id:null});
+    assert.deepEqual((await db.query('select weight::float as weight from sets where workout_id=$1',[ownWorkout])).rows,[{weight:31.25}]);
   });
   await t.test('account changes and private exercises cannot bypass invoker permissions',async()=> {
     await db.exec(`set test.user_id='${other}'`);

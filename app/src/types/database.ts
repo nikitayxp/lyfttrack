@@ -595,10 +595,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "workouts_template_id_fkey"
-            columns: ["template_id"]
+            columns: ["template_id", "user_id"]
             isOneToOne: false
             referencedRelation: "workout_templates"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "user_id"]
           },
           {
             foreignKeyName: "workouts_user_id_fkey"

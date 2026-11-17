@@ -77,7 +77,7 @@ test('shared session store has one subscription, rejects stale bootstrap and man
   let workoutInvalidations = 0, catalogInvalidations = 0;
   const load = loadSource({
     '@/services/dataCache': { invalidateWorkoutDataCache: () => workoutInvalidations++, invalidateExerciseCatalogCache: () => catalogInvalidations++ },
-    '@/services/supabase': { supabase: { auth: {
+    '@/services/supabase': { isDeletedAuthAccount: async () => false, subscribeDeletedAuthAccounts: () => () => {}, supabase: { auth: {
       getSession: () => initial.promise,
       onAuthStateChange: cb => { subscriptions++; callback = cb; return { data: { subscription: { unsubscribe: () => unsubscribeCount++ } } }; },
       startAutoRefresh: () => starts++, stopAutoRefresh: () => stops++,
@@ -174,8 +174,7 @@ test('native Google login consumes its browser return and concurrent starts shar
     '@react-native-async-storage/async-storage': storage,
     'react-native': { Platform: { OS: 'ios' } },
     'expo-web-browser': { openAuthSessionAsync: async () => { browsers++; return browser.promise; } },
-    '@/services/supabase': { getGoogleOAuthRedirectTo: () => 'lyfttrack://callback', supabase: { auth: {
-      signInWithOAuth: async () => { starts++; return { data: { url: 'https://provider.test' }, error: null }; },
+    '@/services/supabase': { getGoogleOAuthRedirectTo: () => 'lyfttrack://callback', beginOAuthSignIn: async () => { starts++; return { data: { url: 'https://provider.test' }, error: null }; }, supabase: { auth: {
       exchangeCodeForSession: async code => { codes.push(code); return { data: { session: { user: { id: 'a' } } }, error: null }; },
       getSession: async () => ({ data: { session: { user: { id: 'a' } } }, error: null }),
     } } },
@@ -188,18 +187,27 @@ test('native Google login consumes its browser return and concurrent starts shar
   assert.deepEqual(codes, ['browser-code']);
 });
 
-test('native client uses PKCE and processLock while web retains its default browser lock', () => {
-  for (const os of ['ios', 'web']) {
+test('auth keeps the existing PKCE session key and selects a platform lock', async () => {
+  for (const [os, hasBrowserLocks] of [['ios', false], ['web', true], ['web', false]]) {
     let options;
-    const processLock = () => {};
+    const calls = [];
+    const processLock = (...args) => { calls.push(['process', ...args]); };
+    const browserManager = { request: async (name, options, run) => {
+      assert.equal(options.steal, undefined);
+      calls.push(['browser', name]);
+      return run({ name });
+    } };
     loadSource({
       '@supabase/supabase-js': { processLock, createClient: (_url, _key, config) => { options = config; return {}; } },
       '@react-native-async-storage/async-storage': { getItem() {} },
       'expo-linking': {},
       'react-native': { Platform: { OS: os } },
-    }, { process: { env: { EXPO_PUBLIC_SUPABASE_URL: 'https://project.test', EXPO_PUBLIC_SUPABASE_ANON_KEY: 'public-test' } } })('app/src/services/supabase.ts');
+    }, { navigator: hasBrowserLocks ? { locks: browserManager } : undefined, AbortController, process: { env: { EXPO_PUBLIC_SUPABASE_URL: 'https://project.test', EXPO_PUBLIC_SUPABASE_ANON_KEY: 'public-test' } } })('app/src/services/supabase.ts');
     assert.equal(options.auth.flowType, 'pkce');
-    assert.equal(options.auth.lock, os === 'web' ? undefined : processLock);
+    assert.equal(options.auth.storageKey, 'sb-project-auth-token');
+    const work = () => {};
+    await options.auth.lock('fixture-lock', 3000, work);
+    assert.deepEqual(calls, [hasBrowserLocks ? ['browser', 'fixture-lock'] : ['process', 'fixture-lock', 3000, work]]);
     assert.equal(options.auth.detectSessionInUrl, false);
   }
 });
@@ -210,9 +218,7 @@ test('native cancelled Google sessions reject and can be retried', async () => {
     '@react-native-async-storage/async-storage': memoryStorage(),
     'react-native': { Platform: { OS: 'ios' } },
     'expo-web-browser': { openAuthSessionAsync: async () => { calls++; return { type: 'cancel' }; } },
-    '@/services/supabase': { getGoogleOAuthRedirectTo: () => 'lyfttrack://callback', supabase: { auth: {
-      signInWithOAuth: async () => ({ data: { url: 'https://provider.test' }, error: null }),
-    } } },
+    '@/services/supabase': { getGoogleOAuthRedirectTo: () => 'lyfttrack://callback', beginOAuthSignIn: async () => ({ data: { url: 'https://provider.test' }, error: null }), supabase: { auth: {} } },
   })('app/src/services/authService.ts');
   await assert.rejects(service.startGoogleOAuth(), /oauth-cancelled/);
   await assert.rejects(service.startGoogleOAuth(), /oauth-cancelled/);

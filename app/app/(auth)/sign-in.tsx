@@ -19,7 +19,7 @@ import { AuthAmbientGlow } from '@/components/auth/AuthAmbientGlow';
 import { AuthLanguageToggle } from '@/components/auth/AuthLanguageToggle';
 import { AppButton } from '@/components/ui/AppButton';
 import { markTermsAcceptedForOAuth, startGoogleOAuth } from '@/services/authService';
-import { getPasswordResetRedirectTo, supabase } from '@/services/supabase';
+import { getPasswordResetRedirectTo, signInWithPassword, supabase } from '@/services/supabase';
 
 const palette = Colors.dark;
 
@@ -46,7 +46,7 @@ export default function SignInScreen() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { error } = await signInWithPassword({
         email: normalizedEmail,
         password,
       });
@@ -57,6 +57,8 @@ export default function SignInScreen() {
       }
 
       router.replace('/(tabs)/workout' as any);
+    } catch {
+      setFeedback({ message: t('common.unknownError'), type: 'error' });
     } finally {
       setLoading(false);
     }

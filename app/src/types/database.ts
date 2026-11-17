@@ -683,7 +683,7 @@ export type Database = {
         Returns: undefined
       }
       delete_own_account: {
-        Args: Record<string, never>
+        Args: { p_expected_user_id: string } | Record<string, never>
         Returns: undefined
       }
       respond_to_friend_request: {

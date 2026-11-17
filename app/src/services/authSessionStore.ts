@@ -1,6 +1,6 @@
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { AppState, Platform } from 'react-native';
-import { supabase } from '@/services/supabase';
+import { isDeletedAuthAccount, observeDeletedAuthAccount, subscribeDeletedAuthAccounts, supabase } from '@/services/supabase';
 import { invalidateExerciseCatalogCache, invalidateWorkoutDataCache } from '@/services/dataCache';
 
 export type AuthSessionSnapshot = { session: Session | null; isPending: boolean; hasTimedOut: boolean };
@@ -30,23 +30,59 @@ function publish(session: Session | null, event?: AuthChangeEvent): void {
 function connect(): void {
   const currentGeneration = ++generation;
   let hasReceivedEvent = false;
+  let eventRevision = 0;
+  let publishedRevision = 0;
+  const invalidatedAccounts = new Set<string>();
   const timeout = setTimeout(() => {
-    if (currentGeneration !== generation || hasReceivedEvent || !snapshot.isPending) return;
+    if (currentGeneration !== generation || !snapshot.isPending) return;
     snapshot = { ...snapshot, hasTimedOut: true };
     listeners.forEach(listener => listener(snapshot));
   }, 10_000);
+  const invalidateAccount = (userId: string) => {
+    if (currentGeneration !== generation) return;
+    invalidatedAccounts.add(userId);
+    if (snapshot.session?.user.id === userId) {
+      clearTimeout(timeout);
+      publish(null, 'SIGNED_OUT');
+    }
+  };
+  const settle = async (session: Session | null, event?: AuthChangeEvent) => {
+    const revision = ++eventRevision;
+    const userId = session?.user.id;
+    let deleted = false;
+    let storageUnavailable = false;
+    try {
+      if (userId) deleted = invalidatedAccounts.has(userId) || await isDeletedAuthAccount(userId);
+    } catch {
+      storageUnavailable = true;
+    }
+    if (currentGeneration !== generation || revision < publishedRevision) return;
+    if (userId && (deleted || invalidatedAccounts.has(userId) || storageUnavailable)) {
+      // Ignore stale events without superseding a concurrent valid account event.
+      if (deleted) invalidateAccount(userId);
+      if (snapshot.isPending || (storageUnavailable && snapshot.session?.user.id === userId)) {
+        clearTimeout(timeout);
+        publish(null, 'SIGNED_OUT');
+      }
+      return;
+    }
+    publishedRevision = revision;
+    clearTimeout(timeout);
+    publish(session, event);
+  };
+  const unsubscribeDeleted = subscribeDeletedAuthAccounts(invalidateAccount);
+  const storageListener = (event: StorageEvent) => observeDeletedAuthAccount(event.key, event.newValue);
+  const hasStorageEvents = Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.addEventListener === 'function';
+  if (hasStorageEvents) window.addEventListener('storage', storageListener);
   const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
     if (currentGeneration !== generation) return;
-    clearTimeout(timeout);
     hasReceivedEvent = true;
-    publish(session, event);
+    void settle(session, event);
   });
   void supabase.auth.getSession().then(({ data, error }) => {
-    clearTimeout(timeout);
-    if (currentGeneration === generation && !hasReceivedEvent) publish(error ? null : data.session);
+    if (currentGeneration === generation && !hasReceivedEvent) void settle(error ? null : data.session);
   }).catch(() => {
-    clearTimeout(timeout);
-    if (currentGeneration === generation && !hasReceivedEvent) publish(null);
+    if (currentGeneration === generation && !hasReceivedEvent) void settle(null);
   });
   let removeLifecycle: (() => void) | undefined;
   if (Platform.OS !== 'web') {
@@ -62,6 +98,8 @@ function connect(): void {
     generation++;
     clearTimeout(timeout);
     subscription.unsubscribe();
+    unsubscribeDeleted();
+    if (hasStorageEvents) window.removeEventListener('storage', storageListener);
     removeLifecycle?.();
     snapshot = { session: null, isPending: true, hasTimedOut: false };
     disconnect = null;

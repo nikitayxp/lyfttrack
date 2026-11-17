@@ -59,7 +59,7 @@ async function setup(t, initialWidth = 375) {
     '@/constants/theme': colors,
     '@/services/authService': { applyPendingTermsAcceptance: async () => {} },
     '@/services/authSetup': { needsUsernameReview: () => false, needsOptionalOnboarding: () => false },
-    '@/services/supabase': { supabase: { auth: {
+    '@/services/supabase': { isDeletedAuthAccount: async () => false, subscribeDeletedAuthAccounts: () => () => {}, supabase: { auth: {
       getSession: async () => ({ data: { session: null } }),
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
     } } },

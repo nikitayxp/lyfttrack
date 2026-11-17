@@ -37,6 +37,7 @@ async function setup(t, platform, active, screen = 'settings') {
     '@/context/ToastContext': { useAppToast: () => ({ showToast() {} }) },
     '@/context/PreferencesContext': { usePreferences: () => ({ language: 'pt', setLanguage() {}, countWorkingSetsOnly: false, setCountWorkingSetsOnly() {} }) },
     '@/context/WorkoutContext': { useWorkoutContext: () => ({ hasActiveWorkout, activeExercises: [] }), useWorkoutElapsedSeconds: () => 0 },
+    '@/services/authSessionStore': { subscribeAuthSession(listener) { listener({ session: { user: { id: 'owner' } } }); return () => {}; } },
     '@/services/supabase': { supabase: { auth: { signOut: async () => ({ error: null }), getUser: async () => ({ data: { user: { email: 'test@example.test' } }, error: null }) } } },
     '@/services/profileService': { getProfile: async () => ({ visibility: 'public' }), updateProfile() {}, deleteOwnAccount() {}, withAvatarCacheBuster: value => value },
     '@/utils/confirmAction': { confirmAction: async () => false },

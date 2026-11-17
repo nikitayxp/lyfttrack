@@ -15,8 +15,8 @@ function setup({ platform = 'ios', result = { type: 'success', url: 'lyfttrack:/
     '@/services/supabase': {
       getGoogleOAuthRedirectTo: () => platform === 'web' ? 'https://app.example.test/callback' : 'lyfttrack://callback',
       isNonLoopbackIpOrigin: () => false,
+      beginOAuthSignIn: async options => { starts.push(options); return { data: { url: 'https://supabase.example.test/auth/v1/authorize?provider=google' }, error: null }; },
       supabase: { auth: {
-        signInWithOAuth: async options => { starts.push(options); return { data: { url: 'https://supabase.example.test/auth/v1/authorize?provider=google' }, error: null }; },
         exchangeCodeForSession: async code => { exchanges.push(code); if (!exchangeError) activeSession = { user: { id: 'test-user' } }; return { data: { session: activeSession, user: activeSession?.user }, error: exchangeError }; },
         getSession: async () => ({ data: { session: activeSession }, error: null }),
       } },

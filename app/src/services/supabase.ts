@@ -1,4 +1,4 @@
-import { createClient, processLock, type Session } from '@supabase/supabase-js';
+import { createClient, processLock, type Session, type SignInWithOAuthCredentials, type SignInWithPasswordCredentials } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
@@ -6,6 +6,7 @@ import { Database } from '@/types/database';
 import { isIpHostname, isLoopbackHostname } from '@/utils/hostname';
 import '@/utils/authCrypto';
 import { createSupabaseReadFetch } from '@/services/supabaseReadFetch';
+import { createAccountSessionStorage, createBrowserSessionLock } from '@/services/authSessionStorage';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -148,18 +149,91 @@ function createAuthStorage(): SupabaseStorage | undefined {
 }
 
 const authStorage = createAuthStorage();
+const authStorageKey = `sb-${new URL(supabaseUrl).hostname.split('.')[0]}-auth-token`;
+const sharedLock = Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.locks
+  ? createBrowserSessionLock(navigator.locks)
+  : processLock;
+let authLockName: string | null = null;
+const runAuthLock: typeof processLock = (name, timeout, work) => {
+  authLockName = name;
+  return sharedLock(name, timeout, work);
+};
+const accountStorage = authStorage
+  ? createAccountSessionStorage(authStorage, authStorageKey, work => sharedLock(`storage:${authStorageKey}`, 10_000, work))
+  : null;
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   global: { fetch: createSupabaseReadFetch(supabaseUrl) },
   auth: {
-    ...(authStorage ? { storage: authStorage } : {}),
+    ...(accountStorage ? { storage: accountStorage.storage } : {}),
+    storageKey: authStorageKey,
     flowType: 'pkce',
-    ...(Platform.OS !== 'web' ? { lock: processLock } : {}),
+    lock: runAuthLock,
     autoRefreshToken: authStorage !== undefined,
     persistSession: authStorage !== undefined,
     detectSessionInUrl: false,
   },
 });
+
+// The SDK does not acquire its session lock for these two entry points.
+// Keep an older password response from clearing a verifier just issued for Google.
+function serializeSignIn<T>(work: () => Promise<T>): Promise<T> {
+  return runAuthLock(authLockName ?? `lock:${authStorageKey}`, 10_000, work);
+}
+
+export function signInWithPassword(credentials: SignInWithPasswordCredentials) {
+  return serializeSignIn(() => supabase.auth.signInWithPassword(credentials));
+}
+
+export function beginOAuthSignIn(credentials: SignInWithOAuthCredentials) {
+  return serializeSignIn(() => supabase.auth.signInWithOAuth(credentials));
+}
+
+export async function deleteAccountForCurrentSession(expectedUserId: string): Promise<{
+  accountChanged: boolean;
+  error: { message: string; code?: string; hint?: string } | null;
+}> {
+  if (!accountStorage || !authLockName) return { accountChanged: true, error: null };
+
+  // Drain earlier refreshes; use an isolated token-bound client inside this lock.
+  return runAuthLock(authLockName, 10_000, async () => {
+    const session = await accountStorage.readSession();
+    if (session?.user.id !== expectedUserId) return { accountChanged: true, error: null };
+    await accountStorage.reserveDeletion(expectedUserId);
+    const bound = createClient<Database>(supabaseUrl!, supabaseAnonKey!, {
+      global: { fetch: createSupabaseReadFetch(supabaseUrl!) },
+      accessToken: async () => session.access_token,
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+
+    let committed = false;
+    try {
+      const { error } = await bound.rpc('delete_own_account', { p_expected_user_id: expectedUserId });
+      if (error) {
+        await accountStorage.cancelDeletion(expectedUserId);
+        return { accountChanged: false, error };
+      }
+      committed = true;
+      const cleared = await accountStorage.clearForAccount(expectedUserId);
+      return { accountChanged: !cleared, error: null };
+    } catch (error) {
+      if (!committed) await accountStorage.cancelDeletion(expectedUserId);
+      throw error;
+    }
+  });
+}
+
+export function isDeletedAuthAccount(userId: string): Promise<boolean> {
+  return accountStorage?.isDeleted(userId) ?? Promise.resolve(false);
+}
+
+export function subscribeDeletedAuthAccounts(listener: (userId: string) => void): () => void {
+  return accountStorage?.subscribe(listener) ?? (() => undefined);
+}
+
+export function observeDeletedAuthAccount(key: string | null, value: string | null): void {
+  accountStorage?.observeDeletion(key, value);
+}
 
 export async function updateRecoveredPassword(session: Session, password: string): Promise<void> {
   const recoveryClient = createClient<Database>(supabaseUrl!, supabaseAnonKey!, {

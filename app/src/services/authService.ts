@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
-import { getGoogleOAuthRedirectTo, supabase } from '@/services/supabase';
+import { beginOAuthSignIn, getGoogleOAuthRedirectTo, supabase } from '@/services/supabase';
 import { getAuthenticatedUserOrThrow } from '@/services/authUserService';
 import { completeGoogleOAuthReturn } from '@/services/oauthReturn';
 
@@ -86,7 +86,7 @@ async function performGoogleOAuth(): Promise<void> {
 
   const redirectTo = getGoogleOAuthRedirectTo();
 
-  const { data, error } = await supabase.auth.signInWithOAuth({
+  const { data, error } = await beginOAuthSignIn({
     provider: 'google',
     options: {
       redirectTo,

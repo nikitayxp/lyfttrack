@@ -350,9 +350,11 @@ export const resources = {
           'Permanently deletes your account and all your data: workouts, sets, templates, measurements, profile, likes and comments. This cannot be undone.',
         deleteAccountConfirmTitle: 'Delete your account?',
         deleteAccountConfirmDescription:
-          'Everything is removed for good and cannot be recovered. You will be signed out immediately.',
+          'Your account data and stored photos are permanently removed. This device returns to sign-in.',
         deleteAccountConfirmWord: 'delete',
         deleteAccountTypePrompt: 'Type "{{word}}" to confirm',
+        deleteAccountAvatarCleanupError: 'Unable to remove your photos. Your account was not deleted. Please try again.',
+        deleteAccountSessionChangedError: 'The session changed during deletion. Check the current account before trying again.',
       },
       workout: {
         pauseTimer: 'Pause workout timer',
@@ -1221,9 +1223,11 @@ export const resources = {
           'Elimina permanentemente a tua conta e todos os teus dados: treinos, series, templates, medicoes, perfil, gostos e comentarios. Esta accao nao pode ser revertida.',
         deleteAccountConfirmTitle: 'Eliminar a tua conta?',
         deleteAccountConfirmDescription:
-          'Fica tudo apagado de forma definitiva e sem recuperacao possivel. A sessao termina de imediato.',
+          'Os dados da tua conta e as fotografias são removidos definitivamente. Este dispositivo volta ao início de sessão.',
         deleteAccountConfirmWord: 'eliminar',
         deleteAccountTypePrompt: 'Escreve "{{word}}" para confirmar',
+        deleteAccountAvatarCleanupError: 'Não foi possível remover as fotografias. A conta não foi eliminada. Tenta novamente.',
+        deleteAccountSessionChangedError: 'A sessão mudou durante a eliminação. Confirma a conta atual antes de tentar novamente.',
       },
       workout: {
         title: 'Treino',

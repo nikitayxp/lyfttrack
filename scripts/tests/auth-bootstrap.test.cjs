@@ -37,7 +37,7 @@ async function setup(t, segments = ['(tabs)']) {
     '@/constants/theme': colors,
     '@/services/authService': { applyPendingTermsAcceptance: async () => { acceptedTerms += 1; } },
     '@/services/authSetup': { needsUsernameReview: () => false, needsOptionalOnboarding: () => false },
-    '@/services/supabase': { supabase: { auth: {
+    '@/services/supabase': { isDeletedAuthAccount: async () => false, subscribeDeletedAuthAccounts: () => () => {}, supabase: { auth: {
       startAutoRefresh() {}, stopAutoRefresh() {},
       getSession: () => { sessionReads++; return pendingSession; },
       onAuthStateChange: listener => {

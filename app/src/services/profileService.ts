@@ -1,7 +1,7 @@
 import type { User } from '@supabase/supabase-js';
 import * as ImagePicker from 'expo-image-picker';
 import { decode as decodeBase64 } from 'base64-arraybuffer';
-import { supabase } from '@/services/supabase';
+import { deleteAccountForCurrentSession, supabase } from '@/services/supabase';
 import { getAuthenticatedUserOrThrow, getSessionUserOrThrow } from '@/services/authUserService';
 import { onAuthAccountChange } from '@/services/authSessionStore';
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/database';
@@ -370,64 +370,93 @@ export async function getPublicProfileById(profileId: string): Promise<PublicPro
   return { ...data, bio };
 }
 
-/**
- * Avatars live in the `avatars` bucket under a folder named after the user id.
- * They have to go before the RPC runs: once the auth row is gone the session is
- * invalid and storage would reject the delete, leaving a publicly reachable
- * photo behind.
- *
- * A failure here is logged but does not abort the deletion — refusing to delete
- * an account because an image could not be removed is the worse outcome for a
- * user exercising their right to erasure.
- */
+export type AccountDeletionFailure = 'avatar-cleanup-failed' | 'account-changed';
+
+export class AccountDeletionError extends Error {
+  constructor(readonly reason: AccountDeletionFailure) {
+    super(reason === 'avatar-cleanup-failed'
+      ? 'Unable to remove stored avatars. The account was not deleted. Please try again.'
+      : 'Account changed while deleting. Please try again.');
+    this.name = 'AccountDeletionError';
+  }
+}
+
+async function assertDeletionAccount(userId: string): Promise<void> {
+  const { data, error } = await supabase.auth.getSession();
+  if (error || data.session?.user.id !== userId) {
+    throw new AccountDeletionError('account-changed');
+  }
+}
+
+/** List every page before removing files; folders are virtual Storage prefixes. */
 async function deleteStoredAvatars(userId: string): Promise<void> {
   try {
-    const { data: files, error: listError } = await supabase.storage.from('avatars').list(userId);
+    const folders = [userId];
+    const visited = new Set<string>();
+    const paths = new Set<string>();
+    const bucket = supabase.storage.from('avatars');
 
-    if (listError) {
-      throw listError;
+    for (let index = 0; index < folders.length; index++) {
+      const folder = folders[index];
+      if (visited.has(folder)) continue;
+      visited.add(folder);
+
+      for (let offset = 0; ; offset += 100) {
+        await assertDeletionAccount(userId);
+        const { data, error } = await bucket.list(folder, {
+          limit: 100,
+          offset,
+          sortBy: { column: 'name', order: 'asc' },
+        });
+        if (error) throw error;
+
+        const entries = data ?? [];
+        for (const file of entries) {
+          if (!file.name || file.name === '.' || file.name === '..' || /[/\\]/.test(file.name)) {
+            throw new Error('Invalid avatar object name');
+          }
+          const objectPath = `${folder}/${file.name}`;
+          if (file.id === null) folders.push(objectPath);
+          else paths.add(objectPath);
+        }
+        if (entries.length < 100) break;
+      }
     }
 
-    if (!files || files.length === 0) {
-      return;
-    }
-
-    const { error: removeError } = await supabase.storage
-      .from('avatars')
-      .remove(files.map((file) => `${userId}/${file.name}`));
-
-    if (removeError) {
-      throw removeError;
+    const files = Array.from(paths);
+    for (let offset = 0; offset < files.length; offset += 1000) {
+      await assertDeletionAccount(userId);
+      const { error } = await bucket.remove(files.slice(offset, offset + 1000));
+      if (error) throw error;
     }
   } catch (error) {
-    console.warn('[profileService] Unable to remove stored avatars before account deletion', error);
+    if (error instanceof AccountDeletionError) throw error;
+    throw new AccountDeletionError('avatar-cleanup-failed');
   }
 }
 
 /**
- * Deletes the account and every row belonging to it, then ends the session.
- *
- * The heavy lifting is the `delete_own_account` RPC: removing the auth user
- * needs privileges the anon key does not have, and doing the cleanup in one
- * transaction avoids a half-deleted account. The local sign-out afterwards is
- * best-effort — the session is already invalid once the auth row is gone, so a
- * failure there must not be reported as a failed deletion.
+ * Remove avatars through Storage, then let the database remove account data.
+ * The server checks the account ID and refuses deletion if any avatar remains.
+ * An issued JWT can outlive the auth row, so uploads also check the live owner.
  */
-export async function deleteOwnAccount(): Promise<void> {
-  const user = await getAuthenticatedUserOrThrow();
+export async function deleteOwnAccount(expectedUserId: string): Promise<void> {
+  // The server validates the JWT. A local session also permits a safe retry if
+  // the deletion committed but its response was lost and Auth no longer has it.
+  await assertDeletionAccount(expectedUserId);
+  await deleteStoredAvatars(expectedUserId);
+  await assertDeletionAccount(expectedUserId);
 
-  await deleteStoredAvatars(user.id);
-
-  const { error } = await supabase.rpc('delete_own_account');
-
+  const { error, accountChanged } = await deleteAccountForCurrentSession(expectedUserId);
+  if (accountChanged) throw new AccountDeletionError('account-changed');
   if (error) {
+    if (error.hint === 'account_avatar_cleanup_required') {
+      throw new AccountDeletionError('avatar-cleanup-failed');
+    }
+    if (error.code === '42501' && error.message === 'Account changed while deleting. Please try again.') {
+      throw new AccountDeletionError('account-changed');
+    }
     throw new Error(`Unable to delete account: ${error.message}`);
-  }
-
-  try {
-    await supabase.auth.signOut();
-  } catch (signOutError) {
-    console.warn('[profileService] Sign-out after account deletion failed', signOutError);
   }
 }
 

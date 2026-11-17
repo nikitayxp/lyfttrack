@@ -21,8 +21,9 @@ import { usePreferences } from '@/context/PreferencesContext';
 import { useWorkoutContext } from '@/context/WorkoutContext';
 import { getTabBarHeight, MINIMIZED_WORKOUT_BAR_GAP, MINIMIZED_WORKOUT_BAR_HEIGHT } from '@/constants/tabBar';
 import type { AppLanguage } from '@/i18n/resources';
+import { subscribeAuthSession } from '@/services/authSessionStore';
 import { supabase } from '@/services/supabase';
-import { deleteOwnAccount, getProfile, updateProfile } from '@/services/profileService';
+import { AccountDeletionError, deleteOwnAccount, getProfile, updateProfile } from '@/services/profileService';
 import { confirmAction } from '@/utils/confirmAction';
 import { showAlert } from '@/utils/showAlert';
 
@@ -74,10 +75,17 @@ export default function ProfileSettingsScreen() {
   const [visibility, setVisibility] = useState<'public' | 'friends' | 'private'>('public');
   const [isUpdatingPrivacy, setIsUpdatingPrivacy] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
-  const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
+  const [accountId, setAccountId] = useState<string | null>(null);
+  const [deleteAccountId, setDeleteAccountId] = useState<string | null>(null);
   const [deleteConfirmationInput, setDeleteConfirmationInput] = useState('');
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  useEffect(() => subscribeAuthSession(({ session }) => {
+    const userId = session?.user.id ?? null;
+    setAccountId(userId);
+    setDeleteAccountId(confirmedId => confirmedId === userId ? confirmedId : null);
+  }), []);
 
   useEffect(() => {
     let isMounted = true;
@@ -121,7 +129,7 @@ export default function ProfileSettingsScreen() {
     deleteConfirmationInput.trim().toLowerCase() === deleteConfirmationWord.trim().toLowerCase();
 
   const handleDeleteAccount = useCallback(async () => {
-    if (isDeletingAccount) {
+    if (isDeletingAccount || !isDeleteConfirmed || !deleteAccountId || deleteAccountId !== accountId) {
       return;
     }
 
@@ -129,15 +137,19 @@ export default function ProfileSettingsScreen() {
     setDeleteError(null);
 
     try {
-      await deleteOwnAccount();
-      setIsDeleteModalVisible(false);
-      router.replace('/(auth)/sign-in');
+      await deleteOwnAccount(deleteAccountId);
+      // The root auth guard handles navigation, including a newer session.
+      setDeleteAccountId(null);
     } catch (error) {
-      setDeleteError(toErrorMessage(error, t('common.unknownError')));
+      setDeleteError(error instanceof AccountDeletionError
+        ? t(error.reason === 'avatar-cleanup-failed'
+          ? 'settings.deleteAccountAvatarCleanupError'
+          : 'settings.deleteAccountSessionChangedError')
+        : toErrorMessage(error, t('common.unknownError')));
     } finally {
       setIsDeletingAccount(false);
     }
-  }, [isDeletingAccount, t]);
+  }, [accountId, deleteAccountId, isDeleteConfirmed, isDeletingAccount, t]);
 
   const confirmSignOut = useCallback(async (): Promise<boolean> => {
     return confirmAction({
@@ -416,9 +428,9 @@ export default function ProfileSettingsScreen() {
           onPress={() => {
             setDeleteConfirmationInput('');
             setDeleteError(null);
-            setIsDeleteModalVisible(true);
+            setDeleteAccountId(accountId);
           }}
-          disabled={isDeletingAccount}
+          disabled={isDeletingAccount || !accountId}
           accessibilityRole="button"
           accessibilityLabel={t('settings.deleteAccountAction')}
         >
@@ -428,12 +440,12 @@ export default function ProfileSettingsScreen() {
       </View>
 
       <Modal
-        visible={isDeleteModalVisible}
+        visible={deleteAccountId !== null && deleteAccountId === accountId}
         transparent
         animationType="fade"
         onRequestClose={() => {
           if (!isDeletingAccount) {
-            setIsDeleteModalVisible(false);
+            setDeleteAccountId(null);
           }
         }}
       >
@@ -458,13 +470,13 @@ export default function ProfileSettingsScreen() {
               accessibilityLabel={t('settings.deleteAccountTypePrompt', { word: deleteConfirmationWord })}
             />
 
-            {deleteError ? <Text style={styles.modalErrorText}>{deleteError}</Text> : null}
+            {deleteError ? <Text accessibilityRole="alert" style={styles.modalErrorText}>{deleteError}</Text> : null}
 
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={styles.modalCancelButton}
                 activeOpacity={ACTIVE_OPACITY}
-                onPress={() => setIsDeleteModalVisible(false)}
+                onPress={() => setDeleteAccountId(null)}
                 disabled={isDeletingAccount}
                 accessibilityRole="button"
                 accessibilityLabel={t('common.cancel')}
@@ -478,12 +490,12 @@ export default function ProfileSettingsScreen() {
                 onPress={() => void handleDeleteAccount()}
                 disabled={!isDeleteConfirmed || isDeletingAccount}
                 accessibilityRole="button"
-                accessibilityLabel={t('settings.deleteAccountAction')}
+                accessibilityLabel={t(deleteError ? 'common.retry' : 'settings.deleteAccountAction')}
               >
                 {isDeletingAccount ? (
                   <ActivityIndicator size="small" color={palette.textPrimary} />
                 ) : (
-                  <Text style={styles.modalConfirmText}>{t('settings.deleteAccountAction')}</Text>
+                  <Text style={styles.modalConfirmText}>{t(deleteError ? 'common.retry' : 'settings.deleteAccountAction')}</Text>
                 )}
               </TouchableOpacity>
             </View>

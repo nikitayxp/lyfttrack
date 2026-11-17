@@ -340,6 +340,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "template_exercises_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises_read"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "template_exercises_template_id_fkey"
             columns: ["template_id"]
             isOneToOne: false
@@ -611,6 +618,14 @@ export type Database = {
       }
     }
     Views: {
+      exercises_read: {
+        Row: Database["public"]["Tables"]["exercises"]["Row"]
+        Relationships: []
+      }
+      workout_exercises_read: {
+        Row: Database["public"]["Tables"]["workout_exercises"]["Row"]
+        Relationships: Database["public"]["Tables"]["workout_exercises"]["Relationships"]
+      }
       profile_cards: {
         Row: {
           id: string

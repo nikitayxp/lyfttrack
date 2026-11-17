@@ -31,7 +31,7 @@ function setup(pageLimit = 137, builtInCount = 1201) {
       return { data, error: null };
     },
     from(table) {
-      assert.equal(table, 'exercises');
+      assert.equal(table, 'exercises_read');
       let cursor = '';
       let visibility;
       let wantsCount = false;

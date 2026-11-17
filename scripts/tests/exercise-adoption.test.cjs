@@ -63,14 +63,14 @@ test('same-name exercises with different equipment or content remain independent
   assert.notEqual(result.get(foreign.id).id, own.id);
   assert.notEqual(result.get(foreign.id).id, result.get(second.id).id);
   assert.equal(result.get(foreign.id).equipment, 'machine');
-  assert.equal(result.get(second.id).description, 'Different movement');
+  assert.equal(result.get(second.id).description, null);
 });
 
-test('copies preserve aliases and whether the source is listed', async () => {
+test('copies omit private aliases and preserve whether the source is listed', async () => {
   const foreign = { ...friendNew, aliases: ['Rotação', 'Twist'], listed: false };
   const { adoptForeignCustomExercises, inserted } = loadService([]);
   const result = await adoptForeignCustomExercises([foreign]);
-  assert.deepEqual([...inserted[0].aliases], foreign.aliases);
+  assert.deepEqual([...inserted[0].aliases], []);
   assert.equal(result.get(foreign.id).listed, false);
 });
 
@@ -150,4 +150,44 @@ test('a database failure aborts adoption without returning foreign references', 
     const { adoptForeignCustomExercises } = loadService([], failure);
     await assert.rejects(adoptForeignCustomExercises([friendNew]), /Unable to (load|create) exercises/);
   }
+});
+
+test('a foreign copy omits descriptions and aliases even when an old client supplies them', async () => {
+  const foreign = { ...friendNew, description: 'Private setup', aliases: ['Private nickname'] };
+  const { adoptForeignCustomExercises, inserted } = loadService([]);
+  const result = await adoptForeignCustomExercises([foreign]);
+  assert.equal(inserted[0].description, null);
+  assert.deepEqual([...inserted[0].aliases], []);
+  assert.equal(result.get(foreign.id).description, null);
+  assert.deepEqual([...result.get(foreign.id).aliases], []);
+  assert.equal(result.get(foreign.id).name_pt, foreign.name_pt);
+  assert.equal(foreign.description, 'Private setup');
+});
+
+test('own and built-in descriptions and aliases remain available', async () => {
+  const own = { ...mine, description: 'My setup', aliases: ['Mine'] };
+  const builtin = { ...catalog, description: 'Catalogue instructions', aliases: ['Bench'] };
+  const { adoptForeignCustomExercises, inserted } = loadService([]);
+  const result = await adoptForeignCustomExercises([own, builtin]);
+  assert.equal(result.get(own.id), own);
+  assert.equal(result.get(builtin.id), builtin);
+  assert.equal(inserted.length, 0);
+});
+
+test('copying again ignores changes to private source fields without editing the owned copy', async () => {
+  const own = { ...friendNew, id: 'owned-copy', created_by: me, description: null, aliases: [] };
+  const foreign = { ...friendNew, description: 'Changed private setup', aliases: ['Changed private nickname'] };
+  const { adoptForeignCustomExercises, inserted } = loadService([own]);
+  const result = await adoptForeignCustomExercises([foreign]);
+  assert.equal(inserted.length, 0);
+  assert.equal(result.get(foreign.id), own);
+  assert.equal(own.description, null);
+});
+
+test('copied custom blocks omit stale private notes while own and catalogue notes remain', () => {
+  const { getCopiedExerciseNotes } = loadService([]);
+  const copy = { ...friendNew, id: 'owned-copy', created_by: me, description: null };
+  assert.equal(getCopiedExerciseNotes(friendNew.id, copy, 'Private old snapshot'), null);
+  assert.equal(getCopiedExerciseNotes(mine.id, mine, 'My old note'), 'My old note');
+  assert.equal(getCopiedExerciseNotes(catalog.id, catalog, 'Public catalogue block note'), 'Public catalogue block note');
 });

@@ -204,7 +204,7 @@ export async function getTemplateById(templateId: string): Promise<TemplateDetai
 
   const { data: templateExercises, error: templateExercisesError } = await supabase
     .from('template_exercises')
-    .select('id, order_index, rest_seconds, exercise_id, exercises(*)')
+    .select('id, order_index, rest_seconds, exercise_id, exercises:exercises_read(*)')
     .eq('template_id', template.id)
     .order('order_index', { ascending: true });
 

@@ -45,7 +45,7 @@ import {
   orderExercisesByIds,
   type PreviousExercisePerformanceSet,
 } from '@/services/workoutService';
-import { adoptForeignCustomExercises } from '@/services/exerciseAdoptionService';
+import { adoptForeignCustomExercises, getCopiedExerciseNotes } from '@/services/exerciseAdoptionService';
 import { finishWorkout } from '@/services/sessionRepository';
 import { getTemplateById } from '@/services/templateService';
 import {
@@ -574,8 +574,7 @@ export default function ActiveWorkout() {
 
             return createExerciseBlockFromSets(exerciseRow, seeds, {
               defaultRestSeconds: entry.rest_time ?? undefined,
-              // Keep notes from that past session (equipment settings, unilateral notes, etc.).
-              notes: entry.notes ?? exerciseRow.description ?? null,
+              notes: getCopiedExerciseNotes(entry.exercise_id, exerciseRow, entry.notes),
             });
           });
 

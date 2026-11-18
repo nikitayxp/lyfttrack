@@ -19,7 +19,7 @@ const exercise = {
 function setup() {
   const supabase = {
     from(table) {
-      assert.equal(table, 'exercises');
+      assert.equal(table, 'exercises_read');
       let columns;
       let missingColumn;
       let ids;

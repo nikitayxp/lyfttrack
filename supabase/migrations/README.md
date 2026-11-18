@@ -224,3 +224,34 @@ test the migrations separately in staging before an authorized production rollou
    - template save/load with rest intervals
 - If large table sizes exist, schedule a low-traffic window for index creation.
 - Keep app schema types aligned with production after each migration.
+
+
+## Custom exercise fields: prepare, deploy, restrict
+
+I apply the separately approved, idempotent `supabase/rollouts/exercise_read_views.sql`
+before publishing the compatible client. It adds the two authenticated read views,
+two guarded readers and compatible owner-only import snapshot/remap definitions.
+It preserves base-table access, existing policies and all exercise/history data,
+and does not write the migration ledger. I verify owner/catalogue values, redacted
+shared custom fields, workout/template embeds and import repairs in an isolated
+API before requesting that preparation in a hosted environment.
+
+After the additive objects exist, I publish and verify the compatible web client:
+exercise catalogue/details, own and shared workout details, exercise creation,
+copies into a workout/model, and the owner's import repair. Old clients that read
+the full base row need updating before the final permission change.
+
+Only after the compatible production deployment is verified do I authorize the
+migration cutover. `20261117121500_exercise_private_read_views.sql` records the
+same additive SQL and may safely run again. The following
+`20261117121600_restrict_exercise_private_columns.sql` removes client SELECT on
+`exercises.description`, `exercises.aliases` and `workout_exercises.notes`, while
+keeping safe base columns, existing writes and RLS. Shared custom block notes can
+contain an old description, so the view retains them for the workout owner and
+omits them for other viewers; general workout notes and built-in block notes keep
+their existing behaviour. Neither migration edits historical rows.
+
+A normal `db push` applies both pending migrations without an app-deployment pause.
+I must not run the cutover workflow before preparing the views and verifying the
+client. A push to main only runs the workflow's notice job; applying SQL still
+requires the separately approved manual dispatch for the exact main revision.

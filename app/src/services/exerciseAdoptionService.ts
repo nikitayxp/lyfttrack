@@ -2,8 +2,15 @@ import { supabase } from '@/services/supabase';
 import { getAuthenticatedUserOrThrow } from '@/services/authUserService';
 import type { Tables, TablesInsert } from '@/types/database';
 import { generateId } from '@/utils/uuid';
+import { EXERCISE_PUBLIC_COLUMNS, exerciseWithEmptyPrivateFields } from '@/services/exerciseFields';
 
 type ExerciseRow = Tables<'exercises'>;
+
+export function getCopiedExerciseNotes(originalExerciseId: string, copy: ExerciseRow, notes: string | null): string | null {
+  // A custom block can hold an old snapshot of the source's private setup.
+  if (copy.is_custom && copy.id !== originalExerciseId) return null;
+  return notes ?? copy.description ?? null;
+}
 
 function exerciseContentKey(row: ExerciseRow): string {
   return JSON.stringify([
@@ -30,6 +37,11 @@ export async function adoptForeignCustomExercises(
     throw new Error('Unable to copy exercises: source exercises are unavailable');
   }
   const user = await getAuthenticatedUserOrThrow();
+  for (const [id, row] of byOriginalId) {
+    if (row.is_custom && row.created_by !== user.id) {
+      byOriginalId.set(id, exerciseWithEmptyPrivateFields(row));
+    }
+  }
   const foreignRows = [...byOriginalId.values()].filter((row) => row.is_custom && row.created_by !== user.id);
 
   if (foreignRows.length === 0) {
@@ -37,7 +49,7 @@ export async function adoptForeignCustomExercises(
   }
 
   const { data: ownRows, error: ownError } = await supabase
-    .from('exercises')
+    .from('exercises_read')
     .select('*')
     .eq('created_by', user.id)
     .eq('is_custom', true);
@@ -85,13 +97,13 @@ export async function adoptForeignCustomExercises(
     const { data: created, error: createError } = await supabase
       .from('exercises')
       .insert([...pendingCopies.values()])
-      .select('*');
+      .select(EXERCISE_PUBLIC_COLUMNS);
 
     if (createError) {
       throw new Error(`Unable to create exercises: ${createError.message}`);
     }
 
-    const createdById = new Map((created ?? []).map((row) => [row.id, row] as const));
+    const createdById = new Map((created ?? []).map((row) => [row.id, exerciseWithEmptyPrivateFields(row)] as const));
     for (const [originalId, copy] of pendingCopies) {
       const ownRow = createdById.get(copy.id);
       if (!ownRow || ownRow.created_by !== user.id || !ownRow.is_custom

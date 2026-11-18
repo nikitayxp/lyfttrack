@@ -23,6 +23,7 @@ import {
 } from '@/utils/personalRecords';
 import { dedupeExerciseNames, type ExerciseNameSource } from '@/utils/exerciseLocalization';
 import { generateId } from '@/utils/uuid';
+import { EXERCISE_PUBLIC_COLUMNS, exerciseWithEmptyPrivateFields } from '@/services/exerciseFields';
 
 export { getAuthenticatedUserOrThrow } from '@/services/authUserService';
 
@@ -989,7 +990,7 @@ export async function getExercisesCatalog(filters: ExerciseCatalogFilters = {}):
     : 'and(is_custom.eq.false,listed.eq.true)';
   const ownedCustomFilter = `and(is_custom.eq.true,created_by.eq.${user.id})`;
   const rows = await exerciseCatalogCache.get(user.id, catalogKey, () => loadAllRows(count =>
-    supabase.from('exercises')
+    supabase.from('exercises_read')
       .select('id,name,name_en,name_pt,aliases,listed,muscle_group,muscle_en,muscle_pt,equipment,is_custom,image_url,description,created_by', { count })
       .or(`${builtInFilter},${ownedCustomFilter}`),
     'Unable to load exercises',
@@ -1021,7 +1022,7 @@ export async function getExercisesByIds(exerciseIds: string[]): Promise<Exercise
     return [];
   }
 
-  return loadAllRows(() => supabase.from('exercises')
+  return loadAllRows(() => supabase.from('exercises_read')
     .select('id,name,name_en,name_pt,aliases,listed,muscle_group,muscle_en,muscle_pt,equipment,is_custom,image_url,description,created_by')
     .in('id', normalizedIds), 'Unable to load exercises');
 }
@@ -1046,14 +1047,14 @@ export async function createExercise(input: CreateExerciseInput): Promise<Exerci
     equipment: normalizedEquipmentKey ?? normalizeWriteText(input.equipment, INPUT_LIMITS.nameMax),
   };
 
-  const { data, error } = await supabase.from('exercises').insert(insertRow).select('*').single();
+  const { data, error } = await supabase.from('exercises').insert(insertRow).select(EXERCISE_PUBLIC_COLUMNS).single();
 
   if (error || !data) {
     throw new Error(`Unable to create exercise: ${error?.message ?? 'Unknown error'}`);
   }
 
   invalidateExerciseCatalogCache(user.id);
-  return data;
+  return exerciseWithEmptyPrivateFields(data);
 }
 
 /**
@@ -1591,7 +1592,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
   const profileByUserId = await getPublicProfilesByIds([workout.user_id]);
 
   const { data: rawWorkoutExercisesData, error: workoutExercisesError } = await supabase
-    .from('workout_exercises')
+    .from('workout_exercises_read')
     .select('id, order, rest_time, exercise_id, notes, exercises(id, name, name_en, name_pt, muscle_group, equipment, is_custom, created_by, image_url)')
     .eq('workout_id', normalizedWorkoutId)
     .order('order', { ascending: true });
@@ -1607,7 +1608,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
 
     if (isNotesMissing) {
       const fallback = await supabase
-        .from('workout_exercises')
+        .from('workout_exercises_read')
         .select('id, order, rest_time, exercise_id, exercises(id, name, name_en, name_pt, muscle_group, equipment, is_custom, created_by, image_url)')
         .eq('workout_id', normalizedWorkoutId)
         .order('order', { ascending: true });
@@ -1719,7 +1720,7 @@ export async function getWorkoutDetails(workoutId: string): Promise<WorkoutDetai
   if (missingExerciseIds.length > 0) {
     const { data: missingExercises, error: missingExercisesError } = await supabase
       .from('exercises')
-      .select('id, name, name_en, name_pt, aliases, muscle_group, equipment, is_custom, created_by, image_url')
+      .select('id, name, name_en, name_pt, muscle_group, equipment, is_custom, created_by, image_url')
       .in('id', missingExerciseIds);
 
     if (missingExercisesError) {

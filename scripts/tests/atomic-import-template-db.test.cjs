@@ -220,4 +220,26 @@ test('atomic imports, repairs and templates retain data and identity', async t =
     await assert.rejects(importBatch(batch),/permission denied/);
     await assert.rejects(save('50000000-0000-0000-0000-000000000009'),/permission denied/);
   });
+  await t.test('owner remap repairs and retries preserve notes after private column grants are removed',async()=>{
+    await db.exec(`reset role; create schema private; create role service_role;
+      alter table exercises add column description text, add column aliases text[] not null default '{}',
+        add column listed boolean not null default true, add column image_url text,
+        add column muscle_en text, add column muscle_pt text;
+      create function public.can_view_user_content(target uuid) returns boolean language sql stable as $$
+        select target=auth.uid()
+      $$;
+    `);
+    await db.exec(fs.readFileSync(path.resolve(__dirname,'../../supabase/migrations/20261117121500_exercise_private_read_views.sql'),'utf8'));
+    await db.exec(fs.readFileSync(path.resolve(__dirname,'../../supabase/migrations/20261117121600_restrict_exercise_private_columns.sql'),'utf8'));
+    await db.exec(`set role authenticated; set test.user_id='${owner}'`);
+    const before=await rpc('import_workout_snapshot',[id]);
+    const mapping=before.exercises.map(entry=>({exercise_id:entry.exercise_id,order:entry.order,rest_time:entry.rest_time}));
+    const args=[owner,'60000000-0000-0000-0000-000000000095',id,{name:'Repair after column restrictions',notes:before.notes},mapping,[],'remap',before];
+    assert.equal(await rpc('repair_imported_workout_atomic',args),id);
+    assert.equal(await rpc('repair_imported_workout_atomic',args),id);
+    const after=await rpc('import_workout_snapshot',[id]);
+    assert.deepEqual(after.exercises,before.exercises);
+    assert.deepEqual(after.sets,before.sets);
+    assert.equal(after.name,'Repair after column restrictions');
+  });
 });

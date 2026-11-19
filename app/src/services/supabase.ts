@@ -163,6 +163,7 @@ const accountStorage = authStorage
   : null;
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  db: { retry: false },
   global: { fetch: createSupabaseReadFetch(supabaseUrl) },
   auth: {
     ...(accountStorage ? { storage: accountStorage.storage } : {}),

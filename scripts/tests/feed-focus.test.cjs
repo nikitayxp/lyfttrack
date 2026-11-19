@@ -15,9 +15,9 @@ async function mountFeed(t, {
   const toast = () => {};
   const animation = { springify() { return animation; }, damping() { return animation; }, stiffness() { return animation; }, duration() { return animation; }, delay() { return animation; } };
   function Card(props) { React.useEffect(() => { mounts += 1; }, []); return React.createElement('WorkoutCard', props); }
-  function List({ data, renderItem, ListHeaderComponent, refreshControl, onEndReached }) {
+  function List({ data, renderItem, ListHeaderComponent, ListEmptyComponent, refreshControl, onEndReached }) {
     return React.createElement('FeedList', { onEndReached }, ListHeaderComponent, refreshControl,
-      data.map((item, index) => React.createElement(React.Fragment, { key: item.id }, renderItem({ item, index }))));
+      data.length === 0 ? ListEmptyComponent : data.map((item, index) => React.createElement(React.Fragment, { key: item.id }, renderItem({ item, index }))));
   }
   const load = createSourceLoader({
     '@/constants/Styles': { ACTIVE_OPACITY: 0.8, Radius: {} },
@@ -36,7 +36,7 @@ async function mountFeed(t, {
       getErrorMessage: error => error.message,
     },
     '@/services/import/importEvents': { WORKOUTS_IMPORTED_EVENT: 'import' },
-    '@/components/common/EmptyState': { EmptyState: () => null },
+    '@/components/common/EmptyState': { EmptyState: props => React.createElement('EmptyState', props) },
     '@/components/feed/FeedCommentsModal': { FeedCommentsModal: () => null },
     '@/components/feed/WorkoutFeedCard': { WorkoutFeedCard: Card },
     '@/context/ToastContext': { useAppToast: () => ({ showToast: toast }) },
@@ -53,6 +53,7 @@ async function mountFeed(t, {
     async focus() { await act(async () => { if (focus) focus(); }); },
     async refresh() { await act(async () => tree.root.findByType('Refresh').props.onRefresh()); },
     async nextPage() { await act(async () => tree.root.findByType('FeedList').props.onEndReached()); },
+    async retry() { await act(async () => tree.root.findByType('EmptyState').props.onActionPress()); },
   };
 }
 
@@ -141,4 +142,30 @@ test('record counts can resolve out of order across two visible pages', async t 
   await act(async () => pending[0](new Map([['first-0', 1]])));
   assert.equal(app.cards().find(card => card.id === 'first-0').prCount, 1);
   assert.equal(app.cards().find(card => card.id === 'second').prCount, 2);
+});
+
+test('a failed first feed page waits for a requested retry before paginating', async t => {
+  const pages = [];
+  let available = false;
+  const app = await mountFeed(t, {
+    getFeedWorkouts: async (page, size) => {
+      pages.push(page);
+      if (!available) throw new Error('Feed unavailable');
+      return page === 0
+        ? Array.from({ length: size }, (_, index) => ({ id: `first-${index}`, user_id: 'friend', prCount: null }))
+        : [{ id: 'second-page', user_id: 'friend', prCount: null }];
+    },
+  });
+
+  await app.nextPage();
+  await app.nextPage();
+  assert.deepEqual(pages, [0]);
+  assert.equal(app.cards().length, 0);
+
+  available = true;
+  await app.retry();
+  assert.equal(app.cards().length, 20);
+  await app.nextPage();
+  assert.deepEqual(pages, [0, 0, 1]);
+  assert.equal(app.cards().at(-1).id, 'second-page');
 });

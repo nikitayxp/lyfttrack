@@ -55,7 +55,7 @@ test('the active session shows its name, elapsed time and progress from actual s
   assert.equal(title.props.children, 'Upper body');
   assert.ok(header.findAllByType('Text').some(node => node.props.children === '01:01:05'));
   const progress = header.findByProps({ accessibilityRole: 'progressbar' });
-  assert.equal(progress.props.accessibilityLabel, '2/3');
+  assert.equal(progress.props.accessibilityLabel, 'workout.sessionProgressLabel');
   assert.equal(progress.props['aria-valuenow'], 2);
   assert.equal(progress.props['aria-valuemax'], 3);
   assert.equal(progress.props['aria-valuetext'], '2/3');

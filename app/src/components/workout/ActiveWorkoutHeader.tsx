@@ -115,7 +115,7 @@ export function ActiveWorkoutHeader({
           <View
             accessible
             accessibilityRole="progressbar"
-            accessibilityLabel={progressLabel}
+            accessibilityLabel={t('workout.sessionProgressLabel')}
             aria-valuemin={0}
             aria-valuemax={total}
             aria-valuenow={completed}

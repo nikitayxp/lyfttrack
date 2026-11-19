@@ -61,7 +61,7 @@ export type WorkoutDraft = {
   schemaVersion: number;
   draftId: string;
   userId: string;
-  workoutName: string;
+  workoutName?: string;
   startTime: string;
   sessionStartTime?: string;
   templateId: string | null;

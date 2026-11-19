@@ -13,6 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
 import { useTranslation } from 'react-i18next';
 import { Colors } from '@/constants/theme';
+import { trainingColors } from '@/constants/trainingColors';
 import { AbsoluteFill } from '@/constants/Styles';
 import { DEVICE_FRAME } from '@/constants/deviceFrame';
 import { applyPendingTermsAcceptance } from '@/services/authService';
@@ -113,6 +114,9 @@ const styles = StyleSheet.create({
     position: 'relative',
     backgroundColor: palette.bgPrimary,
   },
+  activeWorkoutWebRoot: {
+    backgroundColor: trainingColors.bgPrimary,
+  },
   webRootDesktop: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -212,6 +216,7 @@ export default function RootLayout() {
   const [isAuthBootstrapPending, setIsAuthBootstrapPending] = useState(true);
   const [hasAuthBootstrapTimedOut, setHasAuthBootstrapTimedOut] = useState(false);
   const isTabsRoute = rootSegment === '(tabs)';
+  const isActiveWorkoutRoute = rootSegment === 'workout' && childSegment === 'active';
   const inAuthGroup = rootSegment === '(auth)';
   const isOAuthCallbackRoute = rootSegment === 'callback' || childSegment === 'callback';
   const isResetPasswordRoute = inAuthGroup && childSegment === 'reset-password';
@@ -483,28 +488,44 @@ export default function RootLayout() {
       overflow: 'hidden',
     };
 
-    return (
-      <View testID="app-web-shell" style={[styles.webRoot, isDesktopWeb && styles.webRootDesktop, webViewportFill, visibleWebShellStyle]}>
-        <View style={[styles.webFlowLayer, styles.pointerEventsNone]}>
-          <NeuralBackground color="#3B82F6" trailOpacity={0.12} speed={0.35} />
-        </View>
+    const showDeviceFrame = isDesktopWeb && !isActiveWorkoutRoute;
 
-        <LinearGradient
-          colors={['rgba(59,130,246,0.50)', 'rgba(59,130,246,0.00)']}
-          start={{ x: 0.4, y: 0.2 }}
-          end={{ x: 0.85, y: 0.9 }}
-          style={[styles.webBlueAuraTop, styles.pointerEventsNone]}
-        />
-        <LinearGradient
-          colors={['rgba(56,189,248,0.42)', 'rgba(56,189,248,0.00)']}
-          start={{ x: 0.2, y: 0.15 }}
-          end={{ x: 0.8, y: 0.85 }}
-          style={[styles.webBlueAuraBottom, styles.pointerEventsNone]}
-        />
+    return (
+      <View
+        testID="app-web-shell"
+        style={[
+          styles.webRoot,
+          isDesktopWeb && styles.webRootDesktop,
+          isActiveWorkoutRoute && styles.activeWorkoutWebRoot,
+          webViewportFill,
+          visibleWebShellStyle,
+        ]}
+      >
+        {!isActiveWorkoutRoute ? (
+          <>
+            <View style={[styles.webFlowLayer, styles.pointerEventsNone]}>
+              <NeuralBackground color="#3B82F6" trailOpacity={0.12} speed={0.35} />
+            </View>
+
+            <LinearGradient
+              colors={['rgba(59,130,246,0.50)', 'rgba(59,130,246,0.00)']}
+              start={{ x: 0.4, y: 0.2 }}
+              end={{ x: 0.85, y: 0.9 }}
+              style={[styles.webBlueAuraTop, styles.pointerEventsNone]}
+            />
+
+            <LinearGradient
+              colors={['rgba(56,189,248,0.42)', 'rgba(56,189,248,0.00)']}
+              start={{ x: 0.2, y: 0.15 }}
+              end={{ x: 0.8, y: 0.85 }}
+              style={[styles.webBlueAuraBottom, styles.pointerEventsNone]}
+            />
+          </>
+        ) : null}
 
         <View
-          testID={isDesktopWeb ? 'app-device-frame' : 'app-mobile-frame'}
-          style={isDesktopWeb ? [styles.deviceMockup, desktopShellWebShadow] : styles.mobileAppFrame}
+          testID={showDeviceFrame ? 'app-device-frame' : 'app-mobile-frame'}
+          style={showDeviceFrame ? [styles.deviceMockup, desktopShellWebShadow] : styles.mobileAppFrame}
         >
           {layout}
         </View>

@@ -336,7 +336,7 @@ export function useActiveWorkoutState({
       schemaVersion: SCHEMA_VERSION,
       draftId,
       userId,
-      workoutName: workoutName ?? 'Untitled Workout',
+      workoutName,
       startTime,
       sessionStartTime: sessionStartTime ?? startTime,
       templateId: templateId ?? null,

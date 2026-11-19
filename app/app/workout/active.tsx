@@ -3,7 +3,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
   ActivityIndicator,
-  Animated,
   Platform,
   Pressable,
   ScrollView,
@@ -17,7 +16,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { trainingColors } from '@/constants/trainingColors';
-import { AbsoluteFill, ACTIVE_OPACITY, HIT_SLOP, Radius, Spacing } from '@/constants/Styles';
+import { ACTIVE_OPACITY, HIT_SLOP, Radius, Spacing } from '@/constants/Styles';
 import {
   EXERCISE_EQUIPMENT_OPTIONS,
   EXERCISE_EQUIPMENT_TRANSLATION_KEY,
@@ -98,6 +97,7 @@ import { showAlert } from '@/utils/showAlert';
 
 const palette = trainingColors;
 const DESKTOP_WEB_MIN_WIDTH = 768;
+const WIDE_SESSION_MIN_WIDTH = 960;
 const MAX_SESSION_WIDTH = 520;
 const ROOT_SCREEN_BG = palette.bgPrimary;
 // Few on purpose: dumping 20 recents would make "scroll down for the rest"
@@ -175,6 +175,7 @@ export default function ActiveWorkout() {
   const [tableRowWidth, setTableRowWidth] = useState(0);
   const isWeb = Platform.OS === 'web';
   const isDesktopWeb = isWeb && windowWidth > DESKTOP_WEB_MIN_WIDTH;
+  const isWideSession = isWeb && windowWidth >= WIDE_SESSION_MIN_WIDTH;
   const searchParams = useLocalSearchParams<{
     templateId?: string | string[];
     copyFromWorkoutId?: string | string[];
@@ -219,7 +220,6 @@ export default function ActiveWorkout() {
     removeSet,
     addExercise,
     clearExercises,
-    getExerciseCompletionGlowValue,
     clearDraft,
     resetWorkoutSession,
     workoutName,
@@ -235,6 +235,7 @@ export default function ActiveWorkout() {
   } = useWorkoutContext();
 
   const [exercisePickerVisible, setExercisePickerVisible] = useState(false);
+  const [expandedExerciseActionsId, setExpandedExerciseActionsId] = useState<string | null>(null);
   const [exercisePickerQuery, setExercisePickerQuery] = useState('');
   const [selectedMuscleFilter, setSelectedMuscleFilter] = useState<ExerciseLibraryMuscleFilter | 'recent' | 'custom'>('all');
   const [selectedEquipmentFilter, setSelectedEquipmentFilter] = useState<ExerciseLibraryEquipmentFilter>('all');
@@ -889,13 +890,27 @@ export default function ActiveWorkout() {
   // The old confirm dialog lived here and was a no-op on web (react-native-web
   // ignores Alert buttons), so a refresh dropped the whole workout.
 
+  const addExerciseButton = (
+    <TouchableOpacity
+      style={styles.addExerciseTrigger}
+      activeOpacity={ACTIVE_OPACITY}
+      onPress={() => setExercisePickerVisible(true)}
+      accessibilityRole="button"
+      accessibilityLabel={t('accessibility.openExercisePicker', { defaultValue: 'Open exercise picker' })}
+    >
+      <Ionicons name="add" size={19} color={palette.bgPrimary} />
+      <Text style={styles.addExerciseTriggerLabel}>{t('workout.addExercise')}</Text>
+    </TouchableOpacity>
+  );
+
   return (
     <SafeAreaView style={[styles.safeArea, isWeb && styles.safeAreaWeb]} edges={['top', 'left', 'right']}>
       <StatusBar style="light" />
 
-      <View style={[styles.container, isWeb && styles.containerWeb]}>
+      <View style={[styles.container, isWeb && styles.containerWeb, isWideSession && styles.containerWide]}>
         <ActiveWorkoutHeader
           title={workoutTitleInput}
+          wide={isWideSession}
           exercises={activeExercises}
           isTimerPaused={isTimerPaused}
           isSubmitting={isSubmitting}
@@ -906,9 +921,16 @@ export default function ActiveWorkout() {
           onFinish={openFinishModal}
         />
 
+        <View style={styles.logColumn}>
+          {isWideSession ? (
+            <View style={styles.logHeading}>
+              <Text accessibilityRole="header" style={styles.logTitle}>{t('workout.exerciseLogTitle')}</Text>
+              {addExerciseButton}
+            </View>
+          ) : null}
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 80 }]}
+          contentContainerStyle={[styles.scrollContent, isWideSession && styles.scrollContentWide]}
           showsVerticalScrollIndicator={!isDesktopWeb}
         >
           {isPreloadingRoute && activeExercises.length === 0 ? (
@@ -948,19 +970,10 @@ export default function ActiveWorkout() {
                 exercise.sets.map((entry) => entry.set_number)
               );
               const tableLayout = getWorkoutTableLayout(tableRowWidth, previousColumnWidth);
+              const actionsExpanded = expandedExerciseActionsId === exercise.id;
 
               return (
                 <View key={exercise.id} style={styles.exerciseCard}>
-                  <Animated.View
-                    style={[
-                      styles.exerciseCompletionGlow,
-                      styles.pointerEventsNone,
-                      {
-                        opacity: getExerciseCompletionGlowValue(exercise.id),
-                      },
-                    ]}
-                  />
-
                   <View style={styles.exerciseHeaderRow}>
                     <TouchableOpacity
                       style={styles.exerciseHeaderTextWrap}
@@ -973,15 +986,31 @@ export default function ActiveWorkout() {
                       <Text style={styles.exerciseTitle}>{getLocalizedExerciseName(exercise.exercise, language)}</Text>
                     </TouchableOpacity>
 
-                    <View style={styles.exerciseHeaderActions}>
+                    <TouchableOpacity
+                      style={styles.exerciseMenuButton}
+                      activeOpacity={ACTIVE_OPACITY}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('workout.exerciseOptions', { name: getLocalizedExerciseName(exercise.exercise, language) })}
+                      accessibilityState={{ expanded: actionsExpanded }}
+                      onPress={() => setExpandedExerciseActionsId(actionsExpanded ? null : exercise.id)}
+                    >
+                      <Ionicons name={actionsExpanded ? 'close' : 'ellipsis-horizontal'} size={20} color={palette.textSecondary} />
+                    </TouchableOpacity>
+                  </View>
+
+                    {actionsExpanded ? <View style={styles.exerciseHeaderActions}>
                       <TouchableOpacity
                         style={styles.exerciseActionButton}
                         activeOpacity={ACTIVE_OPACITY}
-                        onPress={() => openExerciseStatsModal(exercise.exercise)}
+                        onPress={() => {
+                          setExpandedExerciseActionsId(null);
+                          openExerciseStatsModal(exercise.exercise);
+                        }}
                         accessibilityRole="button"
                         accessibilityLabel={t('accessibility.viewExerciseStats', { defaultValue: 'View exercise stats' })}
                       >
                         <Ionicons name="stats-chart-outline" size={18} color={palette.textSecondary} />
+                        <Text style={styles.exerciseActionLabel}>{t('workout.exerciseStatsAction')}</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
@@ -993,6 +1022,7 @@ export default function ActiveWorkout() {
                         accessibilityLabel={t('accessibility.moveExerciseUp', { defaultValue: 'Move exercise up' })}
                       >
                         <Ionicons name="arrow-up" size={16} color={palette.textSecondary} />
+                        <Text style={styles.exerciseActionLabel}>{t('workout.moveExerciseUpAction')}</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
@@ -1007,6 +1037,7 @@ export default function ActiveWorkout() {
                         accessibilityLabel={t('accessibility.moveExerciseDown', { defaultValue: 'Move exercise down' })}
                       >
                         <Ionicons name="arrow-down" size={16} color={palette.textSecondary} />
+                        <Text style={styles.exerciseActionLabel}>{t('workout.moveExerciseDownAction')}</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
@@ -1014,13 +1045,15 @@ export default function ActiveWorkout() {
                         activeOpacity={ACTIVE_OPACITY}
                         accessibilityRole="button"
                         accessibilityLabel={t('accessibility.removeExercise', { defaultValue: 'Remove exercise' })}
-                        onPress={() => setPendingRemoveExerciseIndex(exerciseIndex)}
+                        onPress={() => {
+                          setExpandedExerciseActionsId(null);
+                          setPendingRemoveExerciseIndex(exerciseIndex);
+                        }}
                       >
-                        <Ionicons name="trash-outline" size={16} color="#FCA5A5" />
+                        <Ionicons name="trash-outline" size={16} color={palette.errorText} />
+                        <Text style={[styles.exerciseActionLabel, styles.exerciseActionDanger]}>{t('workout.removeExerciseAction')}</Text>
                       </TouchableOpacity>
-
-                    </View>
-                  </View>
+                    </View> : null}
 
                   <TextInput
                     accessibilityLabel={t('accessibility.exerciseNotes', { defaultValue: 'Exercise notes' })}
@@ -1290,28 +1323,19 @@ export default function ActiveWorkout() {
           )}
         </ScrollView>
 
-        <View style={[styles.bottomActionArea, { bottom: insets.bottom + 12 }]}>
-          <TouchableOpacity
-            style={styles.addExerciseTrigger}
-            activeOpacity={ACTIVE_OPACITY}
-            onPress={() => setExercisePickerVisible(true)}
-            accessibilityRole="button"
-            accessibilityLabel={t('accessibility.openExercisePicker', { defaultValue: 'Open exercise picker' })}
-          >
-            <View style={styles.addExerciseTriggerIconWrap}>
-              <Ionicons name="search-outline" size={16} color={palette.textPrimary} />
+          {isWideSession ? null : (
+            <View style={[styles.bottomActionArea, { paddingBottom: insets.bottom + 12 }]}>
+              {addExerciseButton}
             </View>
-            <View style={styles.addExerciseTriggerTextWrap}>
-              <Text style={styles.addExerciseTriggerLabel}>{t('workout.addExercise')}</Text>
-            </View>
-            <Ionicons name="chevron-up" size={18} color={palette.textMuted} />
-          </TouchableOpacity>
+          )}
         </View>
       </View>
 
       <DismissibleBottomSheet
         visible={isFinishModalVisible}
         onClose={() => setIsFinishModalVisible(false)}
+        centered={isDesktopWeb}
+        sheetStyle={styles.trainingSheet}
       >
         <Text style={styles.modalTitle}>{t('workout.finishModalTitle')}</Text>
         <Text style={styles.finishModalSubtitle}>{t('workout.finishModalSubtitle')}</Text>
@@ -1362,12 +1386,38 @@ export default function ActiveWorkout() {
       <DismissibleBottomSheet
         visible={exercisePickerVisible}
         onClose={closeExercisePicker}
+        centered={isDesktopWeb}
         scrollable
-        sheetStyle={styles.pickerModalSheet}
+        sheetStyle={[styles.trainingSheet, styles.pickerModalSheet]}
       >
         <SafeAreaView edges={['bottom']} style={styles.modalSheetSafeArea}>
               <View style={styles.modalHeaderRow}>
-                <Text style={styles.modalTitle}>{t('workout.selectExercise')}</Text>
+                <Text accessibilityRole="header" style={[styles.modalTitle, styles.pickerTitle]}>{t('workout.selectExercise')}</Text>
+                <TouchableOpacity
+                  style={styles.exerciseMenuButton}
+                  activeOpacity={ACTIVE_OPACITY}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('accessibility.closeModal')}
+                  onPress={closeExercisePicker}
+                >
+                  <Ionicons name="close" color={palette.textPrimary} size={22} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.pickerToolbar}>
+                <View style={styles.pickerSearchBar}>
+                  <Ionicons name="search" size={18} color={palette.textMuted} />
+                  <TextInput
+                    accessibilityLabel={t('accessibility.searchExercises', { defaultValue: 'Search exercises' })}
+                    value={exercisePickerQuery}
+                    onChangeText={setExercisePickerQuery}
+                    placeholder={t('workout.searchExercisesPlaceholder')}
+                    placeholderTextColor={palette.textMuted}
+                    style={styles.pickerSearchInput}
+                    autoCorrect={false}
+                    autoCapitalize="none"
+                  />
+                </View>
                 <TouchableOpacity
                   style={styles.modalCustomButton}
                   activeOpacity={ACTIVE_OPACITY}
@@ -1382,81 +1432,70 @@ export default function ActiveWorkout() {
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.pickerSearchBar}>
-                <Ionicons name="search" size={18} color={palette.textMuted} />
-                <TextInput
-                  accessibilityLabel={t('accessibility.searchExercises', { defaultValue: 'Search exercises' })}
-                  value={exercisePickerQuery}
-                  onChangeText={setExercisePickerQuery}
-                  placeholder={t('workout.searchExercisesPlaceholder')}
-                  placeholderTextColor={palette.textMuted}
-                  style={styles.pickerSearchInput}
-                  autoCorrect={false}
-                  autoCapitalize="none"
-                />
-              </View>
-
-              <Text style={styles.filterChipsSectionLabel}>{t('workout.muscleGroup')}</Text>
-              <ScrollView
-                horizontal
-                nestedScrollEnabled
-                showsHorizontalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                style={[styles.filterChipsScroll, isWeb && styles.filterChipsScrollWeb]}
-                contentContainerStyle={styles.filterChipsContent}
-              >
-                {MUSCLE_FILTER_CHIP_KEYS.map((filterKey) => {
-                  const isSelected = filterKey === selectedMuscleFilter;
-
-                  return (
-                    <TouchableOpacity
-                      key={filterKey}
-                      style={[styles.filterChip, isSelected && styles.filterChipSelected]}
-                      activeOpacity={ACTIVE_OPACITY}
-                      onPress={() => setSelectedMuscleFilter(filterKey)}
-                      accessibilityRole="button"
-                      accessibilityLabel={getMuscleFilterLabel(filterKey)}
-                    >
-                      <Text style={[styles.filterChipText, isSelected && styles.filterChipTextSelected]}>
-                        {getMuscleFilterLabel(filterKey)}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-
-              <Text style={styles.filterChipsSectionLabel}>{t('workout.equipment')}</Text>
-              <ScrollView
-                horizontal
-                nestedScrollEnabled
-                showsHorizontalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                style={[styles.filterChipsScroll, isWeb && styles.filterChipsScrollWeb]}
-                contentContainerStyle={styles.filterChipsContent}
-              >
-                {EQUIPMENT_FILTER_CHIP_KEYS.map((filterKey) => {
-                  const isSelected = filterKey === selectedEquipmentFilter;
-
-                  return (
-                    <TouchableOpacity
-                      key={filterKey}
-                      style={[styles.filterChip, isSelected && styles.filterChipSelected]}
-                      activeOpacity={ACTIVE_OPACITY}
-                      onPress={() => setSelectedEquipmentFilter(filterKey)}
-                      accessibilityRole="button"
-                      accessibilityLabel={getEquipmentFilterLabel(filterKey)}
-                    >
-                      <Text style={[styles.filterChipText, isSelected && styles.filterChipTextSelected]}>
-                        {getEquipmentFilterLabel(filterKey)}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-
               <SectionList
                 sections={isLoadingExercises || exerciseLoadError || filteredCatalogExercises.length === 0 ? [] : pickerSections}
                 keyExtractor={(exercise) => exercise.id}
+                ListHeaderComponent={(
+                  <>
+                    <Text style={styles.filterChipsSectionLabel}>{t('workout.muscleGroup')}</Text>
+                    <ScrollView
+                      horizontal={!isDesktopWeb}
+                      nestedScrollEnabled
+                      showsHorizontalScrollIndicator={false}
+                      keyboardShouldPersistTaps="handled"
+                      style={[styles.filterChipsScroll, isWeb && styles.filterChipsScrollWeb]}
+                      contentContainerStyle={[styles.filterChipsContent, isDesktopWeb && styles.filterChipsWide]}
+                    >
+                      {MUSCLE_FILTER_CHIP_KEYS.map((filterKey) => {
+                        const isSelected = filterKey === selectedMuscleFilter;
+
+                        return (
+                          <TouchableOpacity
+                            key={filterKey}
+                            style={[styles.filterChip, isSelected && styles.filterChipSelected]}
+                            activeOpacity={ACTIVE_OPACITY}
+                            onPress={() => setSelectedMuscleFilter(filterKey)}
+                            accessibilityRole="button"
+                            accessibilityLabel={getMuscleFilterLabel(filterKey)}
+                          >
+                            <Text style={[styles.filterChipText, isSelected && styles.filterChipTextSelected]}>
+                              {getMuscleFilterLabel(filterKey)}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+
+                    <Text style={styles.filterChipsSectionLabel}>{t('workout.equipment')}</Text>
+                    <ScrollView
+                      horizontal={!isDesktopWeb}
+                      nestedScrollEnabled
+                      showsHorizontalScrollIndicator={false}
+                      keyboardShouldPersistTaps="handled"
+                      style={[styles.filterChipsScroll, isWeb && styles.filterChipsScrollWeb]}
+                      contentContainerStyle={[styles.filterChipsContent, isDesktopWeb && styles.filterChipsWide]}
+                    >
+                      {EQUIPMENT_FILTER_CHIP_KEYS.map((filterKey) => {
+                        const isSelected = filterKey === selectedEquipmentFilter;
+
+                        return (
+                          <TouchableOpacity
+                            key={filterKey}
+                            style={[styles.filterChip, isSelected && styles.filterChipSelected]}
+                            activeOpacity={ACTIVE_OPACITY}
+                            onPress={() => setSelectedEquipmentFilter(filterKey)}
+                            accessibilityRole="button"
+                            accessibilityLabel={getEquipmentFilterLabel(filterKey)}
+                          >
+                            <Text style={[styles.filterChipText, isSelected && styles.filterChipTextSelected]}>
+                              {getEquipmentFilterLabel(filterKey)}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </>
+                )}
                 style={styles.modalList}
                 contentContainerStyle={styles.modalListContent}
                 showsVerticalScrollIndicator={false}
@@ -1570,6 +1609,8 @@ export default function ActiveWorkout() {
       <DismissibleBottomSheet
         visible={createExerciseVisible}
         onClose={() => setCreateExerciseVisible(false)}
+        centered={isDesktopWeb}
+        sheetStyle={styles.trainingSheet}
         scrollable
       >
             <Text style={styles.modalTitle}>{t('workout.createExercise')}</Text>
@@ -1758,13 +1799,44 @@ const styles = StyleSheet.create({
     marginRight: 'auto',
     backgroundColor: ROOT_SCREEN_BG,
   },
+  containerWide: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    maxWidth: 1160,
+    gap: 32,
+    paddingTop: 34,
+    paddingHorizontal: 28,
+  },
+  logColumn: {
+    flex: 1,
+    minWidth: 0,
+  },
+  logHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.border,
+  },
+  logTitle: {
+    flexShrink: 1,
+    color: palette.textPrimary,
+    fontSize: 28,
+    fontWeight: '600',
+    letterSpacing: -0.65,
+  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: 14,
-    paddingTop: 14,
-    gap: 12,
+    paddingVertical: 18,
+    gap: 18,
+  },
+  scrollContentWide: {
+    paddingHorizontal: 0,
   },
   emptyWorkoutCard: {
     borderRadius: Radius.card,
@@ -1827,30 +1899,19 @@ const styles = StyleSheet.create({
   exerciseCard: {
     position: 'relative',
     overflow: 'hidden',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: palette.border,
     backgroundColor: palette.surface,
+    borderRadius: 10,
     paddingHorizontal: 10,
     paddingTop: 14,
     paddingBottom: 12,
-  },
-  exerciseCompletionGlow: {
-    ...AbsoluteFill,
-    backgroundColor: palette.glowCyan,
-  },
-  pointerEventsNone: {
-    pointerEvents: 'none',
   },
   exerciseHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 4,
-    marginBottom: 10,
+    marginBottom: 5,
     columnGap: 10,
-    flexWrap: 'wrap',
-    rowGap: 12,
   },
   exerciseHeaderTextWrap: {
     flex: 1,
@@ -1858,7 +1919,6 @@ const styles = StyleSheet.create({
     minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    flexBasis: '100%',
   },
   exerciseThumbnail: {
     width: 34,
@@ -1880,16 +1940,25 @@ const styles = StyleSheet.create({
   },
   exerciseHeaderActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 4,
+    marginBottom: 10,
+  },
+  exerciseMenuButton: {
+    minHeight: 44,
+    minWidth: 44,
     alignItems: 'center',
-    columnGap: 8,
-    flexShrink: 0,
+    justifyContent: 'center',
+    borderRadius: 8,
   },
   exerciseActionButton: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: palette.inputStroke,
+    minHeight: 44,
+    paddingHorizontal: 10,
+    flexGrow: 1,
+    flexDirection: 'row',
+    gap: 7,
+    borderRadius: 8,
     backgroundColor: palette.inputFill,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1897,10 +1966,17 @@ const styles = StyleSheet.create({
   exerciseActionButtonDisabled: {
     opacity: 0.36,
   },
+  exerciseActionLabel: {
+    color: palette.textSecondary,
+    fontSize: 13,
+  },
+  exerciseActionDanger: {
+    color: palette.errorText,
+  },
   exerciseTitle: {
     color: palette.textPrimary,
     fontSize: 20,
-    fontWeight: '800',
+    fontWeight: '600',
     letterSpacing: -0.4,
     flex: 1,
   },
@@ -1926,7 +2002,7 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   sideToggleChip: {
-    minHeight: 36,
+    minHeight: 44,
     paddingHorizontal: 8,
     borderRadius: Radius.pill,
     borderWidth: 1,
@@ -1949,8 +2025,6 @@ const styles = StyleSheet.create({
     color: palette.textPrimary,
   },
   tableHeaderRow: {
-    backgroundColor: palette.bgAlt,
-    borderRadius: Radius.button,
     borderBottomWidth: 1,
     borderColor: palette.rowSeparator,
     marginBottom: 4,
@@ -2015,15 +2089,13 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   exerciseNotesInput: {
-    minHeight: 40,
-    borderRadius: Radius.md,
-    paddingHorizontal: 12,
+    minHeight: 42,
+    paddingHorizontal: 6,
     paddingVertical: 8,
     marginBottom: 10,
     color: palette.textPrimary,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: palette.rowSeparator,
     fontSize: 13,
     lineHeight: 18,
   },
@@ -2125,10 +2197,9 @@ const styles = StyleSheet.create({
   addSetButton: {
     marginTop: 12,
     minHeight: 48,
-    borderRadius: Radius.card,
-    borderWidth: 1,
-    borderColor: palette.inputBorder,
-    backgroundColor: palette.surfaceAlt,
+    borderRadius: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: palette.rowSeparator,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -2140,40 +2211,25 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   bottomActionArea: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
+    paddingTop: 10,
+    paddingHorizontal: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: palette.border,
   },
   addExerciseTrigger: {
-    minHeight: 54,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: palette.borderStrong,
-    backgroundColor: palette.surface,
+    minHeight: 46,
+    borderRadius: 8,
+    backgroundColor: palette.accent,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    columnGap: 10,
-  },
-  addExerciseTriggerIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: palette.accentSoft,
-    backgroundColor: palette.surfaceAlt,
-    alignItems: 'center',
     justifyContent: 'center',
-  },
-  addExerciseTriggerTextWrap: {
-    flex: 1,
-    minWidth: 0,
+    paddingHorizontal: 14,
+    columnGap: 6,
   },
   addExerciseTriggerLabel: {
-    color: palette.textPrimary,
-    fontSize: 15,
-    fontWeight: '800',
-    marginBottom: 2,
+    color: palette.bgPrimary,
+    fontSize: 14,
+    fontWeight: '700',
   },
   modalBackdrop: {
     flex: 1,
@@ -2209,6 +2265,10 @@ const styles = StyleSheet.create({
     maxHeight: '88%',
     paddingBottom: Spacing.md,
   },
+  trainingSheet: {
+    backgroundColor: palette.surface,
+    borderColor: palette.borderStrong,
+  },
   modalSheetSafeArea: {
     flexGrow: 1,
     minHeight: 0,
@@ -2218,7 +2278,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    gap: 12,
+    marginBottom: 10,
+  },
+  pickerTitle: {
+    flex: 1,
+    fontSize: 23,
+    fontWeight: '600',
+    marginBottom: 0,
+  },
+  pickerToolbar: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 14,
   },
   modalHandle: {
     alignSelf: 'center',
@@ -2235,9 +2308,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   modalCustomButton: {
-    minHeight: 34,
+    minHeight: 44,
     borderRadius: Radius.md,
-    backgroundColor: palette.accent,
+    backgroundColor: palette.surfaceAlt,
+    borderColor: palette.borderStrong,
+    borderWidth: 1,
     paddingHorizontal: 12,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2245,19 +2320,21 @@ const styles = StyleSheet.create({
     columnGap: 4,
   },
   modalCustomButtonText: {
-    color: palette.bgPrimary,
+    color: palette.textPrimary,
     fontSize: 13,
     fontWeight: '700',
   },
   modalList: {
     flex: 1,
-    minHeight: 180,
+    minHeight: 0,
     marginTop: 2,
   },
   modalListContent: {
     paddingBottom: 6,
   },
   pickerSearchBar: {
+    flex: 1,
+    minWidth: 172,
     backgroundColor: palette.inputBackground,
     borderWidth: 1,
     borderColor: palette.inputBorder,
@@ -2266,7 +2343,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     minHeight: 44,
-    marginBottom: 12,
   },
   pickerSearchInput: {
     flex: 1,
@@ -2285,6 +2361,7 @@ const styles = StyleSheet.create({
   },
   filterChipsScroll: {
     flexGrow: 0,
+    flexShrink: 0,
     marginBottom: 10,
   },
   filterChipsScrollWeb: {
@@ -2298,6 +2375,11 @@ const styles = StyleSheet.create({
     columnGap: 8,
     paddingRight: 16,
     paddingVertical: 2,
+  },
+  filterChipsWide: {
+    flexWrap: 'wrap',
+    gap: 6,
+    paddingRight: 0,
   },
   filterChip: {
     flexShrink: 0,

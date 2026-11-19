@@ -36,6 +36,7 @@ type DismissibleBottomSheetProps = {
   onClose: () => void;
   children: ReactNode;
   sheetStyle?: StyleProp<ViewStyle>;
+  centered?: boolean;
   /**
    * Sheets with a ScrollView/FlatList inside: only the handle pans to dismiss,
    * so vertical scrolling still works. Short menus keep the default (whole sheet).
@@ -52,15 +53,19 @@ export function DismissibleBottomSheet({
   onClose,
   children,
   sheetStyle,
+  centered = false,
   scrollable = false,
 }: DismissibleBottomSheetProps) {
   const { t } = useTranslation();
   const isWeb = Platform.OS === 'web';
-  const webSheetInset = isWeb ? { marginBottom: Spacing.lg } : null;
+  const centeredOnWeb = isWeb && centered;
+  const enterOffset = centeredOnWeb ? 12 : ENTER_Y;
+  const exitOffset = centeredOnWeb ? 12 : EXIT_Y;
+  const sheetLayout = [styles.sheet, isWeb && styles.sheetWeb, centeredOnWeb && styles.sheetCentered, sheetStyle];
   const [mounted, setMounted] = useState(visible);
   /** Block taps on the sheet until the enter slide finishes (avoids accidental presses). */
   const [sheetInteractive, setSheetInteractive] = useState(false);
-  const translateY = useSharedValue(ENTER_Y);
+  const translateY = useSharedValue(enterOffset);
   const backdropOpacity = useSharedValue(0);
 
   useEffect(() => {
@@ -90,15 +95,15 @@ export function DismissibleBottomSheet({
     if (!visible) {
       return;
     }
-    translateY.set(ENTER_Y);
+    translateY.set(enterOffset);
     backdropOpacity.set(0);
-  }, [backdropOpacity, translateY, visible]);
+  }, [backdropOpacity, enterOffset, translateY, visible]);
 
   useEffect(() => {
     if (visible) {
       setMounted(true);
       setSheetInteractive(false);
-      translateY.set(ENTER_Y);
+      translateY.set(enterOffset);
       backdropOpacity.set(0);
       translateY.set(withTiming(
         0,
@@ -127,7 +132,7 @@ export function DismissibleBottomSheet({
 
     backdropOpacity.set(withTiming(0, { duration: EXIT_MS, easing: Easing.in(Easing.quad) }));
     translateY.set(withTiming(
-      EXIT_Y,
+      exitOffset,
       { duration: EXIT_MS, easing: Easing.in(Easing.cubic) },
       (finished) => {
         if (finished) {
@@ -138,7 +143,7 @@ export function DismissibleBottomSheet({
     // Intentionally not depending on `mounted`: including it restarts the enter
     // animation and can leave gestures dead until the next layout.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mounted gated inside
-  }, [backdropOpacity, translateY, visible]);
+  }, [backdropOpacity, enterOffset, exitOffset, translateY, visible]);
 
   const pan = Gesture.Pan()
     .activeOffsetY(8)
@@ -204,42 +209,34 @@ export function DismissibleBottomSheet({
     </Animated.View>
   );
 
+  const backdrop = (
+    <Animated.View style={[styles.backdropFill, backdropAnimatedStyle]}>
+      <Pressable
+        style={StyleSheet.absoluteFill}
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel={t('accessibility.closeModal', { defaultValue: 'Close modal' })}
+      />
+    </Animated.View>
+  );
+
+  const sheet = (
+    <Animated.View
+      testID="app-bottom-sheet"
+      pointerEvents={sheetInteractive ? 'auto' : 'none'}
+      style={[sheetLayout, sheetAnimatedStyle]}
+    >
+      {centeredOnWeb ? null : scrollable ? <GestureDetector gesture={pan}>{handle}</GestureDetector> : handle}
+      {scrollable ? <View style={styles.scrollableBody}>{children}</View> : children}
+    </Animated.View>
+  );
+
   return (
     <Modal visible transparent animationType="none" onRequestClose={onClose}>
       <GestureHandlerRootView style={styles.flex}>
-        <View style={styles.backdropRoot}>
-          <GestureDetector gesture={backdropPan}>
-            <Animated.View style={[styles.backdropFill, backdropAnimatedStyle]}>
-              <Pressable
-                style={StyleSheet.absoluteFill}
-                onPress={onClose}
-                accessibilityRole="button"
-                accessibilityLabel={t('accessibility.closeModal', { defaultValue: 'Close modal' })}
-              />
-            </Animated.View>
-          </GestureDetector>
-
-          {scrollable ? (
-            <Animated.View
-              testID="app-bottom-sheet"
-              pointerEvents={sheetInteractive ? 'auto' : 'none'}
-              style={[styles.sheet, isWeb && styles.sheetWeb, webSheetInset, sheetStyle, sheetAnimatedStyle]}
-            >
-              <GestureDetector gesture={pan}>{handle}</GestureDetector>
-              <View style={styles.scrollableBody}>{children}</View>
-            </Animated.View>
-          ) : (
-            <GestureDetector gesture={pan}>
-              <Animated.View
-                testID="app-bottom-sheet"
-                pointerEvents={sheetInteractive ? 'auto' : 'none'}
-                style={[styles.sheet, isWeb && styles.sheetWeb, webSheetInset, sheetStyle, sheetAnimatedStyle]}
-              >
-                {handle}
-                {children}
-              </Animated.View>
-            </GestureDetector>
-          )}
+        <View style={[styles.backdropRoot, centeredOnWeb && styles.backdropCentered]}>
+          {centeredOnWeb ? backdrop : <GestureDetector gesture={backdropPan}>{backdrop}</GestureDetector>}
+          {centeredOnWeb || scrollable ? sheet : <GestureDetector gesture={pan}>{sheet}</GestureDetector>}
         </View>
       </GestureHandlerRootView>
     </Modal>
@@ -253,6 +250,9 @@ const styles = StyleSheet.create({
   backdropRoot: {
     flex: 1,
     justifyContent: 'flex-end',
+  },
+  backdropCentered: {
+    justifyContent: 'center',
   },
   backdropFill: {
     ...AbsoluteFill,
@@ -279,6 +279,12 @@ const styles = StyleSheet.create({
     ...(Platform.OS === 'web'
       ? ({ touchAction: 'none', overscrollBehavior: 'contain' } as object)
       : null),
+  },
+  sheetCentered: {
+    width: '92%',
+    maxWidth: 640,
+    paddingTop: Spacing.lg,
+    ...(Platform.OS === 'web' ? ({ touchAction: 'auto' } as object) : null),
   },
   handleHit: {
     alignItems: 'center',

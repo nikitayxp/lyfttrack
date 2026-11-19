@@ -9,7 +9,7 @@ import {
   type MutableRefObject,
   type PropsWithChildren,
 } from 'react';
-import { Animated, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import {
   createExerciseBlock,
@@ -51,7 +51,6 @@ type WorkoutContextValue = {
   clearExercises: () => void;
   removeExercise: (exerciseIndex: number) => void;
   moveExercise: (exerciseIndex: number, direction: 'up' | 'down') => void;
-  getExerciseCompletionGlowValue: (exerciseId: string) => Animated.Value;
   workoutName: string | null;
   setWorkoutName: (name: string | null) => void;
   recoveredDraft: RecoveredDraftState | null;
@@ -125,7 +124,6 @@ function WorkoutSessionProvider({ children, currentUserId }: WorkoutProviderProp
     addSet,
     removeSet,
     clearExercises,
-    getExerciseCompletionGlowValue,
     recoveredDraft,
     isDraftRecoveryPending: isDraftReadPending,
     clearDraft: clearPersistedDraft,
@@ -487,7 +485,6 @@ function WorkoutSessionProvider({ children, currentUserId }: WorkoutProviderProp
     clearExercises: clearWorkout,
     removeExercise,
     moveExercise,
-    getExerciseCompletionGlowValue,
     workoutName,
     setWorkoutName,
     recoveredDraft,
@@ -520,7 +517,6 @@ function WorkoutSessionProvider({ children, currentUserId }: WorkoutProviderProp
     discardRecoveredDraft,
     pausedElapsedSeconds,
     ensureWorkoutStarted,
-    getExerciseCompletionGlowValue,
     getExerciseRestSecondsByExerciseId,
     handleSetCompletionToggle,
     hasActiveWorkout,

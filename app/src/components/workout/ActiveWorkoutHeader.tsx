@@ -11,6 +11,7 @@ type SessionExercise = {
 
 type ActiveWorkoutHeaderProps = {
   title: string;
+  wide?: boolean;
   exercises: readonly SessionExercise[];
   isTimerPaused: boolean;
   isSubmitting: boolean;
@@ -60,6 +61,7 @@ function WorkoutClock({ isPaused, onPress }: { isPaused: boolean; onPress: () =>
 
 export function ActiveWorkoutHeader({
   title,
+  wide = false,
   exercises,
   isTimerPaused,
   isSubmitting,
@@ -80,35 +82,38 @@ export function ActiveWorkoutHeader({
   const progressLabel = t('workout.sessionSetProgress', { completed, count: total });
   const busy = isSubmitting || isDiscarding;
 
+  const finishButton = (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={t('workout.finish')}
+      accessibilityState={{ busy: isSubmitting, disabled: busy }}
+      disabled={busy}
+      onPress={onFinish}
+      style={({ pressed }) => [styles.finishButton, (pressed || busy) && styles.pressed]}
+    >
+      {isSubmitting
+        ? <ActivityIndicator size="small" color={color.textPrimary} />
+        : <Text style={styles.finishText}>{t('workout.finish')}</Text>}
+    </Pressable>
+  );
+
   return (
-    <View style={styles.header}>
-      <View style={styles.headingRow}>
+    <View style={[styles.header, wide && styles.headerWide]}>
+      <View style={[styles.headingRow, wide && styles.headingRowWide]}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t('workout.minimizeA11y')}
           onPress={onMinimize}
           style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
         >
-          <Ionicons name="chevron-down" size={21} color={color.textPrimary} />
+          <Ionicons name={wide ? 'arrow-back' : 'chevron-down'} size={20} color={color.textPrimary} />
         </Pressable>
 
-        <Text accessibilityRole="header" style={styles.title} numberOfLines={2}>{title}</Text>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('workout.finish')}
-          accessibilityState={{ busy: isSubmitting, disabled: busy }}
-          disabled={busy}
-          onPress={onFinish}
-          style={({ pressed }) => [styles.finishButton, (pressed || busy) && styles.pressed]}
-        >
-          {isSubmitting
-            ? <ActivityIndicator size="small" color={color.bgPrimary} />
-            : <Text style={styles.finishText}>{t('workout.finish')}</Text>}
-        </Pressable>
+        <Text accessibilityRole="header" style={[styles.title, wide && styles.titleWide]} numberOfLines={2}>{title}</Text>
+        {wide ? null : finishButton}
       </View>
 
-      <View style={styles.metricsRow}>
+      <View style={[styles.metricsRow, wide && styles.metricsWide]}>
         <WorkoutClock isPaused={isTimerPaused} onPress={onToggleTimer} />
 
         {total > 0 ? (
@@ -120,7 +125,7 @@ export function ActiveWorkoutHeader({
             aria-valuemax={total}
             aria-valuenow={completed}
             aria-valuetext={progressLabel}
-            style={styles.progress}
+            style={[styles.progress, wide && styles.progressWide]}
           >
             <Text style={styles.progressLabel} numberOfLines={2}>{progressLabel}</Text>
             <View style={styles.rail}>
@@ -133,6 +138,10 @@ export function ActiveWorkoutHeader({
           </View>
         ) : null}
 
+      </View>
+
+      <View style={wide ? styles.actionsWide : styles.discardMobile}>
+        {wide ? finishButton : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t('workout.discardA11y')}
@@ -141,7 +150,7 @@ export function ActiveWorkoutHeader({
           onPress={onDiscard}
           style={({ pressed }) => [styles.iconButton, styles.discardButton, (pressed || busy) && styles.pressed]}
         >
-          <Ionicons name="trash-outline" size={18} color={color.errorText} />
+          <Ionicons name="trash-outline" size={18} color={color.textMuted} />
         </Pressable>
       </View>
     </View>
@@ -152,16 +161,29 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 14,
     paddingTop: 8,
-    paddingBottom: 8,
+    paddingBottom: 12,
     gap: 6,
     backgroundColor: color.bgAlt,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: color.borderStrong,
   },
+  headerWide: {
+    width: 248,
+    alignSelf: 'flex-start',
+    gap: 24,
+    padding: 18,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: color.border,
+  },
   headingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  headingRowWide: {
+    alignItems: 'flex-start',
+    flexDirection: 'column',
   },
   title: {
     flex: 1,
@@ -169,8 +191,12 @@ const styles = StyleSheet.create({
     color: color.textPrimary,
     fontFamily: titleFont,
     fontSize: 24,
-    fontWeight: '800',
+    fontWeight: '700',
     letterSpacing: -0.8,
+  },
+  titleWide: {
+    fontSize: 34,
+    flex: 0,
   },
   iconButton: {
     width: 44,
@@ -189,23 +215,32 @@ const styles = StyleSheet.create({
     minHeight: 44,
     minWidth: 74,
     paddingHorizontal: 12,
-    maxWidth: '40%',
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 8,
-    backgroundColor: color.accent,
+    borderWidth: 1,
+    borderColor: color.borderStrong,
+    backgroundColor: color.surfaceAlt,
   },
   finishText: {
-    color: color.bgPrimary,
+    color: color.textPrimary,
     textAlign: 'center',
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   metricsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     columnGap: 12,
     flexWrap: 'wrap',
+    paddingRight: 50,
+  },
+  metricsWide: {
+    alignItems: 'stretch',
+    flexDirection: 'column',
+    flexWrap: 'nowrap',
+    gap: 14,
+    paddingRight: 0,
   },
   clock: {
     minHeight: 44,
@@ -241,6 +276,14 @@ const styles = StyleSheet.create({
     borderLeftColor: color.borderStrong,
     gap: 5,
   },
+  progressWide: {
+    flex: 0,
+    borderLeftWidth: 0,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: color.borderStrong,
+    paddingHorizontal: 0,
+    paddingTop: 14,
+  },
   progressLabel: {
     color: color.textPrimary,
     fontSize: 12,
@@ -266,5 +309,15 @@ const styles = StyleSheet.create({
     marginLeft: 'auto',
     borderColor: 'transparent',
     backgroundColor: 'transparent',
+  },
+  discardMobile: {
+    position: 'absolute',
+    right: 14,
+    bottom: 12,
+  },
+  actionsWide: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
   },
 });

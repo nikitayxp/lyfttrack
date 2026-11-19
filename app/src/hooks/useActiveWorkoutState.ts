@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, type AppStateStatus, Animated, Platform, Vibration } from 'react-native';
+import { AppState, type AppStateStatus, Platform, Vibration } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import type { Tables } from '@/types/database';
 import {
@@ -311,7 +311,6 @@ export function useActiveWorkoutState({
 }: UseActiveWorkoutStateProps = {}) {
   const [activeExercises, setActiveExercises] = useState<ActiveExercise[]>([]);
   const activeExercisesRef = useRef<ActiveExercise[]>([]);
-  const completionGlowByExerciseIdRef = useRef<Map<string, Animated.Value>>(new Map());
   const completedDraftIdRef = useRef<string | null>(null);
 
   // Draft state exposed to the consumer so they can restore it
@@ -447,28 +446,6 @@ export function useActiveWorkoutState({
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  const getExerciseCompletionGlowValue = useCallback((exerciseId: string): Animated.Value => {
-    const existingValue = completionGlowByExerciseIdRef.current.get(exerciseId);
-    if (existingValue) return existingValue;
-    const nextValue = new Animated.Value(0);
-    completionGlowByExerciseIdRef.current.set(exerciseId, nextValue);
-    return nextValue;
-  }, []);
-
-  const animateExerciseCompletionGlow = useCallback(
-    (exerciseId: string) => {
-      const glow = getExerciseCompletionGlowValue(exerciseId);
-      glow.stopAnimation();
-      glow.setValue(0.02);
-
-      Animated.sequence([
-        Animated.timing(glow, { toValue: 0.6, duration: 140, useNativeDriver: true }),
-        Animated.timing(glow, { toValue: 0, duration: 360, useNativeDriver: true }),
-      ]).start();
-    },
-    [getExerciseCompletionGlowValue]
-  );
-
   const toggleSetCompleted = useCallback((
     exerciseId: string,
     setId: string,
@@ -521,14 +498,13 @@ export function useActiveWorkoutState({
         if (onSetCompleted) {
           onSetCompleted(restSecondsForExercise);
         }
-        animateExerciseCompletionGlow(exerciseId);
 
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {
           Vibration.vibrate(10);
         });
       }
     },
-    [animateExerciseCompletionGlow, onSetCompleted, toggleSetCompleted]
+    [onSetCompleted, toggleSetCompleted]
   );
 
   const updateSetInput = useCallback((exerciseId: string, setId: string, field: SetInputField, value: string) => {
@@ -666,7 +642,6 @@ export function useActiveWorkoutState({
 
   const clearExercises = useCallback(() => {
     setActiveExercisesWithRef([]);
-    completionGlowByExerciseIdRef.current.clear();
   }, [setActiveExercisesWithRef]);
 
   /** Call after successfully saving to Supabase to remove the draft */
@@ -709,7 +684,6 @@ export function useActiveWorkoutState({
     removeSet,
     addExercise,
     clearExercises,
-    getExerciseCompletionGlowValue,
     recoveredDraft,
     isDraftRecoveryPending,
     clearDraft,

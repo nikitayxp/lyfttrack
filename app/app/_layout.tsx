@@ -217,6 +217,7 @@ export default function RootLayout() {
   const [hasAuthBootstrapTimedOut, setHasAuthBootstrapTimedOut] = useState(false);
   const isTabsRoute = rootSegment === '(tabs)';
   const isActiveWorkoutRoute = rootSegment === 'workout' && childSegment === 'active';
+  const showDeviceFrame = isDesktopWeb && !isActiveWorkoutRoute;
   const inAuthGroup = rootSegment === '(auth)';
   const isOAuthCallbackRoute = rootSegment === 'callback' || childSegment === 'callback';
   const isResetPasswordRoute = inAuthGroup && childSegment === 'reset-password';
@@ -323,12 +324,12 @@ export default function RootLayout() {
       return;
     }
 
-    document.body.classList.toggle('desktop-mockup-active', isDesktopWeb);
+    document.body.classList.toggle('desktop-mockup-active', showDeviceFrame);
 
     return () => {
       document.body.classList.remove('desktop-mockup-active');
     };
-  }, [isWeb, isDesktopWeb]);
+  }, [isWeb, showDeviceFrame]);
 
   useEffect(() => subscribeAuthSession((next, event) => {
     setSession(next.session);
@@ -487,8 +488,6 @@ export default function RootLayout() {
       top: 'var(--app-visible-viewport-top, 0px)' as ViewStyle['top'],
       overflow: 'hidden',
     };
-
-    const showDeviceFrame = isDesktopWeb && !isActiveWorkoutRoute;
 
     return (
       <View

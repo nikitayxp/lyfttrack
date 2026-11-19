@@ -111,6 +111,7 @@ test('changing accounts clears live data and preserves the previous account draf
   assert.equal(await app.storage.loadWorkoutDraft('B'), null);
   await app.changeUser('A');
   assert.equal(app.current.activeExercises[0]?.notes, 'notes-A');
+  assert.equal(app.current.workoutName, 'Workout A');
   assert.equal(app.current.didRestoreDraft, true);
 });
 
@@ -342,4 +343,17 @@ test('history from before an account switch cannot touch the restored draft', as
   await app.run(() => history.resolve(pastSets));
   assert.equal(app.current.activeExercises[0], restored);
   assert.deepEqual(types(restored), ['warmup', 'normal']);
+});
+
+test('restoring an unnamed draft keeps its display name localizable', async t => {
+  const app = await setup(t);
+  await app.run(c => c.setActiveExercisesWithRef([exercise('A')]));
+  await app.background();
+  const draft = await app.storage.loadWorkoutDraft('A');
+  assert.equal(draft.workoutName, undefined);
+  await app.changeUser('B');
+  await app.changeUser('A');
+  assert.equal(app.current.didRestoreDraft, true);
+  assert.equal(app.current.workoutName, null);
+  assert.equal(app.current.activeExercises[0]?.exercise.id, 'A');
 });

@@ -21,6 +21,8 @@ function eventTarget(values = {}) {
 
 async function setup(t, initialWidth = 375) {
   let width = initialWidth;
+  let segments = ['(auth)', 'sign-in'];
+  const bodyClasses = new Set();
   let mounts = 0;
   let changeDraft;
   const css = new Map();
@@ -31,7 +33,10 @@ async function setup(t, initialWidth = 375) {
   };
   const document = {
     documentElement: { style },
-    body: { style: {}, classList: { toggle() {}, remove() {} } },
+    body: { style: {}, classList: {
+      toggle(name, enabled) { if (enabled) bodyClasses.add(name); else bodyClasses.delete(name); },
+      remove(name) { bodyClasses.delete(name); },
+    } },
     getElementById: () => null,
   };
   const viewport = eventTarget({ height: 800 });
@@ -51,7 +56,7 @@ async function setup(t, initialWidth = 375) {
     'react-native': { View: 'View', ActivityIndicator: empty, Platform: { OS: 'web', select: values => values.web ?? values.default },
       useWindowDimensions: () => ({ width, height: 800 }),
       StyleSheet: { create: value => value, absoluteFillObject: {} } },
-    'expo-router': { DarkTheme: { colors: {} }, ThemeProvider: passthrough, Stack, useSegments: () => ['(auth)', 'sign-in'], router: { replace() {} } },
+    'expo-router': { DarkTheme: { colors: {} }, ThemeProvider: passthrough, Stack, useSegments: () => segments, router: { replace() {} } },
     'expo-status-bar': { StatusBar: empty },
     'expo-linear-gradient': { LinearGradient: empty },
     'expo-web-browser': { maybeCompleteAuthSession() {} },
@@ -78,7 +83,11 @@ async function setup(t, initialWidth = 375) {
   await act(async () => { tree = create(React.createElement(Root)); });
   t.after(async () => { if (tree) await act(async () => tree.unmount()); });
   return {
-    css, viewport, window,
+    css, viewport, window, bodyClasses,
+    async navigate(nextSegments) {
+      segments = nextSegments;
+      await act(async () => tree.update(React.createElement(Root)));
+    },
     get mounts() { return mounts; },
     get draft() { return tree.root.findByType('SessionProbe').props.draft; },
     get shellHeight() {
@@ -113,6 +122,16 @@ test('crossing the phone-frame breakpoint retains the mounted app and unsaved in
   await screen.resize(375);
   assert.equal(screen.draft, 'unsent comment');
   assert.equal(screen.mounts, 1);
+});
+
+test('desktop workout portals follow the full viewport while framed routes keep their phone width', async t => {
+  const screen = await setup(t, 1036);
+  const frameClass = 'desktop-mockup-active';
+  assert.equal(screen.bodyClasses.has(frameClass), true);
+  await screen.navigate(['workout', 'active']);
+  assert.equal(screen.bodyClasses.has(frameClass), false);
+  await screen.navigate(['(tabs)', 'workout']);
+  assert.equal(screen.bodyClasses.has(frameClass), true);
 });
 
 test('a visual-only keyboard resize publishes the same visible height for body portals', async t => {
